@@ -16,6 +16,7 @@ const entries = { entries: [], tombstones: [] };
 describe("RosterSyncMsgSchema", () => {
 	it("accepts a well-formed roster-sync payload", () => {
 		const ok = {
+			vaultId: "v1",
 			relayUrl: "wss://r",
 			groupKeyB64: "g",
 			roster,
@@ -45,6 +46,7 @@ describe("RosterSyncMsgSchema", () => {
 describe("EnrollInviteMsgSchema", () => {
 	it("accepts an inviter payload", () => {
 		const ok = {
+			vaultId: "v1",
 			relayUrl: "wss://r",
 			groupKeyB64: "g",
 			psk: "p",
@@ -53,6 +55,18 @@ describe("EnrollInviteMsgSchema", () => {
 			entries,
 		};
 		expect(EnrollInviteMsgSchema.parse(ok)).toEqual(ok);
+	});
+
+	it("rejects an inviter payload that doesn't name its vault", () => {
+		const bad = {
+			relayUrl: "wss://r",
+			groupKeyB64: "g",
+			psk: "p",
+			devicePrivB64: "priv",
+			roster,
+			entries,
+		};
+		expect(EnrollInviteMsgSchema.safeParse(bad).success).toBe(false);
 	});
 
 	it("rejects an inviter payload missing entries", () => {
@@ -100,8 +114,12 @@ describe("EnrollJoinMsgSchema", () => {
 });
 
 describe("ApplyRemoteMsgSchema", () => {
-	it("requires a payloadJson string", () => {
-		expect(ApplyRemoteMsgSchema.parse({ payloadJson: "{}" })).toEqual({ payloadJson: "{}" });
+	it("requires a payloadJson string and the vault it is for", () => {
+		expect(ApplyRemoteMsgSchema.parse({ vaultId: "v1", payloadJson: "{}" })).toEqual({
+			vaultId: "v1",
+			payloadJson: "{}",
+		});
+		expect(ApplyRemoteMsgSchema.safeParse({ payloadJson: "{}" }).success).toBe(false);
 		expect(ApplyRemoteMsgSchema.safeParse({}).success).toBe(false);
 		expect(ApplyRemoteMsgSchema.safeParse({ payloadJson: 1 }).success).toBe(false);
 	});

@@ -13,6 +13,9 @@ const { loads, stub } = vi.hoisted(() => {
 			if (ct === "broken") throw new Error("cannot decrypt");
 			return `pt:${ct}`;
 		},
+		// The Rust batch: a failed entry is null, never a failed batch.
+		decrypt_entries: (entries: { ciphertext: string }[]) =>
+			entries.map((e) => (e.ciphertext === "broken" ? null : `pt:${e.ciphertext}`)),
 	};
 	return { loads, stub };
 });
@@ -63,16 +66,28 @@ describe("offscreen CRYPTO_DECRYPT_INDEX", () => {
 		});
 		expect(loads).toEqual(["vek"]);
 	});
-	it("leaves the existing crypto adapter batch strict", async () => {
+	it("returns null for an entry that doesn't decrypt instead of failing the batch", async () => {
 		const res = await handleHostMessage("CRYPTO_DECRYPT_BATCH", {
 			entries: [entry("a"), entry("broken")],
 			vekB64: "vek",
 		});
-		expect(res.ok).toBe(false);
+		expect(res).toEqual({ ok: true, data: ["pt:a", null] });
 	});
 	it("supports an empty index", async () => {
 		expect(await handleHostMessage("CRYPTO_DECRYPT_INDEX", { entries: [], vekB64: "vek" })).toEqual(
 			{ ok: true, data: [] },
 		);
+	});
+});
+
+describe("offscreen CRYPTO_CHECK_ENTRIES", () => {
+	it("answers whether each entry decrypts, without returning any plaintext", async () => {
+		loads.length = 0;
+		const res = await handleHostMessage("CRYPTO_CHECK_ENTRIES", {
+			entries: [entry("a"), entry("broken")],
+			vekB64: "vek",
+		});
+		expect(res).toEqual({ ok: true, data: [true, false] });
+		expect(loads).toEqual(["vek"]);
 	});
 });

@@ -9,6 +9,7 @@ import type { ShellAdapter } from "@core/adapters/shell";
 import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
+import { desktopStorage } from "./storage";
 
 /**
  * Whether this install is allowed to replace itself.
@@ -30,6 +31,9 @@ export function canSelfUpdate(): boolean {
 	return selfUpdatable;
 }
 
+/** Device-level rather than a vault preference: the launch check runs before anything is unlocked. */
+const CHECK_ON_LAUNCH_KEY = "updates.checkOnLaunch";
+
 /** Held between check and install so the user is not made to wait for a second round trip. */
 let pending: Awaited<ReturnType<typeof check>> | null = null;
 
@@ -49,6 +53,16 @@ export const desktopUpdates: NonNullable<ShellAdapter["updates"]> = {
 	async check() {
 		pending = await check();
 		return pending ? { version: pending.version, notes: pending.body ?? undefined } : null;
+	},
+
+	// Only an explicit false turns it off. A fresh install checks, because a fix that reaches
+	// nobody fixes nothing, and the default is what most people will never change.
+	async checkOnLaunch() {
+		return (await desktopStorage.getMeta<boolean>(CHECK_ON_LAUNCH_KEY)) !== false;
+	},
+
+	async setCheckOnLaunch(on) {
+		await desktopStorage.setMeta(CHECK_ON_LAUNCH_KEY, on);
 	},
 
 	onProgress(callback) {

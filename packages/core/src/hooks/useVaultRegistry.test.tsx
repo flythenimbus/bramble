@@ -210,6 +210,27 @@ describe("makeVaultScopedStorage", () => {
 		expect(await scoped.getMeta("k")).toBe("meta");
 	});
 
+	// Dropping a method here silently disables the feature behind it (it happened to readVaultBackup).
+	it("passes the quarantine store through, scoped to the active vault", async () => {
+		const calls: unknown[][] = [];
+		const base = {
+			readQuarantine: async (id?: string) => {
+				calls.push(["read", id]);
+				return null;
+			},
+			writeQuarantine: async (json: string, id?: string) => {
+				calls.push(["write", json, id]);
+			},
+		} as unknown as StorageAdapter;
+		const scoped = makeVaultScopedStorage(base, "v1");
+		await scoped.readQuarantine?.();
+		await scoped.writeQuarantine?.("[]");
+		expect(calls).toEqual([
+			["read", "v1"],
+			["write", "[]", "v1"],
+		]);
+	});
+
 	it("passes undefined (the default vault) when no vault id is bound", async () => {
 		const read = vi.fn(async () => new Uint8Array());
 		const base = { readVaultBlob: read } as unknown as StorageAdapter;

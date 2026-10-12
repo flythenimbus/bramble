@@ -8,6 +8,7 @@ import {
 	openPopup,
 	seedExampleLogin,
 	unlock,
+	waitOutPickerClickGuard,
 } from "./helpers";
 
 // Drives the strong-password suggestion end to end through the real content script, the picker,
@@ -131,6 +132,7 @@ test("suggests a strong password on a signup form, then fills it and offers to s
 	// of the regenerate button on the right) to use it.
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
 	// It fills the page's password field with a 20-character strong password...
@@ -162,6 +164,7 @@ test("a signup with an existing saved login still offers a NEW login, not update
 	}).toPass({ timeout: 20_000 });
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
 	await expect(page.locator("#bramble-corner-prompt")).toBeAttached({ timeout: 10_000 });
@@ -238,6 +241,7 @@ test("suggests a strong password on a change-password form (new field, not the c
 	// Use the suggestion (top row).
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
 	// It fills the new-password and confirm fields with the same strong password, leaves the
@@ -277,6 +281,7 @@ test("offers the suggestion while the vault is locked (fills, then prompts Unloc
 	// unlock pop-out and leave the field empty.)
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
 
@@ -307,6 +312,7 @@ test("Unlock & Save commits the new login after unlocking, and confirms it with 
 	}).toPass({ timeout: 20_000 });
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
 	// The locked card offers "Unlock & Save"; click it (bottom-left of the card).
@@ -400,6 +406,7 @@ test("suggests on a set-password form served from a login route", async ({
 
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
 	// Both boxes get the same generated password: the new one and its confirm.
@@ -433,6 +440,7 @@ test("a set-password form captures as a rotation, not a new login", async ({
 	}).toPass({ timeout: 20_000 });
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
 	await expect(page.locator("#bramble-corner-prompt")).toBeAttached({ timeout: 10_000 });
@@ -464,6 +472,7 @@ test("a bare confirm pair outweighs the login route it is served from", async ({
 
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
 });

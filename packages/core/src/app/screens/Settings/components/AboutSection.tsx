@@ -4,12 +4,9 @@ import { useRef } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { Button } from "../../../components/ui/button";
 import { openDevFlags } from "../../../dev-flags-open";
+import { REPO_URL } from "../../../repo";
 import { storeReviewUrl } from "../../../review-nudge";
 import { Section } from "./primitives";
-
-// Public repository. External-origin links open in a new tab on the extension and in the
-// system browser on mobile (Capacitor's default for cross-origin links).
-const GITHUB_URL = "https://github.com/flythenimbus/bramble";
 
 const linkClass = "text-primary hover:underline";
 
@@ -65,7 +62,7 @@ export function AboutSection() {
 					<Trans>Source code</Trans>
 				</span>
 				<span className="flex items-center gap-2">
-					<a href={GITHUB_URL} target="_blank" rel="noreferrer noopener" className={linkClass}>
+					<a href={REPO_URL} target="_blank" rel="noreferrer noopener" className={linkClass}>
 						GitHub
 					</a>
 				</span>

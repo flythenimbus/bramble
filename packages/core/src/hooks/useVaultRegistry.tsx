@@ -199,6 +199,9 @@ export function makeVaultScopedStorage(
 		readVaultBlob: (id) => storage.readVaultBlob(id ?? vaultId),
 		writeVaultBlob: (blob, id) => storage.writeVaultBlob(blob, id ?? vaultId),
 		restoreVaultFromBackup: (id) => storage.restoreVaultFromBackup(id ?? vaultId),
+		readQuarantine: storage.readQuarantine && ((id) => storage.readQuarantine!(id ?? vaultId)),
+		writeQuarantine:
+			storage.writeQuarantine && ((json, id) => storage.writeQuarantine!(json, id ?? vaultId)),
 		// Delete always targets an explicit vault; no active-vault default.
 		deleteVaultBlob: (id) => storage.deleteVaultBlob(id),
 		// Device-global metadata: pass through untouched (the adapter methods don't use `this`).

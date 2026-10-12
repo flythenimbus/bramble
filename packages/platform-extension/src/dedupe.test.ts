@@ -215,6 +215,13 @@ describe("hostname policy regressions", () => {
 			expect(hostnameMatches({ hostnames: [`dbs.${suffix}`] }, `evil.${suffix}`)).toBe(false);
 		},
 	);
+	it.each(["github.io", "vercel.app", "pages.dev"])(
+		"never offers another tenant's credentials under %s",
+		(suffix) => {
+			expect(hostnameMatches({ hostnames: [`alice.${suffix}`] }, `mallory.${suffix}`)).toBe(false);
+			expect(hostnameMatches({ hostnames: [`alice.${suffix}`] }, `www.alice.${suffix}`)).toBe(true);
+		},
+	);
 	it("keeps underscore subdomains within their registrable domain", () => {
 		expect(hostnameMatches({ hostnames: ["example.com"] }, "my_host.example.com")).toBe(true);
 	});

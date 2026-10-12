@@ -150,9 +150,8 @@ function handleCornerCardClick(e: Event): void {
 		return;
 	}
 	if (action === "save-new") {
-		// Keep existing entries, add captured credential as a separate login;
-		// same backend path as a fresh save-login.
-		sendCornerResponse("save");
+		// Its own action: a plain "save" re-runs dedupe, which folds a single match back into an update.
+		sendCornerResponse("save-new");
 		removeCornerPrompt();
 		return;
 	}

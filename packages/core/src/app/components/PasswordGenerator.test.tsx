@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../context/PlatformContext";
 import { PrefsProvider } from "../../hooks/usePrefs";
+import { effWordlist } from "../../util/wordlist-eff";
 import { PasswordGenerator } from "./PasswordGenerator";
 
 // The panel is the only place these settings can be reached, so what it refuses to do (leave
@@ -54,6 +55,21 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
+/** Every word count a "-"-joined passphrase can be read as: a hyphenated entry spans two pieces. */
+function wordCounts(phrase: string): Set<number> {
+	const words = new Set(effWordlist());
+	const pieces = phrase.split("-");
+	const reach = pieces.map(() => new Set<number>()).concat([new Set<number>()]);
+	reach[0]?.add(0);
+	pieces.forEach((piece, i) => {
+		for (const count of reach[i] ?? []) {
+			if (words.has(piece)) reach[i + 1]?.add(count + 1);
+			if (words.has(`${piece}-${pieces[i + 1]}`)) reach[i + 2]?.add(count + 1);
+		}
+	});
+	return reach[pieces.length] ?? new Set();
+}
+
 it("generates from the defaults and hands the shown value back", async () => {
 	const { shown, onUse } = mount();
 	await waitFor(() => expect(shown().length).toBe(20));
@@ -83,12 +99,30 @@ it("switches to a passphrase and remembers the mode", async () => {
 	await waitFor(() => expect(shown()).not.toBe(""));
 
 	fireEvent.click(screen.getByRole("button", { name: "Passphrase" }));
-	await waitFor(() => expect(shown().split("-")).toHaveLength(5));
-	for (const word of shown().split("-")) expect(word).toMatch(/^[a-z-]+$/);
+	await waitFor(() => expect(wordCounts(shown())).toContain(5));
 
 	await waitFor(() =>
 		expect(store.get("pref.generator")).toMatchObject({ mode: "passphrase", words: 5 }),
 	);
+});
+
+// The wordlist keeps four entries with a hyphen of their own (drop-down, felt-tip, t-shirt, yo-yo),
+// so a passphrase drawing one used to fail a split-on-"-" count about once in 400 runs.
+it("counts a word that carries its own hyphen as one word", async () => {
+	const dropDown = effWordlist().indexOf("drop-down");
+	vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation((buf) => {
+		(buf as Uint32Array)[0] = dropDown;
+		return buf;
+	});
+	try {
+		const { shown } = mount();
+		await waitFor(() => expect(shown()).not.toBe(""));
+		fireEvent.click(screen.getByRole("button", { name: "Passphrase" }));
+		await waitFor(() => expect(shown()).toContain("drop-down"));
+		expect(wordCounts(shown())).toContain(5);
+	} finally {
+		vi.restoreAllMocks();
+	}
 });
 
 it("starts from the settings the last session saved", async () => {

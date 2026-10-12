@@ -48,6 +48,14 @@ describe("PSL regressions", () => {
 		expect(etld1("b.ck")).toBeNull();
 		expect(etld1("www.ck")).toBe("www.ck");
 	});
+	it.each(["github.io", "vercel.app", "pages.dev", "netlify.app", "blogspot.com"])(
+		"treats the private PSL suffix %s as a boundary",
+		(suffix) => {
+			expect(etld1(`alice.${suffix}`)).toBe(`alice.${suffix}`);
+			expect(etld1(`www.alice.${suffix}`)).toBe(`alice.${suffix}`);
+			expect(etld1(suffix)).toBeNull();
+		},
+	);
 	it("retains the domain for subdomains containing underscores", () => {
 		expect(etld1("my_host.example.com")).toBe("example.com");
 	});

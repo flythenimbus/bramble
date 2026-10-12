@@ -28,6 +28,11 @@ name: iOS TestFlight
 # and one live App Store Connect call, in a few minutes and with no build. Worth doing after any
 # credential rotation, rather than discovering it during a release.
 #
+# `metadata_only` uploads the App Store listing in fastlane/metadata/ios (release notes,
+# description, keywords, screenshots) for the marketing version the ref carries, with no build and
+# no signing identity: the same `fastlane metadata` lane a Mac runs, but with the upload key that
+# lives here. Run it from main after a release's notes land, before submitting for review.
+#
 # `version` exists because App Store Connect closes a marketing version once it ships: uploading
 # another build to it is rejected with "Invalid Pre-Release Train ... is closed for new build
 # submissions". A one-off build off a branch whose version has already been released has nowhere
@@ -51,6 +56,11 @@ on:
         type: string
       check_only:
         description: "Only check the credentials and signing identities; build nothing"
+        required: false
+        default: false
+        type: boolean
+      metadata_only:
+        description: "Only upload the App Store listing (fastlane/metadata/ios); build nothing"
         required: false
         default: false
         type: boolean
@@ -98,20 +108,20 @@ jobs:
       # release build: a restored target/ puts objects in a signed build that did not come from
       # this checkout. The cost is a cold core build on a runner that already waits for an upload.
       - name: Setup Rust
-        if: ${{ !inputs.check_only }}
+        if: ${{ !inputs.check_only && !inputs.metadata_only }}
         uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           cache: false
 
       # The webview half of the shared core still builds through wasm-pack, pinned as in ci.yml.
       - name: Install wasm-pack
-        if: ${{ !inputs.check_only }}
+        if: ${{ !inputs.check_only && !inputs.metadata_only }}
         uses: taiki-e/install-action@76c2e6406e52637deed7160d77bded76bd83e06e # v2
         with:
           tool: wasm-pack@0.13.1
 
       - name: Install JS deps
-        if: ${{ !inputs.check_only }}
+        if: ${{ !inputs.check_only && !inputs.metadata_only }}
         run: pnpm install --frozen-lockfile
 
       # Always named, never inherited. The image's default is not ours to choose and moves without
@@ -159,7 +169,7 @@ jobs:
       # archive, and the upload. BRAMBLE_IOS_BUILD empty means the lane computes a timestamp, which
       # is what a one-off build wants.
       - name: Build and upload to TestFlight
-        if: ${{ !inputs.check_only }}
+        if: ${{ !inputs.check_only && !inputs.metadata_only }}
         env:
           BRAMBLE_IOS_BUILD: ${{ inputs.build }}
           BRAMBLE_IOS_VERSION: ${{ inputs.version }}
@@ -174,10 +184,23 @@ jobs:
           FASTLANE_HIDE_CHANGELOG: "1"
         run: fastlane beta_ci
 
+      # The listing only: the lane reads the marketing version from the project, so it targets (and
+      # creates, if missing) the App Store version this ref carries. Needs the upload key, nothing
+      # from the certificates repo.
+      - name: Upload the App Store listing
+        if: ${{ inputs.metadata_only && !inputs.check_only }}
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+        run: fastlane metadata
+
       # What landed, without opening App Store Connect. Also the one artifact worth keeping: a
       # crash report from TestFlight is unreadable without the dSYMs for that exact build.
       - name: Keep the dSYMs
-        if: ${{ success() && !inputs.check_only }}
+        if: ${{ success() && !inputs.check_only && !inputs.metadata_only }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dsyms-${{ github.run_id }}

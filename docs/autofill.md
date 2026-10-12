@@ -60,7 +60,12 @@ is similarly bound to the same live password field and rechecks for CAPTCHAs.
 `hostnameMatches` (background) returns true when the page hostname matches any of
 a login's registered hostnames under that entry's **subdomain match** policy:
 
-- `etld1` (default): the registrable domain and all its subdomains.
+- `etld1` (default): the registrable domain and all its subdomains. The boundary
+  is the full Public Suffix List **including its private section**, so tenants of
+  shared hosts (`alice.github.io`, `x.vercel.app`, `y.pages.dev`) are separate
+  sites. tldts leaves the private section out by default, which collapsed every
+  tenant to `github.io` and offered one tenant's login to all the others
+  (GHSA-rf5w-r5j3-6wmf).
 - `exact`: that exact hostname only.
 - `subdomain`: this domain plus its subdomains.
 
@@ -485,36 +490,50 @@ click inside it. Entry ids and row text live only inside the iframe, never in a
 page-readable surface. Content-script-injected web-accessible-resource iframes are
 exempt from the host page's `frame-src` CSP, so this works even on strict-CSP
 sites; the one header that blocks it is `Cross-Origin-Embedder-Policy:
-require-corp`, where a readiness race on the iframe's `AUTOFILL_UI_READY` ping
-times out and the content script falls back to the closed-shadow dropdown.
+require-corp`, where the readiness handshake times out and the content script
+falls back to the closed-shadow dropdown.
 
 The iframe holds **no secrets**. It receives only summaries (name + masked
 secondary) over `postMessage` and reports the user's pick back; the fill still
 happens in the content script against the real page inputs, and the background
-returns secrets only to the initiating content script's original request. The trust hinges on two
-origin checks the page can't forge:
+returns secrets only to the initiating content script's original request.
 
-- The content script honors an iframe message only when `event.source ===
-  iframe.contentWindow` **and** `event.origin === <extension origin>` (both
-  browser-set). A page's `window.postMessage` carries the page origin and a
-  different source, so it is dropped. The extension origin is taken from the
-  iframe's own `AUTOFILL_UI_READY` handshake (it must arrive from that window, on
-  the extension's url scheme) and pinned for every later message in both
-  directions - **not** from `runtime.getURL()`. Under Chromium's manifest
-  `use_dynamic_url`, getURL hands a content script a per-session GUID origin while
-  the document it loads reports the extension's static origin, so comparing
-  against the src origin drops every message both ways: READY never lands and the
-  picker silently falls back to the shadow renderer on every page.
-- The iframe accepts a parent message only when `event.source === window.parent`
-  and `event.origin === <page origin>` (passed on the iframe `src` as
-  `?parentOrigin=`), and posts back pinned to that origin.
+The iframe sits in the page's DOM, so `window.parent` is the **page's** window,
+which the content script shares. A check on the parent's source and origin cannot
+tell the content script from the page's own script, and once trusted that way the
+iframe obeyed whoever posted to it: a page could focus the field itself (script
+focus is a trusted focusin), take the iframe's window off any message it posted
+back, and send `UI_KEY` ArrowDown + Enter to fill with no click
+(GHSA-mvjj-4qqq-xr7h). So the window carries only a handshake, and everything
+else rides a **private `MessageChannel`**:
 
-Because the page controls the iframe element's geometry, `pickIsTrustworthy()`
-runs a **pick-time visibility check** before honoring a pick: the host must be
-on-screen, legibly sized, opaque, visible, unclipped, and not overlaid
-(`elementFromPoint` at its center must resolve to the host). This blocks a
-clickjacking page that hides/moves/overlays the iframe to coax a real click - the
-case that matters being cards, which are offered on every site.
+- The iframe posts `AUTOFILL_UI_READY` to the page origin. The content script
+  takes it only when `event.source === iframe.contentWindow` **and** the origin is
+  on the extension's url scheme (both browser-set), and answers with
+  `UI_CONNECT`, transferring one end of a fresh channel, pinned to READY's origin -
+  **not** to `runtime.getURL()`'s. Under Chromium's manifest `use_dynamic_url`,
+  getURL hands a content script a per-session GUID origin while the document it
+  loads reports the extension's static origin, so pinning to the src origin drops
+  the hand-over and the picker silently falls back to the shadow renderer.
+- The iframe adopts the **first** port it is handed, acks `UI_CONNECTED` on it,
+  and from then on ignores the window entirely. Rows and keys arrive, and picks
+  and heights leave, only on that port. The content script counts the iframe
+  ready on the ack, not on READY.
+- A page that wins the race to hand over its own port gets the iframe's answers
+  on its port and the content script hears nothing, so the worst it gets is a dead
+  picker; the readiness timeout then falls back to the shadow renderer.
+- The content script also honors a `UI_PICK` only for an entry id it rendered.
+
+Because the page controls the host element's geometry, `pickIsTrustworthy()`
+runs a **pick-time visibility check** before honoring a pick, on both renderers:
+the host must be on-screen, legibly sized, opaque, visible, unclipped, and not
+overlaid (`elementFromPoint` at its center must resolve to the host). Opacity is
+the effective one: the host's own times every ancestor's, `filter: opacity()`
+included, because neither inherits into the host's computed style. Other
+ancestor filters are allowed (Dark Reader's filter mode inverts every page's
+root). This blocks a clickjacking page that hides/moves/overlays the picker to
+coax a real click - the case that matters being cards, which are offered on every
+site.
 
 ### Relayed placement: hosted-fields checkouts
 
@@ -585,9 +604,12 @@ the top frame reads itself, not from any message.
 
 Keyboard nav works without moving focus off the page field: when the iframe is
 open, the content script forwards only Up/Down/Enter/Escape to it as `UI_KEY`
-(never characters). The iframe moves a highlight and reports back whether a row
-is selected (`UI_HIGHLIGHT`), which gates Enter - with a highlight, Enter picks
-that row; without one, Enter falls through so the form submits normally.
+(never characters). The iframe moves a highlight, which gates Enter - with a
+highlight, Enter picks that row; without one, Enter falls through so the form
+submits normally. The non-relayed content script tracks the gate itself from the
+renders and arrows it sent (the iframe applies them in order on the port), not
+from the iframe's `UI_HIGHLIGHT`: that report lands a round trip late and lost
+the race to a quick Enter. The relayed path still gates on `UI_HIGHLIGHT`.
 
 ### The card the tab already used
 
@@ -616,7 +638,7 @@ is an id the same response already carries in `cards`, so a frame that never ask
 learns nothing and the rule that query results are never tab-addressed still
 holds. The badge is ordering and a label only, never the keyboard highlight:
 taking that would make Enter fill a card on a form where Enter submits (see the
-`UI_HIGHLIGHT` gate above).
+Enter gate above).
 
 The carry is bound to the session that created it (`autofillSessionOwner`), so a
 lock, a vault switch or a lock/unlock ABA drops it; `tabs.onUpdated` with a url
@@ -649,8 +671,11 @@ layers:
   synthetic event can't pick (the capture listeners gate the same way);
 - the dropdown renders in a cross-origin iframe the page can neither read nor
   dispatch events into;
-- the content-script bridge honors a `UI_PICK` only when its `source`/`origin`
-  are the real iframe, so a page's own `postMessage` is dropped.
+- picks reach the content script only over the private channel handed to the
+  iframe, and the iframe takes rows and keys only from that channel, so a page's
+  own `postMessage` can neither pick nor drive the picker into picking (see "UI
+  isolation"; `picker-iframe.spec.ts` runs the page script from
+  GHSA-mvjj-4qqq-xr7h).
 
 **2. Clickjacking (UI redress).** The page can't fake a click, so it tricks the
 user into a *real* one. It makes the dropdown invisible (`opacity`), tiny, or
@@ -659,8 +684,29 @@ click (a play button, a cookie banner). The click is genuine and lands in the
 iframe, so every other defense passes, but the user never knew they were filling
 a credential and the page reads it back. Stopped by `pickIsTrustworthy()`, which
 honors a pick only when the host is actually visible to the user: on-screen,
-legibly sized, opaque, unclipped, and not overlaid (`elementFromPoint` at its
-center resolves to the host).
+legibly sized, opaque (counting ancestors), unclipped, and not overlaid
+(`elementFromPoint` at its center resolves to the host). It runs on the shadow
+fallback too, which a page can force by keeping the iframe from loading.
+
+Two more gates apply to **clicks** only. Keyboard picks (↓ then Enter in the
+focused field) are deliberate and skip both:
+
+- **Early clicks.** A click is dropped until the picker has sat still for 500 ms,
+  and the clock restarts whenever it appears, un-hides or moves. A page that can
+  open the picker (script focus) or move its field can otherwise put it under a
+  click the user is already making, a double-click lure being the classic.
+- **Browser-vouched visibility (Chromium).** Hit testing skips an overlay with
+  `pointer-events: none`, so a decoy painted over the picker passes
+  `elementFromPoint` while the user's click goes straight through it to a row.
+  The iframe watches itself with IntersectionObserver v2 (`trackVisibility`) and
+  refuses clicks unless the browser reports it unobscured, unfiltered and
+  opaque. A refused click shows "Use ↓ and Enter to fill on this page". It also
+  refuses under any filter on the page root, so with Dark Reader's filter mode
+  clicks don't fill in Chromium and the keyboard does.
+
+Firefox has no `trackVisibility`, so a static `pointer-events: none` decoy is
+still open there; putting the picker in the top layer (`popover`) is the
+candidate fix. `picker-iframe.spec.ts` runs the decoy in Chromium.
 
 **Blast-radius containment.** If a fill is somehow triggered anyway,
 `authorizeFill` (background) still requires a **login** to match the verified

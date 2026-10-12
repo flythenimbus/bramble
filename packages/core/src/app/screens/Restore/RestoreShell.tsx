@@ -11,6 +11,7 @@ import {
 	type PasswordSlot,
 	verifierPrefix,
 } from "../../../vault-format";
+import { CryptoErrorText } from "../../components/CryptoErrorText";
 import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
@@ -179,6 +180,7 @@ export function RestoreShell({
 				else setDone(true);
 			}
 		} catch (e) {
+			// Kept raw: CryptoErrorText renders it, so an internal code or raw crypto text never shows.
 			setError(e instanceof Error ? e.message : t`Couldn't restore this backup.`);
 		} finally {
 			setBusy(false);
@@ -251,7 +253,11 @@ export function RestoreShell({
 							<Trans>Reading file…</Trans>
 						</div>
 					)}
-					{error && <p className="text-sm text-destructive text-center mt-4">{error}</p>}
+					{error && (
+						<p className="text-sm text-destructive text-center mt-4">
+							<CryptoErrorText message={error} />
+						</p>
+					)}
 				</>
 			) : (
 				<form
@@ -297,7 +303,7 @@ export function RestoreShell({
 						value={password}
 						autoFocus
 						onChange={(e) => setPassword(e.target.value)}
-						error={error ?? undefined}
+						error={error ? <CryptoErrorText message={error} /> : undefined}
 					/>
 					<div className="flex items-center justify-between gap-3">
 						<Button

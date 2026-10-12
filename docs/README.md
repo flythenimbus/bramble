@@ -30,6 +30,7 @@ comments point here instead of repeating it.
 | [multiple-vaults.md](multiple-vaults.md) | Plan: parallel vaults on one device (local-id registry, one active vault at a time, active-vault-only sync, a primary vault for autofill/biometric) |
 | [p2p-sync.md](p2p-sync.md) | Cross-device P2P sync: WebRTC transport, Nostr-subset relay, enrollment + roster-auth, the entry-level merge engine (HLC + tombstones) |
 | [p2p-sync-testing.md](p2p-sync-testing.md) | Exercising device sync locally with two browser profiles + the relay |
+| [sync-vault-pinning-and-quarantine.md](sync-vault-pinning-and-quarantine.md) | Plan: pin extension sync to one vault, silently quarantine entries a vault can't decrypt, refuse foreign entries at merge, calm unlock errors |
 | [file-attachments.md](file-attachments.md) | Plan: files in a vault (entry attachments + standalone Files items); why the bytes cannot ride the entries payload, the immutable content-addressed blob store, per-file FEK + STREAM chunked AEAD, and the direct-only transfer that structurally cannot use TURN |
 | [cloud-storage-backups.md](cloud-storage-backups.md) | Planned scheduled encrypted backups: why the provider need not be zero-knowledge, and targeting S3 + WebDAV to cover Nextcloud/self-host and the privacy providers |
 | [synced-settings.md](synced-settings.md) | Plan: a third `PrefScope` (`"synced"`) so a setting crosses devices by one word in the scope table; the stamped map it rides in, why absent must mean "no opinion", and why a locked-readable pref can never be synced |

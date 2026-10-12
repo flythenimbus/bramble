@@ -95,9 +95,19 @@ declared `display`.
 
 `detectCardFields` is token-first: it prefers proper `autocomplete="cc-*"` tokens
 and falls back to regex hints. A combined MM/YY field is only treated as present
-when there is no split month/year pair, avoiding double-fill. A bare cardholder
-name is too weak a signal on its own, so `cardFieldsPresent` requires a real card
-field (number, CVV, or expiry) before the card picker is offered.
+when there is no split month/year pair, avoiding double-fill.
+
+Detecting a slot is not the same as calling the page a card form. `cardFieldsPresent`
+makes that call, and the card picker is offered only when it holds: **two of number,
+expiry and CVV together**, or any one of them carrying its own `cc-*` token. A lone
+field labelled "Expiry" is a passport, a document or a subscription as often as a
+card, and offering cards there was a reported bug; the same goes for a bare "Card
+number" (library, gift, ID card) or a split expiry month/year with nothing beside it.
+The token is the exception because a site that writes `cc-exp` has said what the
+field is, and a hosted-fields checkout (Stripe Elements, Braintree) puts each box in
+its own frame, where the pair can never be seen. A cardholder name never counts
+toward the pair. A lone untagged slot is still detected, which keeps that "Expiry"
+box out of the OTP rungs.
 
 The number has a third pass behind those two, for names that are unambiguous **on
 a card form** and meaningless anywhere else. `pan` is the one that matters: it is

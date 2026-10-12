@@ -322,6 +322,9 @@ export const extensionShell: ShellAdapter = {
 		const keys = Object.keys(all).filter((k) => k.startsWith("sync."));
 		if (keys.length) await api.storage.local.remove(keys);
 	},
+	async notifyVaultOpened(vaultId) {
+		await api.runtime.sendMessage({ type: "VAULT_OPENED", payload: { vaultId } }).catch(() => {});
+	},
 	setActiveVault(vaultId) {
 		// Shared with the background via chrome.storage.session, which reads it to sync the active
 		// vault and clears it on lock (background/session.ts). The id is not secret. Returns the

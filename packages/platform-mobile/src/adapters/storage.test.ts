@@ -5,13 +5,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // In-memory native filesystem (path -> base64 data) and Preferences (key -> string), so the
 // migration can be exercised without a device. Persist across resetModules so a test can drive the
 // migration then re-load (a fresh service-worker context) over the same store.
-const { files, prefs } = vi.hoisted(() => ({
+const { files, prefs, tear } = vi.hoisted(() => ({
 	files: new Map<string, string>(),
 	prefs: new Map<string, string>(),
+	// When on, every write leaves a truncated file and throws: the app killed mid-write.
+	tear: { on: false, rename: false },
 }));
 
 vi.mock("@capacitor/filesystem", () => ({
 	Directory: { Data: "DATA" },
+	Encoding: { UTF8: "utf8" },
 	Filesystem: {
 		stat: async ({ path }: { path: string }) => {
 			if (!files.has(path)) throw new Error("not found");
@@ -19,7 +22,18 @@ vi.mock("@capacitor/filesystem", () => ({
 		},
 		readFile: async ({ path }: { path: string }) => ({ data: files.get(path) }),
 		writeFile: async ({ path, data }: { path: string; data: string }) => {
+			if (tear.on) {
+				files.set(path, data.slice(0, 3));
+				throw new Error("killed mid-write");
+			}
 			files.set(path, data);
+		},
+		rename: async ({ from, to }: { from: string; to: string }) => {
+			if (tear.rename) throw new Error("killed before the rename");
+			const data = files.get(from);
+			if (data === undefined) throw new Error("not found");
+			files.set(to, data);
+			files.delete(from);
 		},
 		deleteFile: async ({ path }: { path: string }) => {
 			files.delete(path);
@@ -236,5 +250,65 @@ describe("subscribeMeta", () => {
 		off?.();
 		await storage.setMeta("backup.targets:v", []);
 		expect(seen).toEqual(["targets", "targets"]);
+	});
+});
+
+describe("quarantine", () => {
+	it("keeps a vault's quarantine in its own file and deletes it with the vault", async () => {
+		prefs.set(
+			REG_KEY,
+			JSON.stringify({
+				vaults: [
+					{ id: "a", label: "", createdAt: 1 },
+					{ id: "b", label: "", createdAt: 2 },
+				],
+			} satisfies VaultRegistry),
+		);
+		const storage = await loadStorage();
+		await storage.writeVaultBlob(new Uint8Array([1]), "a");
+		await storage.writeQuarantine?.("[]", "a");
+		expect(await storage.readQuarantine?.("a")).toBe("[]");
+		expect(await storage.readQuarantine?.("b")).toBeNull();
+		// A file, not Preferences: settings storage is no place for kept entries.
+		expect([...prefs.keys()].some((k) => k.includes("quarantine"))).toBe(false);
+
+		await storage.deleteVaultBlob("a");
+		expect(await storage.readQuarantine?.("a")).toBeNull();
+	});
+
+	it("a write torn by the app being killed leaves the previous quarantine intact", async () => {
+		prefs.set(
+			REG_KEY,
+			JSON.stringify({ vaults: [{ id: "a", label: "", createdAt: 1 }] } satisfies VaultRegistry),
+		);
+		const storage = await loadStorage();
+		await storage.writeVaultBlob(new Uint8Array([1]), "a");
+		await storage.writeQuarantine?.('["old"]', "a");
+		tear.on = true;
+		try {
+			await expect(storage.writeQuarantine?.('["new","longer"]', "a")).rejects.toThrow();
+		} finally {
+			tear.on = false;
+		}
+		expect(await storage.readQuarantine?.("a")).toBe('["old"]');
+	});
+
+	it("a write killed after the old store was removed still reads back the new one", async () => {
+		prefs.set(
+			REG_KEY,
+			JSON.stringify({ vaults: [{ id: "a", label: "", createdAt: 1 }] } satisfies VaultRegistry),
+		);
+		const storage = await loadStorage();
+		await storage.writeVaultBlob(new Uint8Array([1]), "a");
+		await storage.writeQuarantine?.('["old"]', "a");
+		tear.rename = true;
+		try {
+			await expect(storage.writeQuarantine?.('["new"]', "a")).rejects.toThrow();
+		} finally {
+			tear.rename = false;
+		}
+		expect(await storage.readQuarantine?.("a")).toBe('["new"]');
+		await storage.deleteVaultBlob("a");
+		expect([...files.keys()].some((k) => k.includes("quarantine"))).toBe(false);
 	});
 });

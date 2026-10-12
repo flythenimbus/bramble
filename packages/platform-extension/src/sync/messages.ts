@@ -11,6 +11,7 @@ import { z } from "zod";
 
 /** background -> offscreen: start the continuous roster-sync host. */
 export const RosterSyncMsgSchema = z.object({
+	vaultId: z.string(),
 	relayUrl: z.string(),
 	iceUrl: z.string().optional(),
 	groupKeyB64: z.string(),
@@ -23,6 +24,8 @@ export type RosterSyncMsg = z.infer<typeof RosterSyncMsgSchema>;
 /** popup -> background -> offscreen: start enrollment as the inviter. The
  * background injects devicePrivB64; the popup never sees the private key. */
 export const EnrollInviteMsgSchema = z.object({
+	// The inviting vault, injected by the background: the host adds the joiner to THIS vault's roster.
+	vaultId: z.string(),
 	relayUrl: z.string(),
 	iceUrl: z.string().optional(),
 	groupKeyB64: z.string(),
@@ -73,11 +76,17 @@ export const EnrollJoinMsgSchema = z.object({
 });
 
 /** offscreen -> background: a peer's entries payload (JSON) to merge locally. */
-export const ApplyRemoteMsgSchema = z.object({ payloadJson: z.string() });
+export const ApplyRemoteMsgSchema = z.object({ vaultId: z.string(), payloadJson: z.string() });
 export type ApplyRemoteMsg = z.infer<typeof ApplyRemoteMsgSchema>;
 
 /** offscreen -> background: a peer's roster (JSON) to merge locally (revocations propagate). */
-export const ApplyRosterMsgSchema = z.object({ rosterJson: z.string() });
+export const ApplyRosterMsgSchema = z.object({ vaultId: z.string(), rosterJson: z.string() });
+
+/** offscreen -> background: which vault a pinned sync callback is for. */
+export const SyncVaultMsgSchema = z.object({ vaultId: z.string() });
+
+/** background -> offscreen: stop roster sync unless it serves this vault. Enrollment is untouched. */
+export const RosterStopMsgSchema = z.object({ keepVaultId: z.string().nullable() });
 
 /** shell -> background (SYNC_SIGN_ENTRY): the canonical roster-entry string to Ed25519-sign. */
 export const RosterSignEntryMsgSchema = z.object({ canonical: z.string() });

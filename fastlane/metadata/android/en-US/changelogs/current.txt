@@ -1,11 +1,8 @@
 What's new in this release:
 
-- Cloud backups now work on Android. Point Bramble at storage you already have, an S3-compatible bucket such as Backblaze B2, Cloudflare R2 or Wasabi, or a WebDAV server such as Nextcloud, and it keeps a copy of your vault there, still sealed with your master password so the provider cannot read it. A backup happens when you unlock Bramble or come back to it after the interval you chose has passed. Back up now does it straight away.
-- Leaving Bramble during a backup no longer cuts it off. It keeps running until the upload is done, and you may see a notification saying so. If a backup could not be confirmed, Settings tells you, and it runs again the next time you open Bramble.
-- Two more email alias services: DuckDuckGo Email Protection and Firefox Relay. DuckDuckGo has no page for API keys, so Settings explains where to find the one it uses.
-- Switching to a different alias service now clears the API key box. Before, a key typed for one service stayed there, and checking it would send it to the service you had just switched to.
-- Pairing two devices no longer fails while you are still confirming it. It could time out partway and report that the other device had rejected the pairing, when nobody had.
-- Searching and selecting in a large vault is smoother. The list no longer redraws every item on each keystroke.
-- In German, Spanish, French, Italian and Portuguese, a few instructions were cut off mid-sentence, including the ones for pairing with another device. They are complete now.
+- A vault no longer refuses to open because it holds entries from one of your other vaults. A sync problem in the browser extension could copy entries from one vault into another, and that vault then failed to unlock with a technical error even with the right password. Bramble now sets those entries aside on this device, unchanged, and opens the vault with everything else.
+- During sync, Bramble now turns away entries that belong to a different vault, so a device that still has the problem cannot pass it on.
+- If a vault still won't open, Bramble says so in plain words and links to our issue tracker, instead of showing a technical error.
+- A security update to Capacitor, the framework the app is built on.
 
 No account, no cloud. Everything stays on your devices.

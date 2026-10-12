@@ -109,6 +109,9 @@ const categories: Category[] = [
 							body: "A per-user installer for Windows 10 and 11, so it needs no administrator rights. It checks for updates and installs them itself.",
 							action: windowsInstaller,
 							meta: `Version ${DESKTOP_VERSION}`,
+							// Said here because it is the moment someone wonders why the publisher is not
+							// "Bramble". The full policy is linked from the footer.
+							note: "Windows names SignPath Foundation as the publisher. Free code signing provided by SignPath.io, certificate by SignPath Foundation.",
 						},
 					]
 				: []),

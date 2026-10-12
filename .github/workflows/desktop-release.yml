@@ -377,3 +377,17 @@ jobs:
           if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
           if [ -n "$SKIP" ]; then flags+=("--skip=$SKIP"); fi
           node scripts/release.ts desktop "$VERSION" "${flags[@]}"
+
+  # The APT repository, once the release it points at exists. Its own workflow and environment, so
+  # the repository key never sits in desktop-release, and a failure here leaves a complete release
+  # that `gh workflow run apt-release.yml -f release=<version>-desktop` finishes.
+  apt:
+    name: APT repository
+    needs: publish
+    if: ${{ !inputs.dry_run && !contains(inputs.skip, 'linux') && needs.publish.result == 'success' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/apt-release.yml
+    with:
+      release: ${{ inputs.version }}-desktop
+    secrets: inherit

@@ -3,7 +3,8 @@ import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { ISSUES_URL, STORE_REVIEW_URL } from "../review-nudge";
+import { ISSUES_URL } from "../repo";
+import { STORE_REVIEW_URL } from "../review-nudge";
 import { ReviewNudgeCard } from "./ReviewNudgeCard";
 
 // The card is the only place the policy's decision becomes something clickable, and what it does

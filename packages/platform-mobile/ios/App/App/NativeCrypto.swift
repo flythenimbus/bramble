@@ -227,8 +227,8 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 	@objc func decryptEntries(_ call: CAPPluginCall) {
 		let entries = call.getArray("entries") ?? []
 		do {
-			var values: [String] = []
-			values.reserveCapacity(entries.count)
+			var payloads: [EncryptedPayload] = []
+			payloads.reserveCapacity(entries.count)
 			for item in entries {
 				guard let d = item as? [String: Any],
 					let ct = d["ciphertext"] as? String, let iv = d["iv"] as? String,
@@ -237,8 +237,10 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 					call.reject("Malformed entry in decryptEntries")
 					return
 				}
-				values.append(try App.decryptEntry(ciphertext: ct, iv: iv, wrappedDek: wd, dekIv: di))
+				payloads.append(EncryptedPayload(ciphertext: ct, iv: iv, wrappedDek: wd, dekIv: di))
 			}
+			// A failed entry is null, never a rejection of the whole vault.
+			let values: [Any] = try App.decryptEntries(payloads: payloads).map { $0 ?? NSNull() }
 			call.resolve(["values": values])
 		} catch { fail(call, error) }
 	}

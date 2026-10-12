@@ -7,6 +7,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import org.json.JSONObject
 import uniffi.vault_crypto.CryptoException
 import uniffi.vault_crypto.PasswordSlotBlob
 
@@ -230,18 +231,18 @@ class NativeCryptoPlugin : Plugin() {
             return
         }
         call.runCrypto {
-            val values = JSArray()
-            for (i in 0 until entries.length()) {
+            val payloads = (0 until entries.length()).map { i ->
                 val e = entries.getJSONObject(i)
-                values.put(
-                    uniffi.vault_crypto.decryptEntry(
-                        e.getString("ciphertext"),
-                        e.getString("iv"),
-                        e.getString("wrappedDek"),
-                        e.getString("dekIv"),
-                    ),
+                uniffi.vault_crypto.EncryptedPayload(
+                    e.getString("ciphertext"),
+                    e.getString("iv"),
+                    e.getString("wrappedDek"),
+                    e.getString("dekIv"),
                 )
             }
+            val values = JSArray()
+            // A failed entry is null, never a rejection of the whole vault.
+            for (v in uniffi.vault_crypto.decryptEntries(payloads)) values.put(v ?: JSONObject.NULL)
             call.resolve(JSObject().put("values", values))
         }
     }

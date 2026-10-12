@@ -154,10 +154,6 @@ export const STORE_REVIEW_URL: Partial<Record<Target, string>> = {
 	ios: "https://apps.apple.com/app/id6783071787?action=write-review",
 };
 
-/** Where "report an issue" goes. Offered beside the review ask so someone with a complaint has
- * somewhere better to put it than a one-star review. */
-export const ISSUES_URL = "https://github.com/flythenimbus/bramble/issues";
-
 export function storeReviewUrl(target: Target): string | undefined {
 	return STORE_REVIEW_URL[target];
 }

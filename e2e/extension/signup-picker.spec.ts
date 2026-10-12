@@ -1,6 +1,13 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { configureAliasProvider, createVault, lock, openPopup, seedExampleLogin } from "./helpers";
+import {
+	configureAliasProvider,
+	createVault,
+	lock,
+	openPopup,
+	seedExampleLogin,
+	waitOutPickerClickGuard,
+} from "./helpers";
 
 // What the picker offers on a form that CREATES a credential rather than fills one. The user is
 // inventing an account there, so the matches are clutter and the "Vault locked" row is worse: it
@@ -220,6 +227,7 @@ test("still offers the generated password on the signup form's own password box"
 	await expectPickerOn(page, "#pass");
 	const box = await page.locator(HOST).boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(STRONG_CHARS);
 });

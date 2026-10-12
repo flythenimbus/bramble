@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import type { Frame, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, openPopup, seedTotpLogin } from "./helpers";
+import { createVault, openPopup, seedTotpLogin, waitOutPickerClickGuard } from "./helpers";
 
 // A one-time code filled into a segmented widget, end to end: the real content script detects the
 // boxes, the real background computes the code, and the picker hands it over on a trusted click.
@@ -127,6 +127,7 @@ test("fills Cloudflare's six-box widget without blanking it on the hidden mirror
 	const frame = await openPicker(page, "#c1");
 	const row = frame.locator("[data-entry-id]");
 	await expect(row).toBeVisible({ timeout: 10_000 });
+	await waitOutPickerClickGuard(page);
 	await row.click();
 
 	// One digit per box, and the assembled code in the mirror rather than the empty string

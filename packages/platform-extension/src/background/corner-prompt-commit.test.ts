@@ -232,6 +232,40 @@ describe("commit: update an existing login (password rotation)", () => {
 	});
 });
 
+describe("commit: Save as new on the update card", () => {
+	it("adds a second login instead of rotating the single candidate", async () => {
+		const bg = await unlocked();
+		const cap = await bg.send(
+			{ type: "CORNER_PROMPT_CAPTURE", payload: { username: "bob", password: "SECOND" } },
+			pageSender("example.com", 5),
+		);
+		expect(cap.resp.data.kind).toBe("update-login");
+		expect(cap.resp.data.candidates).toHaveLength(1);
+
+		const res = await bg.send(
+			{
+				type: "CORNER_PROMPT_RESPONSE",
+				payload: { promptId: cap.resp.data.promptId, action: "save-new" },
+			},
+			pageSender("example.com", 5),
+		);
+		expect(res.resp).toEqual({ ok: true, data: null });
+		expect(bg.state.session["capture.pending.example.com"]).toBeUndefined();
+
+		const find = await bg.send(
+			{ type: "AUTOFILL_FIND", payload: { hostname: "example.com", hasLogin: true } },
+			extensionSender,
+		);
+		expect(find.resp.data.logins.map((l: any) => l.secondary).sort()).toEqual(["alice", "bob"]);
+		const fetched = await bg.send(
+			{ type: "AUTOFILL_FETCH", payload: { entryId: "login1" } },
+			extensionSender,
+		);
+		expect(fetched.resp.data.username).toBe("alice");
+		expect(fetched.resp.data.password).toBe("pw1");
+	});
+});
+
 describe("commit: a signup capture is always a new login", () => {
 	it("saves a new login on a signup even when a matching login already exists", async () => {
 		const bg = await unlocked();

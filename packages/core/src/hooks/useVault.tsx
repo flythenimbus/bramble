@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { IndexEntry, SubdomainMatchMode } from "../adapters/autofill";
 import type { BiometryType } from "../adapters/biometric";
+import { VAULT_OPEN_FAILED } from "../adapters/crypto";
 import { usePlatform } from "../context/PlatformContext";
 import {
 	decodeVaultBlob,
@@ -196,6 +197,7 @@ import {
 } from "../sync";
 import { PER_VAULT_SYNC_KEYS, syncKeyFor } from "../sync/sync-keys";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
+import { UserFacingError } from "../util/user-facing-error";
 import { toAutofillIndex } from "../vault/autofill-index";
 import {
 	biometricUnlockFlow,
@@ -207,8 +209,10 @@ import {
 	wrapRecoverySlot as buildRecoverySlot,
 	buildVaultBytes,
 } from "../vault/build-vault";
+import { createEntriesBlobStore } from "../vault/entries-blob";
 import { createEntryMutations, type VaultEntries } from "../vault/entry-mutations";
 import { entryDataSchema, normalizeEntryData } from "../vault/entry-normalize";
+import { quarantineEntries } from "../vault/quarantine";
 import { decryptEntriesOrRecover } from "../vault/recover-entries";
 import {
 	generateRecoveryCode as makeRecoveryCode,
@@ -554,75 +558,130 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 
 	/** Decrypt all entries and push the autofill index. */
-	const loadEntries = useCallback(async () => {
-		// Bind the eventual plaintext cache publish to the unlocked session that started this
-		// load, before any blob read/decrypt await can cross a lock/unlock or vault switch.
-		// A lease that cannot be issued is the same class of refusal as one that is rejected
-		// later, so it drops the index update rather than the unlock.
-		const indexLease = await autofill.beginIndexUpdate?.().catch((e: unknown) => {
-			console.warn("[vault] no autofill index lease for this load:", e);
-			return undefined;
-		});
-		const { blob } = await readDecodedBlob();
-		if (blob.entriesCiphertext.length === 0) {
-			stampsRef.current = new Map();
-			tombstonesRef.current = new Map();
-			settingsRef.current = undefined;
-			setSyncedSettings(undefined);
-			setEntries([]);
-			await publishIndex([], indexLease);
-			return;
-		}
-		// A blob that decodes but won't decrypt is the issue-#27 signature; recover from the
-		// verified snapshot where one exists. See vault/recover-entries.
-		const outerJson = await decryptEntriesOrRecover(
-			{
-				crypto,
-				storage,
-				onRestored: () =>
-					console.warn("[vault] entries failed to decrypt; restoring the verified snapshot"),
-			},
-			blob,
-		);
-		// The blob decrypted, so the key is right; a decode failure here means the
-		// payload shape is from an incompatible (older) format. Surface an actionable
-		// message instead of leaking raw decoder/zod internals to the unlock screen.
-		let payload: EntriesPayload;
-		try {
-			payload = decodeEntriesPayload(outerJson);
-		} catch (e) {
-			console.error("[vault] entries payload failed to decode:", e);
-			throw new Error(
-				"This vault was created by an incompatible version and can't be opened. Its data format has changed.",
+	// `vaultId` names the vault when the caller just created or selected it and this closure's
+	// `activeId` hasn't caught up (the restore screen's first-vault unlock).
+	const loadEntries = useCallback(
+		async (vaultId?: string) => {
+			const targetId = vaultId ?? activeId;
+			// Bind the eventual plaintext cache publish to the unlocked session that started this
+			// load, before any blob read/decrypt await can cross a lock/unlock or vault switch.
+			// A lease that cannot be issued is the same class of refusal as one that is rejected
+			// later, so it drops the index update rather than the unlock.
+			const indexLease = await autofill.beginIndexUpdate?.().catch((e: unknown) => {
+				console.warn("[vault] no autofill index lease for this load:", e);
+				return undefined;
+			});
+			const { blob } = await readDecodedBlob();
+			if (blob.entriesCiphertext.length === 0) {
+				stampsRef.current = new Map();
+				tombstonesRef.current = new Map();
+				settingsRef.current = undefined;
+				setSyncedSettings(undefined);
+				setEntries([]);
+				await publishIndex([], indexLease);
+				return;
+			}
+			// A blob that decodes but won't decrypt is the issue-#27 signature; recover from the
+			// verified snapshot where one exists. See vault/recover-entries.
+			const outerJson = await decryptEntriesOrRecover(
+				{
+					crypto,
+					storage,
+					onRestored: () =>
+						console.warn("[vault] entries failed to decrypt; restoring the verified snapshot"),
+				},
+				blob,
 			);
-		}
-		stampsRef.current = new Map(payload.entries.map((e) => [e.id, e.hlc]));
-		tombstonesRef.current = new Map(payload.tombstones.map((t) => [t.id, t.hlc]));
-		settingsRef.current = payload.settings;
-		setSyncedSettings(payload.settings);
-		// Advance this device's clock past every stamp it just read, so the next
-		// local write is causally ordered after them.
-		const clock = await ensureClock();
-		for (const e of payload.entries) clock.witness(e.hlc);
-		for (const t of payload.tombstones) clock.witness(t.hlc);
-		// One decrypt call for the whole vault: on the extension that is a single
-		// offscreen round-trip instead of one per entry (~1s -> a fraction on large
-		// vaults). Plaintexts come back in the same order as the entries.
-		const plaintexts = await crypto.decryptEntries(
-			payload.entries.map((enc) => ({
-				ciphertext: enc.ciphertext,
-				iv: enc.iv,
-				wrappedDek: enc.wrappedDek,
-				dekIv: enc.dekIv,
-			})),
-		);
-		const decrypted: Entry[] = payload.entries.map((enc, i) => {
-			const data = normalizeEntryData(JSON.parse(plaintexts[i] as string));
-			return { id: enc.id, ...data };
-		});
-		setEntries(decrypted);
-		await publishIndex(toAutofillIndex(decrypted), indexLease);
-	}, [readDecodedBlob, crypto, storage, autofill, ensureClock, publishIndex]);
+			// The blob decrypted, so the key is right; a decode failure here means the
+			// payload shape is from an incompatible (older) format. Surface an actionable
+			// message instead of leaking raw decoder/zod internals to the unlock screen.
+			let payload: EntriesPayload;
+			try {
+				payload = decodeEntriesPayload(outerJson);
+			} catch (e) {
+				console.error("[vault] entries payload failed to decode:", e);
+				throw new UserFacingError(
+					"This vault was created by an incompatible version and can't be opened. Its data format has changed.",
+				);
+			}
+			tombstonesRef.current = new Map(payload.tombstones.map((t) => [t.id, t.hlc]));
+			settingsRef.current = payload.settings;
+			setSyncedSettings(payload.settings);
+			// Advance this device's clock past every stamp it just read, so the next
+			// local write is causally ordered after them.
+			const clock = await ensureClock();
+			for (const e of payload.entries) clock.witness(e.hlc);
+			for (const t of payload.tombstones) clock.witness(t.hlc);
+			// One decrypt call for the whole vault: on the extension that is a single
+			// offscreen round-trip instead of one per entry (~1s -> a fraction on large
+			// vaults). Plaintexts come back in the same order as the entries.
+			const plaintexts = await crypto.decryptEntries(
+				payload.entries.map((enc) => ({
+					ciphertext: enc.ciphertext,
+					iv: enc.iv,
+					wrappedDek: enc.wrappedDek,
+					dekIv: enc.dekIv,
+				})),
+			);
+			// Decode everything readable BEFORE any write: a failed open must leave the vault as it was.
+			const readable: EncryptedEntry[] = [];
+			const unreadable: EncryptedEntry[] = [];
+			const decrypted: Entry[] = [];
+			payload.entries.forEach((enc, i) => {
+				const plaintext = plaintexts[i];
+				if (plaintext == null) {
+					unreadable.push(enc);
+					return;
+				}
+				readable.push(enc);
+				decrypted.push({ id: enc.id, ...normalizeEntryData(JSON.parse(plaintext)) });
+			});
+			if (unreadable.length > 0) {
+				// The outer layer opened under this key, so failures are stray entries unless this
+				// device can't decrypt entries at all: a fresh probe tells the two apart.
+				const probe = await crypto.encryptEntry("{}");
+				const [probed] = await crypto.decryptEntries([probe]);
+				if (probed == null) throw new Error("entry decryption is failing on this device");
+				const { readQuarantine, writeQuarantine } = storage;
+				if (!targetId || !readQuarantine || !writeQuarantine) {
+					throw new Error("no quarantine store for this vault");
+				}
+				console.warn(`[vault] setting aside ${unreadable.length} entries this vault can't decrypt`);
+				await quarantineEntries(
+					{
+						storage: { readQuarantine, writeQuarantine },
+						store: createEntriesBlobStore({
+							crypto,
+							storage,
+							readDecodedBlob,
+							verifyVekBeforeWrite: true,
+						}),
+						vaultId: targetId,
+					},
+					unreadable,
+				);
+			}
+			stampsRef.current = new Map(readable.map((e) => [e.id, e.hlc]));
+			setEntries(decrypted);
+			await publishIndex(toAutofillIndex(decrypted), indexLease);
+		},
+		[readDecodedBlob, crypto, storage, autofill, ensureClock, publishIndex, activeId],
+	);
+
+	// After a successful unwrap: load, or lock again so nothing syncs a vault that didn't open.
+	const openUnlocked = useCallback(
+		async (vaultId: string | null) => {
+			try {
+				await loadEntries(vaultId ?? undefined);
+			} catch (e) {
+				console.error("[vault] vault failed to open after unlock:", e);
+				await crypto.lock().catch(() => {});
+				throw e instanceof UserFacingError ? e : new Error(VAULT_OPEN_FAILED);
+			}
+			if (vaultId) void shell.notifyVaultOpened?.(vaultId);
+		},
+		[loadEntries, crypto, shell],
+	);
 
 	// On mount (and when the active vault resolves): detect an existing vault handle and
 	// whether crypto is already unlocked (popup reopened mid-session). Waits for the registry
@@ -656,6 +715,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 				try {
 					await loadEntries();
+					if (activeId) void shell.notifyVaultOpened?.(activeId);
 				} catch (e) {
 					// Reading the vault failed while unlocked (commonly an FSA file whose
 					// read permission needs a gesture on popup reopen). Fall back to the
@@ -685,6 +745,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		refreshSlotMetadata,
 		vaults.length,
 		refreshRegistry,
+		activeId,
 	]);
 
 	// Record which vault is unlocked so the background can target it for sync and a reopened popup
@@ -766,12 +827,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				magicVersion: verifierPrefix(),
 			});
 			if (!ok) throw new Error(t`Incorrect master password`);
-			await loadEntries();
+			await openUnlocked(target);
 			setIsLocked(false);
 			// Commit any corner-prompt capture parked while locked, now that the VEK is live.
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[readDecodedBlob, crypto, loadEntries, shell, activeId, t],
+		[readDecodedBlob, crypto, openUnlocked, shell, activeId, t],
 	);
 
 	/** Lock the vault: clear the VEK, autofill index, and decrypted state. */
@@ -814,11 +875,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				magicVersion: verifierPrefix(),
 			});
 			if (!ok) throw new Error(t`Security-key unlock failed (verifier mismatch).`);
-			await loadEntries();
+			await openUnlocked(activeId ?? null);
 			setIsLocked(false);
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[crypto, loadEntries, shell, activeId, t],
+		[crypto, openUnlocked, shell, activeId, t],
 	);
 
 	/** Unlock via a registered security key (one tap, two if the salt mismatches). */
@@ -1346,11 +1407,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				}
 			}
 			if (!opened) throw new Error(t`Incorrect recovery code`);
-			await loadEntries();
+			await openUnlocked(activeId ?? null);
 			setIsLocked(false);
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
-		[readDecodedBlob, crypto, loadEntries, shell, activeId, t],
+		[readDecodedBlob, crypto, openUnlocked, shell, activeId, t],
 	);
 
 	// Re-probe the gate's availability + enabled state. Called on mount and whenever the
@@ -1428,6 +1489,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				loadEntries,
 				onStaleCache: () => setBiometricEnabled(false),
 			});
+			void shell.notifyVaultOpened?.(activeId);
 			setIsLocked(false);
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},

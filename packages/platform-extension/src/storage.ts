@@ -26,6 +26,10 @@ function blobKeyFor(id: string): string {
 function backupKeyFor(id: string): string {
 	return `${VAULT_BLOB_BACKUP_KEY}:${id}`;
 }
+/** Entries a vault couldn't decrypt, kept sealed beside it. */
+function quarantineKeyFor(id: string): string {
+	return `vault-quarantine:${id}`;
+}
 
 /** True for any vault's blob storage key: a namespaced `<base>:<id>` key, or the un-suffixed `<base>`
  * a pre-namespacing vault briefly occupies mid-migration. Excludes the backup key. Used by the sync
@@ -285,11 +289,26 @@ export const extensionStorage: StorageAdapter = {
 		return true;
 	},
 
-	/** Delete a vault's blob and recovery snapshot. Idempotent (removing an absent key is a no-op). */
+	async readQuarantine(vaultId) {
+		if (!vaultId) throw new Error("readQuarantine needs a vault id");
+		await ensureMigrated();
+		const key = quarantineKeyFor(vaultId);
+		const v = (await api.storage.local.get(key))[key];
+		return typeof v === "string" ? v : null;
+	},
+
+	async writeQuarantine(json, vaultId) {
+		if (!vaultId) throw new Error("writeQuarantine needs a vault id");
+		await ensureMigrated();
+		await api.storage.local.set({ [quarantineKeyFor(vaultId)]: json });
+	},
+
+	/** Delete a vault's blob, recovery snapshot and quarantine. Idempotent (removing an absent key is a no-op). */
 	async deleteVaultBlob(vaultId) {
 		await ensureMigrated();
 		await api.storage.local.remove(blobKeyFor(vaultId));
 		await api.storage.local.remove(backupKeyFor(vaultId));
+		await api.storage.local.remove(quarantineKeyFor(vaultId));
 	},
 
 	// Meta reads/writes gate on the migration too: the registry lives here, so a read that skipped

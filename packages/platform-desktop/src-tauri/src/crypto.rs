@@ -189,20 +189,10 @@ pub fn crypto_decrypt_entry(payload: EncryptedPayload) -> CmdResult<String> {
 }
 
 /// Batch form: one IPC round trip for the whole vault rather than one per entry, which is
-/// what dominates open time on large vaults. Order matches `payloads`.
+/// what dominates open time on large vaults. A failed entry is null; order matches `payloads`.
 #[tauri::command]
-pub fn crypto_decrypt_entries(payloads: Vec<EncryptedPayload>) -> CmdResult<Vec<String>> {
-    payloads
-        .into_iter()
-        .map(|p| {
-            map(vault_crypto::decrypt_entry(
-                p.ciphertext,
-                p.iv,
-                p.wrapped_dek,
-                p.dek_iv,
-            ))
-        })
-        .collect()
+pub fn crypto_decrypt_entries(payloads: Vec<EncryptedPayload>) -> CmdResult<Vec<Option<String>>> {
+    map(vault_crypto::decrypt_entries_core(&payloads))
 }
 
 #[tauri::command]

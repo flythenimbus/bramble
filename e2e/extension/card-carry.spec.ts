@@ -1,6 +1,12 @@
 import type { BrowserContext, Frame, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, openPopup, seedExampleCard, seedSecondCard } from "./helpers";
+import {
+	createVault,
+	openPopup,
+	seedExampleCard,
+	seedSecondCard,
+	waitOutPickerClickGuard,
+} from "./helpers";
 
 // The card a tab has already filled, on the checkout that needs it: hosted fields, one
 // cross-origin frame per box, each frame filling only its own inputs (the relay itself is
@@ -119,6 +125,7 @@ test("the card picked in one hosted field leads the list in the next", async ({
 	// list it would have shown anyway.
 	const numberUi = await openPicker(page, "number");
 	await expect(numberUi.locator("[data-entry-id]")).toHaveCount(2);
+	await waitOutPickerClickGuard(page);
 	await numberUi.locator("[data-entry-id]").filter({ hasText: "Travel Mastercard" }).click();
 	await expect(boxFrame(page, "number").locator("#number")).toHaveValue("5555555555554444", {
 		timeout: 15_000,
@@ -147,6 +154,7 @@ test("a second tab is not told what the first one filled", async ({ context, ext
 	const first = await checkout(context);
 
 	const ui = await openPicker(first, "number");
+	await waitOutPickerClickGuard(first);
 	await ui.locator("[data-entry-id]").filter({ hasText: "Travel Mastercard" }).click();
 	await expect(boxFrame(first, "number").locator("#number")).toHaveValue("5555555555554444", {
 		timeout: 15_000,
@@ -168,6 +176,7 @@ test("navigating away ends it", async ({ context, extensionId }) => {
 	const page = await checkout(context);
 
 	const ui = await openPicker(page, "number");
+	await waitOutPickerClickGuard(page);
 	await ui.locator("[data-entry-id]").filter({ hasText: "Travel Mastercard" }).click();
 	await expect(boxFrame(page, "number").locator("#number")).toHaveValue("5555555555554444", {
 		timeout: 15_000,

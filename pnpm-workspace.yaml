@@ -19,7 +19,5 @@ onlyBuiltDependencies:
 # clean.
 overrides:
   adm-zip: ^0.6.1 # web-ext > firefox-profile; 0.6.1 fixes GHSA-vwc7-r8mq-g2x9
-  shell-quote: ^1.9.0 # web-ext > fx-runner, concurrently
-  sharp: ^0.35.0 # wrangler > miniflare, astro
-  minimatch@3>brace-expansion: ^2.1.4
-  undici: ^7.29.0 # web-ext > addons-linter > cheerio, vitest > jsdom
+  shell-quote: ^1.11.0 # web-ext > fx-runner, concurrently; 1.11.0 fixes GHSA-pqg4-j6r4-53mv
+  minimatch@3>brace-expansion: ^2.1.7

@@ -1,4 +1,4 @@
-import { Directory, Filesystem } from "@capacitor/filesystem";
+import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { Preferences } from "@capacitor/preferences";
 import type { StorageAdapter } from "@core/index";
 import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
@@ -26,6 +26,14 @@ function blobFileFor(id: string): string {
 }
 function backupFileFor(id: string): string {
 	return `vault-${id}.vlt1.bak`;
+}
+/** Entries a vault couldn't decrypt, kept sealed beside it. */
+function quarantineFileFor(id: string): string {
+	return `vault-${id}.quarantine.json`;
+}
+/** Where a quarantine write lands before it replaces the store, so a killed write tears only this. */
+function quarantineTempFor(id: string): string {
+	return `vault-${id}.quarantine.json.tmp`;
 }
 /** A per-vault sync value's Preferences key: `meta:<base>:<id>`. */
 function syncMetaKey(base: string, id: string): string {
@@ -223,13 +231,37 @@ export const mobileStorage: StorageAdapter = {
 		});
 		return true;
 	},
-	/** Delete a vault's blob file and recovery snapshot. Idempotent (missing files are skipped). */
+	async readQuarantine(vaultId) {
+		if (!vaultId) throw new Error("readQuarantine needs a vault id");
+		await ensureMigrated();
+		// The temp file only stands in when a write was killed between removing the store and the rename.
+		for (const path of [quarantineFileFor(vaultId), quarantineTempFor(vaultId)]) {
+			if (!(await fileExists(path))) continue;
+			const r = await Filesystem.readFile({ path, directory: DIR, encoding: Encoding.UTF8 });
+			return r.data as string;
+		}
+		return null;
+	},
+	async writeQuarantine(json, vaultId) {
+		if (!vaultId) throw new Error("writeQuarantine needs a vault id");
+		await ensureMigrated();
+		const path = quarantineFileFor(vaultId);
+		const temp = quarantineTempFor(vaultId);
+		await Filesystem.writeFile({ path: temp, directory: DIR, data: json, encoding: Encoding.UTF8 });
+		// Removed first, so the rename never depends on the platform overwriting an existing file.
+		if (await fileExists(path)) await Filesystem.deleteFile({ path, directory: DIR });
+		await Filesystem.rename({ from: temp, to: path, directory: DIR, toDirectory: DIR });
+	},
+	/** Delete a vault's blob file, recovery snapshot and quarantine. Idempotent (missing files are skipped). */
 	async deleteVaultBlob(vaultId) {
 		await ensureMigrated();
 		const path = blobFileFor(vaultId);
 		const bak = backupFileFor(vaultId);
 		if (await fileExists(path)) await Filesystem.deleteFile({ path, directory: DIR });
 		if (await fileExists(bak)) await Filesystem.deleteFile({ path: bak, directory: DIR });
+		for (const q of [quarantineFileFor(vaultId), quarantineTempFor(vaultId)]) {
+			if (await fileExists(q)) await Filesystem.deleteFile({ path: q, directory: DIR });
+		}
 	},
 
 	// Meta reads/writes gate on the migration too: the registry lives here, so a read that skipped

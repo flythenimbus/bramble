@@ -1,0 +1,8 @@
+What's new in this release:
+
+- A vault no longer refuses to open because it holds entries from one of your other vaults. A sync problem in the browser extension could copy entries from one vault into another, and that vault then failed to unlock with a technical error even with the right password. Bramble now sets those entries aside on this device, unchanged, and opens the vault with everything else.
+- During sync, Bramble now turns away entries that belong to a different vault, so a device that still has the problem cannot pass it on.
+- If a vault still won't open, Bramble says so in plain words and links to our issue tracker, instead of showing a technical error.
+- A security update to Capacitor, the framework the app is built on.
+
+No account, no cloud. Everything stays on your devices.

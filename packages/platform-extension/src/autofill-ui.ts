@@ -27,8 +27,10 @@ type Inbound =
 	| { type: "RENDER_LOCKED" }
 	| { type: "UI_KEY"; key: string };
 
-// Page origin (from the iframe src): outbound posts pin to it, inbound is checked against it.
+// Page origin (from the iframe src): READY is pinned to it, and only the content script's
+// UI_CONNECT is taken from it. The page shares that window, so everything after rides the port.
 const PARENT_ORIGIN = new URLSearchParams(location.search).get("parentOrigin") ?? "";
+let parentPort: MessagePort | null = null;
 // Relayed mode: our element is hosted by the top frame but the field lives in some
 // other frame, which answers our probe and becomes the peer we exchange rows and picks
 // with. The host frame only ever gets our height. See docs/autofill.md.
@@ -61,14 +63,18 @@ function post(message: unknown): void {
 		if (peer) peer.win.postMessage(message, peer.origin);
 		return;
 	}
-	if (!PARENT_ORIGIN) return;
-	window.parent.postMessage(message, PARENT_ORIGIN);
+	parentPort?.postMessage(message);
 }
 
 /** Our rendered height, always to the frame that owns our element (never the peer). */
 function postHeight(height: number): void {
+	const message = { type: "UI_RESIZE", height };
+	if (!RELAYED) {
+		parentPort?.postMessage(message);
+		return;
+	}
 	if (!PARENT_ORIGIN) return;
-	window.parent.postMessage({ type: "UI_RESIZE", height }, PARENT_ORIGIN);
+	window.parent.postMessage(message, PARENT_ORIGIN);
 }
 
 /** Uppercase avatar initials: first letter of the first two words, else first two letters. */
@@ -212,6 +218,7 @@ const STYLE = `
 	.tp-alias-busy { opacity: 0.75; cursor: default; }
 	.tp-alias-error .tp-user { color: var(--tp-danger, #dc2626); }
 	.tp-spin { animation: tp-spin 0.9s linear infinite; }
+	.tp-hint { padding: 8px 12px; color: var(--tp-muted); font-size: 12px; }
 	@keyframes tp-spin { to { transform: rotate(360deg); } }
 	.tp-avatar-suggest svg { width: 20px; height: 20px; }
 	.tp-suggest-pw {
@@ -339,10 +346,47 @@ function lockedRow(): string {
 /** Render body html, then report the rendered height so the parent can size the iframe. */
 function render(bodyHtml: string): void {
 	document.body.innerHTML = `<style>${STYLE}</style><div class="tp-list" role="listbox">${bodyHtml}</div>`;
+	reportHeight();
+}
+
+function reportHeight(): void {
 	requestAnimationFrame(() => {
 		const list = document.body.querySelector(".tp-list");
 		postHeight(list ? Math.ceil(list.getBoundingClientRect().height) : 0);
 	});
+}
+
+// Chromium can vouch that this frame is unobscured and unfiltered on screen (IntersectionObserver
+// v2), which catches a pointer-events: none decoy over us that no hit test sees. Clicks wait for
+// it; keys don't. Engines without it (Firefox) leave clicks to the content script's checks.
+const TRACKS_VISIBILITY =
+	typeof IntersectionObserver !== "undefined" &&
+	"trackVisibility" in IntersectionObserver.prototype;
+let vouchedVisible = false;
+if (TRACKS_VISIBILITY) {
+	new IntersectionObserver(
+		(entries) => {
+			const last = entries[entries.length - 1] as IntersectionObserverEntry & {
+				isVisible?: boolean;
+			};
+			vouchedVisible = last?.isVisible === true;
+		},
+		{ threshold: [0], trackVisibility: true, delay: 100 } as IntersectionObserverInit,
+	).observe(document.body);
+}
+
+/** Whether a click may fill; when it may not, say how to fill from the keyboard instead. */
+function clickAllowed(): boolean {
+	if (!TRACKS_VISIBILITY || vouchedVisible) return true;
+	const list = document.body.querySelector(".tp-list");
+	if (list && !list.querySelector(".tp-hint")) {
+		list.insertAdjacentHTML(
+			"beforeend",
+			html`<div class="tp-hint" role="status">${t("pickerUseKeyboard")}</div>`,
+		);
+		reportHeight();
+	}
+	return false;
 }
 
 /** Move the keyboard highlight and tell the parent whether a row is selected (gates Enter-to-pick). */
@@ -385,20 +429,23 @@ document.addEventListener("mousedown", (e) => {
 		post({ type: "UI_REGENERATE" });
 		return;
 	}
+	// Anything that fills is marked as a click, so the content script can time it.
 	const item = target?.closest<HTMLElement>("[data-entry-id]");
 	if (item?.dataset.entryId) {
 		e.preventDefault();
-		post({ type: "UI_PICK", entryId: item.dataset.entryId, otpOnly });
+		if (clickAllowed()) {
+			post({ type: "UI_PICK", entryId: item.dataset.entryId, otpOnly, pointer: true });
+		}
 		return;
 	}
 	if (target?.closest("[data-tp-suggest]")) {
 		e.preventDefault();
-		post({ type: "UI_USE_SUGGESTED" });
+		if (clickAllowed()) post({ type: "UI_USE_SUGGESTED", pointer: true });
 		return;
 	}
 	if (target?.closest("[data-tp-alias]")) {
 		e.preventDefault();
-		post({ type: "UI_USE_ALIAS" });
+		if (clickAllowed()) post({ type: "UI_USE_ALIAS", pointer: true });
 		return;
 	}
 	if (target?.closest("[data-tp-popout]")) {
@@ -417,11 +464,20 @@ window.addEventListener("message", (e) => {
 		const type = (e.data as { type?: string } | undefined)?.type;
 		if (!e.source || !type || !CONTENT_TYPES.has(type)) return;
 		peer = { win: e.source as Window, origin: e.origin };
-	} else {
-		if (e.source !== window.parent) return;
-		if (PARENT_ORIGIN && e.origin !== PARENT_ORIGIN) return;
+		handleInbound(e.data as Inbound | undefined);
+		return;
 	}
-	const msg = e.data as Inbound | undefined;
+	// First port wins. If the page races the content script to it, our answers go to the
+	// page's port and the content script never hears a pick: a dead picker, never a fill.
+	if (parentPort || e.source !== window.parent) return;
+	if (PARENT_ORIGIN && e.origin !== PARENT_ORIGIN) return;
+	if ((e.data as { type?: string } | undefined)?.type !== "UI_CONNECT" || !e.ports[0]) return;
+	parentPort = e.ports[0];
+	parentPort.onmessage = (m) => handleInbound(m.data as Inbound | undefined);
+	parentPort.postMessage({ type: "UI_CONNECTED" });
+});
+
+function handleInbound(msg: Inbound | undefined): void {
 	switch (msg?.type) {
 		case "RENDER_MATCHES": {
 			otpOnly = !!msg.otpOnly;
@@ -457,7 +513,7 @@ window.addEventListener("message", (e) => {
 			else if (msg.key === "Enter" && highlight >= 0) activate(highlight);
 			break;
 	}
-});
+}
 
 /**
  * Announce ourselves to every frame in the tab. Carries only our relay id, and the
@@ -522,6 +578,6 @@ if (RELAYED) {
 		announce();
 	}, ANNOUNCE_INTERVAL_MS);
 } else {
-	// Tell the parent we're live so it can push the first RENDER_MATCHES.
-	post({ type: "AUTOFILL_UI_READY" });
+	// Tell the parent we're live so the content script can hand over its port.
+	if (PARENT_ORIGIN) window.parent.postMessage({ type: "AUTOFILL_UI_READY" }, PARENT_ORIGIN);
 }

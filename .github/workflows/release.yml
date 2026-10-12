@@ -131,37 +131,10 @@ jobs:
     if: endsWith(github.event.release.tag_name, '-desktop')
     runs-on: ubuntu-latest
     steps:
-      # What apt trusts is the signature on the index, not the packages: a .deb is verified by its
-      # checksum in Packages, which is covered by Release, which is signed. So a repository whose
-      # InRelease does not verify against the published key is one that installs nothing, and the
-      # failure surfaces to users as "the following signatures were invalid" long after the fact.
-      # This runs against the live repository, so it also catches a half-finished upload.
-      - name: Assert the APT index verifies against the published key
-        run: |
-          set -euo pipefail
-          curl -fsSL https://apt.bramble.sh/keys.asc | gpg --dearmor > /tmp/bramble.gpg
-          curl -fsSL https://apt.bramble.sh/dists/stable/InRelease > /tmp/InRelease
-          gpgv --keyring /tmp/bramble.gpg /tmp/InRelease
-          echo "ok: InRelease verifies"
-
-      # The index names packages by path and checksum; a pool file that is missing (or was
-      # overwritten by a later sync) makes `apt install` fail on a package apt was just told about.
-      #
-      # Every architecture the repository claims, not just amd64: checking one of them is how the
-      # arm64 packages stayed unreachable for two releases. The architectures come from the sources
-      # snippet users actually install, so this fails if it stops matching the index as well.
-      - name: Assert every package the index names is actually there
-        run: |
-          set -euo pipefail
-          arches="$(curl -fsSL https://apt.bramble.sh/bramble.sources | sed -n 's/^Architectures: //p')"
-          [ -n "$arches" ] || { echo "::error::bramble.sources names no architectures"; exit 1; }
-          for arch in $arches; do
-            echo "-- $arch"
-            curl -fsSL "https://apt.bramble.sh/dists/stable/main/binary-$arch/Packages" > /tmp/Packages
-            grep -q '^Filename:' /tmp/Packages || { echo "::error::binary-$arch names no packages"; exit 1; }
-            grep '^Filename:' /tmp/Packages | awk '{print $2}' | while read -r path; do
-              code="$(curl -s -o /dev/null -w '%{http_code}' -I "https://apt.bramble.sh/$path")"
-              [ "$code" = "200" ] || { echo "::error::$path is $code"; exit 1; }
-              echo "ok: $path"
-            done
-          done
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # The signature on the index against the published key, then every package it names: see the
+      # script, which apt-release.yml runs too.
+      - name: Assert the APT repository verifies and serves every package it names
+        run: scripts/verify-apt-repository.sh

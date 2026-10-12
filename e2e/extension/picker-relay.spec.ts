@@ -1,6 +1,6 @@
 import type { Frame, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, openPopup, seedExampleCard } from "./helpers";
+import { createVault, openPopup, seedExampleCard, waitOutPickerClickGuard } from "./helpers";
 
 // Card autofill on a hosted-fields checkout (Shopify, Stripe Elements, Braintree, Adyen). The card
 // input lives in a cross-origin iframe sized to the input itself, so a picker mounted in that
@@ -183,6 +183,7 @@ test("picking a card fills the frame that owns the field, decoys included", asyn
 	await page.goto(`${MERCHANT}/`);
 
 	const ui = await openPicker(page);
+	await waitOutPickerClickGuard(page);
 	await ui.locator("[data-entry-id]").click();
 
 	const frame = cardFrame(page);
@@ -255,6 +256,7 @@ test("a card frame with room still renders the picker locally", async ({
 	expect(await hostCount(cardFrame(page))).toBe(1);
 	expect(await hostCount(page)).toBe(0);
 
+	await waitOutPickerClickGuard(page);
 	await ui.locator("[data-entry-id]").click();
 	await expect(cardFrame(page).locator("#number")).toHaveValue("4242424242424242", {
 		timeout: 15_000,
@@ -324,6 +326,7 @@ test("accumulates offsets through an intermediate frame", async ({ context, exte
 	expect(box?.y ?? 0).toBeGreaterThan(240);
 	expect(box?.y ?? 0).toBeLessThan(300);
 
+	await waitOutPickerClickGuard(page);
 	await ui.locator("[data-entry-id]").click();
 	await expect(cardFrame(page).locator("#number")).toHaveValue("4242424242424242", {
 		timeout: 15_000,

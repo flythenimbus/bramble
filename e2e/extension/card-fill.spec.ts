@@ -1,6 +1,12 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, openPopup, seedExampleCard, seedSecondCard } from "./helpers";
+import {
+	createVault,
+	openPopup,
+	seedExampleCard,
+	seedSecondCard,
+	waitOutPickerClickGuard,
+} from "./helpers";
 
 // Card fill on an ordinary same-document checkout, as opposed to the hosted-fields iframe case
 // in picker-relay.spec.ts. What is driven here needs a real browser: switching cards depends on
@@ -31,6 +37,22 @@ const PAN_ONLY = `<!doctype html><html><head><title>Secure payment</title></head
 	<input type="text" name="cvc" id="cvc" style="display: none" maxlength="4" />
 </body></html>`;
 
+// An unrelated expiry, the way a passport or document form has one: no tokens, just a label.
+const PASSPORT = `<!doctype html><html><head><title>Travel document</title></head><body>
+	<form id="form">
+		<label for="doc">Passport number</label><input id="doc" name="passport" />
+		<label for="exp">Expiry</label><input id="exp" name="expiry" />
+	</form>
+</body></html>`;
+
+// A card form named only by its labels: the pair is what makes it one.
+const UNTAGGED_CHECKOUT = `<!doctype html><html><head><title>Checkout</title></head><body>
+	<form>
+		<label for="num">Card number</label><input id="num" name="number" />
+		<label for="exp">Expiry</label><input id="exp" name="exp" />
+	</form>
+</body></html>`;
+
 const HOST = "#bramble-autofill-dropdown";
 
 /** Serve `html` for example.com under COEP, which forces the observable shadow renderer. */
@@ -58,6 +80,7 @@ async function openPickerOn(page: Page, selector: string) {
 
 /** Click the nth row of the open picker (rows live in a closed shadow root, so click by position). */
 async function clickRow(page: Page, box: { x: number; y: number; height: number }, n: number) {
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box.x + 30, box.y + 24 + n * 44);
 }
 
@@ -130,4 +153,50 @@ test('offers a card on an unlabelled name="pan" field', async ({ context, extens
 	await page.goto("https://example.com/pay");
 
 	await openPickerOn(page, "#pan");
+});
+
+test("a lone Expiry box is not a card form, until a CVV joins it", async ({
+	context,
+	extensionId,
+}) => {
+	// The reported bug: an unrelated "Expiry" field offered every stored card.
+	await setUp(context, extensionId);
+	const page = await context.newPage();
+	await serve(page, PASSPORT);
+	await page.goto("https://example.com/passport");
+
+	await page.locator("#exp").click();
+	// A negative about something asynchronous: give the query the round trip it would need.
+	await page.waitForTimeout(2000);
+	await expect(page.locator(HOST)).toHaveCount(0);
+
+	// Expiry and CVV together are a card form, and the same box now offers the card.
+	await page.evaluate(() => {
+		document
+			.getElementById("form")
+			?.insertAdjacentHTML(
+				"beforeend",
+				'<label for="cvv">CVV</label><input id="cvv" name="cvv" />',
+			);
+	});
+	const box = await openPickerOn(page, "#exp");
+	await clickRow(page, box, 0);
+	await expect.poll(() => page.locator("#exp").inputValue()).toBe("04/30");
+	await expect.poll(() => page.locator("#cvv").inputValue()).toBe("123");
+	expect(await page.locator("#doc").inputValue()).toBe("");
+});
+
+test("a card number and expiry with no cc-* tokens are a card form", async ({
+	context,
+	extensionId,
+}) => {
+	await setUp(context, extensionId);
+	const page = await context.newPage();
+	await serve(page, UNTAGGED_CHECKOUT);
+	await page.goto("https://example.com/checkout");
+
+	const box = await openPickerOn(page, "#exp");
+	await clickRow(page, box, 0);
+	await expect.poll(() => page.locator("#num").inputValue()).toBe("4242424242424242");
+	await expect.poll(() => page.locator("#exp").inputValue()).toBe("04/30");
 });

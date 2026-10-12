@@ -1,6 +1,12 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { backgroundWorker, createVault, expectUnlocked, openPopup } from "./helpers";
+import {
+	backgroundWorker,
+	createVault,
+	expectUnlocked,
+	openPopup,
+	waitOutPickerClickGuard,
+} from "./helpers";
 
 // The generator end to end: the panel in the entry form, the settings it saves, and the in-page
 // signup suggestion those settings shape. The page half is served with COEP: require-corp for the
@@ -158,6 +164,7 @@ test("a signup form is suggested a password in the shape the panel was left in",
 	// Use the suggestion (its row is the dropdown's first, clicked left of the regenerate button).
 	const box = await host.boundingBox();
 	expect(box).not.toBeNull();
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 
 	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(PASSPHRASE);
@@ -196,6 +203,7 @@ test("regenerating in the page asks the background, so it stays in that shape to
 	expect(await page.locator("#pass").inputValue()).toBe("");
 
 	// Now take what regenerate left on offer: still a passphrase.
+	await waitOutPickerClickGuard(page);
 	await page.mouse.click(box!.x + 30, box!.y + Math.min(36, box!.height / 2));
 	await expect.poll(() => page.locator("#pass").inputValue()).toMatch(PASSPHRASE);
 });

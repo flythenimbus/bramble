@@ -178,7 +178,13 @@ export interface PasskeyPromptResponse {
 	choice?: string;
 }
 
-type CornerPromptResponseAction = "save" | "update" | "dismiss" | "never" | "save-unlock-first";
+type CornerPromptResponseAction =
+	| "save"
+	| "save-new"
+	| "update"
+	| "dismiss"
+	| "never"
+	| "save-unlock-first";
 
 export interface CornerPromptResponse {
 	promptId: string;

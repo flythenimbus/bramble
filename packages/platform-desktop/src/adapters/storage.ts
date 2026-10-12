@@ -28,6 +28,10 @@ export const desktopStorage: StorageAdapter = {
 		return bytes ? Uint8Array.from(bytes) : null;
 	},
 
+	// A file beside the vault, not meta.json: that is rewritten whole and reset when corrupt.
+	readQuarantine: (vaultId) => invoke<string | null>("storage_read_quarantine", { vaultId }),
+	writeQuarantine: (json, vaultId) => invoke<void>("storage_write_quarantine", { json, vaultId }),
+
 	deleteVaultBlob: (vaultId) => invoke<void>("storage_delete_vault", { vaultId }),
 
 	getMeta: async <T>(key: string) => {

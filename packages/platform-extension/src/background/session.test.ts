@@ -7,6 +7,7 @@ import {
 	loadBackground,
 	pageSender,
 	setAutofillIndex,
+	TEST_ACTIVE_VAULT,
 	TEST_VEK_KEY,
 } from "../test/test-harness";
 
@@ -664,5 +665,44 @@ describe("autofill session transition ordering", () => {
 		).toBe(true);
 		release?.();
 		await clearing;
+	});
+});
+
+describe("sync waits for the vault to open", () => {
+	const syncSeed = {
+		"vault.registry": { vaults: [{ id: TEST_ACTIVE_VAULT, label: "", createdAt: 1 }] },
+		[`sync.group:${TEST_ACTIVE_VAULT}`]: {
+			groupKey: "Zw==",
+			roster: { devices: [], revoked: [] },
+		},
+		[`sync.deviceKeypair:${TEST_ACTIVE_VAULT}`]: { privateKey: "cHJpdg==", publicKey: "cHVi" },
+	};
+	const types = (bg: Awaited<ReturnType<typeof loadBackground>>) =>
+		bg.state.offscreenCalls.map((m) => m.type);
+
+	it("starts sync after the vault opens, not when the key unwraps", async () => {
+		const bg = await loadBackground({ localSeed: syncSeed });
+		await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(types(bg)).not.toContain("SYNC_ROSTER_SYNC");
+		await bg.send({ type: "VAULT_OPENED", payload: { vaultId: TEST_ACTIVE_VAULT } });
+		await vi.waitFor(() => expect(types(bg)).toContain("SYNC_ROSTER_SYNC"));
+	});
+
+	it("ignores an open reported for a vault that isn't active", async () => {
+		const bg = await loadBackground({ localSeed: syncSeed });
+		await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
+		const { resp } = await bg.send({ type: "VAULT_OPENED", payload: { vaultId: "someone-else" } });
+		expect(resp?.ok).toBe(false);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(types(bg)).not.toContain("SYNC_ROSTER_SYNC");
+	});
+
+	it("forgets an open when the vault locks", async () => {
+		const bg = await loadBackground({ localSeed: syncSeed });
+		await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
+		await bg.send({ type: "VAULT_OPENED", payload: { vaultId: TEST_ACTIVE_VAULT } });
+		await bg.send({ type: "CRYPTO_LOCK" });
+		expect(bg.state.session["sync.openedVault"]).toBeUndefined();
 	});
 });

@@ -1,0 +1,101 @@
+name: APT release
+
+# Publishes a desktop release's .debs to the APT repository (apt.bramble.sh): refills an aptly repo
+# from the live one, adds the release, signs the index with the standby key and uploads it to R2.
+# The end-to-end flow is in docs/apt-releases.md.
+#
+# - Called by desktop-release.yml once a release is published, and dispatchable by hand for a
+#   re-run (an APT step that failed is not a failed release) or a dry run.
+# - The `apt-release` environment gates the job. Its signing key and R2 credentials are released
+#   only after a required reviewer approves, and they are separate from desktop-release's so a
+#   desktop signing run never holds the key every apt install trusts.
+# - Actions are pinned by commit and first-party only, for the same reason.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Desktop release tag whose .debs to publish, e.g. 0.12.0-desktop"
+        required: true
+        type: string
+      dry_run:
+        description: "Refill, sign and check the index, but upload nothing"
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      release:
+        required: true
+        type: string
+      dry_run:
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+# Two publishes racing would each sync their own index over the other's.
+concurrency:
+  group: apt-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Sign and publish the APT index
+    runs-on: ubuntu-24.04
+    environment: apt-release
+    timeout-minutes: 30
+    env:
+      # The standby key (docs/release-signing.md), which ships in the keyring since desktop 0.9.0.
+      # The YubiKey key stays in the keyring, so indexes it signed keep verifying.
+      BRAMBLE_APT_GPG_KEY: F6A840761E00875560B1CA1AC265880E1ED5826E
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # From Ubuntu's own archive rather than a third-party action: this job holds the signing key.
+      - name: Install aptly and rclone
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends aptly rclone
+          aptly version
+          rclone version | head -1
+
+      - name: Refill, sign and publish
+        env:
+          RELEASE: ${{ inputs.release }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          CF_CACHE_PURGE_TOKEN: ${{ secrets.CF_CACHE_PURGE_TOKEN }}
+        run: |
+          set -euo pipefail
+          flags=(--release "$RELEASE")
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
+          node scripts/publish-apt.ts "${flags[@]}"
+
+      # What apt will check, on what was just signed, before (or instead of) anything going live.
+      - name: Check the signed index against the shipped keyring
+        run: |
+          set -euo pipefail
+          gpg --dearmor < packages/platform-desktop/apt/bramble-keyring.asc > "$RUNNER_TEMP/keyring.gpg"
+          gpgv --keyring "$RUNNER_TEMP/keyring.gpg" "$HOME/.aptly/public/dists/stable/InRelease"
+
+      - name: Check the live repository
+        if: ${{ !inputs.dry_run }}
+        run: scripts/verify-apt-repository.sh

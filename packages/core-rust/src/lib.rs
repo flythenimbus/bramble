@@ -608,6 +608,17 @@ pub fn unwrap_vek_webauthn(
     Ok(true)
 }
 
+fn open_entry(vek: &[u8], p: &EncryptedPayload) -> Result<String, CryptoError> {
+    let ct = b64_decode(&p.ciphertext)?;
+    let iv = iv_from(b64_decode(&p.iv)?)?;
+    let wrapped = b64_decode(&p.wrapped_dek)?;
+    let dek_iv = iv_from(b64_decode(&p.dek_iv)?)?;
+
+    let dek = aes_decrypt(vek, &dek_iv, &wrapped)?;
+    let plaintext = aes_decrypt(dek.as_slice(), &iv, &ct)?;
+    String::from_utf8(plaintext.to_vec()).map_err(|e| err(format!("utf8: {e}")))
+}
+
 /// Decrypt an entry: VEK unwraps the DEK, the DEK decrypts the plaintext.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[cfg_attr(feature = "ffi", uniffi::export)]
@@ -617,16 +628,30 @@ pub fn decrypt_entry(
     wrapped_dek: String,
     dek_iv: String,
 ) -> Result<String, CryptoError> {
-    with_vek(|vek| {
-        let ct = b64_decode(&ciphertext)?;
-        let iv = iv_from(b64_decode(&iv)?)?;
-        let wrapped = b64_decode(&wrapped_dek)?;
-        let dek_iv = iv_from(b64_decode(&dek_iv)?)?;
+    let p = EncryptedPayload {
+        ciphertext,
+        iv,
+        wrapped_dek,
+        dek_iv,
+    };
+    with_vek(|vek| open_entry(vek, &p))
+}
 
-        let dek = aes_decrypt(vek, &dek_iv, &wrapped)?;
-        let plaintext = aes_decrypt(dek.as_slice(), &iv, &ct)?;
-        String::from_utf8(plaintext.to_vec()).map_err(|e| err(format!("utf8: {e}")))
-    })
+/// Open a whole vault's entries in one VEK section. A failed entry is None; only a locked
+/// vault fails the call.
+pub fn decrypt_entries_core(
+    payloads: &[EncryptedPayload],
+) -> Result<Vec<Option<String>>, CryptoError> {
+    with_vek(|vek| Ok(payloads.iter().map(|p| open_entry(vek, p).ok()).collect()))
+}
+
+/// Batch decrypt for the native hosts; see `decrypt_entries_core`.
+#[cfg(feature = "ffi")]
+#[uniffi::export]
+pub fn decrypt_entries(
+    payloads: Vec<EncryptedPayload>,
+) -> Result<Vec<Option<String>>, CryptoError> {
+    decrypt_entries_core(&payloads)
 }
 
 /// Decrypt ciphertext encrypted directly under the VEK.
@@ -677,6 +702,17 @@ mod wasm_exports {
     pub fn encrypt_entry(plaintext_json: String) -> Result<JsValue, CryptoError> {
         let payload = encrypt_entry_core(&plaintext_json)?;
         serde_wasm_bindgen::to_value(&payload).map_err(|e| err(format!("serialize: {e}")))
+    }
+
+    /// Open many entries in one call; failed entries come back as null.
+    #[wasm_bindgen]
+    pub fn decrypt_entries(entries: JsValue) -> Result<JsValue, CryptoError> {
+        let payloads: Vec<EncryptedPayload> = serde_wasm_bindgen::from_value(entries)
+            .map_err(|e| err(format!("deserialize: {e}")))?;
+        let out = decrypt_entries_core(&payloads)?;
+        // json_compatible: None must reach JS as null, not undefined.
+        out.serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(|e| err(format!("serialize: {e}")))
     }
 
     /// Encrypt plaintext directly under the VEK (no per-item DEK).
@@ -1005,6 +1041,20 @@ mod tests {
         let back = decrypt_entry(p.ciphertext, p.iv, p.wrapped_dek, p.dek_iv).unwrap();
         assert_eq!(back, json);
         lock();
+    }
+
+    // One stray entry sealed under another key must not fail the whole vault's batch.
+    #[test]
+    fn decrypt_entries_marks_foreign_entries_none() {
+        let _guard = VEK_SLOT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unlock_with_vek(B64.encode([0x22u8; KEY_LEN])).unwrap();
+        let foreign = encrypt_entry_core("{\"title\":\"Other vault\"}").unwrap();
+        unlock_with_vek(B64.encode([0x11u8; KEY_LEN])).unwrap();
+        let mine = encrypt_entry_core("{\"title\":\"Mine\"}").unwrap();
+        let out = decrypt_entries_core(&[mine, foreign]).unwrap();
+        assert_eq!(out, vec![Some("{\"title\":\"Mine\"}".to_string()), None]);
+        lock();
+        assert!(decrypt_entries_core(&[]).is_err());
     }
 }
 

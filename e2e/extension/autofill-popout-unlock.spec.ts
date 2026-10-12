@@ -1,6 +1,13 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, lock, openPopup, STRONG_PW, seedExampleLogin } from "./helpers";
+import {
+	createVault,
+	lock,
+	openPopup,
+	STRONG_PW,
+	seedExampleLogin,
+	waitOutPickerClickGuard,
+} from "./helpers";
 
 // The production click-to-unlock flow, end to end: locked vault -> "Vault locked" row in the picker
 // -> the real unlock POP-OUT WINDOW the background opens -> master password. Two things must happen
@@ -43,6 +50,7 @@ async function serve(page: Page): Promise<void> {
 
 /** Click the middle of the picker's first row (the rows are in a closed shadow root). */
 async function clickPickerRow(page: Page): Promise<void> {
+	await waitOutPickerClickGuard(page);
 	const box = await page.locator(HOST).boundingBox();
 	expect(box).not.toBeNull();
 	await page.mouse.click(box!.x + box!.width / 2, box!.y + Math.min(37, box!.height / 2));

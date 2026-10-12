@@ -1766,8 +1766,8 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 			" is committed and the website is deploying." +
 			(skip.has("linux")
 				? ""
-				: "\nThe APT repository is still signed from a Mac, until its key moves off the YubiKey:" +
-					`\n  pnpm run publish:apt --release ${tag}`),
+				: "\nThe APT repository is next (the APT repository job, approved in apt-release). If it" +
+					` fails, the release stands; finish it with:\n  gh workflow run apt-release.yml -f release=${tag}`),
 	);
 }
 

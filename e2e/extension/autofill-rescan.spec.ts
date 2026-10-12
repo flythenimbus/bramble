@@ -1,6 +1,12 @@
 import type { BrowserContext, Frame, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { backgroundWorker, createVault, openPopup, seedExampleLogin } from "./helpers";
+import {
+	backgroundWorker,
+	createVault,
+	openPopup,
+	seedExampleLogin,
+	waitOutPickerClickGuard,
+} from "./helpers";
 
 // When the content script looks at the page again, and what that costs. Issue #59:
 // the MutationObserver dropped the cached field model on every childList batch, so
@@ -285,6 +291,7 @@ test("fills a login form rendered inside an open shadow root", async ({ context,
 	await expect(row).toBeVisible({ timeout: 10_000 });
 	await expect(row).toContainText("alice@example.com");
 
+	await waitOutPickerClickGuard(page);
 	await row.click();
 	await expect(user).toHaveValue("alice@example.com", { timeout: 10_000 });
 	await expect(pass).toHaveValue("s3cr3t-pw-01");

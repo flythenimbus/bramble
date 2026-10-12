@@ -21,6 +21,7 @@ import {
 import { syncKeyFor } from "@core/sync/sync-keys";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
 import { api } from "../platform-api";
+import { OPENED_VAULT_KEY } from "../session-keys";
 import { extensionStorage } from "../storage";
 import {
 	AdmissionPubkeyMsgSchema,
@@ -30,6 +31,7 @@ import {
 	RosterSignEntryMsgSchema,
 	type RosterSyncMsg,
 	type SyncEventMsg,
+	SyncVaultMsgSchema,
 } from "../sync/messages";
 import {
 	type DeviceKeypair,
@@ -141,6 +143,8 @@ const withDeviceKey = async (message: {
 			// and it can't recover it from the private key. Harmless on the join path.
 			devicePubB64: kp.publicKey,
 			...(vekB64 ? { vekB64 } : {}),
+			// The inviting vault, so the host adds the joiner to this vault's roster and no other.
+			...(message.type === "SYNC_ENROLL_INVITE" ? { vaultId: ctx.vaultId } : {}),
 		},
 	});
 };
@@ -226,6 +230,8 @@ const syncHostSuspends = !useOffscreenDoc;
 // (top-level resume, unlock, and the keepalive alarm can all fire in one lifetime). A fresh
 // lifetime (after a suspend) resets it, so a woken event page reconnects.
 let syncRunning = false;
+/** The vault the running session serves; null when none. */
+let syncVaultId: string | null = null;
 let syncEpoch = 0;
 let stopInFlight: Promise<void> = Promise.resolve();
 
@@ -267,6 +273,8 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 	}
 	const ctx = await resolveSyncVault();
 	if (!ctx) return; // this vault simply isn't enrolled; not a failure
+	const opened = (await api.storage.session.get(OPENED_VAULT_KEY))[OPENED_VAULT_KEY];
+	if (opened !== ctx.vaultId) return; // not loaded since unlock: never sync a vault that may not open
 	if (sessionMoved()) {
 		abandonStart("resolving the vault", startEpoch, vekEpoch);
 		return;
@@ -278,10 +286,17 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 		abandonStart("reading the group", startEpoch, vekEpoch);
 		return;
 	}
-	if (syncRunning) return;
+	if (syncRunning && syncVaultId === ctx.vaultId) return;
+	if (syncRunning) {
+		// Still serving a vault the user left: stop it, then start over for this one.
+		await stopSync({ keepVaultId: ctx.vaultId });
+		return maybeStartSync(expectedVekEpoch);
+	}
 	syncRunning = true;
+	syncVaultId = ctx.vaultId;
 	if (syncHostSuspends) api.alarms.create(SYNC_KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
 	const payload: RosterSyncMsg = {
+		vaultId: ctx.vaultId,
 		relayUrl: await getStoredRelay(),
 		iceUrl: await getStoredIceUrl(),
 		groupKeyB64: group.groupKey,
@@ -292,6 +307,7 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 	if (sessionMoved()) {
 		abandonStart("the final check before handing the roster to the host", startEpoch, vekEpoch);
 		syncRunning = false;
+		syncVaultId = null;
 		return;
 	}
 	await sendToOffscreen({ type: "SYNC_ROSTER_SYNC", payload });
@@ -303,9 +319,15 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 	}).catch(() => {});
 }
 
-export async function stopSync(): Promise<void> {
+/** Stop sync. With `keepVaultId`, only roster sync for other vaults stops and a pairing is untouched. */
+export async function stopSync({
+	keepVaultId,
+}: {
+	keepVaultId?: string | null;
+} = {}): Promise<void> {
 	const stopEpoch = ++syncEpoch;
 	syncRunning = false;
+	syncVaultId = null;
 	// The pipe must not outlive sync: it exists to carry sync, and holding it open would keep a
 	// native host process alive for nothing.
 	void closeSyncLink().catch(() => {});
@@ -313,9 +335,19 @@ export async function stopSync(): Promise<void> {
 		if (syncHostSuspends) await api.alarms.clear(SYNC_KEEPALIVE_ALARM);
 		// If a newer stop superseded this one, it will deliver the disconnect instead.
 		if (stopEpoch !== syncEpoch) return;
-		await sendToOffscreen({ type: "SYNC_DISCONNECT" }).catch(() => {});
+		const message =
+			keepVaultId === undefined
+				? { type: "SYNC_DISCONNECT" }
+				: { type: "SYNC_ROSTER_STOP", payload: { keepVaultId } };
+		await sendToOffscreen(message).catch(() => {});
 	})();
 	await stopInFlight;
+}
+
+/** The active vault moved: stop any roster session serving another vault, even one this worker didn't start. */
+export function retargetSync(activeVaultId: string | null): void {
+	if (syncRunning && syncVaultId === activeVaultId) return;
+	void stopSync({ keepVaultId: activeVaultId });
 }
 
 // Read + decrypt the active vault's outer blob. Returns the blob (for its slots, carried
@@ -365,6 +397,22 @@ function makeVaultSyncPort(ctx: SyncVaultCtx): VaultSyncPort {
 			await writeVault(newBlob, ctx.vaultId);
 			await broadcastVaultChanged();
 		},
+		async openable(entries) {
+			const res = await sendToOffscreen({
+				type: "CRYPTO_CHECK_ENTRIES",
+				vaultId: ctx.vaultId,
+				payload: {
+					entries: entries.map(({ ciphertext, iv, wrappedDek, dekIv }) => ({
+						ciphertext,
+						iv,
+						wrappedDek,
+						dekIv,
+					})),
+				},
+			});
+			if (!res.ok || !Array.isArray(res.data)) throw new Error(res.error ?? "entry check failed");
+			return res.data as boolean[];
+		},
 	};
 }
 
@@ -373,9 +421,17 @@ function makeVaultSyncPort(ctx: SyncVaultCtx): VaultSyncPort {
 // document messages the background) and handed to the in-process bridge (Firefox:
 // the host runs in this event page). See offscreen-core SyncBridge.
 
-/** The active vault's current payload, to send to peers. */
-async function syncLocalPayload(): Promise<string> {
-	const ctx = await resolveSyncVault();
+/** The pinned vault, only while it is still the active one; null makes a stale session inert. */
+async function pinnedCtx(vaultId: string): Promise<SyncVaultCtx | null> {
+	const active = await resolveSyncVault();
+	return active?.vaultId === vaultId ? active : null;
+}
+
+const EMPTY_ROSTER = encodeRoster({ devices: [], revoked: [] });
+
+/** The pinned vault's current payload, to send to peers. */
+async function syncLocalPayload(vaultId: string): Promise<string> {
+	const ctx = await pinnedCtx(vaultId);
 	if (!ctx) return encodeEntriesPayload(emptyEntriesPayload());
 	const { payload } = await readLocalState(ctx);
 	return encodeEntriesPayload(payload);
@@ -383,12 +439,30 @@ async function syncLocalPayload(): Promise<string> {
 
 let lastSyncStampAt = 0;
 
-/** A peer's payload arrived: merge into the active vault. Returns whether it changed. */
-async function syncApplyRemote(payloadJson: string): Promise<boolean> {
-	const ctx = await resolveSyncVault();
+/** One merge at a time per vault: the relay and desktop-link sessions both feed this. */
+const applyChains = new Map<string, Promise<unknown>>();
+/** Entry versions a vault refused at merge, so a peer's rebroadcast isn't re-checked every tick. */
+const refusedByVault = new Map<string, Set<string>>();
+
+/** A peer's payload arrived: merge into the pinned vault. Returns whether it changed. */
+export async function syncApplyRemote(vaultId: string, payloadJson: string): Promise<boolean> {
+	const run = (applyChains.get(vaultId) ?? Promise.resolve()).then(() =>
+		applyRemoteNow(vaultId, payloadJson),
+	);
+	applyChains.set(
+		vaultId,
+		run.catch(() => {}),
+	);
+	return run;
+}
+
+async function applyRemoteNow(vaultId: string, payloadJson: string): Promise<boolean> {
+	const ctx = await pinnedCtx(vaultId);
 	if (!ctx) return false;
 	const remote = decodeEntriesPayload(payloadJson);
-	const { changed } = await applyRemotePayload(makeVaultSyncPort(ctx), remote);
+	const rejected = refusedByVault.get(ctx.vaultId) ?? new Set<string>();
+	refusedByVault.set(ctx.vaultId, rejected);
+	const { changed } = await applyRemotePayload(makeVaultSyncPort(ctx), remote, { rejected });
 	// Every reconcile (changed or no-op) means "we're up to date with a peer". Peers rebroadcast
 	// every few seconds, so throttle the stamp to ~30s to avoid churn (each write wakes the Sync
 	// UI via storage.onChanged). The UI live-reads this via subscribeMeta. Per-vault so each vault's
@@ -401,17 +475,18 @@ async function syncApplyRemote(payloadJson: string): Promise<boolean> {
 	return changed;
 }
 
-/** The active vault's roster, to gossip alongside entries. */
-async function syncLocalRoster(): Promise<string> {
-	const ctx = await resolveSyncVault();
-	if (!ctx) return "";
+/** The pinned vault's roster, to gossip alongside entries. */
+export async function syncLocalRoster(vaultId: string): Promise<string> {
+	const ctx = await pinnedCtx(vaultId);
+	// Empty, not "": "" makes the host fall back to the device list it started with.
+	if (!ctx) return EMPTY_ROSTER;
 	const group = await getStoredGroup(ctx);
-	return group ? encodeRoster(group.roster) : "";
+	return group ? encodeRoster(group.roster) : EMPTY_ROSTER;
 }
 
 /** A peer's roster arrived: merge revocations/additions, persist, and nudge the popup. */
-async function syncApplyRoster(rosterJson: string): Promise<void> {
-	const ctx = await resolveSyncVault();
+async function syncApplyRoster(vaultId: string, rosterJson: string): Promise<void> {
+	const ctx = await pinnedCtx(vaultId);
 	if (!ctx) return;
 	const group = await getStoredGroup(ctx);
 	if (!group) return;
@@ -429,23 +504,30 @@ async function syncApplyRoster(rosterJson: string): Promise<void> {
 
 on(
 	"SYNC_LOCAL_PAYLOAD",
-	extensionOnly(async () => ({ ok: true, data: await syncLocalPayload() })),
-);
-on(
-	"SYNC_APPLY_REMOTE",
 	extensionOnly(async (message) => ({
 		ok: true,
-		data: await syncApplyRemote(ApplyRemoteMsgSchema.parse(message.payload).payloadJson),
+		data: await syncLocalPayload(SyncVaultMsgSchema.parse(message.payload).vaultId),
 	})),
 );
 on(
+	"SYNC_APPLY_REMOTE",
+	extensionOnly(async (message) => {
+		const { vaultId, payloadJson } = ApplyRemoteMsgSchema.parse(message.payload);
+		return { ok: true, data: await syncApplyRemote(vaultId, payloadJson) };
+	}),
+);
+on(
 	"SYNC_LOCAL_ROSTER",
-	extensionOnly(async () => ({ ok: true, data: await syncLocalRoster() })),
+	extensionOnly(async (message) => ({
+		ok: true,
+		data: await syncLocalRoster(SyncVaultMsgSchema.parse(message.payload).vaultId),
+	})),
 );
 on(
 	"SYNC_APPLY_ROSTER",
 	extensionOnly(async (message) => {
-		await syncApplyRoster(ApplyRosterMsgSchema.parse(message.payload).rosterJson);
+		const { vaultId, rosterJson } = ApplyRosterMsgSchema.parse(message.payload);
+		await syncApplyRoster(vaultId, rosterJson);
 		return { ok: true };
 	}),
 );
@@ -454,7 +536,7 @@ on(
 // and calls these directly instead of round-tripping through runtime messaging.
 setInProcessSyncBridge({
 	fetchLocalPayload: syncLocalPayload,
-	pushRemotePayload: (payloadJson) => syncApplyRemote(payloadJson).then(() => {}),
+	pushRemotePayload: (vaultId, payloadJson) => syncApplyRemote(vaultId, payloadJson).then(() => {}),
 	fetchLocalRoster: syncLocalRoster,
 	pushRemoteRoster: syncApplyRoster,
 });

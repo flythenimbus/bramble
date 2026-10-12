@@ -1,0 +1,84 @@
+---
+import LegalLayout from "@/layouts/LegalLayout.astro";
+import { LINKS } from "@/consts";
+---
+
+<LegalLayout
+	title="Code signing policy"
+	description="How the Bramble desktop app's Windows installer is built and signed: free code signing provided by SignPath.io, certificate by SignPath Foundation."
+	path="/code-signing"
+	meta="Effective date: 10 October 2026"
+>
+	<p class="lead">
+		Free code signing provided by <a href="https://signpath.io">SignPath.io</a>, certificate by
+		<a href="https://signpath.org">SignPath Foundation</a>.
+	</p>
+
+	<h2>What is signed</h2>
+	<p>
+		The Windows installer for the Bramble desktop app is Authenticode-signed through SignPath. The
+		certificate is issued to the SignPath Foundation, so Windows names
+		<strong>SignPath Foundation</strong> as the verified publisher when you run the installer. That
+		is expected, and it is how you can tell a genuine installer from one that was altered after it
+		was signed.
+	</p>
+	<p>
+		Only Bramble's own software is signed this way. Bramble does not use this certificate to sign
+		anyone else's programs or libraries.
+	</p>
+
+	<h2>How a signed build is made</h2>
+	<ul>
+		<li>
+			<strong>From the public source, on GitHub's machines.</strong> The installer is built by
+			GitHub Actions on GitHub-hosted runners, directly from the public
+			<a href={LINKS.github}>source repository</a>. Nothing built on a personal computer is ever
+			submitted for signing. SignPath verifies where each build came from using information
+			supplied by GitHub itself, not by the build.
+		</li>
+		<li>
+			<strong>Every release is approved by hand.</strong> A signing request is only fulfilled
+			after an approver (below) reviews and approves it in SignPath.
+		</li>
+		<li>
+			<strong>The build scripts are source too.</strong> The workflow that builds and signs the
+			installer lives in the repository and goes through the same review as the rest of the code.
+		</li>
+	</ul>
+
+	<h2>Team roles</h2>
+	<ul>
+		<li>
+			<strong>Committers and reviewers:</strong>
+			<a href="https://github.com/flythenimbus">@flythenimbus</a>. Changes from anyone else arrive
+			as pull requests and are reviewed before they are merged.
+		</li>
+		<li>
+			<strong>Approvers:</strong> <a href="https://github.com/flythenimbus">@flythenimbus</a>, who
+			approves each signing request.
+		</li>
+	</ul>
+	<p>Everyone in these roles uses multi-factor authentication for GitHub and for SignPath.</p>
+
+	<h2>Privacy</h2>
+	<p>
+		Bramble does not transfer any information to other networked systems unless you ask it to, with
+		one exception: the desktop app checks for updates when it opens, which you can turn off. Every
+		network connection Bramble can make is described in the <a href="/privacy">privacy policy</a>.
+	</p>
+
+	<h2>Other downloads</h2>
+	<p>
+		This policy covers the Windows installer, the only download signed through SignPath. Bramble's
+		other downloads are signed through their own channels: the macOS app with Bramble's Apple
+		Developer ID and notarized by Apple, the browser extensions and the iOS app by their stores, and
+		the Android and Linux releases with Bramble's own release keys.
+	</p>
+
+	<h2>Reporting a problem</h2>
+	<p>
+		If you think a signed Bramble installer is not what it should be, or you find a security issue,
+		please report it privately through
+		<a href={`${LINKS.github}/security/advisories/new`}>GitHub's security advisories</a>.
+	</p>
+</LegalLayout>

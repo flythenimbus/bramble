@@ -63,10 +63,16 @@ describe("resolveSyncVault", () => {
 		expect(await resolveSyncVault()).toEqual({ vaultId: "b" });
 	});
 
-	it("falls back to the first vault when no active vault is recorded", async () => {
+	it("syncs nothing when no active vault is recorded", async () => {
 		stubChrome(regSeed, {});
 		const { resolveSyncVault } = await loadConfig();
-		expect(await resolveSyncVault()).toEqual({ vaultId: "a" });
+		expect(await resolveSyncVault()).toBeNull();
+	});
+
+	it("syncs nothing for an active id the registry doesn't hold", async () => {
+		stubChrome(regSeed, { [ACTIVE_VAULT_SESSION_KEY]: "deleted" });
+		const { resolveSyncVault } = await loadConfig();
+		expect(await resolveSyncVault()).toBeNull();
 	});
 
 	it("returns null when no vault exists yet", async () => {

@@ -432,6 +432,16 @@ async function cornerPromptResponse(
 			}
 			return { ok: true, data: null };
 		}
+		if (response.action === "save-new") {
+			// "Save as new" on the update card: the user overruled dedupe, so don't re-run it.
+			await hydrateAutofillIndexFromDisk();
+			try {
+				await commitCornerSave(capture, undefined);
+			} finally {
+				await clearPendingCapture(etld1);
+			}
+			return { ok: true, data: null };
+		}
 		if (response.action === "update") {
 			if (!response.chosenEntryId) {
 				return { ok: false, error: "update missing chosenEntryId" };

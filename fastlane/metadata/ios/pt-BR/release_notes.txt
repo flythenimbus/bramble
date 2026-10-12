@@ -1,9 +1,8 @@
-Novidades desta versão:
+Novidades nesta versão:
 
-- O backup na nuvem agora funciona no iPhone. Aponte o Bramble para o armazenamento que você já tem (um bucket compatível com S3, como Backblaze B2, Cloudflare R2 ou Wasabi, ou um servidor WebDAV, como Nextcloud) e ele manterá uma cópia do seu cofre lá, ainda lacrada com a sua senha mestra, para que o provedor não consiga lê-la. O iOS não permite que apps sejam executados em segundo plano de forma programada, então o backup acontece quando você desbloqueia o Bramble ou volta a ele depois que o intervalo que você escolheu tiver passado. “Fazer backup agora” faz isso imediatamente.
-- Mais dois serviços de alias de e-mail: DuckDuckGo Email Protection e Firefox Relay. O DuckDuckGo não tem uma página de chaves de API, então a tela Configurações explica onde encontrar a chave que ele usa.
-- Trocar para outro serviço de alias agora limpa o campo da chave de API. Antes, uma chave digitada para um serviço permanecia lá e, ao verificá-la, ela era enviada para o serviço para o qual você tinha acabado de trocar.
-- Pesquisar e selecionar em um cofre grande está mais fluido. A lista não redesenha mais todos os itens a cada tecla digitada.
-- Em alemão, espanhol, francês, italiano e português, algumas instruções estavam cortadas no meio da frase, incluindo as de pareamento com outro dispositivo. Agora estão completas.
+- Um cofre não se recusa mais a abrir porque contém itens de um dos seus outros cofres. Um problema de sincronização na extensão do navegador podia copiar itens de um cofre para outro, e esse cofre então não conseguia ser desbloqueado, exibindo um erro técnico mesmo com a senha correta. O Bramble agora separa esses itens neste dispositivo, sem alterações, e abre o cofre com todo o restante.
+- Durante a sincronização, o Bramble agora recusa itens que pertencem a um cofre diferente, para que um dispositivo que ainda tenha o problema não possa repassá-lo.
+- Se um cofre ainda não abrir, o Bramble informa isso em linguagem simples e inclui um link para nosso rastreador de problemas, em vez de exibir um erro técnico.
+- Uma atualização de segurança no Capacitor, o framework no qual o aplicativo é construído.
 
 Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

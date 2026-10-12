@@ -995,8 +995,24 @@ decrypt, which is what *exposes* damage planted earlier.
   destructive, and the live file is the user's only other copy.
 
 Still a follow-up: porting the per-vault VEK map to mobile, which would remove this class
-structurally rather than fencing it. The extension has a milder instance of the same shape
-in `background/sync.ts`, which re-resolves its vault per call.
+structurally rather than fencing it.
+
+The extension had the same shape in `background/sync.ts`, and it was not milder: a field
+report (Chromium 1.30.1) had 499 entries from one vault merged into another, after the
+offscreen host kept serving the old vault's group while every callback followed the active
+vault. Its sync session is now pinned to the vault id it started for. Every callback carries
+that id; a session for a vault that is no longer active reads an empty payload and an empty
+device list, writes nothing, and is stopped by `retargetSync` (a roster-only stop that leaves a
+pairing in progress alone). Merges for one vault run one at a time. See
+`docs/sync-vault-pinning-and-quarantine.md`.
+
+Entries a vault can't decrypt no longer stop it opening. At load they move, still sealed, to
+that vault's quarantine store (a file beside the vault on desktop and mobile, a
+`vault-quarantine:<id>` key on the extension), are never synced or shown, and are kept until
+the vault is deleted. The vault's outer layer has already opened under the same key by then,
+so a fresh probe entry decides between stray entries and a device that can't decrypt at all;
+in the second case nothing is touched. Readable entries are decoded before anything is
+written, so a failed open leaves the vault as it was.
 
 ### Ghost records: registered but never written
 

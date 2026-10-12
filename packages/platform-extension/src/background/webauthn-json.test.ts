@@ -50,6 +50,7 @@ describe("isRegistrableSuffix (phishing resistance)", () => {
 		expect(isRegistrableSuffix("evil.com", "google.com")).toBe(false);
 		expect(isRegistrableSuffix("evil.com", "com")).toBe(false);
 		expect(isRegistrableSuffix("login.evil.co.uk", "co.uk")).toBe(false);
+		expect(isRegistrableSuffix("alice.github.io", "github.io")).toBe(false);
 		expect(isRegistrableSuffix("a.com", "")).toBe(false);
 	});
 });

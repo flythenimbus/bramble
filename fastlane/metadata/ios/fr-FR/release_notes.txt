@@ -1,9 +1,8 @@
 Nouveautés de cette version :
 
-- Les sauvegardes cloud fonctionnent désormais sur iPhone. Pointez Bramble vers un espace de stockage que vous possédez déjà, un compartiment compatible S3 tel que Backblaze B2, Cloudflare R2 ou Wasabi, ou un serveur WebDAV tel que Nextcloud, et Bramble y conserve une copie de votre coffre, toujours scellée avec votre mot de passe principal afin que le fournisseur ne puisse pas la lire. iOS n’autorise pas les applications à s’exécuter en arrière-plan selon un calendrier ; une sauvegarde a donc lieu lorsque vous déverrouillez Bramble ou que vous y revenez après l’intervalle que vous avez choisi. « Sauvegarder maintenant » effectue la sauvegarde immédiatement.
-- Deux services d’alias d’e-mails supplémentaires : DuckDuckGo Email Protection et Firefox Relay. DuckDuckGo ne propose pas de page pour les clés API ; la section Réglages explique donc où trouver celle qu’il utilise.
-- Passer à un autre service d’alias efface désormais le champ de clé API. Auparavant, une clé saisie pour un service y restait, et sa vérification l’envoyait au service vers lequel vous veniez de basculer.
-- La recherche et la sélection dans un coffre volumineux sont plus fluides. La liste ne redessine plus chaque élément à chaque frappe.
-- En allemand, en espagnol, en français, en italien et en portugais, quelques instructions étaient tronquées en cours de phrase, notamment celles pour l’appairage avec un autre appareil. Elles sont désormais complètes.
+- Un coffre ne refuse plus de s’ouvrir parce qu’il contient des entrées provenant de l’un de vos autres coffres. Un problème de synchronisation dans l’extension de navigateur pouvait copier des entrées d’un coffre dans un autre, et ce coffre ne parvenait alors plus à se déverrouiller avec une erreur technique, même avec le bon mot de passe. Bramble met désormais ces entrées de côté sur cet appareil, sans les modifier, et ouvre le coffre avec tout le reste.
+- Lors de la synchronisation, Bramble refuse désormais les entrées qui appartiennent à un autre coffre, afin qu’un appareil encore concerné par le problème ne puisse pas le transmettre.
+- Si un coffre ne s’ouvre toujours pas, Bramble l’explique en termes simples et renvoie vers notre outil de suivi des problèmes, au lieu d’afficher une erreur technique.
+- Une mise à jour de sécurité de Capacitor, le framework sur lequel repose l’application.
 
-Aucun compte, aucun cloud. Tout reste sur vos appareils.
+Pas de compte, pas de cloud. Tout reste sur vos appareils.

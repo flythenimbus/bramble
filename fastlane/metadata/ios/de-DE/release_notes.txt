@@ -1,9 +1,8 @@
 Neu in dieser Version:
 
-- Cloud-Backups funktionieren jetzt auf dem iPhone. Richten Sie Bramble auf vorhandenen Speicher ein, z. B. einen S3-kompatiblen Bucket wie Backblaze B2, Cloudflare R2 oder Wasabi oder einen WebDAV-Server wie Nextcloud, und Bramble bewahrt dort eine Kopie Ihres Tresors auf, weiterhin mit Ihrem Master-Passwort versiegelt, sodass der Anbieter sie nicht lesen kann. iOS erlaubt es Apps nicht, im Hintergrund nach einem Zeitplan zu laufen; ein Backup wird deshalb erstellt, wenn Sie Bramble entsperren oder zu Bramble zurückkehren, nachdem das von Ihnen gewählte Intervall verstrichen ist. „Jetzt sichern“ führt es sofort aus.
-- Zwei weitere E-Mail-Alias-Dienste: DuckDuckGo Email Protection und Firefox Relay. DuckDuckGo bietet keine Seite für API-Schlüssel; in den Einstellungen wird erklärt, wo Sie den verwendeten Schlüssel finden.
-- Beim Wechsel zu einem anderen Alias-Dienst wird das Feld für den API-Schlüssel jetzt geleert. Zuvor blieb ein für einen Dienst eingegebener Schlüssel dort stehen; beim Überprüfen wurde er an den Dienst gesendet, zu dem Sie gerade gewechselt hatten.
-- Das Suchen und Auswählen in einem großen Tresor ist jetzt flüssiger. Die Liste zeichnet nicht mehr bei jedem Tastendruck jeden Eintrag neu.
-- Auf Deutsch, Spanisch, Französisch, Italienisch und Portugiesisch wurden einige Anweisungen mitten im Satz abgeschnitten, darunter die Anweisungen zum Koppeln mit einem anderen Gerät. Sie sind jetzt vollständig.
+- Ein Tresor verweigert das Öffnen nicht mehr, weil er Einträge aus einem Ihrer anderen Tresore enthält. Ein Synchronisationsproblem in der Browser-Erweiterung konnte Einträge aus einem Tresor in einen anderen kopieren, und dieser Tresor ließ sich dann selbst mit dem richtigen Passwort nicht entsperren und zeigte einen technischen Fehler. Bramble legt diese Einträge jetzt auf diesem Gerät unverändert beiseite und öffnet den Tresor mit allen übrigen Inhalten.
+- Bei der Synchronisierung weist Bramble Einträge, die zu einem anderen Tresor gehören, jetzt ab, damit ein Gerät, bei dem das Problem weiterhin besteht, es nicht weitergeben kann.
+- Wenn sich ein Tresor weiterhin nicht öffnen lässt, sagt Bramble das in klaren Worten und verlinkt auf unseren Issue-Tracker, statt einen technischen Fehler anzuzeigen.
+- Ein Sicherheitsupdate für Capacitor, das Framework, auf dem die App basiert.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

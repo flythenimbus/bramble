@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../../../context/PlatformContext";
 import { UpdatesSection } from "./UpdatesSection";
@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
 	/** Progress subscribers, so a test can push a download that this section did not start. */
 	watchers: new Set<(f: number | null | undefined) => void>(),
 	installs: 0,
+	/** What the launch-check setting was set to, in order. */
+	launchSettings: [] as boolean[],
 }));
 
 function platformWithUpdates(): Platform {
@@ -34,6 +36,17 @@ function platformWithUpdates(): Platform {
 			},
 		},
 	} as unknown as Platform;
+}
+
+/** A desktop that also has the launch-check setting, currently `stored`. */
+function platformWithLaunchSetting(stored: boolean): Platform {
+	const platform = platformWithUpdates();
+	const updates = (platform.shell as { updates: Record<string, unknown> }).updates;
+	updates.checkOnLaunch = async () => stored;
+	updates.setCheckOnLaunch = async (on: boolean) => {
+		h.launchSettings.push(on);
+	};
+	return platform;
 }
 
 function mount(platform: Platform) {
@@ -62,6 +75,7 @@ afterEach(() => {
 	cleanup();
 	h.watchers.clear();
 	h.installs = 0;
+	h.launchSettings = [];
 });
 
 describe("UpdatesSection", () => {
@@ -101,5 +115,32 @@ describe("UpdatesSection", () => {
 		const buttons = screen.getAllByRole("button");
 		expect(buttons.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
 		expect(h.installs).toBe(0);
+	});
+
+	// The privacy policy sends people here to refuse the one request Bramble makes unasked.
+	it("shows the launch check as on, as stored", async () => {
+		mount(platformWithLaunchSetting(true));
+
+		const toggle = await screen.findByRole("button", { name: /when bramble opens/i });
+		expect(toggle.getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("saves turning the launch check off", async () => {
+		mount(platformWithLaunchSetting(true));
+		const toggle = await screen.findByRole("button", { name: /when bramble opens/i });
+
+		await act(async () => {
+			fireEvent.click(toggle);
+		});
+
+		expect(h.launchSettings).toEqual([false]);
+		expect(toggle.getAttribute("aria-pressed")).toBe("false");
+	});
+
+	it("shows it off when the user already turned it off", async () => {
+		mount(platformWithLaunchSetting(false));
+
+		const toggle = await screen.findByRole("button", { name: /when bramble opens/i });
+		expect(toggle.getAttribute("aria-pressed")).toBe("false");
 	});
 });

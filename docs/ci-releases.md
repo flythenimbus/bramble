@@ -12,10 +12,11 @@ It is a deliberate trade, and the point of writing it down is that the trade is 
 - **A release still needs one human tap.** Every environment holding a credential has a required
   reviewer. The tap moves from a YubiKey on a desk to an approval on a phone, and it keeps the
   property that matters most: repository write access alone can never sign anything.
-- **The APT repository keeps signing locally, for now.** Its key was generated on the YubiKey's
-  OpenPGP applet with off-card backup declined, so unlike every other secret here there is nothing
-  to decrypt and move. Rotating it to a software key is its own phase, because it asks every
-  existing user to install a new key once.
+- **The APT repository signs in CI with its standby key** (`apt-release.yml`, from desktop 0.12.0).
+  The original key was generated on the YubiKey's OpenPGP applet with off-card backup declined, so
+  there was nothing to move; instead an exportable standby key went into the keyring the package
+  ships, reached users through 0.9.0 and 0.11.0, and only then started signing. See
+  [apt-releases.md](apt-releases.md#the-keyring-and-how-a-key-is-rotated).
 - **Credentials start as GitHub environment secrets.** Fetching them from an external store over
   OIDC is better custody and comes later; see [Keeping OIDC cheap](#keeping-oidc-cheap).
 
@@ -53,8 +54,8 @@ things that keep it defensible:
 | AMO key + secret | `amo-api-credentials.age` | 2 secrets | Regenerate at will |
 | App Store Connect key | `asc-api-key.age` | already done | Revoke and reissue |
 | Developer ID certificate | login keychain | `.p12` + password | Re-issue from Apple |
-| R2 + Cloudflare purge | `.env.local` | secrets, with the APT phase | Rotate freely |
-| APT repository GPG | YubiKey OpenPGP applet | **stays local for now** | Users install a new key once |
+| R2 + Cloudflare purge | `.env.local` | `apt-release` secrets | Rotate freely |
+| APT repository GPG | YubiKey OpenPGP applet | standby key in `apt-release`; the YubiKey key no longer signs | Through the shipped keyring, a release ahead |
 
 `scripts/ci-secrets.ts` performs the migration: decrypt each wrapper with one touch and push it
 straight to the right environment with `gh secret set --env`, never writing plaintext to disk. One
@@ -132,8 +133,8 @@ tag with one `latest.json`, so none of them can leave the Mac until all three ca
 | **1** | **Android**, fully from CI. Built: `android-release.yml`, `release android` | keystore + password |
 | **2** | **Firefox**. Built: `firefox-release.yml`, `release firefox`, with an AMO preflight | AMO credentials |
 | **3** | **Chrome**. Built: `chrome-release.yml`, `release chromium`, with a store preflight | CWS key + service account |
-| **4** | **Desktop**. Built: `desktop-release.yml`, `release desktop`: Linux in the Debian container on native amd64 + arm64 runners, macOS compiled in a job holding no secrets, Windows through `sign-windows.yml` and SignPath, then one approved macOS job that bundles, codesigns, notarizes, signs every updater artifact and publishes. APT stays on a Mac (`publish:apt --release`) | updater key, Developer ID `.p12`, ASC key |
-| **later** | APT key rotation, then OIDC custody | Users install a new key once |
+| **4** | **Desktop**. Built: `desktop-release.yml`, `release desktop`: Linux in the Debian container on native amd64 + arm64 runners, macOS compiled in a job holding no secrets, Windows through `sign-windows.yml` and SignPath, then one approved macOS job that bundles, codesigns, notarizes, signs every updater artifact and publishes. APT through `apt-release.yml`, after the release, behind its own approval | updater key, Developer ID `.p12`, ASC key |
+| **later** | OIDC custody | |
 
 Android leads because it is self-contained and proves every part of the pattern in one place: a
 build, a signature with a permanent key, and a GitHub release published from a runner rather than
@@ -177,7 +178,5 @@ still does not exist: four approvals and four sets of notes, to save one command
 ## What this never buys
 
 - **Store review.** Chrome Web Store, AMO and App Store review stay human and stay slow.
-- **A hands-off Debian channel**, until the APT key is rotated. That is the one remaining local
-  step, and it needs two touches per publish.
 - **Freedom from the approval tap**, by choice. Removing it would make repository write equivalent
   to holding every permanent key.

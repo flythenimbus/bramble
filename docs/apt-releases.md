@@ -38,16 +38,16 @@ says nothing about updates when it detects it was installed that way.
 | Step | Runs | Why there |
 |---|---|---|
 | Build `.deb` / `.rpm` / AppImage | Container (`pnpm run build:linux`) | A Debian package has to be built on Debian; the maintainer's machine is a Mac |
-| Sign the index, upload | Host (`pnpm run publish:apt`) | The GPG key is on a YubiKey, and Docker Desktop on macOS cannot pass a USB device through |
+| Sign the index, upload | CI (`apt-release.yml`), or the host (`pnpm run publish:apt`) as the fallback | CI holds the exportable standby key behind the `apt-release` approval; the host signs with the YubiKey, which Docker Desktop on macOS cannot pass through to a container |
 | Verify the published result | CI (`verify-apt-repository`) | It runs against the live URL, so it also catches a half-finished upload |
 
-**`pnpm release desktop` now drives all of this from one machine**, so the two build commands above
-are what a release runs rather than what you type. From a Mac it builds macOS natively, then the
-Linux packages in the container, attaches every artifact to the one GitHub release, writes
-`latest.json` with both the darwin and `linux-x86_64` keys, and finishes with `publish:apt`. The
-updater key is unlocked once for both builds, so a release is one YubiKey touch for signing plus
-two for the APT index. If the APT step fails the release is still valid and complete; re-run
-`pnpm run publish:apt`.
+**A desktop release from GitHub runs all of this** (`pnpm run release desktop <version>`, see
+[ci-releases.md](ci-releases.md)): Linux packages build on native runners, the release is published,
+and then the `APT repository` job calls `apt-release.yml`, which waits for its own approval in the
+`apt-release` environment and signs with the standby key. If the APT step fails the release is still
+valid and complete; re-run it with `gh workflow run apt-release.yml -f release=<version>-desktop`
+(add `-f dry_run=true` to sign and check without uploading). A `--local` release still finishes
+with `publish:apt` on the Mac, signed by the YubiKey.
 
 That split is forced rather than chosen. Everything that must be Linux is in the container;
 everything that must be near a key is on the host. aptly and rclone are cross-platform, and aptly
@@ -115,6 +115,12 @@ rotation therefore goes in this order, and the gap between the steps is the whol
 3. Switch `BRAMBLE_APT_GPG_KEY` to the new key. Nothing visible happens to anyone who upgraded.
 4. Once the old key is unused, remove it from the keyring on the next release.
 
+Where this rotation stands: step 1 shipped in 0.9.0 (2026-09-20, the standby key
+`F6A8 4076 1E00 8755 60B1  CA1A C265 880E 1ED5 826E`), step 2 was 0.11.0, the last index the
+YubiKey signed (2026-10-11), and step 3 is `apt-release.yml`, which signs with the standby key from
+0.12.0 on. Step 4, dropping the YubiKey key from the keyring, is still to come; until then its old
+signatures keep verifying.
+
 `publish-apt.ts` refuses to upload if the key that signed the index is not in this file, and CI
 asserts the `.deb` ships exactly these bytes, because a keyring that quietly stops being delivered
 is invisible right up until the rotation that needed it.
@@ -177,8 +183,12 @@ and can never self-update, so it is not publishable.
 
 What publish does, in order:
 
-1. Creates the aptly repo on first use, then `repo add -force-replace` for each `.deb` in
-   `dist-linux/deb/`, so a re-run after a half-failed release is not an error.
+1. Creates the aptly repo on first use and refills it from the live repository, checking the
+   same chain apt does (InRelease against the committed keyring, each `Packages` against
+   InRelease, each `.deb` against `Packages`). The upload is an `rclone sync`, so without this a
+   fresh machine or a CI runner would publish an index of one release and delete every older
+   package. Then `repo add -force-replace` for each new `.deb`, so a re-run after a half-failed
+   release is not an error.
 2. Asserts aptly's `gpgProvider` is `"gpg"`. Its built-in Go OpenPGP implementation cannot talk to
    a smartcard and reports a missing secret key for a key that is plainly there.
 3. `publish repo` (first time) or `publish update` (after), signing `Release`.

@@ -431,9 +431,73 @@ describe("cardFieldsPresent / isCardField", () => {
 		expect(cardFieldsPresent(detectCardFields())).toBe(false);
 	});
 
-	it("returns true when any real card field is present", () => {
+	it("returns true for a lone field the site tags with a cc-* token", () => {
+		// A hosted-fields frame holds one box per document.
 		loadHTML(`<input autocomplete="cc-number" />`);
 		expect(cardFieldsPresent(detectCardFields())).toBe(true);
+		loadHTML(`<input autocomplete="cc-csc" name="cvv" />`);
+		expect(cardFieldsPresent(detectCardFields())).toBe(true);
+		loadHTML(`<input autocomplete="billing cc-exp" />`);
+		expect(cardFieldsPresent(detectCardFields())).toBe(true);
+	});
+
+	it("returns false for a lone untagged expiry field", () => {
+		// The reported bug: an unrelated "Expiry" box offered cards.
+		loadHTML(`
+			<form>
+				<label for="doc">Document number</label><input id="doc" name="doc" />
+				<label for="exp">Expiry</label><input id="exp" name="exp" />
+			</form>
+		`);
+		const exp = document.getElementById("exp") as HTMLInputElement;
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+		expect(candidateKind(exp)).toBeNull();
+	});
+
+	it("returns false for a lone untagged expiry month and year", () => {
+		loadHTML(`
+			<form>
+				<input name="expiry_month" />
+				<select name="expiry_year"><option value="2030">2030</option></select>
+			</form>
+		`);
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+	});
+
+	it("returns false for a lone untagged number or CVV", () => {
+		loadHTML(`<label for="n">Card number</label><input id="n" />`);
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+		loadHTML(`<input name="cvv" maxlength="4" />`);
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+	});
+
+	it("returns true when two of number, expiry and CVV come together", () => {
+		const NUMBER = `<label for="n">Card number</label><input id="n" />`;
+		const EXPIRY = `<label for="e">Expiry</label><input id="e" />`;
+		const CVV = `<label for="c">CVV</label><input id="c" />`;
+		for (const pair of [NUMBER + EXPIRY, EXPIRY + CVV, NUMBER + CVV]) {
+			loadHTML(`<form>${pair}</form>`);
+			expect(cardFieldsPresent(detectCardFields())).toBe(true);
+		}
+		loadHTML(`
+			<form>
+				<input name="expiry_month" />
+				<input name="expiry_year" />
+				<input name="cvc" />
+			</form>
+		`);
+		expect(cardFieldsPresent(detectCardFields())).toBe(true);
+		expect(candidateKind(document.querySelector('[name="cvc"]'))).toBe("card");
+	});
+
+	it("does not count a cardholder name toward the pair", () => {
+		loadHTML(`
+			<form>
+				<input name="cardholder" />
+				<label for="e">Expiry</label><input id="e" />
+			</form>
+		`);
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
 	});
 
 	it("isCardField identifies each slot", () => {

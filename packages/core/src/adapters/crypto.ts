@@ -116,6 +116,8 @@ export interface SaveKdbxInput {
  */
 export const CRYPTO_SESSION_CHANGED = "vek_session_changed";
 export const CRYPTO_PERSISTENCE_FAILED = "vek_persistence_failed";
+/** A vault's key unwrapped but its entries did not load; the vault was locked again. */
+export const VAULT_OPEN_FAILED = "VAULT_OPEN_FAILED";
 
 /** Vault crypto operations (VEK lifecycle, slot wrap/unwrap, entry encryption, KeePass import). */
 export interface CryptoAdapter {
@@ -157,8 +159,9 @@ export interface CryptoAdapter {
 	decryptEntry(payload: EncryptedPayload): Promise<string>;
 	// Decrypt many entries in one call. On the extension this is a single offscreen
 	// round-trip (vs one per entry), which dominates open time on large vaults.
-	// Returns plaintexts in the same order as `payloads`.
-	decryptEntries(payloads: EncryptedPayload[]): Promise<string[]>;
+	// Returns plaintexts in the same order as `payloads`. A failed entry is null; only a
+	// locked vault rejects.
+	decryptEntries(payloads: EncryptedPayload[]): Promise<(string | null)[]>;
 	encryptWithVek(plaintext: string): Promise<VekEncrypted>;
 	decryptWithVek(iv: string, ciphertext: string): Promise<string>;
 

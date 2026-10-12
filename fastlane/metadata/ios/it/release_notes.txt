@@ -1,9 +1,8 @@
 Novità di questa versione:
 
-- I backup su cloud ora funzionano su iPhone. Basta puntare Bramble verso uno spazio di archiviazione di cui si dispone già, un bucket compatibile con S3 come Backblaze B2, Cloudflare R2 o Wasabi, oppure un server WebDAV come Nextcloud, e Bramble ci conserva una copia della cassaforte, sempre protetta dalla password principale, così il provider non può leggerla. iOS non consente alle app di essere eseguite in background secondo una pianificazione, quindi il backup viene eseguito quando si sblocca Bramble o si torna all'app dopo che è trascorso l'intervallo scelto. Il pulsante Esegui backup ora esegue subito il backup.
-- Due nuovi servizi di alias email: DuckDuckGo Email Protection e Firefox Relay. DuckDuckGo non ha una pagina per le chiavi API, quindi Impostazioni spiega dove trovare quella che utilizza.
-- Passare a un servizio di alias diverso ora svuota il campo della chiave API. In precedenza, una chiave digitata per un servizio rimaneva nel campo e, verificandola, veniva inviata al servizio a cui si era appena passato.
-- La ricerca e la selezione in una cassaforte di grandi dimensioni sono più fluide. L'elenco non ridisegna più ogni elemento a ogni pressione di un tasto.
-- In tedesco, spagnolo, francese, italiano e portoghese alcune istruzioni risultavano troncate a metà frase, comprese quelle per l'associazione con un altro dispositivo. Ora sono complete.
+- Una cassaforte non si rifiuta più di aprirsi perché contiene voci provenienti da una delle altre casseforti. Un problema di sincronizzazione nell'estensione del browser poteva copiare voci da una cassaforte all'altra e quella cassaforte non si sbloccava più, mostrando un errore tecnico, anche con la password corretta. Bramble ora mette da parte quelle voci su questo dispositivo, senza modificarle, e apre la cassaforte con tutto il resto.
+- Durante la sincronizzazione, Bramble ora respinge le voci che appartengono a una cassaforte diversa, così un dispositivo che presenta ancora il problema non può trasmetterlo.
+- Se una cassaforte continua a non aprirsi, Bramble lo comunica con parole semplici e inserisce un collegamento al nostro registro dei problemi, invece di mostrare un errore tecnico.
+- Un aggiornamento di sicurezza per Capacitor, il framework su cui si basa l'app.
 
-Nessun account, nessun cloud. Tutto rimane sui dispositivi dell'utente.
+Nessun account, nessun cloud. Tutto rimane sui Suoi dispositivi.

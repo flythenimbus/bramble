@@ -53,6 +53,7 @@ import {
 	EnrollJoinMsgSchema,
 	type PendingEnrollApproval,
 	RosterSignHostMsgSchema,
+	RosterStopMsgSchema,
 	type RosterSyncMsg,
 	RosterSyncMsgSchema,
 	type SyncEventMsg,
@@ -68,10 +69,10 @@ import { loadWasm, type VaultCrypto } from "./wasm-loader";
  * calls on Firefox (the host already runs in the background event page).
  */
 export interface SyncBridge {
-	fetchLocalPayload: () => Promise<string>;
-	pushRemotePayload: (payloadJson: string) => Promise<void>;
-	fetchLocalRoster: () => Promise<string>;
-	pushRemoteRoster: (rosterJson: string) => Promise<void>;
+	fetchLocalPayload: (vaultId: string) => Promise<string>;
+	pushRemotePayload: (vaultId: string, payloadJson: string) => Promise<void>;
+	fetchLocalRoster: (vaultId: string) => Promise<string>;
+	pushRemoteRoster: (vaultId: string, rosterJson: string) => Promise<void>;
 }
 
 export interface HostResponse {
@@ -128,6 +129,8 @@ let linkSyncSession: MeshSession | null = null;
  * and there is no reason to keep a second copy of secret material in a module global.
  */
 let syncConfigKey: string | null = null;
+/** The vault the live sync sessions serve. */
+let syncSessionVaultId: string | null = null;
 
 /**
  * Serializes the start/stop of those sessions. Two SYNC_ROSTER_SYNCs arriving together (a service
@@ -138,7 +141,13 @@ let syncConfigKey: string | null = null;
 let rosterSyncInFlight: Promise<void> = Promise.resolve();
 
 function rosterSyncConfigKey(opts: RosterSyncMsg): string {
-	return JSON.stringify([opts.relayUrl, opts.iceUrl ?? "", opts.groupKeyB64, opts.devicePubB64]);
+	return JSON.stringify([
+		opts.vaultId,
+		opts.relayUrl,
+		opts.iceUrl ?? "",
+		opts.groupKeyB64,
+		opts.devicePubB64,
+	]);
 }
 
 /** Tear down both sync sessions and forget their config. */
@@ -148,6 +157,7 @@ function stopSyncSessions(): void {
 	linkSyncSession?.stop();
 	linkSyncSession = null;
 	syncConfigKey = null;
+	syncSessionVaultId = null;
 }
 
 /**
@@ -164,10 +174,11 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 		...opts,
 		wasm: w,
 		report: reportSyncStatus,
-		fetchLocalPayload: bridge.fetchLocalPayload,
-		pushRemotePayload: bridge.pushRemotePayload,
-		fetchLocalRoster: bridge.fetchLocalRoster,
-		pushRemoteRoster: bridge.pushRemoteRoster,
+		// Every callback names the vault this session was started for, never "the active one".
+		fetchLocalPayload: () => bridge.fetchLocalPayload(opts.vaultId),
+		pushRemotePayload: (json: string) => bridge.pushRemotePayload(opts.vaultId, json),
+		fetchLocalRoster: () => bridge.fetchLocalRoster(opts.vaultId),
+		pushRemoteRoster: (json: string) => bridge.pushRemoteRoster(opts.vaultId, json),
 	};
 	syncSession = await startRosterSync(common);
 	// The desktop app on this machine, over the pipe it already has. Started second so
@@ -175,6 +186,7 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 	linkSyncSession = await startRosterSync({ ...common, peerSource: desktopPeerSource });
 	// Recorded only once both are up, so a half-started pair is rebuilt rather than kept.
 	syncConfigKey = key;
+	syncSessionVaultId = opts.vaultId;
 }
 
 /** Sinks for frames the desktop app sends, delivered here by the background. */
@@ -314,6 +326,8 @@ type SyncVek = {
 	): boolean;
 	encrypt_entry(plaintextJson: string): EncryptedPayload;
 	decrypt_entry(ciphertext: string, iv: string, wrappedDek: string, dekIv: string): string;
+	/** One VEK section for many entries; a failed entry is null. */
+	decrypt_entries(entries: EncryptedPayload[]): (string | null)[];
 	encrypt_with_vek(plaintext: string): VekEncrypted;
 	decrypt_with_vek(iv: string, ciphertext: string): string;
 };
@@ -364,7 +378,31 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 			const p = CryptoDecryptBatchSchema.parse(payload);
 			const w = (await getWasm()) as unknown as SyncVek;
 			return withVek(w, p.vekB64, (w) =>
-				p.entries.map((e) => w.decrypt_entry(e.ciphertext, e.iv, e.wrappedDek, e.dekIv)),
+				w.decrypt_entries(
+					p.entries.map(({ ciphertext, iv, wrappedDek, dekIv }) => ({
+						ciphertext,
+						iv,
+						wrappedDek,
+						dekIv,
+					})),
+				),
+			);
+		}
+		case "CRYPTO_CHECK_ENTRIES": {
+			// Verdicts only: plaintext never leaves this document for an admission check.
+			const p = CryptoDecryptBatchSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) =>
+				w
+					.decrypt_entries(
+						p.entries.map(({ ciphertext, iv, wrappedDek, dekIv }) => ({
+							ciphertext,
+							iv,
+							wrappedDek,
+							dekIv,
+						})),
+					)
+					.map((pt) => pt != null),
 			);
 		}
 		case "CRYPTO_DECRYPT_INDEX": {
@@ -577,6 +615,7 @@ async function decodeQrDataUrl(dataUrl: string): Promise<string | null> {
  */
 export async function addEnrolledToLocalRoster(
 	bridge: SyncBridge,
+	vaultId: string,
 	admission: { password: string; saltB64: string; adminId: string } | undefined,
 	entryJson: string,
 ): Promise<void> {
@@ -592,7 +631,7 @@ export async function addEnrolledToLocalRoster(
 			);
 			admitted = { ...entry, admission: { by: admission.adminId, sig } };
 		}
-		await bridge.pushRemoteRoster(encodeRoster({ devices: [admitted], revoked: [] }));
+		await bridge.pushRemoteRoster(vaultId, encodeRoster({ devices: [admitted], revoked: [] }));
 	} catch (err) {
 		console.warn("[offscreen] host-side roster add failed", err);
 	}
@@ -623,6 +662,16 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				rosterSyncInFlight = stopping.catch(() => {});
 				await stopping;
 				reportSyncStatus("disconnected");
+				return { ok: true };
+			}
+			case "SYNC_ROSTER_STOP": {
+				// A vault switch: stop roster sync for any other vault, and leave a pairing in progress alone.
+				const { keepVaultId } = RosterStopMsgSchema.parse(payload);
+				const stopping = rosterSyncInFlight.then(() => {
+					if (syncSessionVaultId !== null && syncSessionVaultId !== keepVaultId) stopSyncSessions();
+				});
+				rosterSyncInFlight = stopping.catch(() => {});
+				await stopping;
 				return { ok: true };
 			}
 			case "SYNC_ENROLL_STOP":
@@ -755,6 +804,7 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 						: EnrollJoinMsgSchema.parse(payload);
 				// Inviter-only: the material for the host to admission-sign + roster the joiner itself.
 				const admission = role === "inviter" ? (opts as EnrollInviteMsg).admission : undefined;
+				const inviteVaultId = role === "inviter" ? (opts as EnrollInviteMsg).vaultId : undefined;
 				enrollSession?.stop();
 				settleApproval(false); // a new enroll supersedes any prompt left over from the last one
 				enrollSession = await startEnroll(role, {
@@ -790,7 +840,8 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 					onEnrolled: (entryJson) => {
 						// Add to the roster in the host (reliable) AND notify the popup (updates its UI +
 						// upgrades the same entry). See addEnrolledToLocalRoster.
-						void addEnrolledToLocalRoster(bridge, admission, entryJson);
+						if (inviteVaultId)
+							void addEnrolledToLocalRoster(bridge, inviteVaultId, admission, entryJson);
 						broadcastSyncEvent({ kind: "enrolled", entryJson });
 					},
 				});

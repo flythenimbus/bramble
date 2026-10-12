@@ -258,6 +258,8 @@ pub fn run() {
             storage::storage_read_vault,
             storage::storage_write_vault,
             storage::storage_read_vault_backup,
+            storage::storage_read_quarantine,
+            storage::storage_write_quarantine,
             storage::storage_restore_vault_backup,
             storage::storage_delete_vault,
             storage::storage_get_meta,

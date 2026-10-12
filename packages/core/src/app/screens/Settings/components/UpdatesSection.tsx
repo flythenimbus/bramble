@@ -1,9 +1,9 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, Rocket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { Button } from "../../../components/ui/button";
-import { Row, Section } from "./primitives";
+import { Row, Section, Toggle } from "./primitives";
 
 /**
  * Check for and install a new version of the app.
@@ -27,6 +27,18 @@ export function UpdatesSection() {
 	// Subscribed rather than tracked locally: the launch prompt can start a download, and this
 	// section opened afterwards should show it rather than offering to check again.
 	useEffect(() => shell.updates?.onProgress(setFraction), [shell]);
+
+	// Null until read, so the row does not flash the wrong position on open.
+	const [checkOnLaunch, setCheckOnLaunch] = useState<boolean | null>(null);
+	useEffect(() => {
+		let cancelled = false;
+		void shell.updates?.checkOnLaunch?.().then((on) => {
+			if (!cancelled) setCheckOnLaunch(on);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [shell]);
 
 	// Nothing to offer, but not always nothing to say: where a package manager owns this install
 	// the app cannot update itself and should not pretend otherwise, yet vanishing would read as
@@ -128,6 +140,23 @@ export function UpdatesSection() {
 					</Button>
 				)}
 			</Row>
+			{/* The one request Bramble makes unasked, so the privacy policy points here. */}
+			{checkOnLaunch !== null && (
+				<Row
+					icon={<Rocket className="w-4 h-4 text-primary" />}
+					title={t`Check for updates when Bramble opens`}
+					subtitle={t`Fetches the latest version number from bramble.sh. Nothing from your vault is sent.`}
+				>
+					<Toggle
+						checked={checkOnLaunch}
+						label={t`Check for updates when Bramble opens`}
+						onChange={(on) => {
+							setCheckOnLaunch(on);
+							void shell.updates?.setCheckOnLaunch?.(on);
+						}}
+					/>
+				</Row>
+			)}
 			{found?.notes && (
 				<p className="text-xs text-muted-foreground whitespace-pre-line">{found.notes}</p>
 			)}

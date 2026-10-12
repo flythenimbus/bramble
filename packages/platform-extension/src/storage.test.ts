@@ -443,6 +443,20 @@ describe("multi-vault registry", () => {
 		expect(local[nk(id1)]).toBeDefined();
 	});
 
+	it("keeps a vault's quarantine beside it and deletes it with the vault", async () => {
+		const local = stubChrome();
+		const storage = await loadStorage();
+		await register(storage, "vault-a", "vault-b");
+		await storage.writeVaultBlob(new Uint8Array([1]), "vault-a");
+		await storage.writeQuarantine?.('[{"id":"x"}]', "vault-a");
+		expect(await storage.readQuarantine?.("vault-a")).toBe('[{"id":"x"}]');
+		expect(await storage.readQuarantine?.("vault-b")).toBeNull();
+
+		await storage.deleteVaultBlob("vault-a");
+		expect(await storage.readQuarantine?.("vault-a")).toBeNull();
+		expect(Object.keys(local).some((k) => k.includes("quarantine"))).toBe(false);
+	});
+
 	it("reports vault existence for a specific id and for any vault", async () => {
 		stubChrome();
 		const storage = await loadStorage();
@@ -564,6 +578,7 @@ describe("isVaultBlobKey", () => {
 
 	it("does not match the backup key or unrelated keys", () => {
 		expect(isVaultBlobKey("vault-blob-backup-b64")).toBe(false);
+		expect(isVaultBlobKey("vault-quarantine:abc")).toBe(false);
 		expect(isVaultBlobKey("vault-blob-backup-b64:abc")).toBe(false);
 		expect(isVaultBlobKey("sync.group")).toBe(false);
 		expect(isVaultBlobKey("vault.registry")).toBe(false);

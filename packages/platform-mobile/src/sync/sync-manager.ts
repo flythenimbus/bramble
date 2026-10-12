@@ -394,6 +394,8 @@ async function startRoster(): Promise<void> {
 	// session and bumps the gen rather than letting the running one follow the active vault.
 	const blobStore = makeBlobStore(vaultId);
 	const gen = sessionGen;
+	// Entry versions this session refused at merge; per session, so a transient state can't outlive it.
+	const rejected = new Set<string>();
 	sessionVaultId = vaultId;
 	rosterSession = await startRosterSync({
 		relayUrl: relay,
@@ -432,13 +434,14 @@ async function startRoster(): Promise<void> {
 				}
 				const port = createVaultSyncPort({
 					store: blobStore,
+					crypto: mobileCrypto,
 					witnessRemote: async (stamps) => {
 						const clock = await getClock(vaultId);
 						for (const hlc of stamps) clock.witness(hlc);
 					},
 					onChanged: notifyExternalChange, // refresh the in-app list with the peer's edits
 				});
-				await applyRemotePayload(port, decodeEntriesPayload(json));
+				await applyRemotePayload(port, decodeEntriesPayload(json), { rejected });
 				// Every reconcile (changed or no-op) means "we're up to date with a peer". Throttle to
 				// ~30s (peers rebroadcast every few seconds); persist + emit the live tick for the in-process
 				// Sync UI (onSyncEvent "synced").

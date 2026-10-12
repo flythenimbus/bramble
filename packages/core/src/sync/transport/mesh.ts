@@ -41,6 +41,8 @@ export interface MeshOptions {
 	roomLabel: string;
 	signer: SignerPair;
 	iceServers?: RTCIceServer[];
+	/** Mint fresh ICE credentials before each new WebRTC connection, overriding iceServers. */
+	getIceServers?: () => Promise<RTCIceServer[]>;
 	onStatus: (status: string) => void;
 	onPeer: (session: PeerSession) => void;
 	/** Rotate the room id per epoch (subscribe current+previous) so no single permanent room id
@@ -109,6 +111,8 @@ const ANNOUNCE_MS = 30 * 1000;
 
 class Mesh {
 	private readonly peers = new Map<string, Peer>();
+	/** Offers and candidates share the pending setup while ICE credentials are fetched. */
+	private readonly pendingPeers = new Map<string, Promise<Peer | undefined>>();
 	private readonly relayPeers = new Map<
 		string,
 		{ receive: (f: DataFrame) => void; close: () => void }
@@ -216,7 +220,8 @@ class Mesh {
 	 */
 	private announce(): void {
 		for (const remote of this.known) {
-			if (!this.peers.has(remote) && !this.relayPeers.has(remote)) this.known.delete(remote);
+			if (!this.peers.has(remote) && !this.pendingPeers.has(remote) && !this.relayPeers.has(remote))
+				this.known.delete(remote);
 		}
 		this.sendHello();
 	}
@@ -336,7 +341,7 @@ class Mesh {
 
 	// Deterministic role: lower pubkey offers. Re-announce once per new peer so a
 	// late joiner still learns us over the store-nothing relay.
-	private discover(remote: string, remoteRtc: boolean): void {
+	private async discover(remote: string, remoteRtc: boolean): Promise<void> {
 		if (this.known.has(remote)) return;
 		this.known.add(remote);
 		this.sendHello();
@@ -347,7 +352,7 @@ class Mesh {
 			if (initiator) {
 				this.opts.onStatus(`peer ${short(remote)} found — initiating (webrtc)`);
 				try {
-					this.makePeer(remote, true);
+					await this.makePeer(remote, true);
 				} catch (e) {
 					// RTCPeerConnection / createDataChannel throwing here is otherwise swallowed
 					// by the void-ed event handler and looks identical to a stuck "initiating".
@@ -366,24 +371,43 @@ class Mesh {
 	private async routeSignal(remote: string, signal: PeerSignal): Promise<void> {
 		let peer = this.peers.get(remote);
 		if (!peer) {
-			if (signal.kind !== "offer") return; // only an offer bootstraps a responder
+			// Only an offer bootstraps a responder, but candidates arriving during its
+			// ICE request must wait for that same peer rather than being discarded.
+			if (signal.kind !== "offer" && !this.pendingPeers.has(remote)) return;
 			this.known.add(remote);
 			try {
-				peer = this.makePeer(remote, false);
+				peer = await this.makePeer(remote, false);
 			} catch (e) {
 				this.opts.onStatus(`peer setup failed: ${(e as Error).message}`);
 				return;
 			}
 		}
-		await peer.handleSignal(signal);
+		if (!this.stopped) await peer?.handleSignal(signal);
 	}
 
-	private makePeer(remote: string, initiator: boolean): Peer {
+	private makePeer(remote: string, initiator: boolean): Promise<Peer | undefined> {
+		const existing = this.peers.get(remote);
+		if (existing) return Promise.resolve(existing);
+		const pending = this.pendingPeers.get(remote);
+		if (pending) return pending;
+		const setup = (async () => {
+			if (this.stopped) return;
+			const iceServers = this.opts.getIceServers
+				? await this.opts.getIceServers()
+				: this.opts.iceServers;
+			if (this.stopped) return;
+			return this.openPeer(remote, initiator, iceServers);
+		})().finally(() => this.pendingPeers.delete(remote));
+		this.pendingPeers.set(remote, setup);
+		return setup;
+	}
+
+	private openPeer(remote: string, initiator: boolean, iceServers?: RTCIceServer[]): Peer {
 		let peer: Peer;
 		const { channel, push } = makeChannel((data) => peer.send(data));
 		peer = createPeer({
 			initiator,
-			iceServers: this.opts.iceServers,
+			iceServers,
 			onSignal: (signal) => void this.publish({ to: remote, ...signal }),
 			onMessage: push,
 			onOpen: () =>

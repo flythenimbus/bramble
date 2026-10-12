@@ -143,6 +143,10 @@
 		"message": "Générez un mot de passe différent",
 		"description": "Accessible label for the regenerate button on the suggested-password row."
 	},
+	"pickerUseKeyboard": {
+		"message": "Appuyez sur ↓ puis Entrée pour remplir sur cette page",
+		"description": "Shown in the autofill dropdown when a click was refused because the browser could not confirm the list is fully visible (something on the page covers or filters it). The arrow-key and Enter path still works."
+	},
 	"aliasUse": {
 		"message": "Utiliser un nouvel alias e-mail",
 		"description": "Sub-text on the email-alias row in the autofill dropdown; the row creates a fresh forwarding address at the user's alias provider and fills it into a signup form."

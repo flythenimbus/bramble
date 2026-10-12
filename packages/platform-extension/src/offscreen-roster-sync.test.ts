@@ -9,9 +9,10 @@ import { describe, expect, it, vi } from "vitest";
 // The phone would log "synced with <browser>" and then "peer idle — dropping" forever.
 // See offscreen-core `syncConfigKey` and docs/p2p-sync.md.
 
-const { started, stub } = vi.hoisted(() => {
+const { started, stub, enrolls } = vi.hoisted(() => {
 	const started: { peerSource: boolean; stopped: boolean }[] = [];
-	return { started, stub: {} };
+	const enrolls: { stopped: boolean }[] = [];
+	return { started, stub: {}, enrolls };
 });
 
 vi.mock("./wasm-loader", () => ({ loadWasm: async () => stub }));
@@ -25,6 +26,18 @@ vi.mock("@core/sync/transport/roster-sync", () => ({
 				session.stopped = true;
 			},
 			broadcastNow: async () => {},
+		};
+	},
+}));
+
+vi.mock("@core/sync/transport/enroll-host", () => ({
+	startEnroll: async () => {
+		const session = { stopped: false };
+		enrolls.push(session);
+		return {
+			stop: () => {
+				session.stopped = true;
+			},
 		};
 	},
 }));
@@ -45,6 +58,7 @@ const roster: RosterPayload = {
 };
 
 const config = (over: Record<string, unknown> = {}) => ({
+	vaultId: "A",
 	relayUrl: "wss://relay.example",
 	groupKeyB64: "GROUP",
 	roster,
@@ -148,5 +162,54 @@ describe("SYNC_ROSTER_SYNC (a service-worker restart must not restart sync)", ()
 		]);
 
 		expect(live()).toHaveLength(0);
+	});
+});
+
+describe("sync sessions are pinned to a vault", () => {
+	it("keeps the sessions for the same vault", async () => {
+		await reset();
+		await handleHostMessage("SYNC_ROSTER_SYNC", config({ vaultId: "A" }));
+		await handleHostMessage("SYNC_ROSTER_SYNC", config({ vaultId: "A" }));
+		expect(started).toHaveLength(2);
+		expect(live()).toHaveLength(2);
+	});
+
+	it("rebuilds the sessions for a different vault", async () => {
+		await reset();
+		await handleHostMessage("SYNC_ROSTER_SYNC", config({ vaultId: "A" }));
+		await handleHostMessage("SYNC_ROSTER_SYNC", config({ vaultId: "B" }));
+		expect(started).toHaveLength(4);
+		expect(live()).toHaveLength(2);
+	});
+
+	it("a stop that names the running vault keeps it", async () => {
+		await reset();
+		await handleHostMessage("SYNC_ROSTER_SYNC", config({ vaultId: "A" }));
+		await handleHostMessage("SYNC_ROSTER_STOP", { keepVaultId: "A" });
+		expect(live()).toHaveLength(2);
+	});
+
+	it("a stop for another vault stops the sessions", async () => {
+		await reset();
+		await handleHostMessage("SYNC_ROSTER_SYNC", config({ vaultId: "A" }));
+		await handleHostMessage("SYNC_ROSTER_STOP", { keepVaultId: "B" });
+		expect(live()).toHaveLength(0);
+	});
+
+	it("a roster stop leaves a pairing running", async () => {
+		await reset();
+		enrolls.length = 0;
+		await handleHostMessage("SYNC_ENROLL_JOIN", {
+			relayUrl: "wss://relay.example",
+			groupKeyB64: "GROUP",
+			psk: "psk",
+			devicePrivB64: "priv",
+			inviterPub: "inviterPub",
+			ownEntry: roster.devices[0],
+		});
+		await handleHostMessage("SYNC_ROSTER_SYNC", config({ vaultId: "A" }));
+		await handleHostMessage("SYNC_ROSTER_STOP", { keepVaultId: "B" });
+		expect(enrolls).toHaveLength(1);
+		expect(enrolls[0]?.stopped).toBe(false);
 	});
 });

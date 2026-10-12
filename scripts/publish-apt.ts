@@ -22,18 +22,32 @@
 // See docs/release-signing.md, "Linux APT repository".
 
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+	chmodSync,
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { indexHashes, packageFiles, publishArgs, REPO, SUITE } from "./apt-index.ts";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEBS = join(ROOT, "dist-linux/deb");
-/** aptly's own name for the repository; not user-visible. */
-const REPO = "bramble";
-/** The suite in `bramble.sources`. Changing it orphans every installed client. */
-const SUITE = "stable";
 const BUCKET = "bramble-apt";
+const LIVE = "https://apt.bramble.sh";
+/** The keyring users verify against; see the check before the upload. */
+const keyring = join(ROOT, "packages/platform-desktop/apt/bramble-keyring.asc");
+/** The sources snippet users install; its Architectures are what the index must serve. */
+const sources = join(ROOT, "packages/platform-desktop/apt/bramble.sources");
 
 const argv = process.argv.slice(2);
 const dryRun = argv.includes("--dry-run");
@@ -64,7 +78,7 @@ function aptly(argv: string[], opts: { quiet?: boolean; capture?: boolean } = {}
 	return out;
 }
 
-for (const bin of ["aptly", "gpg", "rclone"]) {
+for (const bin of ["aptly", "gpg", "gpgv", "rclone"]) {
 	if (!has(bin)) fail(`${bin} not found; see docs/release-signing.md`);
 }
 
@@ -74,6 +88,60 @@ if (!gpgKey) {
 		"BRAMBLE_APT_GPG_KEY is not set: the fingerprint or uid of the repository signing key.\n" +
 			"Put it in .env.local. See docs/release-signing.md.",
 	);
+}
+const signer = gpgKey.replace(/\s/g, "").toUpperCase();
+
+const arches = (text: string, label: string) =>
+	text
+		.match(/^Architectures: (.+)$/m)?.[1]
+		.trim()
+		.split(/\s+/)
+		.sort() ?? fail(`no Architectures line in ${label}`);
+const claimed = arches(readFileSync(sources, "utf8"), sources);
+
+// The key from the environment instead of the card, which is how CI signs (.github/workflows/
+// apt-release.yml): imported into a gpg home that exists for this run only and unlocked from a
+// passphrase file, since a runner has no pinentry to ask. Locally neither variable is set and the
+// YubiKey signs as before.
+let passphraseFile: string | undefined;
+const envKey = process.env.APT_GPG_PRIVATE_KEY;
+if (envKey) {
+	const passphrase =
+		process.env.APT_GPG_PASSPHRASE ??
+		fail("APT_GPG_PRIVATE_KEY is set but APT_GPG_PASSPHRASE is not.");
+	const home = mkdtempSync(join(tmpdir(), "bramble-apt-gpg-"));
+	chmodSync(home, 0o700);
+	process.env.GNUPGHOME = home;
+	process.on("exit", () => {
+		try {
+			execFileSync("gpgconf", ["--kill", "gpg-agent"], { stdio: "ignore" });
+		} catch {}
+		rmSync(home, { recursive: true, force: true });
+	});
+	writeFileSync(join(home, "gpg.conf"), "pinentry-mode loopback\n");
+	writeFileSync(join(home, "gpg-agent.conf"), "allow-loopback-pinentry\n");
+	const truncated =
+		`APT_GPG_PRIVATE_KEY holds no secret key for ${gpgKey}.\n` +
+		"A multi-line secret typed at gh's interactive prompt keeps only its first line; set it from\n" +
+		"the clipboard instead:  pbpaste | gh secret set APT_GPG_PRIVATE_KEY --env apt-release";
+	try {
+		execFileSync("gpg", ["--batch", "--import"], {
+			input: envKey,
+			stdio: ["pipe", "ignore", "pipe"],
+		});
+	} catch {
+		fail(truncated);
+	}
+	const secret = execFileSync("gpg", ["--batch", "--list-secret-keys", "--with-colons"], {
+		encoding: "utf8",
+	});
+	const held = secret
+		.split("\n")
+		.filter((line) => line.startsWith("fpr:"))
+		.map((line) => line.split(":")[9] ?? "");
+	if (!held.some((fpr) => fpr.endsWith(signer))) fail(truncated);
+	passphraseFile = join(home, "passphrase");
+	writeFileSync(passphraseFile, passphrase, { mode: 0o600 });
 }
 
 // Exactly that release's packages: the directory is cleared first, so a .deb left over from a
@@ -109,6 +177,58 @@ const repos = aptly(["repo", "list", "-raw"], { quiet: true });
 if (!repos.split("\n").some((line) => line.trim() === REPO)) {
 	console.log(`creating the aptly repo "${REPO}"…`);
 	aptly(["repo", "create", `-distribution=${SUITE}`, "-component=main", REPO]);
+	await seedFromLive();
+}
+
+/**
+ * A new aptly repo knows nothing of what is already published, and the upload below is an
+ * `rclone sync`: left as it is, this would publish an index of one release and delete every older
+ * package from the bucket. So a new repo (a CI runner, or any fresh machine) is first refilled from
+ * the live repository, through the chain apt itself trusts: InRelease signed by a key in the
+ * committed keyring, each Packages file hashed in InRelease, each .deb hashed in Packages. Anything
+ * that fails a link stops the run, so a tampered file is never re-signed.
+ */
+async function seedFromLive(): Promise<void> {
+	const fetchBytes = async (url: string): Promise<Buffer | null> => {
+		const res = await fetch(url);
+		if (res.status === 404) return null;
+		if (!res.ok) fail(`${url}: ${res.status}`);
+		return Buffer.from(await res.arrayBuffer());
+	};
+	const sha256 = (data: Buffer) => createHash("sha256").update(data).digest("hex");
+	const inRelease = await fetchBytes(`${LIVE}/dists/${SUITE}/InRelease`);
+	if (!inRelease) {
+		console.log("nothing published yet, so nothing to carry over");
+		return;
+	}
+	const dir = mkdtempSync(join(tmpdir(), "bramble-apt-seed-"));
+	const debs = join(dir, "debs");
+	mkdirSync(debs);
+	writeFileSync(join(dir, "InRelease"), inRelease);
+	execFileSync("gpg", ["--batch", "--yes", "--dearmor", "-o", join(dir, "keyring.gpg"), keyring]);
+	try {
+		execFileSync("gpgv", ["--keyring", join(dir, "keyring.gpg"), join(dir, "InRelease")], {
+			stdio: ["ignore", "ignore", "pipe"],
+		});
+	} catch {
+		fail(`${LIVE}/dists/${SUITE}/InRelease does not verify against ${basename(keyring)}.`);
+	}
+	const hashes = indexHashes(inRelease.toString("utf8"));
+	let carried = 0;
+	for (const arch of claimed) {
+		const path = `main/binary-${arch}/Packages`;
+		const index = await fetchBytes(`${LIVE}/dists/${SUITE}/${path}`);
+		if (!index || sha256(index) !== hashes.get(path)) fail(`${path} does not match InRelease.`);
+		for (const pkg of packageFiles(index.toString("utf8"))) {
+			const deb = await fetchBytes(`${LIVE}/${pkg.path}`);
+			if (!deb || sha256(deb) !== pkg.sha256) fail(`${pkg.path} does not match ${path}.`);
+			writeFileSync(join(debs, basename(pkg.path)), deb);
+			carried++;
+		}
+	}
+	console.log(`carrying over ${carried} package(s) already published…`);
+	if (carried > 0) aptly(["repo", "add", REPO, debs]);
+	rmSync(dir, { recursive: true, force: true });
 }
 
 for (const deb of packages) {
@@ -131,23 +251,12 @@ if (config.gpgProvider && config.gpgProvider !== "gpg") {
 }
 
 // The touch is here, and only here. Everything above is public metadata.
-notifyYubiKeyTouch("sign the APT repository index");
+if (!passphraseFile) notifyYubiKeyTouch("sign the APT repository index");
 const published = aptly(["publish", "list", "-raw"], { quiet: true });
 const already = published.split("\n").some((line) => line.trim().startsWith(`. ${SUITE}`));
-// Flags BEFORE the positional arguments: aptly's parser stops looking for flags at the first
-// non-flag word, so `publish repo bramble -gpg-key=...` reads the key as the PREFIX argument and
-// publishes the whole tree into a directory named `-gpg-key=<fingerprint>`. It succeeds, too,
-// which is the annoying part: the only symptom is that dists/ is not where anything expects it.
-//
-// No -batch either: it stops gpg from prompting, and a card asks for its PIN through pinentry.
-// The passphrase prompt -batch exists to avoid is not one this key has.
+// Flag order and -batch: see publishArgs.
 try {
-	aptly(
-		already
-			? ["publish", "update", `-gpg-key=${gpgKey}`, SUITE]
-			: ["publish", "repo", `-gpg-key=${gpgKey}`, REPO],
-		{ capture: true },
-	);
+	aptly(publishArgs({ published: already, gpgKey, passphraseFile }), { capture: true });
 } catch (e) {
 	// stderr is captured for this call (see `capture` below) precisely so the hint can be
 	// conditional. Printed first, because swallowing aptly's own message would be worse than the
@@ -190,14 +299,12 @@ const publishedDir = join(rootDir.replace("~", process.env.HOME ?? "~"), "public
 // Checked, not trusted: the key that just signed the index must be in it, or this publishes a
 // repository nobody can verify, and the failure reads to a user as a network problem ("the
 // following signatures were invalid") rather than as a mismatch here.
-const keyring = join(ROOT, "packages/platform-desktop/apt/bramble-keyring.asc");
 const fingerprints = execFileSync("gpg", ["--show-keys", "--with-colons", keyring], {
 	encoding: "utf8",
 })
 	.split("\n")
 	.filter((line) => line.startsWith("fpr:"))
 	.map((line) => line.split(":")[9] ?? "");
-const signer = gpgKey.replace(/\s/g, "").toUpperCase();
 if (!fingerprints.some((fpr) => fpr.endsWith(signer)))
 	fail(
 		`${basename(keyring)} does not contain the key that signed the index (${gpgKey}).\n` +
@@ -209,14 +316,6 @@ copyFileSync(keyring, join(publishedDir, "keys.asc"));
 // it is checked against it. apt skips a repository whose Architectures do not claim the machine's
 // own, silently: the arm64 packages were published and indexed for two releases while every arm64
 // user saw an empty repository, because this line said amd64.
-const sources = join(ROOT, "packages/platform-desktop/apt/bramble.sources");
-const arches = (text: string, label: string) =>
-	text
-		.match(/^Architectures: (.+)$/m)?.[1]
-		.trim()
-		.split(/\s+/)
-		.sort() ?? fail(`no Architectures line in ${label}`);
-const claimed = arches(readFileSync(sources, "utf8"), sources);
 const publishedRelease = join(publishedDir, "dists", SUITE, "Release");
 const actual = arches(readFileSync(publishedRelease, "utf8"), publishedRelease);
 if (claimed.join(" ") !== actual.join(" "))

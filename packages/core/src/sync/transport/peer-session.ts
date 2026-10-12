@@ -85,14 +85,18 @@ export async function startMeshSession(opts: MeshSessionOptions): Promise<MeshSe
 	}
 	const join: (opts: MeshOptions) => Promise<Stoppable> = opts.join ?? joinMesh;
 	const fetchIce = opts.fetchIce ?? fetchIceServers;
-	const iceServers = await fetchIce(opts.iceUrl || deriveIceUrl(opts.relayUrl));
-	opts.report(iceServers.length ? "ICE: relay servers ready" : "ICE: direct (host) only");
 	const mesh = await join({
 		relayUrl: opts.relayUrl,
 		groupKey: base64ToBytes(opts.groupKeyB64),
 		roomLabel: opts.roomLabel,
 		signer: await makeNostr(opts.wasm),
-		iceServers,
+		// Mint at peer creation, including reconnects: the inviter may wait longer than
+		// a credential's lifetime, and an ongoing mesh can outlive many TURN TTLs.
+		getIceServers: async () => {
+			const servers = await fetchIce(opts.iceUrl || deriveIceUrl(opts.relayUrl));
+			opts.report(servers.length ? "ICE: relay servers ready" : "ICE: direct (host) only");
+			return servers;
+		},
 		epochRooms: opts.epochRooms,
 		onStatus: opts.report,
 		onPeer: (peer) => void opts.onPeer(peer).catch((e) => opts.report(`peer error: ${String(e)}`)),

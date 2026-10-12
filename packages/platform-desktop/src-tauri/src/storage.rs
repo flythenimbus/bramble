@@ -150,6 +150,25 @@ mod ops {
         io(fs::read(&backup), "read vault backup").map(Some)
     }
 
+    /// `<id>.quarantine.json`: its temp file is `<id>.quarantine.tmp`, never the vault's `<id>.tmp`.
+    fn quarantine_path(root: &Path, vault_id: Option<&str>) -> CmdResult<PathBuf> {
+        let (path, _) = vault_paths(root, vault_id)?;
+        Ok(path.with_extension("quarantine.json"))
+    }
+
+    /// Entries the vault couldn't decrypt, kept sealed as JSON. None when there are none.
+    pub fn read_quarantine(root: &Path, vault_id: Option<&str>) -> CmdResult<Option<String>> {
+        let path = quarantine_path(root, vault_id)?;
+        if !path.exists() {
+            return Ok(None);
+        }
+        io(fs::read_to_string(&path), "read quarantine").map(Some)
+    }
+
+    pub fn write_quarantine(root: &Path, json: &str, vault_id: Option<&str>) -> CmdResult<()> {
+        write_atomic(&quarantine_path(root, vault_id)?, json.as_bytes())
+    }
+
     pub fn restore_vault_backup(root: &Path, vault_id: Option<&str>) -> CmdResult<bool> {
         let (path, backup) = vault_paths(root, vault_id)?;
         if !backup.exists() {
@@ -164,7 +183,8 @@ mod ops {
 
     pub fn delete_vault(root: &Path, vault_id: &str) -> CmdResult<()> {
         let (path, backup) = vault_paths(root, Some(vault_id))?;
-        for p in [path, backup] {
+        let quarantine = quarantine_path(root, Some(vault_id))?;
+        for p in [path, backup, quarantine] {
             if p.exists() {
                 io(fs::remove_file(&p), "delete vault file")?;
             }
@@ -261,6 +281,23 @@ pub fn storage_read_vault_backup(
     vault_id: Option<String>,
 ) -> CmdResult<Option<Vec<u8>>> {
     ops::read_vault_backup(&data_dir(&app)?, vault_id.as_deref())
+}
+
+#[tauri::command]
+pub fn storage_read_quarantine(
+    app: AppHandle,
+    vault_id: Option<String>,
+) -> CmdResult<Option<String>> {
+    ops::read_quarantine(&data_dir(&app)?, vault_id.as_deref())
+}
+
+#[tauri::command]
+pub fn storage_write_quarantine(
+    app: AppHandle,
+    json: String,
+    vault_id: Option<String>,
+) -> CmdResult<()> {
+    ops::write_quarantine(&data_dir(&app)?, &json, vault_id.as_deref())
 }
 
 #[tauri::command]
@@ -518,6 +555,29 @@ mod tests {
         ops::write_vault(d.path(), b"v2", None).unwrap();
         fs::remove_file(vlt(d.path(), "default")).unwrap();
         // The .bak is still there, but there is no vault to open.
+        assert!(!ops::has_vault(d.path(), None).unwrap());
+    }
+
+    #[test]
+    fn a_vaults_quarantine_round_trips_and_goes_with_the_vault() {
+        let d = root();
+        ops::write_vault(d.path(), b"v1", Some("q")).unwrap();
+        ops::write_quarantine(d.path(), "[]", Some("q")).unwrap();
+        assert_eq!(
+            ops::read_quarantine(d.path(), Some("q")).unwrap(),
+            Some("[]".to_string())
+        );
+        assert_eq!(ops::read_quarantine(d.path(), Some("other")).unwrap(), None);
+
+        ops::delete_vault(d.path(), "q").unwrap();
+        assert_eq!(ops::read_quarantine(d.path(), Some("q")).unwrap(), None);
+    }
+
+    #[test]
+    fn a_lone_quarantine_does_not_count_as_a_vault() {
+        let d = root();
+        ops::write_quarantine(d.path(), "[]", Some("q")).unwrap();
+        assert!(!ops::has_vault(d.path(), Some("q")).unwrap());
         assert!(!ops::has_vault(d.path(), None).unwrap());
     }
 

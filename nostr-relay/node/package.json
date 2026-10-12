@@ -1,0 +1,16 @@
+{
+	"name": "bramble-nostr-relay",
+	"version": "0.0.0",
+	"private": true,
+	"license": "GPL-3.0-only",
+	"author": "Webvana Inc.",
+	"description": "Minimal Nostr-subset signaling relay for Bramble P2P sync (node/ws).",
+	"type": "module",
+	"main": "relay.mjs",
+	"scripts": {
+		"start": "node relay.mjs"
+	},
+	"dependencies": {
+		"ws": "^8.21.3"
+	}
+}

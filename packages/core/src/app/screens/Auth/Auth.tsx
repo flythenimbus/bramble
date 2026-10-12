@@ -16,13 +16,13 @@ import {
 	isBiometricLockout,
 } from "../../../adapters/biometric";
 import { usePlatform } from "../../../context/PlatformContext";
-import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
 import { usePrefs } from "../../../hooks/usePrefs";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { effectiveAllowPasscode, StaleBiometricCacheError } from "../../../vault/biometric-unlock";
 import { displayLabel } from "../../../vault/vault-registry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
+import { CryptoErrorText } from "../../components/CryptoErrorText";
 import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
@@ -40,6 +40,10 @@ const AUTO_PROMPT_ATTEMPTS = 4;
 const AUTO_PROMPT_RETRY_MS = 400;
 
 /** Vault unlock screen: master password, security key, and recovery-code paths. */
+
+// Errors are kept raw and rendered by CryptoErrorText, which can link to the issue tracker.
+const rawError = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 export function Auth() {
 	const {
 		hasVault,
@@ -72,7 +76,6 @@ export function Auth() {
 	const canWebauthnUnlock = useWebauthnUnlock();
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();
-	const cryptoError = useCryptoErrorMessage();
 	const appName = shell.appName;
 	const onPopOut = canPopOut ? popOut : undefined;
 
@@ -126,7 +129,7 @@ export function Auth() {
 		} catch (e) {
 			// Keep the typed value; the inline field error is the failure signal.
 			// Do not resetField here: in RHF v7 it clears the error and makes failures silent.
-			setError("masterPassword", { message: cryptoError(e) }, { shouldFocus: true });
+			setError("masterPassword", { message: rawError(e) }, { shouldFocus: true });
 		} finally {
 			setBusy(false);
 		}
@@ -137,7 +140,7 @@ export function Auth() {
 		try {
 			await shell.openSetup();
 		} catch (e) {
-			setError("masterPassword", { message: cryptoError(e) });
+			setError("masterPassword", { message: rawError(e) });
 		} finally {
 			setBusy(false);
 		}
@@ -150,11 +153,11 @@ export function Auth() {
 			rearm();
 		} catch (e) {
 			// Surface in the same field-error region as a wrong master password.
-			setError("masterPassword", { message: cryptoError(e) });
+			setError("masterPassword", { message: rawError(e) });
 		} finally {
 			setBusy(false);
 		}
-	}, [unlockWithWebauthnKey, rearm, setError, cryptoError]);
+	}, [unlockWithWebauthnKey, rearm, setError]);
 
 	const couldNotRead = hasVault && vaultError !== null && !hasPasswordSlot && !hasWebauthnSlot;
 	// Hidden where it can't work (mobile): no PRF, so offering it would be a dead end even for
@@ -203,7 +206,7 @@ export function Auth() {
 						});
 					// A user cancel surfaces here too; the password form stays available below.
 				} else if (!auto || e instanceof StaleBiometricCacheError) {
-					setError("masterPassword", { message: cryptoError(e) });
+					setError("masterPassword", { message: rawError(e) });
 				} else if (isBiometricInterrupted(e)) {
 					// Nothing the user asked for should leave an error on screen; they still have
 					// the button, which reports properly. A cancel is an answer, but a gate that
@@ -220,7 +223,7 @@ export function Auth() {
 			setBusy(false);
 			return "done";
 		},
-		[unlockWithBiometric, allowPasscode, rearm, setError, cryptoError, t],
+		[unlockWithBiometric, allowPasscode, rearm, setError, t],
 	);
 
 	const handleRecovery = async (e: React.SyntheticEvent) => {
@@ -231,7 +234,7 @@ export function Auth() {
 			await unlockWithRecoveryCode(recoveryCode);
 			rearm();
 		} catch (err) {
-			setRecoveryError(cryptoError(err));
+			setRecoveryError(rawError(err));
 		} finally {
 			setBusy(false);
 		}
@@ -386,7 +389,11 @@ export function Auth() {
 									<PasswordField
 										label={t`Master password`}
 										autoFocus
-										error={errors.masterPassword?.message}
+										error={
+											errors.masterPassword?.message ? (
+												<CryptoErrorText message={errors.masterPassword.message} />
+											) : undefined
+										}
 										{...register("masterPassword", {
 											required: t`Please enter your master password`,
 										})}
@@ -460,7 +467,11 @@ export function Auth() {
 										disabled={busy}
 										className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
 									/>
-									{recoveryError && <p className="text-xs text-destructive">{recoveryError}</p>}
+									{recoveryError && (
+										<p className="text-xs text-destructive">
+											<CryptoErrorText message={recoveryError} />
+										</p>
+									)}
 									<div className="flex gap-2">
 										<Button
 											type="submit"

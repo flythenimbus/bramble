@@ -1,13 +1,8 @@
 Novedades de esta versión:
 
-- Las copias de seguridad en la nube ya funcionan en el iPhone. Apunte Bramble al almacenamiento que ya tiene, a un bucket compatible con S3 como Backblaze B2, Cloudflare R2 o Wasabi, o a un servidor WebDAV como Nextcloud, y Bramble guarda allí una copia de su bóveda, aún sellada con su contraseña maestra para que el proveedor no pueda leerla. iOS no permite que las aplicaciones se ejecuten en segundo plano según un horario, por lo que la copia se realiza al desbloquear Bramble o al volver a abrir la aplicación después de que haya transcurrido el intervalo elegido. Con «Realizar copia de seguridad ahora» se ejecuta de inmediato.
-
-- Dos servicios más de alias de correo electrónico: DuckDuckGo Email Protection y Firefox Relay. DuckDuckGo no tiene ninguna página de claves API, por lo que en Ajustes se explica dónde encontrar la que utiliza.
-
-- Al cambiar a un servicio de alias distinto, el campo de clave API se vacía. Antes, una clave escrita para un servicio se quedaba ahí y, al comprobarla, se enviaba al servicio al que acababa de cambiar.
-
-- Buscar y seleccionar en una bóveda grande es más fluido. La lista ya no vuelve a dibujar cada elemento con cada pulsación de tecla.
-
-- En alemán, español, francés, italiano y portugués, algunas instrucciones quedaban cortadas a mitad de frase, incluidas las de emparejamiento con otro dispositivo. Ahora están completas.
+- Una bóveda ya no se niega a abrirse porque contiene entradas de una de sus otras bóvedas. Un problema de sincronización en la extensión del navegador podía copiar entradas de una bóveda a otra, y esa bóveda no se desbloqueaba, mostrando un error técnico incluso con la contraseña correcta. Bramble ahora aparta esas entradas en este dispositivo, sin modificarlas, y abre la bóveda con todo lo demás.
+- Durante la sincronización, Bramble ahora rechaza las entradas que pertenecen a otra bóveda, de modo que un dispositivo que aún tenga el problema no pueda transmitirlo.
+- Si una bóveda sigue sin abrirse, Bramble lo indica con palabras claras y enlaza a nuestro sistema de seguimiento de incidencias, en lugar de mostrar un error técnico.
+- Una actualización de seguridad de Capacitor, el framework en el que se basa la aplicación.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

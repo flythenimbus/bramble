@@ -24,7 +24,11 @@ export interface StorageAdapter {
 	 * Optional: platforms without a snapshot store leave it undefined and the fallback self-disables.
 	 */
 	readVaultBackup?(vaultId?: string): Promise<Uint8Array | null>;
-	/** Delete a vault's blob and its recovery snapshot (used when removing a vault). */
+	/** Entries this vault couldn't decrypt, kept sealed as JSON; never synced or shown. Null when none. */
+	readQuarantine?(vaultId?: string): Promise<string | null>;
+	/** Replace the vault's quarantine JSON. Removed with the vault by deleteVaultBlob. */
+	writeQuarantine?(json: string, vaultId?: string): Promise<void>;
+	/** Delete a vault's blob, its recovery snapshot and its quarantine (used when removing a vault). */
 	deleteVaultBlob(vaultId: string): Promise<void>;
 	getMeta<T>(key: string): Promise<T | undefined>;
 	setMeta<T>(key: string, value: T): Promise<void>;

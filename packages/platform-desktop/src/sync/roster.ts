@@ -168,6 +168,8 @@ async function startRoster(): Promise<void> {
 	// the session and bumps the gen rather than letting a running one follow the active vault.
 	const blobStore = makeBlobStore(vaultId);
 	const gen = sessionGen;
+	// Entry versions this session refused at merge; per session, so a transient state can't outlive it.
+	const rejected = new Set<string>();
 	sessionVaultId = vaultId;
 
 	const common = {
@@ -207,6 +209,7 @@ async function startRoster(): Promise<void> {
 				}
 				const port = createVaultSyncPort({
 					store: blobStore,
+					crypto: desktopCrypto,
 					witnessRemote: async (stamps) => {
 						const clock = await getClock(vaultId);
 						for (const hlc of stamps) clock.witness(hlc);
@@ -215,7 +218,7 @@ async function startRoster(): Promise<void> {
 					// showing entries the file no longer matches.
 					onChanged: notifyExternalChange,
 				});
-				await applyRemotePayload(port, decodeEntriesPayload(json));
+				await applyRemotePayload(port, decodeEntriesPayload(json), { rejected });
 
 				// Every reconcile, changed or not, means "up to date with a peer".
 				const at = Date.now();

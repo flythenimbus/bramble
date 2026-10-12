@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Star, X } from "lucide-react";
 import type { ReviewNudge } from "../hooks/useReviewNudge";
-import { ISSUES_URL } from "../review-nudge";
+import { ISSUES_URL } from "../repo";
 import { Button, buttonClasses } from "./ui/button";
 
 /**

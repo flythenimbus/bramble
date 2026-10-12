@@ -5,7 +5,8 @@ import { cn } from "./utils";
 // `size` shadows the input's own character-width attribute, which nothing here uses.
 interface TextFieldProps extends Omit<ComponentProps<"input">, "id" | "placeholder" | "size"> {
 	label: string;
-	error?: string;
+	/** Text, or a rendered message when it carries a link (see CryptoErrorText). */
+	error?: ReactNode;
 	startAdornment?: ReactNode;
 	endAdornment?: ReactNode;
 	/** `sm` for dense panels (the generator's symbol set). Default `md`. */

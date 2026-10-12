@@ -683,9 +683,22 @@ export function detectCardFields(
 	return { number, ...rest };
 }
 
-/** True if a real card field (number/cvv/expiry) is present; a bare name field doesn't count. */
+// The tokens a site uses to declare a card field. cc-name is left out: a bare name field doesn't
+// make a card form.
+const CC_DECLARED = ["cc-number", "cc-exp", "cc-exp-month", "cc-exp-year", "cc-csc"]
+	.map((token) => `[autocomplete~="${token}"]`)
+	.join(",");
+
+/**
+ * True if the page is a card form: two of number, expiry and CVV together, or any one the site
+ * tags with a cc-* token (a hosted-fields frame holds a single box). A lone "Expiry" is as often a
+ * passport or a subscription as a card, and the name never counts toward the pair.
+ */
 export function cardFieldsPresent(c: CardFields): boolean {
-	return !!(c.number || c.cvv || c.expCombined || c.expMonth || c.expYear);
+	const fields = [c.number, c.cvv, c.expCombined, c.expMonth, c.expYear];
+	if (fields.some((el) => el?.matches(CC_DECLARED))) return true;
+	const expiry = c.expCombined ?? c.expMonth ?? c.expYear;
+	return [c.number, c.cvv, expiry].filter(Boolean).length >= 2;
 }
 
 /** True if `el` is one of the detected card fields. */

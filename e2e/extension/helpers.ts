@@ -10,6 +10,12 @@ export const STRONG_PW = "Zx9-mQ2-vLp7-wK4-tR8";
  * Create the first vault through the full-tab options setup flow (which the popup's "Create your
  * vault" opens). Leaves the vault created and unlocked. Pass through the recovery-code screen.
  */
+/** The picker drops clicks in its first 500 ms on screen and again after it moves, since a page
+ *  could put it under a click already in flight. Wait that out before clicking a row. */
+export async function waitOutPickerClickGuard(page: Page): Promise<void> {
+	await page.waitForTimeout(600);
+}
+
 export async function createVault(page: Page, extensionId: string, password = STRONG_PW) {
 	await page.goto(optionsUrl(extensionId));
 	await expect(page.locator("#root")).not.toBeEmpty();
@@ -71,12 +77,12 @@ export async function selectVault(page: Page, name: RegExp, password = STRONG_PW
 
 /** Add the saved login the autofill specs match against (alice@example.com on example.com),
  * through the unlocked popup's own UI. */
-export async function seedExampleLogin(popup: Page) {
+export async function seedExampleLogin(popup: Page, url = "https://example.com") {
 	await popup.getByRole("button", { name: /Add New/i }).click();
 	await popup.getByRole("button", { name: /Add a new login/i }).click();
 	await popup.getByLabel("Name", { exact: true }).fill("Example Login");
 	await popup.getByRole("button", { name: /Add URL/i }).click();
-	await popup.getByLabel("Website URL", { exact: true }).fill("https://example.com");
+	await popup.getByLabel("Website URL", { exact: true }).fill(url);
 	await popup.getByLabel("Username or email", { exact: true }).fill("alice@example.com");
 	await popup.getByLabel("Password", { exact: true }).fill("s3cr3t-pw-01");
 	await popup.getByRole("button", { name: /Save Login/i }).click();
@@ -123,6 +129,50 @@ export async function seedSecondCard(popup: Page) {
 	await popup.getByLabel("CVV", { exact: true }).fill("987");
 	await popup.getByRole("button", { name: /^Save/i }).click();
 	await expect(popup.getByText("Travel Mastercard")).toBeVisible();
+}
+
+type CdpNode = {
+	nodeId: number;
+	attributes?: string[];
+	children?: CdpNode[];
+	shadowRoots?: CdpNode[];
+};
+
+function findById(node: CdpNode, id: string): CdpNode | undefined {
+	const attrs = node.attributes ?? [];
+	for (let i = 0; i < attrs.length; i += 2) {
+		if (attrs[i] === "id" && attrs[i + 1] === id) return node;
+	}
+	for (const child of [...(node.children ?? []), ...(node.shadowRoots ?? [])]) {
+		const hit = findById(child, id);
+		if (hit) return hit;
+	}
+	return undefined;
+}
+
+/**
+ * Click a corner-prompt button by its `data-tp-action`. The card is a closed shadow root that
+ * selectors can't reach, so locate the button over CDP (which pierces closed roots) and send a
+ * real mouse click to its centre.
+ */
+export async function clickCornerAction(page: Page, action: string) {
+	const cdp = await page.context().newCDPSession(page);
+	try {
+		const { root } = await cdp.send("DOM.getDocument", { depth: -1, pierce: true });
+		const shadow = findById(root, "bramble-corner-prompt")?.shadowRoots?.[0];
+		if (!shadow) throw new Error("corner prompt is not mounted");
+		const { nodeId } = await cdp.send("DOM.querySelector", {
+			nodeId: shadow.nodeId,
+			selector: `[data-tp-action="${action}"]`,
+		});
+		if (!nodeId) throw new Error(`corner prompt has no "${action}" button`);
+		const { quads } = await cdp.send("DOM.getContentQuads", { nodeId });
+		const q = quads[0];
+		if (!q) throw new Error(`"${action}" button is not rendered`);
+		await page.mouse.click((q[0]! + q[4]!) / 2, (q[1]! + q[5]!) / 2);
+	} finally {
+		await cdp.detach();
+	}
 }
 
 /** From an unlocked popup, open Settings and select the Device sync panel. */
@@ -220,4 +270,21 @@ export async function configureAliasProvider(page: Page, apiKey = "test-key-not-
 	// The Disconnect button only exists once a provider is stored, so it is the tell that the
 	// write landed rather than a timeout.
 	await expect(page.getByRole("button", { name: "Disconnect" })).toBeVisible();
+}
+
+/** Add a login through the real create-entry UI. */
+export async function addLogin(page: Page, name: string): Promise<void> {
+	await page.getByRole("button", { name: /Add New/i }).click();
+	await page
+		.getByRole("button", { name: /^Login/ })
+		.first()
+		.click();
+	await page.getByLabel(/^Name$/).fill(name);
+	await page.getByLabel(/Username or email/i).fill("octocat@example.com");
+	await page
+		.getByLabel(/^Password$/)
+		.first()
+		.fill("hunter2-c0rrect-h0rse");
+	await page.getByRole("button", { name: /Save Login/i }).click();
+	await expect(page.getByText(name)).toBeVisible();
 }

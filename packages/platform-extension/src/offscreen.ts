@@ -15,23 +15,26 @@ import type { ApplyRemoteMsg } from "./sync/messages";
 // Local read + merge + write happen in the background (it has chrome.storage); the
 // offscreen document round-trips to it.
 const chromeBridge: SyncBridge = {
-	fetchLocalPayload: async () => {
-		const r = await api.runtime.sendMessage({ type: "SYNC_LOCAL_PAYLOAD" });
+	fetchLocalPayload: async (vaultId) => {
+		const r = await api.runtime.sendMessage({ type: "SYNC_LOCAL_PAYLOAD", payload: { vaultId } });
 		if (!r?.ok || typeof r.data !== "string") {
 			throw new Error(r?.error ?? "local payload unavailable");
 		}
 		return r.data;
 	},
-	pushRemotePayload: async (payloadJson: string) => {
-		const payload: ApplyRemoteMsg = { payloadJson };
+	pushRemotePayload: async (vaultId, payloadJson) => {
+		const payload: ApplyRemoteMsg = { vaultId, payloadJson };
 		await api.runtime.sendMessage({ type: "SYNC_APPLY_REMOTE", payload });
 	},
-	fetchLocalRoster: async () => {
-		const r = await api.runtime.sendMessage({ type: "SYNC_LOCAL_ROSTER" });
+	fetchLocalRoster: async (vaultId) => {
+		const r = await api.runtime.sendMessage({ type: "SYNC_LOCAL_ROSTER", payload: { vaultId } });
 		return r?.ok && typeof r.data === "string" ? r.data : "";
 	},
-	pushRemoteRoster: async (rosterJson: string) => {
-		await api.runtime.sendMessage({ type: "SYNC_APPLY_ROSTER", payload: { rosterJson } });
+	pushRemoteRoster: async (vaultId, rosterJson) => {
+		await api.runtime.sendMessage({
+			type: "SYNC_APPLY_ROSTER",
+			payload: { vaultId, rosterJson },
+		});
 	},
 };
 setSyncBridge(chromeBridge);

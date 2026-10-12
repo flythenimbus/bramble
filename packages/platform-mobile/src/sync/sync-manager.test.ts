@@ -15,7 +15,7 @@ const h = vi.hoisted(() => ({
 	sessionStops: 0,
 	stateListener: null as ((locked: boolean) => void) | null,
 	// Swapped per test to drive what a "merge" does.
-	applyRemote: async (_port: unknown, _payload: unknown): Promise<void> => {},
+	applyRemote: async (_port: unknown, _payload: unknown, _opts?: unknown): Promise<void> => {},
 }));
 
 vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true } }));
@@ -29,7 +29,8 @@ vi.mock("@core/index", async (importOriginal) => {
 		...actual,
 		// Pass the deps straight through so a test can reach the session's pinned store.
 		createVaultSyncPort: (deps: unknown) => deps,
-		applyRemotePayload: (port: unknown, payload: unknown) => h.applyRemote(port, payload),
+		applyRemotePayload: (port: unknown, payload: unknown, opts?: unknown) =>
+			h.applyRemote(port, payload, opts),
 	};
 });
 
@@ -170,6 +171,26 @@ describe("session vault binding", () => {
 		await opts().pushRemotePayload(PAYLOAD);
 
 		expect(h.blobWrites).toEqual([{ vaultId: VAULT_A }]);
+	});
+
+	it("checks incoming entries with the vault's crypto and remembers refusals for the session", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadManager();
+		await startSession(mod);
+		const seen: { crypto: unknown; rejected: unknown }[] = [];
+		h.applyRemote = async (port, _payload, mergeOpts) => {
+			seen.push({
+				crypto: (port as { crypto?: unknown }).crypto,
+				rejected: (mergeOpts as { rejected?: unknown } | undefined)?.rejected,
+			});
+		};
+		await opts().pushRemotePayload(PAYLOAD);
+		await opts().pushRemotePayload(PAYLOAD);
+		expect(seen[0]?.crypto).toBeDefined();
+		expect(seen[0]?.rejected).toBeInstanceOf(Set);
+		expect(seen[1]?.rejected).toBe(seen[0]?.rejected);
 	});
 
 	it("never writes with an unresolved vault id", async () => {

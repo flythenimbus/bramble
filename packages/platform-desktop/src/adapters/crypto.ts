@@ -137,7 +137,7 @@ export const desktopCrypto: CryptoAdapter = {
 		invoke<EncryptedPayload>("crypto_encrypt_entry", { plaintextJson }),
 	decryptEntry: (payload) => invoke<string>("crypto_decrypt_entry", { payload }),
 	// One IPC round trip for the whole vault, not one per entry.
-	decryptEntries: (payloads) => invoke<string[]>("crypto_decrypt_entries", { payloads }),
+	decryptEntries: (payloads) => invoke<(string | null)[]>("crypto_decrypt_entries", { payloads }),
 	encryptWithVek: (plaintext) => invoke<VekEncrypted>("crypto_encrypt_with_vek", { plaintext }),
 	decryptWithVek: (iv, ciphertext) => invoke<string>("crypto_decrypt_with_vek", { iv, ciphertext }),
 

@@ -508,6 +508,18 @@ msgid "Bramble {version} is available. Updating downloads it and restarts the ap
 msgstr "Bramble {version} está disponível. A atualização faz o download e reinicia o aplicativo. Seu cofre não é afetado."
 
 #: packages/core/src/hooks/useCryptoErrorMessage.tsx
+#~ msgid "Bramble couldn't open this vault right now. Nothing in it was changed. Please try again."
+#~ msgstr "O Bramble não conseguiu abrir este cofre no momento. Nada nele foi alterado. Tente novamente."
+
+#: packages/core/src/app/components/CryptoErrorText.tsx
+msgid "Bramble couldn't open this vault right now. Please report this error in <0>our issue tracker</0>."
+msgstr "O Bramble não conseguiu abrir este cofre agora. Informe este erro no <0>nosso rastreador de problemas</0>."
+
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
+msgid "Bramble couldn't open this vault right now. Please report this error in our issue tracker."
+msgstr "O Bramble não conseguiu abrir este cofre agora. Informe este erro no nosso rastreador de problemas."
+
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
 msgid "Bramble couldn't safely update this device's key storage, so the vault stayed locked. Try again."
 msgstr "O Bramble não conseguiu atualizar com segurança o armazenamento de chaves deste dispositivo, por isso o cofre permaneceu bloqueado. Tente novamente."
 
@@ -658,6 +670,10 @@ msgstr "Verificar"
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Check for updates"
 msgstr "Verificar atualizações"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check for updates when Bramble opens"
+msgstr "Verificar atualizações ao abrir o Bramble"
 
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Check key"
@@ -1389,6 +1405,10 @@ msgstr "Falhou"
 #: packages/core/src/app/components/ui/password-strength-meter.tsx
 msgid "Fair"
 msgstr "Razoável"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Fetches the latest version number from bramble.sh. Nothing from your vault is sent."
+msgstr "Busca o número da versão mais recente em bramble.sh. Nada do seu cofre é enviado."
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Field name"
@@ -2929,6 +2949,10 @@ msgstr "Sorriso"
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Something went wrong"
 msgstr "Algo deu errado"
+
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
+msgid "Something went wrong. Please try again."
+msgstr "Algo deu errado. Tente novamente."
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Sort"

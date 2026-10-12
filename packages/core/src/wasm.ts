@@ -83,7 +83,7 @@ export interface VaultCrypto {
 	// Optional batch decrypt: native transports (mobile) loop over the entries
 	// in-process and return them all in one bridge call. Absent on the wasm module,
 	// where buildCryptoAdapter falls back to a per-entry loop.
-	decrypt_entries?(entries: EncryptedPayload[]): Awaitable<string[]>;
+	decrypt_entries?(entries: EncryptedPayload[]): Awaitable<(string | null)[]>;
 	encrypt_with_vek(plaintext: string): Awaitable<VekEncrypted>;
 	decrypt_with_vek(iv: string, ciphertext: string): Awaitable<string>;
 

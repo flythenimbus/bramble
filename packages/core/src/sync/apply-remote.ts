@@ -3,8 +3,11 @@
 // supplies decrypt/encrypt/persist via VaultSyncPort, so this stays free of
 // platform APIs and crypto. See docs/p2p-sync.md.
 
+import type { CryptoAdapter } from "../adapters/crypto";
 import type { EntriesBlobStore } from "../vault/entries-blob";
+import type { EncryptedEntry } from "../vault-format";
 import { type EntriesPayload, sanitizeRemoteEntriesPayload } from "./entries-payload";
+import { entryVersionKey } from "./entry-version";
 import { compareHlc, type Hlc } from "./hlc";
 import { mergeEntriesPayload } from "./vault-merge";
 
@@ -18,6 +21,8 @@ export interface VaultSyncPort {
 	/** Persist the merged payload: re-encrypt the outer blob and write it. The
 	 * sealed per-entry envelopes are carried verbatim, never re-encrypted. */
 	writeMerged(merged: EntriesPayload): Promise<void>;
+	/** Whether each entry decrypts under this vault's key; only the verdict leaves the crypto host. */
+	openable(entries: EncryptedEntry[]): Promise<boolean[]>;
 }
 
 /** Every stamp the remote has observed (winners and losers), for clock witnessing. */
@@ -64,23 +69,51 @@ export function payloadsEquivalent(a: EntriesPayload, b: EntriesPayload): boolea
 	);
 }
 
+/** Drop incoming entries that would win the merge but don't decrypt here: a peer can't plant another vault's entries. */
+async function admit(
+	port: VaultSyncPort,
+	local: EntriesPayload,
+	remote: EntriesPayload,
+	rejected: Set<string>,
+): Promise<EntriesPayload> {
+	const mine = new Map(local.entries.map((e) => [e.id, e.hlc]));
+	const candidates = remote.entries.filter((e) => {
+		if (rejected.has(entryVersionKey(e))) return false;
+		const have = mine.get(e.id);
+		return have === undefined || compareHlc(e.hlc, have) > 0;
+	});
+	if (candidates.length > 0) {
+		const verdicts = await port.openable(candidates);
+		const refused = candidates.filter((_, i) => !verdicts[i]);
+		for (const e of refused) rejected.add(entryVersionKey(e));
+		if (refused.length > 0) {
+			console.warn(`[sync] refused ${refused.length} entries that don't decrypt in this vault`);
+		}
+	}
+	return { ...remote, entries: remote.entries.filter((e) => !rejected.has(entryVersionKey(e))) };
+}
+
 /**
  * Merge an incoming remote payload into the local vault. Writes (and so triggers
  * a re-broadcast in a mesh) only when the merge changed local state, which keeps
- * gossip from looping forever once peers converge.
+ * gossip from looping forever once peers converge. `rejected` remembers refused entry
+ * versions across calls, so a peer's rebroadcast isn't re-checked every few seconds.
  */
 export async function applyRemotePayload(
 	port: VaultSyncPort,
 	remote: EntriesPayload,
+	{ rejected = new Set<string>() }: { rejected?: Set<string> } = {},
 ): Promise<ApplyResult> {
 	// A peer's payload is untrusted: drop any future-dated (poisoned) stamps before merge or
 	// witness, so a member can't pin an un-deletable entry by stamping it years ahead.
 	const safe = sanitizeRemoteEntriesPayload(remote);
 	const local = await port.readLocal();
-	const merged = mergeEntriesPayload(local, safe);
+	const admitted = await admit(port, local, safe, rejected);
+	const merged = mergeEntriesPayload(local, admitted);
 	const changed = !payloadsEquivalent(local, merged);
 	if (changed) {
-		await port.witnessRemote(remoteStamps(safe));
+		// Only admitted stamps: a refused entry must not advance this device's clock.
+		await port.witnessRemote(remoteStamps(admitted));
 		await port.writeMerged(merged);
 	}
 	return { payload: merged, changed };
@@ -93,6 +126,7 @@ export async function applyRemotePayload(
  */
 export function createVaultSyncPort(deps: {
 	store: EntriesBlobStore;
+	crypto: Pick<CryptoAdapter, "decryptEntries">;
 	witnessRemote: (stamps: Hlc[]) => Promise<void>;
 	onChanged?: () => void | Promise<void>;
 }): VaultSyncPort {
@@ -103,5 +137,16 @@ export function createVaultSyncPort(deps: {
 			await deps.store.writeEntriesBlob(merged);
 			await deps.onChanged?.();
 		},
+		openable: async (entries) =>
+			(
+				await deps.crypto.decryptEntries(
+					entries.map(({ ciphertext, iv, wrappedDek, dekIv }) => ({
+						ciphertext,
+						iv,
+						wrappedDek,
+						dekIv,
+					})),
+				)
+			).map((p) => p != null),
 	};
 }

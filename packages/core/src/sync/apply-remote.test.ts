@@ -19,11 +19,16 @@ const payload = (
 ): EntriesPayload => ({ entries, tombstones });
 
 /** A fake port recording writes + witnessed stamps + call order, from a given local payload. */
-function fakePort(local: EntriesPayload) {
+function fakePort(local: EntriesPayload, { unopenable = [] }: { unopenable?: string[] } = {}) {
 	const writes: EntriesPayload[] = [];
 	const witnessed: Hlc[][] = [];
 	const order: string[] = [];
+	const checked: string[][] = [];
 	const port: VaultSyncPort = {
+		openable: (es) => {
+			checked.push(es.map((e) => e.id));
+			return Promise.resolve(es.map((e) => !unopenable.includes(e.id)));
+		},
 		readLocal: () => {
 			order.push("read");
 			return Promise.resolve(local);
@@ -39,7 +44,7 @@ function fakePort(local: EntriesPayload) {
 			return Promise.resolve();
 		},
 	};
-	return { port, writes, witnessed, order };
+	return { port, writes, witnessed, order, checked };
 }
 
 const live = (p: EntriesPayload) => p.entries.map((e) => e.id).sort();
@@ -143,5 +148,57 @@ describe("payloadsEquivalent", () => {
 		const a = payload([], [{ id: "1", hlc: hlc(1, "n") }]);
 		const b = payload([]);
 		expect(payloadsEquivalent(a, b)).toBe(false);
+	});
+});
+
+describe("applyRemotePayload admission", () => {
+	it("does not merge a remote entry that doesn't decrypt under this vault's key", async () => {
+		const { port, writes } = fakePort(payload([env("a", "a", hlc(100, "x"))]), {
+			unopenable: ["stray"],
+		});
+		const res = await applyRemotePayload(port, payload([env("stray", "s", hlc(200, "y"))]));
+		expect(res.changed).toBe(false);
+		expect(writes).toHaveLength(0);
+	});
+
+	it("merges the entries that decrypt and drops the rest", async () => {
+		const { port, writes } = fakePort(payload([]), { unopenable: ["stray"] });
+		await applyRemotePayload(
+			port,
+			payload([env("ok", "o", hlc(1, "y")), env("stray", "s", hlc(1, "y"))]),
+		);
+		expect(live(writes[0]!)).toEqual(["ok"]);
+	});
+
+	it("does not let a refused entry advance this device's clock", async () => {
+		const { port, witnessed } = fakePort(payload([]), { unopenable: ["stray"] });
+		await applyRemotePayload(
+			port,
+			payload([env("ok", "o", hlc(1, "y")), env("stray", "s", hlc(9_000, "z"))]),
+		);
+		expect(witnessed.flat().map((h) => h.wall)).toEqual([1]);
+	});
+
+	it("only checks entries that would win the merge", async () => {
+		const { port, checked } = fakePort(payload([env("a", "a", hlc(300, "x"))]));
+		await applyRemotePayload(port, payload([env("a", "old", hlc(100, "y"))]));
+		expect(checked).toEqual([]);
+	});
+
+	it("does not re-check a version it already refused", async () => {
+		const rejected = new Set<string>();
+		const { port, checked } = fakePort(payload([]), { unopenable: ["stray"] });
+		const remote = payload([env("stray", "s", hlc(1, "y"))]);
+		await applyRemotePayload(port, remote, { rejected });
+		await applyRemotePayload(port, remote, { rejected });
+		expect(checked).toEqual([["stray"]]);
+	});
+
+	it("checks a newer version of an id it refused before", async () => {
+		const rejected = new Set<string>();
+		const { port, checked } = fakePort(payload([]), { unopenable: ["stray"] });
+		await applyRemotePayload(port, payload([env("stray", "s", hlc(1, "y"))]), { rejected });
+		await applyRemotePayload(port, payload([env("stray", "s2", hlc(2, "y"))]), { rejected });
+		expect(checked).toEqual([["stray"], ["stray"]]);
 	});
 });

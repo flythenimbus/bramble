@@ -77,7 +77,7 @@ interface NativeCryptoPlugin {
 	}): Promise<{ value: string }>;
 	decryptEntries(o: {
 		entries: { ciphertext: string; iv: string; wrappedDek: string; dekIv: string }[];
-	}): Promise<{ values: string[] }>;
+	}): Promise<{ values: (string | null)[] }>;
 	encryptWithVek(o: { plaintext: string }): Promise<VekEncrypted>;
 	sealPortableVault(o: {
 		entriesJson: string;

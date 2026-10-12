@@ -7,24 +7,21 @@ import { api } from "../platform-api";
 import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
 
 // Which vault the background is syncing: the active (unlocked) vault, whose group and device-identity
-// keys are namespaced `<key>:<id>`. One vault is unlocked at a time, so a single ctx scopes the whole
-// sync/enrollment path.
+// keys are namespaced `<key>:<id>`. A running session is pinned to the id it started for.
 export interface SyncVaultCtx {
 	vaultId: string;
 }
 
-/** Resolve the vault to sync: the active vault the UI recorded in session, else the first vault
- * (covers a service-worker resume before any UI ran). Null only when no vault exists yet. */
+/** The vault to sync: the active vault the UI recorded in session. Null when none is active. */
 export async function resolveSyncVault(): Promise<SyncVaultCtx | null> {
-	const reg = parseRegistry((await api.storage.local.get(VAULT_REGISTRY_KEY))[VAULT_REGISTRY_KEY]);
 	let active: string | null = null;
 	try {
 		const s = await api.storage.session.get([ACTIVE_VAULT_SESSION_KEY]);
 		if (typeof s[ACTIVE_VAULT_SESSION_KEY] === "string") active = s[ACTIVE_VAULT_SESSION_KEY];
 	} catch {}
-	const vaultId = active ?? reg.vaults[0]?.id;
-	if (!vaultId) return null;
-	return { vaultId };
+	if (!active) return null;
+	const reg = parseRegistry((await api.storage.local.get(VAULT_REGISTRY_KEY))[VAULT_REGISTRY_KEY]);
+	return reg.vaults.some((v) => v.id === active) ? { vaultId: active } : null;
 }
 
 /** The per-vault storage key for a flat sync key under this ctx. */

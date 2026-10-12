@@ -3,7 +3,8 @@
 import { CRYPTO_SESSION_CHANGED } from "@core/adapters/crypto";
 import { api } from "../platform-api";
 import { isExtensionSender } from "../sender";
-import { ACTIVE_VAULT_SESSION_KEY, CORNER_HANDOFF_KEY } from "../session-keys";
+import { ACTIVE_VAULT_SESSION_KEY, CORNER_HANDOFF_KEY, OPENED_VAULT_KEY } from "../session-keys";
+import { SyncVaultMsgSchema } from "../sync/messages";
 import { clearIndex } from "./autofill-index";
 import { runDueBackups } from "./backup";
 import { CAPTURE_KEY_PREFIX } from "./corner-prompt";
@@ -11,7 +12,7 @@ import { sendToOffscreen } from "./offscreen-client";
 import { closeUnlockPopout, POPOUT_HANDOFF_KEY } from "./popout";
 import { getAutoLockMinutes } from "./prefs";
 import { extensionOnly, type MessageEnvelope, on, onBeforeDispatch, onPrefix } from "./router";
-import { maybeStartSync, stopSync } from "./sync";
+import { maybeStartSync, retargetSync, stopSync } from "./sync";
 import * as vekStore from "./vek-store";
 
 const LEGACY_AUTOFILL_INDEX_KEY = "autofill.index";
@@ -114,6 +115,7 @@ function advanceAutofillSession(): void {
 function applyActiveVaultTransition(value: unknown): boolean {
 	if (!vekStore.applyActiveVaultId(value)) return false;
 	advanceAutofillSession();
+	retargetSync(vekStore.getActiveVaultId());
 	return true;
 }
 
@@ -251,6 +253,8 @@ export async function clearSession(): Promise<void> {
 		let durableCleanupError: unknown;
 		try {
 			await vekStore.clearAllVeks();
+			// A re-unlock must reopen before it syncs again.
+			await api.storage.session.remove(OPENED_VAULT_KEY);
 		} catch (error) {
 			// The caller must see this failure, but other sensitive session cleanup and the alarm
 			// teardown still belong to this lock attempt.
@@ -356,7 +360,6 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 					if (!vekStore.vekMutationIsCurrent(vekEpoch!)) {
 						return { ok: false, error: CRYPTO_SESSION_CHANGED };
 					}
-					void maybeStartSync(vekEpoch); // begin continuous sync if this vault is in a group
 					const sessionCurrent = () => vekStore.vekMutationIsCurrent(vekEpoch!);
 					void runDueBackups(sessionCurrent); // back up any target that's due, now that the VEK is live
 					void broadcastLockState(false, autofillSessionGeneration);
@@ -375,6 +378,20 @@ async function cryptoHandler(message: any): Promise<MessageEnvelope> {
 // CRYPTO_* reaches the offscreen crypto host (incl. CRYPTO_EXPORT_VEK); only extension
 // pages may drive it, never a content script. See docs/sec-audit-7726.md (A3).
 onPrefix("CRYPTO_", extensionOnly(cryptoHandler));
+
+// The UI loaded this vault's entries; only now may it sync.
+on(
+	"VAULT_OPENED",
+	extensionOnly(async (message) => {
+		const { vaultId } = SyncVaultMsgSchema.parse(message.payload);
+		if ((await refreshActiveVaultId()) !== vaultId || vaultLocked()) {
+			return { ok: false, error: "not the open vault" };
+		}
+		await api.storage.session.set({ [OPENED_VAULT_KEY]: vaultId });
+		void maybeStartSync(vekStore.vekMutationSnapshot());
+		return { ok: true };
+	}),
+);
 on(
 	"AUTOFILL_GET_SESSION_OWNER",
 	extensionOnly(async () => autofillGetSessionOwner()),

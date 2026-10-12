@@ -298,6 +298,10 @@ the VPN's exit IP). The ICE endpoint **derives from the relay URL** by default (
 both), and is separately overridable for self-hosters who put signaling on a public Nostr relay
 (no `/ice-servers`) and TURN elsewhere. Both the relay and ICE URLs are configurable in Settings,
 persisted, and **carried in the pairing code** so a joined device adopts and displays them.
+An explicitly filled ICE URL takes priority over the relay-derived endpoint. Settings initially
+shows the hosted Worker's ICE endpoint, and editing the relay field does not update that field
+alongside it. Before generating a pairing code for a self-hosted relay, explicitly set its
+`https://<relay-host>/ice-servers` URL or clear the ICE field to derive it from the relay.
 
 Platform note (learned the hard way): iOS VPNs (NetworkExtension) leave local-network traffic
 *outside* the tunnel by default, so same-LAN host candidates kept working with a VPN on; Android's
