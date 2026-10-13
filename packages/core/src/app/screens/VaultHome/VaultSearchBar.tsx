@@ -304,7 +304,7 @@ export function VaultSearchBar({
 							);
 						})}
 					</div>
-					<ScrollEdgeFades edges={chipStrip.edges} />
+					<ScrollEdgeFades strip={chipStrip} />
 				</fieldset>
 
 				<SelectPill
