@@ -1,5 +1,7 @@
 import { App as CapacitorApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import { Device } from "@capacitor/device";
+import { Keyboard } from "@capacitor/keyboard";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { PREF_AUTOLOCK_MINUTES } from "@core/hooks/usePrefs";
 import {
@@ -50,6 +52,15 @@ const platform: Platform = {
 };
 
 let deviceLocale: string | undefined;
+
+async function hideKeyboardAccessoryBar(): Promise<void> {
+	if (Capacitor.getPlatform() !== "ios") return;
+	try {
+		await Keyboard.setAccessoryBarVisible({ isVisible: false });
+	} catch (e) {
+		console.warn("[bramble] hiding the keyboard accessory bar failed:", e);
+	}
+}
 
 function Root() {
 	// "app" = vault/unlock UI; "setup" = create/open a vault; "import" = import wizard;
@@ -157,6 +168,7 @@ void (async () => {
 		await mobileStorage.setMeta(PREF_AUTOLOCK_MINUTES, -1);
 	}
 	await resolveAppVersion();
+	await hideKeyboardAccessoryBar();
 	// Best-effort: detect the device locale before render so the UI loads the right
 	// catalog with no English flash. Falls back to navigator.language inside @core.
 	deviceLocale = await Device.getLanguageTag()
