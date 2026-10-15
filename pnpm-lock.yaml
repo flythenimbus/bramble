@@ -334,9 +334,6 @@ importers:
       '@capacitor/ios':
         specifier: ^8.5.3
         version: 8.5.3(@capacitor/core@8.5.3)
-      '@capacitor/keyboard':
-        specifier: ^8.0.6
-        version: 8.0.6(@capacitor/core@8.5.3)
       '@capacitor/preferences':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.5.3)
@@ -933,8 +930,8 @@ packages:
     peerDependencies:
       '@capacitor/core': ^8.5.0
 
-  '@capacitor/keyboard@8.0.6':
-    resolution: {integrity: sha512-Bbe+9V0qaT6dzEFJEK7BUWR01l2+vZE8FM5ITF/WgKtx+G6eGZ6d5+YiSMRJBAK0VGjdO59v8yiQ10Doa5KyvQ==}
+  '@capacitor/keyboard@8.0.5':
+    resolution: {integrity: sha512-oFXygC4eKYA5l2MdpTR06L2M/4x6e2SLD5yS1T9+UBDKTkzyvhWKEhbYLUaTIBPpLKqlfGudJw1X73S1H9eUzQ==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
@@ -5435,7 +5432,7 @@ snapshots:
       '@capacitor/app': 8.1.1(@capacitor/core@8.5.3)
       '@capacitor/core': 8.5.3
       '@capacitor/ios': 8.5.3(@capacitor/core@8.5.3)
-      '@capacitor/keyboard': 8.0.6(@capacitor/core@8.5.3)
+      '@capacitor/keyboard': 8.0.5(@capacitor/core@8.5.3)
 
   '@asamuzakjp/css-color@5.1.11':
     dependencies:
@@ -5984,7 +5981,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.5.3
 
-  '@capacitor/keyboard@8.0.6(@capacitor/core@8.5.3)':
+  '@capacitor/keyboard@8.0.5(@capacitor/core@8.5.3)':
     dependencies:
       '@capacitor/core': 8.5.3
 
