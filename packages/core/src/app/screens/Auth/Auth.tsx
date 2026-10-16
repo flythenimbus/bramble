@@ -77,7 +77,7 @@ export function Auth() {
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();
 	const appName = shell.appName;
-	const onPopOut = canPopOut ? popOut : undefined;
+	const onPopOut = canPopOut ? () => popOut() : undefined;
 
 	// OS biometry can be turned off while backgrounded; re-probe on foreground so the button
 	// reflects it. The same listener publishes visibility for the auto-prompt below.
