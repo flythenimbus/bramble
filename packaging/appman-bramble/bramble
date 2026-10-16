@@ -1,0 +1,211 @@
+#!/bin/sh
+
+# AM INSTALL SCRIPT VERSION 3.5
+# Bramble Desktop AppImage, installed in AppMan's user applications directory.
+set -eu
+
+APP=bramble
+SITE="flythenimbus/bramble"
+MANIFEST="https://bramble.sh/desktop/latest.json"
+skip_verification=0
+
+case "${BRAMBLE_SKIP_VERIFICATION:-0}" in
+	0) ;;
+	1) skip_verification=1 ;;
+	*) echo "BRAMBLE_SKIP_VERIFICATION must be 0 or 1" >&2; exit 2 ;;
+esac
+
+# Keep the /opt and /usr/local paths in AppMan's documented script shape. AppMan
+# rewrites these to its configured user-owned application/bin/desktop locations.
+APPDIR="/opt/$APP"
+had_app=0
+[ -e "$APPDIR/$APP" ] && had_app=1
+
+install_cleanup() {
+	status=$?
+	trap - EXIT
+	rm -rf "$APPDIR/tmp"
+	if [ "$status" -ne 0 ] && [ "$had_app" -eq 0 ]; then
+		rm -rf "$APPDIR"
+	fi
+	exit "$status"
+}
+trap install_cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+[ -n "$APP" ] && mkdir -p "$APPDIR/tmp" "$APPDIR/icons" && cd "$APPDIR/tmp" || exit 1
+
+case "$(uname -m)" in
+	x86_64|amd64) PLATFORM=linux-x86_64; ASSET_ARCH=amd64 ;;
+	aarch64|arm64) PLATFORM=linux-aarch64; ASSET_ARCH=aarch64 ;;
+	*) echo "Bramble Desktop AppImage is unavailable for $(uname -m)" >&2; exit 1 ;;
+esac
+
+for tool in curl jq; do
+	command -v "$tool" >/dev/null 2>&1 || {
+		echo "Missing required command: $tool. Install it before running this script." >&2
+		exit 1
+	}
+done
+
+if [ "$skip_verification" -eq 0 ]; then
+	for tool in minisign base64; do
+		command -v "$tool" >/dev/null 2>&1 || {
+			if [ "$tool" = minisign ]; then
+				echo "Missing required command: minisign. Install minisign, or set BRAMBLE_SKIP_VERIFICATION=1 to skip signature verification for this install." >&2
+			else
+				echo "Missing required command: $tool. Install it before running this script." >&2
+			fi
+			exit 1
+		}
+	done
+else
+	echo "WARNING: Bramble AppImage signature verification is disabled for this install." >&2
+fi
+
+version=$(curl --fail --silent --show-error --location "$MANIFEST" | jq -er '.version')
+case "$version" in
+	''|*[!0-9A-Za-z.+-]*) echo "Invalid version in Bramble update manifest" >&2; exit 1 ;;
+esac
+
+appimage_url=$(curl --fail --silent --show-error --location "$MANIFEST" | jq -er --arg platform "$PLATFORM" '.platforms[$platform].url')
+expected_url="https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/Bramble_${version}_${ASSET_ARCH}.AppImage"
+[ "$appimage_url" = "$expected_url" ] || {
+	echo "Unexpected AppImage URL in Bramble update manifest" >&2
+	exit 1
+}
+
+if [ "$skip_verification" -eq 0 ]; then
+	# The release pipeline publishes a minisign signature next to every AppImage.
+	# This is the public half of the updater key embedded in tauri.conf.json.
+	cat > "/opt/$APP/tmp/bramble-updater.pub" <<'EOF'
+untrusted comment: minisign public key: 67F935EFCFD28F69
+RWRpj9LP7zX5Z/tmH3zxEGUiP+oLc0+1Nbx7l2rY2BzyzFAMxdQ59Sit
+EOF
+fi
+
+curl --fail --silent --show-error --location "$appimage_url" -o "./$APP"
+if [ "$skip_verification" -eq 0 ]; then
+	curl --fail --silent --show-error --location "${appimage_url}.sig" -o "./$APP.sig"
+	# Tauri stores the complete minisign signature file base64-wrapped; unwrap it
+	# before passing it to minisign.
+	base64 -d "./$APP.sig" > "./$APP.minisig"
+	minisign -V -m "./$APP" -x "./$APP.minisig" -p "/opt/$APP/tmp/bramble-updater.pub"
+fi
+chmod a+x "./$APP"
+
+cd ..
+mv "./tmp/$APP" "./$APP.new"
+mv "./$APP.new" "./$APP"
+rm -f "./tmp/$APP.sig" "./tmp/$APP.minisig" ./tmp/bramble-updater.pub
+rm -rf ./tmp || exit 1
+printf '%s\n' "$version" > ./version
+
+# Replace the binary atomically on subsequent installs/updates. The initial
+# install uses the same move above; the updater below uses a staged replacement.
+ln -sfn "/opt/$APP/$APP" "/usr/local/bin/$APP"
+
+cat > ./remove <<EOF
+#!/bin/sh
+set -eu
+rm -f "/usr/local/bin/$APP" "/usr/local/share/applications/$APP-AM.desktop"
+rm -rf "/opt/$APP"
+EOF
+chmod a+x ./remove
+
+cat > ./AM-updater <<'EOF'
+#!/bin/sh
+set -eu
+
+APP=bramble
+MANIFEST="https://bramble.sh/desktop/latest.json"
+APPDIR="/opt/$APP"
+
+case "$(uname -m)" in
+	x86_64|amd64) PLATFORM=linux-x86_64; ASSET_ARCH=amd64 ;;
+	aarch64|arm64) PLATFORM=linux-aarch64; ASSET_ARCH=aarch64 ;;
+	*) echo "Bramble Desktop AppImage is unavailable for $(uname -m)" >&2; exit 1 ;;
+esac
+
+for tool in curl jq minisign base64; do
+	command -v "$tool" >/dev/null 2>&1 || {
+		echo "Missing required command: $tool. Install it before running this script." >&2
+		exit 1
+	}
+done
+
+version=$(curl --fail --silent --show-error --location "$MANIFEST" | jq -er '.version')
+case "$version" in
+	''|*[!0-9A-Za-z.+-]*) echo "Invalid version in Bramble update manifest" >&2; exit 1 ;;
+esac
+installed=$(cat "$APPDIR/version")
+[ "$version" != "$installed" ] || { echo "Bramble is already up to date ($version)"; exit 0; }
+
+appimage_url=$(curl --fail --silent --show-error --location "$MANIFEST" | jq -er --arg platform "$PLATFORM" '.platforms[$platform].url')
+expected_url="https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/Bramble_${version}_${ASSET_ARCH}.AppImage"
+[ "$appimage_url" = "$expected_url" ] || {
+	echo "Unexpected AppImage URL in Bramble update manifest" >&2
+	exit 1
+}
+
+stage="$APPDIR/.update-$$"
+committing=0
+update_cleanup() {
+	status=$?
+	retain_stage=0
+	trap - EXIT HUP INT TERM
+	if [ "$status" -ne 0 ] && [ "$committing" -eq 1 ]; then
+		mv -f "$stage/$APP.old" "$APPDIR/$APP" || retain_stage=1
+		mv -f "$stage/version.old" "$APPDIR/version" || retain_stage=1
+	fi
+	if [ "$status" -ne 0 ]; then
+		rm -f "$APPDIR/$APP.new" "$APPDIR/version.new" || :
+	fi
+	if [ "$retain_stage" -eq 1 ]; then
+		echo "Bramble update rollback was incomplete; recovery files retained in: $stage" >&2
+	else
+		rm -rf "$stage"
+	fi
+	exit "$status"
+}
+trap update_cleanup EXIT
+trap 'exit 1' HUP INT TERM
+mkdir -m 700 "$stage"
+curl --fail --silent --show-error --location "$appimage_url" -o "$stage/$APP"
+curl --fail --silent --show-error --location "${appimage_url}.sig" -o "$stage/$APP.sig"
+base64 -d "$stage/$APP.sig" > "$stage/$APP.minisig"
+cat > "$stage/bramble-updater.pub" <<'KEY'
+untrusted comment: minisign public key: 67F935EFCFD28F69
+RWRpj9LP7zX5Z/tmH3zxEGUiP+oLc0+1Nbx7l2rY2BzyzFAMxdQ59Sit
+KEY
+minisign -V -m "$stage/$APP" -x "$stage/$APP.minisig" -p "$stage/bramble-updater.pub"
+chmod a+x "$stage/$APP"
+printf '%s\n' "$version" > "$APPDIR/version.new"
+
+# Keep rollback copies until both replacements complete. A failed move or
+# interrupted commit restores the previous image and its matching version.
+cp -p "$APPDIR/$APP" "$stage/$APP.old"
+cp -p "$APPDIR/version" "$stage/version.old"
+committing=1
+mv "$stage/$APP" "$APPDIR/$APP.new"
+mv -f "$APPDIR/$APP.new" "$APPDIR/$APP"
+mv -f "$APPDIR/version.new" "$APPDIR/version"
+committing=0
+EOF
+chmod a+x ./AM-updater
+
+# AppImage metadata is optional: the launcher is created only when its icon can
+# be extracted. Distrobox-to-host launcher export is a separate user setup step.
+if "./$APP" --appimage-extract .DirIcon >/dev/null 2>&1 && [ -f ./squashfs-root/.DirIcon ]; then
+	cp ./squashfs-root/.DirIcon "./icons/$APP"
+	cat > "/usr/local/share/applications/$APP-AM.desktop" <<EOF
+[Desktop Entry]
+Name=Bramble
+Exec=$APP
+Terminal=false
+Type=Application
+Icon=/opt/$APP/icons/$APP
+Categories=Utility;Security;
+EOF
+	rm -rf ./squashfs-root
+fi
