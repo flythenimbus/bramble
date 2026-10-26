@@ -27,9 +27,12 @@ const PONG = "pong";
 // allows WebSocket frames up to 32 MiB, and parsing attacker-sized payloads on
 // a single-threaded Durable Object is the obvious cost/DoS footgun. A device
 // needs ~1 room subscription, so bound subs-per-connection too (caps both the
-// fan-out inner loop and the serialized attachment).
+// fan-out inner loop and the serialized attachment). Every message is a billed
+// invocation even when ignored, so a socket over MAX_MSGS_PER_MINUTE is closed;
+// the cap clears an old client resending a large vault over relay-forward.
 const MAX_MSG_BYTES = 64 * 1024;
 const MAX_SUBS_PER_CONN = 8;
+const MAX_MSGS_PER_MINUTE = 6000;
 
 // POST /ice-servers mints short-lived Cloudflare TURN creds so peers across
 // networks/VPNs can relay. See docs/p2p-sync.md.
@@ -96,6 +99,9 @@ function matches(filter: NostrFilter, event: NostrEvent): boolean {
 }
 
 export class Relay extends DurableObject {
+	// In memory only: hibernation resets it, which is fine since a flooding socket keeps the DO awake.
+	private readonly rates = new WeakMap<WebSocket, { start: number; count: number }>();
+
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		// Answered while hibernating, so an idle-but-alive client costs nothing to keep.
@@ -114,6 +120,7 @@ export class Relay extends DurableObject {
 	}
 
 	async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+		if (this.overRate(ws)) return;
 		if ((typeof raw === "string" ? raw.length : raw.byteLength) > MAX_MSG_BYTES) return;
 		if (raw === PING) return void ws.send(PONG); // normally the auto-response; see PING
 
@@ -163,6 +170,19 @@ export class Relay extends DurableObject {
 				return;
 			}
 		}
+	}
+
+	/** Count `ws`'s message in its one-minute window; close it the first time it goes over. */
+	private overRate(ws: WebSocket): boolean {
+		const now = Date.now();
+		let window = this.rates.get(ws);
+		if (!window || now - window.start >= 60_000) {
+			window = { start: now, count: 0 };
+			this.rates.set(ws, window);
+		}
+		if (++window.count <= MAX_MSGS_PER_MINUTE) return false;
+		if (window.count === MAX_MSGS_PER_MINUTE + 1) ws.close(1008, "rate limited");
+		return true;
 	}
 }
 

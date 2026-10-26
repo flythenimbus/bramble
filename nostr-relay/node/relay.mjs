@@ -20,9 +20,12 @@ const PORT = Number(process.env.PORT ?? 7400);
 
 // Cheap abuse guards (kept in parity with cf-worker): a signaling blob is a few
 // KB of encrypted SDP/ICE, so reject larger frames before parsing, and bound
-// subscriptions per connection (a device needs ~1).
+// subscriptions per connection (a device needs ~1). A socket over
+// MAX_MSGS_PER_MINUTE is closed; the cap clears an old client resending a large
+// vault over relay-forward.
 const MAX_MSG_BYTES = 64 * 1024;
 const MAX_SUBS_PER_CONN = 8;
+const MAX_MSGS_PER_MINUTE = 6000;
 
 // Keepalive, in parity with cf-worker (where it is a hibernation auto-response) and
 // @core/sync/signaling-client. Clients ping a quiet socket so an intermediary doesn't drop it, and
@@ -223,7 +226,17 @@ wss.on("connection", (ws, req) => {
 		trace(`${id} close ${Math.round((Date.now() - openedAt) / 1000)}s (${sockets.size} peers)`);
 	});
 
+	let window = { start: openedAt, count: 0 };
 	ws.on("message", (raw) => {
+		const now = Date.now();
+		if (now - window.start >= 60_000) window = { start: now, count: 0 };
+		if (++window.count > MAX_MSGS_PER_MINUTE) {
+			if (window.count === MAX_MSGS_PER_MINUTE + 1) {
+				trace(`${id} close over ${MAX_MSGS_PER_MINUTE} msgs/min`);
+				ws.close(1008, "rate limited");
+			}
+			return;
+		}
 		if (raw.length > MAX_MSG_BYTES) {
 			trace(`${id} drop  frame ${raw.length}B > ${MAX_MSG_BYTES}B`);
 			return;
