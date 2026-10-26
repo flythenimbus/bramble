@@ -34,11 +34,13 @@ export function tallyByType(entries: readonly EntryData[]): Partial<Record<Entry
 
 /**
  * A login on a port is one service among several on that host, and only `exact` pins the
- * port (#145). A mode the source file chose is kept.
+ * port (#145). Only for a single website, since `exact` would narrow any others too. A mode
+ * the source file chose is kept.
  */
 function pinPortedLogin(entry: EntryData): EntryData {
 	if (entry.type !== "login" || entry.subdomainMatch !== undefined) return entry;
-	return loginHosts(entry.urls).ports ? { ...entry, subdomainMatch: "exact" } : entry;
+	const { hostnames, ports } = loginHosts(entry.urls);
+	return hostnames.length === 1 && ports ? { ...entry, subdomainMatch: "exact" } : entry;
 }
 
 /** Validate candidates against EntryData (bad shapes must never reach the vault), drop the rest, tally by type. */

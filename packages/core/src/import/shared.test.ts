@@ -44,8 +44,20 @@ describe("summarize: logins on a port", () => {
 		]);
 	});
 
-	it("pins the whole login when any one of its URLs names a port", () => {
-		expect(modeOf(login(["https://nas.local", "https://nas.local:9000"]))).toEqual(["exact"]);
+	// exact would narrow the other websites too, which ports say nothing about.
+	it("leaves a login with several websites on the default", () => {
+		expect(
+			modeOf(
+				login(["https://nas.local", "https://nas.local:9000"]),
+				login(["http://nas.local:5000", "http://nas.local:9000"]),
+			),
+		).toEqual([undefined, undefined]);
+	});
+
+	it("doesn't count an app link as a second website", () => {
+		expect(modeOf(login(["https://nas.local:5001", "androidapp://com.synology.dsfile"]))).toEqual([
+			"exact",
+		]);
 	});
 
 	it("reads a default port as no port", () => {

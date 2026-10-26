@@ -86,14 +86,15 @@ ignore ports.
 This is Bitwarden's "Host" match detection per login, and a Bitwarden import that
 used Host (or any non-default mode) already lands on `exact` with its URLs intact.
 
-Every import also lands a login on `exact` when one of its URLs names a port and
+Every import also lands a login on `exact` when its one website names a port and
 the source file left the mode unset (issue #145), whichever format it came from:
 the file importers, KeePass `.kdbx` and credential exchange all return through
 `summarize` in `import/shared.ts`. Bitwarden's global "Default URI match detection"
-is not in its export, so a vault set to Host there arrives unset. A mode the file
-did choose is kept, and Bramble's own `.bramble` restore is left alone. Entries
-imported before this keep `etld1`; re-importing doesn't fix them, since dedup
-holds the same login back.
+is not in its export, so a vault set to Host there arrives unset. A login with
+several websites stays on the default, since `exact` would narrow the others too;
+an app link doesn't count as one. A mode the file did choose is kept, and
+Bramble's own `.bramble` restore is left alone. Entries imported before this keep
+`etld1`; re-importing doesn't fix them, since dedup holds the same login back.
 
 There is no separate mode for it on purpose: `subdomainMatch` is persisted and
 synced, so a new enum value would be a format change that released clients reject.
