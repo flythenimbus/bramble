@@ -8,16 +8,16 @@
 [![Linux downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fdownloads%2Flinux)](https://bramble.sh/latest/desktop)
 [![Windows](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fversion%2Fwindows)](#whats-coming-next)
 
-A password manager that keeps your secrets on your own devices. No account, no server holding your vault, no company to get breached and leak everything. You hold the vault, you hold the password, and that's it.
+A password manager that syncs between your devices. Your passwords are not saved on any server, so there's no account to make and no company to get breached and leak everything. You hold the vault, you hold the password, and that's it.
 
 Bramble runs where you do:
 
-- **Browser extension** for Chromium browsers (Brave, Vivaldi, Chrome, Arc, and friends). Install it and you're up and running in a minute.
+- **Browser extension** for Firefox and Chromium browsers (Brave, Vivaldi, Chrome, Arc, and friends). Install it and you're up and running in a minute.
 - **Desktop app** for macOS and Linux, with a global quick-access panel, an always-on sync hub, and scheduled backups.
 - **iOS app** with system AutoFill, Face ID / Touch ID unlock, and passkeys.
 - **Android app** with a native autofill service, biometric unlock, and passkeys.
 
-The same encrypted vault and the same Rust crypto core sit behind all four, and your devices can sync to each other directly, peer-to-peer, with no cloud in the middle.
+The same encrypted vault and the same Rust crypto core sit behind all four, and your devices sync with each other peer-to-peer, end-to-end encrypted, without your vault ever being stored on a server.
 
 **Get Bramble:**
 
@@ -38,7 +38,7 @@ The same encrypted vault and the same Rust crypto core sit behind all four, and 
 
 ## What it does
 
-Your passwords are encrypted on your own device and stay there: in the browser's private extension storage, in ordinary files on your own disk in the desktop app, and in app-private encrypted storage on mobile. There's no server holding your vault and no account to sign up for. To use the same vault on more than one device, Bramble syncs it **directly between your devices, peer-to-peer**, end-to-end encrypted, with no cloud in the middle. Want a copy in your own hands? Export an encrypted backup file any time.
+Your passwords are encrypted on your own device and stay there: in the browser's private extension storage, in ordinary files on your own disk in the desktop app, and in app-private encrypted storage on mobile. There's no server holding your vault and no account to sign up for. To use the same vault on more than one device, Bramble syncs it **between your devices, peer-to-peer**, end-to-end encrypted, and never stores it on a server along the way. Want a copy in your own hands? Export an encrypted backup file any time.
 
 Everything cryptographic happens inside a single Rust core: compiled to WebAssembly in the browser, and to a native library on iOS and Android. Key derivation, encryption, and decryption all run in that core, and derived keys are wiped from memory after use.
 
@@ -60,7 +60,7 @@ The mobile apps reuse Bramble's Rust crypto core and vault format, with native O
 - **Passkeys.** Create and sign in with passkeys, stored as ordinary vault entries so they sync between your devices with everything else.
 - **Biometric unlock.** Unlock with Face ID, Touch ID, or Android biometrics gated by the OS keystore, or fall back to your master password or recovery code.
 - **On-device storage.** The vault lives on the native filesystem, encrypted at rest, not in a webview database the OS might evict.
-- **Peer-to-peer sync.** Pair a phone with your other devices and the vault syncs directly between them, with no relay holding your data.
+- **Peer-to-peer sync.** Pair a phone with your other devices and the vault syncs between them, with no relay holding your data.
 
 The iOS and Android apps are versioned and released independently of the extension.
 
@@ -94,10 +94,10 @@ What it cannot do yet, and says so rather than failing quietly: Touch ID unlock,
 - **Unlock your way.** Master password, a hardware key (YubiKey, Touch ID, Windows Hello via WebAuthn PRF, in the browser extension), biometrics on mobile, or a recovery code. Use them alongside your password, or turn the password off and make one your only way in.
 - **Recovery codes.** Every vault gets a high-entropy recovery code at setup: a printable backup that unlocks it independently of your master password. Shown once, stored offline, never kept in plaintext. Reset it any time.
 - **TOTP / 2FA codes.** Paste an `otpauth://` URI or bare secret and Bramble generates the six-digit codes.
-- **Peer-to-peer sync.** Mirror your vault directly between your own devices over an end-to-end encrypted connection, [merged entry by entry](#how-sync-works). No cloud, no relay holding your data.
+- **Peer-to-peer sync.** Sync your vault between your own devices over an end-to-end encrypted connection, [merged entry by entry](#how-sync-works). No server stores it, and a relay only ever passes along data it can't read.
 - **Breach checking.** Optional Have I Been Pwned lookup using k-anonymity, so nothing about your password leaves your machine.
 - **Auto-lock.** Locks after idle time by default (configurable).
-- **Import from the others.** Bring entries over from 1Password, Bitwarden, Proton Pass, LastPass, Enpass, AliasVault, KeePass (KDBX4 key files included), Apple Passwords, or Google Password Manager.
+- **Import from the others.** Bring entries over from 1Password, Bitwarden, Proton Pass, LastPass, Enpass, AliasVault, KeePass (KDBX4 key files included), Apple Passwords, or Google Password Manager. On iOS 26, bring everything over straight from Apple Passwords or another app with no file in between, passkeys included ([how](https://bramble.sh/blog/credential-exchange)).
 - **Multi-key vaults.** LUKS-style key slots, so your master password, a security key, biometrics, or your recovery code can each unlock the same vault.
 - **Multiple vaults.** Keep more than one vault side by side and pick which to unlock when you open Bramble. Handy for sharing a device, or walling off separate sets of logins behind their own master passwords.
 
@@ -109,8 +109,8 @@ Bramble flips that around:
 
 - **No server to breach.** Your vault never leaves your control. No central pile of data for anyone to go after.
 - **No account, no subscription, no telemetry.** Nothing to sign up for, nothing phoning home.
-- **You own your data.** It lives on your devices, syncs directly between them, and exports to an encrypted file whenever you want an offline copy. Keep it off the internet entirely if you like. Your call.
-- **Cloud-like convenience, without the cloud.** Sync keeps every device up to date automatically, like a cloud manager would, but your vault travels straight between them over an end-to-end encrypted link. No central honeypot, no company in the middle.
+- **You own your data.** It lives on your devices, syncs between them, and exports to an encrypted file whenever you want an offline copy. Keep it off the internet entirely if you like. Your call.
+- **Cloud-like convenience, without a cloud copy.** Sync keeps every device up to date automatically, like a cloud manager would, but your vault is only ever stored on your devices. Anything a relay passes along is end-to-end encrypted, so there's no central honeypot and no company that can read it.
 - **Nothing to trust but the code.** The crypto is open and runs entirely on your device. You're not taking anyone's word that the server "can't read your data."
 
 The tradeoff is real and worth being honest about: there's no "I forgot my password" button on a server somewhere. But you're not without a safety net: every vault gets a recovery code, and you can register a hardware key as another way in. Save the recovery code, keep a second device synced, and export a backup now and then. Lose *all* of your ways in (password, key, and recovery code) and the vault is gone, because nobody else holds a copy.
@@ -147,7 +147,7 @@ Your master password is only ever used to derive keys inside the crypto core, an
 
 ## How sync works
 
-Pair a device once, and from then on any two of your devices sync whenever both are online and unlocked at the same time. A relay passes them just enough to find each other, then they connect directly (or through a TURN server that forwards the still-encrypted channel when a network blocks a direct link) and merge their vaults.
+Pair a device once, and from then on any two of your devices sync whenever both are online and unlocked at the same time. A relay passes them just enough to find each other, then they connect directly and merge their vaults. When a network or browser blocks a direct link, a TURN server or the relay itself forwards the channel instead, still end-to-end encrypted, so neither can read it.
 
 - **Entry by entry, never the whole vault.** Bramble never replaces one device's vault with another's. Each login, card, note, and key syncs on its own, so if you change your Google password on your phone and add a GitHub login on your laptop, both devices end up with both changes.
 - **Every version knows what it replaced.** Each version of an entry records which versions it was edited from, and every change is stamped by a hybrid logical clock: the time, a counter, and the device that made it. An edit made after seeing the previous version simply replaces it. Two edits made without seeing each other are both kept: the newer one is shown, and the entry gets a **Conflict** badge so you can compare the versions and pick one, or keep both. Each device stamps its next change after the newest one it has seen, so a clock that's a few minutes off can't make an old edit look new, and a device more than five minutes ahead has its changes refused and is told to fix its clock.
@@ -162,7 +162,7 @@ Two things worth knowing:
 
 ## How it stacks up against KeePass
 
-If you love KeePass, you'll feel at home: your encrypted database, your control, no cloud middleman. Bramble even imports your KDBX4 files. Where it's different:
+If you love KeePass, you'll feel at home: your encrypted database, your control, no cloud holding your vault. Bramble even imports your KDBX4 files. Where it's different:
 
 - **🌐 It meets you where you are.** A browser extension, a desktop app, and native iOS and Android apps, all on one vault. No plugin bridge to wire up between a desktop program and your browser, and no fiddling to get autofill working on your phone.
 - **Autofill just works.** Domain matching and an on-page dropdown in the browser, plus system autofill and passkeys on mobile, built in rather than bolted on.
