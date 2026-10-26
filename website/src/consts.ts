@@ -2,9 +2,9 @@ export const SITE = {
 	name: "Bramble",
 	domain: "bramble.sh",
 	url: "https://bramble.sh",
-	tagline: "Your passwords never leave your devices.",
+	tagline: "A password manager that syncs between your devices",
 	description:
-		"Bramble is a local-first password manager for your browser and phone. No account, no server holding your vault, no company to breach. You hold the vault, you hold the password.",
+		"Bramble syncs your passwords between your phone, computer and browser. Everything is end-to-end encrypted. Your passwords are saved only on your devices, not on a server. You do not need an account, and only you can open your vault.",
 	contactEmail: "flythenimbus@pm.me",
 } as const;
 
