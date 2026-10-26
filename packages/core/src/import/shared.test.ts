@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EntryData } from "../hooks/useVault";
+import type { EntryData, LoginEntryData } from "../hooks/useVault";
 import { parseCsvRows, summarize, toCustomFields } from "./shared";
 
 describe("summarize", () => {
@@ -21,6 +21,53 @@ describe("summarize", () => {
 		const res = summarize([bad], 0, []);
 		expect(res.imported).toHaveLength(0);
 		expect(res.skipped).toBe(1);
+	});
+});
+
+// A URL with a port is one service among several on that host (#145), and only `exact` pins it.
+describe("summarize: logins on a port", () => {
+	const login = (urls: string[], over: Partial<LoginEntryData> = {}): LoginEntryData => ({
+		type: "login",
+		name: "NAS",
+		urls,
+		username: "admin",
+		password: "pw",
+		...over,
+	});
+	const modeOf = (...entries: EntryData[]) =>
+		summarize(entries, 0, []).imported.map((e) => (e as LoginEntryData).subdomainMatch);
+
+	it("matches a login exactly when its URL names a port", () => {
+		expect(modeOf(login(["http://nas.local:5000"]), login(["https://10.0.0.2:8443/ui"]))).toEqual([
+			"exact",
+			"exact",
+		]);
+	});
+
+	it("pins the whole login when any one of its URLs names a port", () => {
+		expect(modeOf(login(["https://nas.local", "https://nas.local:9000"]))).toEqual(["exact"]);
+	});
+
+	it("reads a default port as no port", () => {
+		expect(modeOf(login(["https://nas.local:443"]), login(["http://nas.local:80"]))).toEqual([
+			undefined,
+			undefined,
+		]);
+	});
+
+	it("leaves a login with no port, or only an app link, on the default", () => {
+		expect(
+			modeOf(login(["https://github.com"]), login(["androidapp://com.example:5000"]), login([])),
+		).toEqual([undefined, undefined, undefined]);
+	});
+
+	it("keeps a mode the source file chose", () => {
+		expect(
+			modeOf(
+				login(["http://nas.local:5000"], { subdomainMatch: "subdomain" }),
+				login(["http://nas.local:5000"], { subdomainMatch: "etld1" }),
+			),
+		).toEqual(["subdomain", "etld1"]);
 	});
 });
 

@@ -84,6 +84,12 @@ describe("parseGooglePasswords", () => {
 		]);
 	});
 
+	it("matches a login on a port exactly (#145)", () => {
+		const csv = [GOOGLE_HEADER, "DSM,http://nas.local:5000/,admin,secret,"].join("\n");
+
+		expect(logins(parseGooglePasswords(csv))[0]?.subdomainMatch).toBe("exact");
+	});
+
 	it("imports a legacy four-column export with no note column", () => {
 		const csv = ["name,url,username,password", "GitHub,https://github.com,alice,secret"].join("\n");
 

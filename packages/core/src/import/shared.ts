@@ -5,6 +5,7 @@ import {
 	type EntryType,
 	entryDataSchema,
 } from "../hooks/useVault";
+import { loginHosts } from "../vault/autofill-index";
 import type { ImportResult } from "./types";
 
 /** Raw key/value pairs collected by a parser before they become CustomFields. */
@@ -31,6 +32,15 @@ export function tallyByType(entries: readonly EntryData[]): Partial<Record<Entry
 	return byType;
 }
 
+/**
+ * A login on a port is one service among several on that host, and only `exact` pins the
+ * port (#145). A mode the source file chose is kept.
+ */
+function pinPortedLogin(entry: EntryData): EntryData {
+	if (entry.type !== "login" || entry.subdomainMatch !== undefined) return entry;
+	return loginHosts(entry.urls).ports ? { ...entry, subdomainMatch: "exact" } : entry;
+}
+
 /** Validate candidates against EntryData (bad shapes must never reach the vault), drop the rest, tally by type. */
 export function summarize(
 	candidates: EntryData[],
@@ -40,7 +50,7 @@ export function summarize(
 	const imported: EntryData[] = [];
 	let dropped = 0;
 	for (const c of candidates) {
-		if (entryDataSchema.safeParse(c).success) imported.push(c);
+		if (entryDataSchema.safeParse(c).success) imported.push(pinPortedLogin(c));
 		else dropped++;
 	}
 	if (dropped > 0) warnings.push(`${dropped} item(s) had an unexpected shape and were skipped.`);

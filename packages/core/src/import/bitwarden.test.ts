@@ -182,8 +182,12 @@ describe("parseBitwarden", () => {
 			ports: ["5000"],
 			subdomainMatch: "exact",
 		});
-		expect(router).toMatchObject({ hostnames: ["nas.local"], ports: ["8080"] });
-		expect((router as { subdomainMatch?: string }).subdomainMatch).toBeUndefined();
+		// Left on Bitwarden's default, a URL with a port still lands on exact (#145).
+		expect(router).toMatchObject({
+			hostnames: ["nas.local"],
+			ports: ["8080"],
+			subdomainMatch: "exact",
+		});
 	});
 
 	it("imports multiple passkeys and preserves the parent login fields", async () => {

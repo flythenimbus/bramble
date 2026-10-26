@@ -56,6 +56,14 @@ describe("kdbxEntriesToResult", () => {
 		expect(res.imported[0]).toMatchObject({ name: "No site", urls: [] });
 	});
 
+	it("matches a login on a port exactly (#145)", async () => {
+		const res = await kdbxEntriesToResult(
+			[entry([{ key: "URL", value: "https://10.0.0.2:8443", protected: false }])],
+			noPasskeys,
+		);
+		expect(res.imported[0]).toMatchObject({ subdomainMatch: "exact" });
+	});
+
 	it("returns nothing for an empty database", async () => {
 		const res = await kdbxEntriesToResult([], noPasskeys);
 		expect(res.imported).toHaveLength(0);
