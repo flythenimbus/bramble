@@ -1,7 +1,7 @@
 {
 	"name": "Bramble",
 	"short_name": "Bramble",
-	"description": "A local-first password manager. Your passwords stay encrypted on your own devices.",
+	"description": "A password manager that syncs between your devices. Your passwords are not saved on any server.",
 	"theme_color": "#ffffff",
 	"background_color": "#ffffff",
 	"display": "standalone",
