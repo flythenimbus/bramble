@@ -28,12 +28,19 @@ const posts = await getPosts();
 				posts.map((post) => (
 					<li>
 						<article>
-							<time
-								datetime={post.data.pubDate.toISOString()}
-								class="text-sm text-muted-foreground"
-							>
-								{formatPostDate(post.data.pubDate)}
-							</time>
+							<p class="text-sm text-muted-foreground">
+								<time datetime={post.data.pubDate.toISOString()}>
+									{formatPostDate(post.data.pubDate)}
+								</time>
+								{post.data.updatedDate && (
+									<>
+										{" · Updated "}
+										<time datetime={post.data.updatedDate.toISOString()}>
+											{formatPostDate(post.data.updatedDate)}
+										</time>
+									</>
+								)}
+							</p>
 							<h2 class="mt-1 text-xl font-semibold tracking-tight">
 								<a href={`/blog/${post.id}`} class="transition-colors hover:text-primary">
 									{post.data.title}

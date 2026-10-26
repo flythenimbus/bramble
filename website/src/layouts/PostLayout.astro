@@ -9,10 +9,11 @@ interface Props {
 	title: string;
 	description: string;
 	pubDate: Date;
+	updatedDate?: Date;
 	path: string;
 }
 
-const { title, description, pubDate, path } = Astro.props;
+const { title, description, pubDate, updatedDate, path } = Astro.props;
 ---
 
 <Layout title={title} description={description} path={path}>
@@ -28,6 +29,14 @@ const { title, description, pubDate, path } = Astro.props;
 			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
 			<p class="mt-3 text-sm text-muted-foreground">
 				<time datetime={pubDate.toISOString()}>{formatPostDate(pubDate)}</time>
+				{
+					updatedDate && (
+						<>
+							{" · Updated "}
+							<time datetime={updatedDate.toISOString()}>{formatPostDate(updatedDate)}</time>
+						</>
+					)
+				}
 			</p>
 		</header>
 		<article class="prose">

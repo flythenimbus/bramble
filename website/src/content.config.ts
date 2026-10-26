@@ -9,6 +9,8 @@ const blog = defineCollection({
 		/** Meta description and the excerpt on the index. */
 		description: z.string(),
 		pubDate: z.coerce.date(),
+		/** Set when a post is edited after publishing, so a reader knows it still holds. */
+		updatedDate: z.coerce.date().optional(),
 		/** Hidden from the index and from the build. */
 		draft: z.boolean().default(false),
 	}),
