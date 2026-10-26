@@ -18,7 +18,9 @@
 		]
 	},
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		// One log per relayed message would blow the free plan's 200k logs/day; analytics still count them.
+		"logs": { "invocation_logs": false }
 	},
 	"upload_source_maps": true
 }
