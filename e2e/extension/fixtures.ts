@@ -19,13 +19,17 @@ const EXTENSION_PATH = path.resolve(
  * independent "devices" (used by the sync test). Headless by default (Chromium's new headless
  * loads MV3 extensions); set HEADED=1 to watch it.
  */
-export async function launchExtensionContext(reuseProfileDir?: string): Promise<{
+export async function launchExtensionContext(
+	reuseProfileDir?: string,
+	extensionPath = EXTENSION_PATH,
+): Promise<{
 	context: BrowserContext;
 	extensionId: string;
 	profileDir: string;
 }> {
 	// Pass an existing dir to relaunch the SAME profile - a real browser restart (persisted
-	// chrome.storage.local carries over). Omit it for a fresh throwaway "device".
+	// chrome.storage.local carries over). Omit it for a fresh throwaway "device". The manifest
+	// pins the id, so relaunching with another build's path is an update in place.
 	const profileDir = reuseProfileDir ?? mkdtempSync(path.join(tmpdir(), "bramble-e2e-"));
 	const context = await chromium.launchPersistentContext(profileDir, {
 		// `channel: "chromium"` runs Chromium's NEW headless, which (unlike the default/old headless)
@@ -35,8 +39,8 @@ export async function launchExtensionContext(reuseProfileDir?: string): Promise<
 		locale: "en-US",
 		...(process.env.HEADED ? { headless: false } : {}),
 		args: [
-			`--disable-extensions-except=${EXTENSION_PATH}`,
-			`--load-extension=${EXTENSION_PATH}`,
+			`--disable-extensions-except=${extensionPath}`,
+			`--load-extension=${extensionPath}`,
 			"--no-sandbox",
 		],
 	});

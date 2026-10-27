@@ -37,5 +37,7 @@
 		/* Skip type checking all .d.ts files. */
 		"skipLibCheck": true,
 		"types": ["./worker-configuration.d.ts"]
-	}
+	},
+	// node:test files, run by Node itself (`pnpm test`); this config has only the Workers types.
+	"exclude": ["src/**/*.test.ts"]
 }

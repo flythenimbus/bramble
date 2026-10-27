@@ -362,10 +362,6 @@ export async function askDesktop(request: Record<string, unknown>): Promise<any>
 
 /** One request over the held link, answered by routeInbound. */
 async function askOverHeld(link: HeldLink, request: Record<string, unknown>): Promise<any> {
-	const sealed = (await offscreen("LINK_SEAL", {
-		sessionId: link.sessionId,
-		plaintext: JSON.stringify(request),
-	})) as string;
 	const answer = new Promise<unknown>((resolve, reject) => {
 		// A dead pipe would otherwise leave this pending forever, and the caller is a fill the
 		// user is waiting on.
@@ -378,8 +374,27 @@ async function askOverHeld(link: HeldLink, request: Record<string, unknown>): Pr
 			resolve(value);
 		};
 	});
-	link.session.send({ sealed });
+	await sealAndSend(link, request);
 	return answer;
+}
+
+/**
+ * Seal one frame and put it on the pipe, in turn with every other.
+ *
+ * Noise numbers its frames, so the app can only open them in the order they were sealed. Seals
+ * are a round trip to the crypto host, and two in flight could come back and be sent out of
+ * order, which the app reads as a broken session and drops. So they queue.
+ */
+function sealAndSend(link: HeldLink, message: Record<string, unknown>): Promise<void> {
+	const run = link.outbound.then(async () => {
+		const sealed = (await offscreen("LINK_SEAL", {
+			sessionId: link.sessionId,
+			plaintext: JSON.stringify(message),
+		})) as string;
+		link.session.send({ sealed });
+	});
+	link.outbound = run.catch(() => {});
+	return run;
 }
 
 /** Reconnect over KK, which is what every session after the first one does. */
@@ -432,9 +447,23 @@ interface HeldLink {
 	/** Opens arrive in order and must be DECRYPTED in order: Noise numbers its transport frames,
 	 * so two opens in flight at once can complete out of order and fail. */
 	inbound: Promise<void>;
+	/** The same for seals, outbound. See sealAndSend. */
+	outbound: Promise<void>;
+	/** The app said it speaks files, so file frames may go over this link. */
+	files: boolean;
 }
 
 let held: HeldLink | null = null;
+/** The connect under way, shared, so two callers cannot each open a pipe. A second connection
+ * displaces the first as the target of the app's pushes; see HeldLink. */
+let connecting: Promise<HeldLink | null> | null = null;
+
+/** The capability that carries attachment bytes. Must match CAP_FILES in socket.rs. */
+const CAP_FILES = "files";
+
+/** Where the app's file frames and pokes go. Set while sync is running. */
+let onBlobFrame: ((stream: number, frame: string) => void) | null = null;
+let onBlobPoke: (() => void) | null = null;
 
 /** Where a frame from the app goes. Set while sync is running. */
 let onSyncFrame: ((frame: string) => void) | null = null;
@@ -491,11 +520,7 @@ export async function reportActiveTab(hostname: string): Promise<void> {
 	const link = held;
 	if (!link || link.session.dead) return;
 	try {
-		const sealed = (await offscreen("LINK_SEAL", {
-			sessionId: link.sessionId,
-			plaintext: JSON.stringify({ op: "activeTab", hostname }),
-		})) as string;
-		link.session.send({ sealed });
+		await sealAndSend(link, { op: "activeTab", hostname });
 	} catch {
 		// A dead pipe is not worth reporting: the next keepalive rebuilds it.
 	}
@@ -575,14 +600,18 @@ export async function closeSyncLink(): Promise<void> {
 /** Hand one sync frame to the app. False when the link is down, which is not an error: the
  * desktop app may simply not be running, and sync carries on over the relay. */
 export async function sendSyncFrame(frame: string): Promise<boolean> {
-	const link = await ensureHeld();
+	return pushFrame(await ensureHeld(), { op: "sync", frame });
+}
+
+/** Push one unanswered frame. False with no link, or when the send fails, which drops the link
+ * for the keepalive to rebuild. */
+async function pushFrame(
+	link: HeldLink | null,
+	message: Record<string, unknown>,
+): Promise<boolean> {
 	if (!link) return false;
 	try {
-		const sealed = (await offscreen("LINK_SEAL", {
-			sessionId: link.sessionId,
-			plaintext: JSON.stringify({ op: "sync", frame }),
-		})) as string;
-		link.session.send({ sealed });
+		await sealAndSend(link, message);
 		return true;
 	} catch {
 		await dropHeld();
@@ -590,9 +619,43 @@ export async function sendSyncFrame(frame: string): Promise<boolean> {
 	}
 }
 
+/** Route the app's file frames and pokes while sync runs. The pipe is sync's; see openSyncLink. */
+export function openBlobLink(
+	onFrame: (stream: number, frame: string) => void,
+	onPoke: () => void,
+): void {
+	onBlobFrame = onFrame;
+	onBlobPoke = onPoke;
+}
+
+export function closeBlobLink(): void {
+	onBlobFrame = null;
+	onBlobPoke = null;
+}
+
+/** Whether a link is up to an app that speaks files. Never opens one: the keepalive does. */
+export function blobLinkUp(): boolean {
+	return held !== null && !held.session.dead && held.files;
+}
+
+/** Hand one file frame to the app. False when there is no link to an app that speaks files,
+ * which is ordinary: the app may be old, or not running. */
+export async function sendBlobFrame(stream: number, frame: string): Promise<boolean> {
+	return pushFrame(blobLinkUp() ? held : null, { op: "blob", stream, frame });
+}
+
 /** The held link, opening one if sync is running and there is none. */
 async function ensureHeld(): Promise<HeldLink | null> {
 	if (held && !held.session.dead) return held;
+	if (!connecting) {
+		connecting = connectHeld().finally(() => {
+			connecting = null;
+		});
+	}
+	return connecting;
+}
+
+async function connectHeld(): Promise<HeldLink | null> {
 	if (held) await dropHeld();
 	if (!linkWanted) return null; // nothing wants the pipe held open
 
@@ -624,7 +687,13 @@ async function ensureHeld(): Promise<HeldLink | null> {
 		return null;
 	}
 
-	const link: HeldLink = { session, sessionId: start.sessionId, inbound: Promise.resolve() };
+	const link: HeldLink = {
+		session,
+		sessionId: start.sessionId,
+		inbound: Promise.resolve(),
+		outbound: Promise.resolve(),
+		files: false,
+	};
 	session.intercept((msg) => {
 		if (typeof msg?.sealed !== "string") return false;
 		// Claimed BEFORE it is opened, and opened on a chain, because deciding what a frame is
@@ -636,20 +705,35 @@ async function ensureHeld(): Promise<HeldLink | null> {
 		// Only if it is still the current link: a rebuild may already have replaced it.
 		if (held === link) held = null;
 	});
+	// What the app speaks, asked before the link is published so no other request can race the
+	// answer. An app from before caps answers with an error, and gets no file frames.
+	link.files = await askOverHeld(link, { op: "caps", caps: [CAP_FILES] })
+		.then((answer) => Array.isArray(answer?.caps) && answer.caps.includes(CAP_FILES))
+		.catch(() => false);
 	held = link;
 	return link;
+}
+
+/** What the app sends: a pushed frame of one kind, or the answer to a request. */
+interface InboundFrame {
+	sync?: string;
+	fill?: WireFill;
+	blob?: string;
+	stream?: number;
+	blobPoke?: boolean;
+	[answer: string]: unknown;
 }
 
 /** Open one inbound frame and dispatch it: a sync frame to sync, anything else to the request
  * waiting for it. */
 async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
-	let parsed: { sync?: string; fill?: WireFill };
+	let parsed: InboundFrame;
 	try {
 		const plain = (await offscreen("LINK_OPEN", {
 			sessionId: link.sessionId,
 			sealed,
 		})) as string;
-		parsed = JSON.parse(plain) as { sync?: string; fill?: WireFill };
+		parsed = JSON.parse(plain) as InboundFrame;
 	} catch {
 		// An unopenable frame means this session is out of step; rebuilding is the only recovery.
 		await dropHeld();
@@ -657,6 +741,14 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 	}
 	if (typeof parsed.sync === "string") {
 		onSyncFrame?.(parsed.sync);
+		return;
+	}
+	if (typeof parsed.blob === "string" && typeof parsed.stream === "number") {
+		onBlobFrame?.(parsed.stream, parsed.blob);
+		return;
+	}
+	if (parsed.blobPoke === true) {
+		onBlobPoke?.();
 		return;
 	}
 	if (parsed.fill && typeof parsed.fill.password === "string") {
@@ -775,6 +867,23 @@ on(
 		if (typeof frame !== "string") return { ok: false, error: "LINK_SYNC_SEND requires a frame" };
 		return { ok: true, data: await sendSyncFrame(frame) };
 	}),
+);
+
+on(
+	"LINK_BLOB_SEND",
+	// The offscreen's file session, the same way. False when no link to an app that speaks files.
+	extensionOnly(async (message) => {
+		const { stream, frame } = (message.payload ?? {}) as { stream?: unknown; frame?: unknown };
+		if (typeof stream !== "number" || typeof frame !== "string") {
+			return { ok: false, error: "LINK_BLOB_SEND requires a stream and a frame" };
+		}
+		return { ok: true, data: await sendBlobFrame(stream, frame) };
+	}),
+);
+
+on(
+	"LINK_BLOB_UP",
+	extensionOnly(async () => ({ ok: true, data: blobLinkUp() })),
 );
 
 on(

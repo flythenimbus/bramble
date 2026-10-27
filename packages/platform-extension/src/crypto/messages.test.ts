@@ -57,9 +57,11 @@ describe("entry + misc schemas", () => {
 		expect(CryptoUnlockWithVekSchema.safeParse({}).success).toBe(false);
 	});
 
-	it("open-kdbx keyfile is optional", () => {
-		const min = { fileB64: "f", password: "pw" };
+	it("open-kdbx takes its database as a handoff, and the keyfile is optional", () => {
+		const min = { handoff: "h", password: "pw" };
 		expect(CryptoOpenKdbxSchema.parse(min)).toEqual(min);
-		expect(CryptoOpenKdbxSchema.safeParse({ fileB64: "f" }).success).toBe(false);
+		expect(CryptoOpenKdbxSchema.safeParse({ handoff: "h" }).success).toBe(false);
+		// Not the file itself: a database can be far larger than a message may be.
+		expect(CryptoOpenKdbxSchema.safeParse({ fileB64: "f", password: "pw" }).success).toBe(false);
 	});
 });

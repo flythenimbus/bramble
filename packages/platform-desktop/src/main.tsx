@@ -8,6 +8,7 @@ import { desktopAutofill } from "./adapters/autofill";
 import { desktopBackupCreds } from "./adapters/backup-creds";
 import { desktopClipboard } from "./adapters/clipboard";
 import { desktopCrypto } from "./adapters/crypto";
+import { desktopFiles, startOpenedCopySweeps } from "./adapters/files";
 import { desktopHttp } from "./adapters/http";
 import { desktopPairing } from "./adapters/pairing";
 import { desktopShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
@@ -19,6 +20,10 @@ import { initRosterSync } from "./sync/roster";
 import { listenForMenuUpdateCheck, promptForUpdateOnLaunch } from "./updates-prompt";
 import { installWindowShortcuts, syncTrayTheme } from "./window-chrome";
 
+// Decrypted attachment copies (opened in another app) are deleted at startup and on every lock,
+// so none outlives the session it was opened in. See ./adapters/files.ts.
+startOpenedCopySweeps();
+
 const platform: Platform = {
 	target: "desktop",
 	storage: desktopStorage,
@@ -29,6 +34,7 @@ const platform: Platform = {
 	pairing: desktopPairing,
 	backupCreds: desktopBackupCreds,
 	http: desktopHttp,
+	files: desktopFiles,
 	// biometric: Touch ID / Windows Hello is phase 1; nothing on Linux.
 	// exchange: iOS only.
 };

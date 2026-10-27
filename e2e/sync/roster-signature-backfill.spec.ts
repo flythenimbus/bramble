@@ -1,6 +1,15 @@
 import type { Page, Worker } from "@playwright/test";
 import { backgroundWorker, popupUrl } from "../extension/helpers";
-import { createVault, expect, gotoSync, type Peer, PW, RELAY_URL, test } from "./fixtures";
+import {
+	createVault,
+	enterCode,
+	expect,
+	gotoSync,
+	invite,
+	type Peer,
+	test,
+	useLocalRelay,
+} from "./fixtures";
 
 // The phase-1 -> phase-2 roster migration, end to end over a real relay.
 //
@@ -17,28 +26,6 @@ import { createVault, expect, gotoSync, type Peer, PW, RELAY_URL, test } from ".
 //
 // It simulates the pre-signing world by stripping the signatures out of both peers' stored rosters
 // after they pair, which is the only way to get a genuinely unsigned entry out of a current build.
-
-const LOCAL_RELAY_HOST = "localhost:7400";
-
-/** Point this peer's sync at the local relay, via the Advanced panel a user would use. */
-async function useLocalRelay(page: Page): Promise<void> {
-	await page.getByRole("button", { name: /Advanced/i }).click();
-	await page.getByLabel(/Nostr relay URL/i).fill(RELAY_URL);
-	await page.getByLabel(/TURN \/ ICE servers URL/i).fill("");
-}
-
-/** Run the inviter flow and return the pairing code. */
-async function invite(page: Page): Promise<string> {
-	await page
-		.getByRole("button", { name: /^Add a device$/i })
-		.last()
-		.click();
-	await page.locator('input[type="password"]').first().fill(PW);
-	await page.getByRole("button", { name: "Continue", exact: true }).click();
-	const codeField = page.locator("input[readonly]");
-	await expect(codeField).toBeVisible();
-	return codeField.inputValue();
-}
 
 interface StoredGroup {
 	groupKey: string;
@@ -117,18 +104,10 @@ async function pair(ext: Peer & { extensionId: string }, mobile: Peer): Promise<
 	await useLocalRelay(ext.page);
 
 	const code = await invite(ext.page);
-	const decoded = JSON.parse(
-		Buffer.from(code.replace("bramble-pair-1.", ""), "base64").toString("utf8"),
-	) as { relay: string };
-	expect(decoded.relay, "the pairing code must name the local relay").toContain(LOCAL_RELAY_HOST);
 
 	await mobile.page.getByRole("button", { name: /Create your vault/i }).click();
 	await mobile.page.getByRole("button", { name: /Join a device/i }).click();
-	const paste = mobile.page.getByRole("button", { name: /Paste code instead/i });
-	if (await paste.isVisible().catch(() => false)) await paste.click();
-	await mobile.page.getByPlaceholder(/Paste the code from your other device/i).fill(code);
-	await mobile.page.getByLabel(/Master password/i).fill(PW);
-	await mobile.page.getByRole("button", { name: /Join vault/i }).click();
+	await enterCode(mobile.page, code);
 
 	// The digits comparison is pair-and-sync.spec.ts's job; here the SAS just has to be answered.
 	await expect(mobile.page.getByRole("heading", { name: /Check this matches/i })).toBeVisible({

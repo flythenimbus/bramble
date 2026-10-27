@@ -1,4 +1,5 @@
 import { TRANSFER_INTERRUPTED } from "../adapters/http";
+import type { AttachmentListCache, BackupBlocked } from "./archive";
 import type { ProviderConfig } from "./types";
 
 // Device-local backup targets, per vault. Non-secret fields are stored in the clear via
@@ -64,6 +65,10 @@ export interface BackupTargetConfig {
 	lastBackupAt?: number;
 	lastVaultHash?: string;
 	lastError?: string;
+	/** Set when a due backup was not made because the vault could not be backed up whole, and
+	 * why (see BackupBlocked). Nothing partial is ever uploaded instead, so the target stays due
+	 * and this says what it is waiting for. Cleared by the next backup that is made. */
+	waiting?: BackupBlocked;
 	/** Consecutive failures, cleared by any success. Drives the retry backoff (see schedule.ts).
 	 * Optional and absent until a target first fails, so an older stored list reads fine and an
 	 * older build simply retries every tick the way it always did. */
@@ -79,6 +84,8 @@ export interface BackupOutcome {
 	/** The vault the run uploaded, or, alongside an error, the one it was trying to. */
 	hash?: string;
 	error?: string;
+	/** Not attempted: the vault cannot be backed up whole yet. Neither a success nor a failure. */
+	blocked?: BackupBlocked;
 }
 
 /**
@@ -100,6 +107,8 @@ export function applyBackupOutcomes(
 	return targets.map((t) => {
 		const r = outcomes.get(t.id);
 		if (!r) return t;
+		// Waiting is not failing: no backoff, and the last good backup still stands.
+		if (r.blocked) return { ...t, waiting: r.blocked };
 		// The app was left before the upload finished. Shown, so nobody assumes it landed, but not
 		// counted as a failure: backoff exists to spare a provider that is refusing, and this one
 		// was not, so the next open has to retry rather than wait out a delay it did not earn.
@@ -116,6 +125,7 @@ export function applyBackupOutcomes(
 					lastBackupAt: now,
 					lastVaultHash: r.hash,
 					lastError: undefined,
+					waiting: undefined,
 					failedAt: undefined,
 					failures: undefined,
 				};
@@ -294,4 +304,24 @@ export function normalizeS3(input: { endpoint: string; bucket: string; prefix?: 
 	} catch {
 		return { endpoint, bucket, prefix: prefix || undefined };
 	}
+}
+
+/** Where a vault's attachment list is cached between runs (see AttachmentListCache). */
+function attachmentListKeyFor(vaultId: string): string {
+	return `backup.attachments:${vaultId}`;
+}
+
+/** An AttachmentListCache in the platform's meta storage, scoped to one vault. */
+export function metaListCache(
+	meta: {
+		getMeta<T>(key: string): Promise<T | null | undefined>;
+		setMeta(key: string, value: unknown): Promise<void>;
+	},
+	vaultId: string,
+): AttachmentListCache {
+	const key = attachmentListKeyFor(vaultId);
+	return {
+		get: async () => (await meta.getMeta<{ vaultHash: string; hashes: string[] }>(key)) ?? null,
+		set: (list) => meta.setMeta(key, list),
+	};
 }

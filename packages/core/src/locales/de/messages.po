@@ -18,6 +18,16 @@ msgstr ""
 msgid "…and {0} more"
 msgstr "...und noch {0} weitere"
 
+#. placeholder {0}: outcome.rejected
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "{0, plural, one {# attachment in the backup file was damaged and wasn't restored. The vault still lists it.} other {# attachments in the backup file were damaged and weren't restored. The vault still lists them.}}"
+msgstr "{0, plural, one {# Anhang in der Sicherungsdatei war beschädigt und wurde nicht wiederhergestellt. Der Tresor listet ihn weiterhin auf.} other {# Anhänge in der Sicherungsdatei waren beschädigt und wurden nicht wiederhergestellt. Der Tresor listet sie weiterhin auf.}}"
+
+#. placeholder {0}: outcome.restored
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "{0, plural, one {# attachment restored with it.} other {# attachments restored with it.}}"
+msgstr "{0, plural, one {# Anhang damit wiederhergestellt.} other {# Anhänge damit wiederhergestellt.}}"
+
 #. placeholder {0}: unsigned.length
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "{0, plural, one {# device has not signed its roster entry yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell it from an impostor.} other {# devices have not signed their roster entries yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell them from an impostor.}}"
@@ -38,10 +48,25 @@ msgstr "{0, plural, one {# Eintrag wird in die Datei geschrieben, mit seinen Pas
 #~ msgid "{0, plural, one {# selected entry goes into the file.} other {# selected entries go into the file.}}"
 #~ msgstr "{0, plural, one {# ausgewählter Eintrag geht in die Datei ein.} other {# ausgewählte Einträge gehen in die Datei ein.}}"
 
+#. placeholder {0}: attachments.length
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{0, plural, one {Add # attachment} other {Add # attachments}}"
+msgstr "{0, plural, one {# Anhang hinzufügen} other {# Anhänge hinzufügen}}"
+
 #. placeholder {0}: ids.length
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "{0, plural, one {Delete # entry?} other {Delete # entries?}}"
 msgstr "{0, plural, one {Möchten Sie # Eintrag löschen?} other {Möchten Sie # Einträge löschen?}}"
+
+#. placeholder {0}: blocked.count
+#: packages/core/src/app/components/backup-blocked.tsx
+msgid "{0, plural, one {Not backed up: # attachment isn't on this device yet. Backups resume once it arrives.} other {Not backed up: # attachments aren't on this device yet. Backups resume once they arrive.}}"
+msgstr "{0, plural, one {Nicht gesichert: # Anhang ist noch nicht auf diesem Gerät. Die Sicherung wird fortgesetzt, sobald er ankommt.} other {Nicht gesichert: # Anhänge sind noch nicht auf diesem Gerät. Die Sicherung wird fortgesetzt, sobald sie ankommen.}}"
+
+#. placeholder {0}: outcome.unstorable
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "{0, plural, one {This backup has # attachment, which Bramble can't store on this device yet. Keep the backup file, which still has it.} other {This backup has # attachments, which Bramble can't store on this device yet. Keep the backup file, which still has them.}}"
+msgstr "{0, plural, one {Diese Sicherung enthält # Anhang, den Bramble auf diesem Gerät noch nicht speichern kann. Bewahren Sie die Sicherungsdatei auf, die ihn noch enthält.} other {Diese Sicherung enthält # Anhänge, die Bramble auf diesem Gerät noch nicht speichern kann. Bewahren Sie die Sicherungsdatei auf, die sie noch enthält.}}"
 
 #. placeholder {0}: fingerprint(d.publicKey)
 #. placeholder {1}: addedOn(d.addedAt)
@@ -71,6 +96,10 @@ msgstr "{affected, plural, one {Tag von # Eintrag entfernen} other {Tag von # Ei
 msgid "{appName} recovery code"
 msgstr "{appName} Wiederherstellungs-Code"
 
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "{attachments, plural, one {Attachments aren't transferred: # file on these entries won't be in the export.} other {Attachments aren't transferred: # files on these entries won't be in the export.}}"
+msgstr "{attachments, plural, one {Anhänge werden nicht übertragen: # Datei zu diesen Einträgen wird nicht in den Export aufgenommen.} other {Anhänge werden nicht übertragen: # Dateien zu diesen Einträgen werden nicht in den Export aufgenommen.}}"
+
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "{conflicted, plural, one {# entry has a sync conflict. Only the version you see is exported.} other {# entries have a sync conflict. Only the version you see is exported.}}"
 msgstr "{conflicted, plural, one {# Eintrag weist einen Synchronisierungskonflikt auf. Es wird nur die angezeigte Version exportiert.} other {# Einträge weisen einen Synchronisierungskonflikt auf. Es wird nur die angezeigte Version exportiert.}}"
@@ -91,6 +120,14 @@ msgstr "{count, plural, one {# ausgewählt} other {# ausgewählt}}"
 msgid "{duplicates} more were already in your vault and will not be added again."
 msgstr "{duplicates} weitere befanden sich bereits in Ihrem Tresor und werden nicht erneut hinzugefügt."
 
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "{from} has it. Coming next."
+msgstr "{from} hat ihn. Kommt als Nächstes."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "{from} has it. Trying again shortly."
+msgstr "{from} hat ihn. Neuer Versuch in Kürze."
+
 #: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
 msgid "{hiddenCount, plural, one {# hidden by the current filter} other {# hidden by the current filter}}"
 msgstr "{hiddenCount, plural, one {# vom aktuellen Filter ausgeblendet} other {# vom aktuellen Filter ausgeblendet}}"
@@ -99,6 +136,14 @@ msgstr "{hiddenCount, plural, one {# vom aktuellen Filter ausgeblendet} other {#
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "{hiddenCount, plural, one {# of them is hidden by the current filter.} other {# of them are hidden by the current filter.}}"
 msgstr "{hiddenCount, plural, one {# davon ist vom aktuellen Filter ausgeblendet.} other {# davon sind vom aktuellen Filter ausgeblendet.}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{importedFiles, plural, one {# attachment came with them.} other {# attachments came with them.}}"
+msgstr "{importedFiles, plural, one {# Anhang wurde mit ihnen übernommen.} other {# Anhänge wurden mit ihnen übernommen.}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{importedFiles, plural, one {Added # attachment} other {Added # attachments}}"
+msgstr "{importedFiles, plural, one {# Anhang hinzugefügt} other {# Anhänge hinzugefügt}}"
 
 #: packages/core/src/app/bulk-actions/archive.tsx
 msgid "{moving, plural, one {Archive # entry?} other {Archive # entries?}}"
@@ -123,6 +168,14 @@ msgstr "{passwordDiffers} teilen sich Website und Benutzername mit einem Eintrag
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "{remaining}s left"
 msgstr "{remaining}s verbleiben"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{toExisting, plural, one {# attachment will be added to an entry you already have.} other {# attachments will be added to entries you already have.}}"
+msgstr "{toExisting, plural, one {# Anhang wird zu einem bereits vorhandenen Eintrag hinzugefügt.} other {# Anhänge werden zu bereits vorhandenen Einträgen hinzugefügt.}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
+msgstr "{withNew, plural, one {# Anhang wird mit ihnen übernommen.} other {# Anhänge werden mit ihnen übernommen.}}"
 
 #. placeholder {0}: result.imported.length
 #: packages/core/src/app/screens/Import/ImportShell.tsx
@@ -168,6 +221,18 @@ msgstr "Ein Gerät hat sich mit Ihrem Pairing-Code verbunden. Überprüfen Sie, 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #~ msgid "A device has connected with your pairing code. Check that it is showing this exact number, then approve. Your vault has not been sent yet."
 #~ msgstr "Ein Gerät hat sich mit Ihrem Kopplungscode verbunden. Prüfen Sie, ob genau diese Nummer auf dem anderen Gerät angezeigt wird, und genehmigen Sie dann. Ihr Tresor wurde noch nicht gesendet."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "A device has it. Coming next."
+msgstr "Ein Gerät hat ihn. Kommt als Nächstes."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "A device has it. Trying again shortly."
+msgstr "Ein Gerät hat ihn. Neuer Versuch in Kürze."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "A device is online but can't connect to this one."
+msgstr "Ein Gerät ist online, kann aber keine Verbindung zu diesem herstellen."
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "A one-time backup code that unlocks your vault if you're locked out."
@@ -333,6 +398,10 @@ msgstr "Sperren Sie den Tresor auch, wenn der Bildschirm Ihres Computers gesperr
 msgid "An app password reaches every file in the account, not just this folder, and cannot be narrowed. For a backup that holds your whole vault history, a separate account used only for backups is worth the two minutes."
 msgstr "Ein App-Passwort hat Zugriff auf jede Datei im Konto, nicht nur auf diesen Ordner, und lässt sich nicht eingrenzen. Für ein Backup, das Ihre gesamte Tresor-Historie enthält, lohnt sich ein separates Konto, das nur für Backups verwendet wird – die zwei Minuten sind es wert."
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "An attachment hasn't reached this device yet, so the export would be missing it. Try again once it has."
+msgstr "Ein Anhang ist noch nicht auf diesem Gerät angekommen, daher würde er im Export fehlen. Versuchen Sie es erneut, sobald er da ist."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
 msgstr "Ein Endpunkt, der Ihre eigenen ICE-Server als JSON zurückgibt. Standardmäßig wird der des Relais verwendet."
@@ -402,6 +471,19 @@ msgstr "Sobald der Sperrbildschirm angezeigt wird, Ihren Passcode abfragen, ohne
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "At Risk"
 msgstr "Risiko besteht"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Attach a file"
+msgstr "Datei anhängen"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+#: packages/core/src/hooks/useVault.tsx
+msgid "Attachments"
+msgstr "Anhänge"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Attachments ready to add to entries you already have"
+msgstr "Anhänge bereit zum Hinzufügen zu bereits vorhandenen Einträgen"
 
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "Authenticator key"
@@ -625,17 +707,16 @@ msgstr "Kuchen"
 msgid "Can't save this code"
 msgstr "Dieser Code kann nicht gespeichert werden"
 
-#: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/components/PasswordGenerator.tsx
 #: packages/core/src/app/components/ui/confirm-dialog.tsx
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
+#: packages/core/src/app/components/ui/inline-confirm.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
-#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
@@ -978,6 +1059,11 @@ msgstr "Mais"
 msgid "Could not sync with the desktop app."
 msgstr "Konnte nicht mit der Desktop-App synchronisiert werden."
 
+#. placeholder {0}: (e as Error).message
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Couldn't export the backup: {0}"
+msgstr "Sicherung konnte nicht exportiert werden: {0}"
+
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
 msgid "Couldn't open this database."
 msgstr "Die Datenbank konnte nicht geöffnet werden."
@@ -1193,6 +1279,7 @@ msgid "Disabling…"
 msgstr "Deaktivierung..."
 
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Disconnect"
@@ -1237,9 +1324,17 @@ msgstr "Herunterladen"
 msgid "Downloading {0}%"
 msgstr "Herunterladen {0}%"
 
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Downloading from {from}, {percent}%"
+msgstr "Wird von {from} heruntergeladen, {percent}%"
+
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Downloading the update"
 msgstr "Update wird heruntergeladen"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Downloading, {percent}%"
+msgstr "Wird heruntergeladen, {percent}%"
 
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Downloading…"
@@ -1290,6 +1385,10 @@ msgstr "Autofill aktivieren"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Encrypted on your device"
 msgstr "Auf Ihrem Gerät verschlüsselt"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Encrypting…"
+msgstr "Verschlüsseln…"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Endpoint"
@@ -1455,6 +1554,10 @@ msgstr "Feldname"
 msgid "Files are read on this device only. Nothing is uploaded. Delete the export file once you're done."
 msgstr "Dateien werden nur auf diesem Gerät gelesen. Es wird nichts hochgeladen. Löschen Sie die Exportdatei, sobald Sie fertig sind."
 
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Files over {LIMIT_MB} MB can't be attached."
+msgstr "Dateien über {LIMIT_MB} MB können nicht angehängt werden."
+
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #~ msgid "Fill logins from the Bramble extension without unlocking twice."
 #~ msgstr "Logins aus der Bramble-Erweiterung ausfüllen, ohne zweimal zu entsperren."
@@ -1560,6 +1663,10 @@ msgstr "Gitarre"
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Hammer"
 msgstr "Hammer"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Hand your logins, codes and passkeys straight to another password app on this device. Attachments aren't sent, so keep a backup for those."
+msgstr "Übergeben Sie Ihre Logins, Codes und Passkeys direkt an eine andere Passwort-App auf diesem Gerät. Anhänge werden nicht übertragen; bewahren Sie für diese eine Sicherung auf."
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Hand your logins, codes and passkeys straight to another password app on this device. Nothing is written to a file."
@@ -1956,6 +2063,10 @@ msgstr "Tresor nach Inaktivität sperren"
 msgid "Lock when the screen locks"
 msgstr "Sperren bei Bildschirmsperre"
 
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Locked"
+msgstr "Gesperrt"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Login"
 msgstr "Login"
@@ -2139,6 +2250,10 @@ msgstr "Keine"
 msgid "None of the selected entries have this tag."
 msgstr "Keiner der ausgewählten Einträge hat diesen Tag."
 
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "None of your connected devices has it yet."
+msgstr "Keines Ihrer verbundenen Geräte hat ihn bisher."
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Nostr relay URL"
 msgstr "Nostr Relay URL"
@@ -2146,6 +2261,10 @@ msgstr "Nostr Relay URL"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Not backed up yet"
 msgstr "Noch nicht gesichert"
+
+#: packages/core/src/app/components/backup-blocked.tsx
+msgid "Not backed up: this vault's attachments can't be listed while it's locked. Unlock it once to resume."
+msgstr "Nicht gesichert: Die Anhänge dieses Tresors können nicht aufgelistet werden, solange er gesperrt ist. Entsperren Sie ihn einmal, um fortzufahren."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #~ msgid "Not finished: Bramble was closed before this backup completed. It will run again next time you open Bramble."
@@ -2155,6 +2274,10 @@ msgstr "Noch nicht gesichert"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Not now"
 msgstr "Nicht jetzt"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Not on this device yet. Waiting for a device that has it."
+msgstr "Noch nicht auf diesem Gerät. Warten auf ein Gerät, das ihn hat."
 
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
@@ -2242,6 +2365,10 @@ msgstr "Nur für ein selbst gehostetes {0}. Leer lassen, um den gehosteten Diens
 msgid "Only your passcode can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
 msgstr "Nur mit Ihrem Passcode können Sie entsperren. Das Hinzufügen oder Entfernen eines Gesichts oder eines Fingerabdrucks deaktiviert diese Funktion. Sie können sie mit Ihrem Master-Passwort wieder aktivieren."
 
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Open"
+msgstr "Öffnen"
+
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Open {name}"
 msgstr "Öffnen {name}"
@@ -2255,6 +2382,10 @@ msgstr "Öffnen Sie <0>{0}</0> als Tresor auf diesem Gerät. Geben Sie dessen Ma
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Open an encrypted .bramble backup and make it the vault on this device."
 msgstr "Öffnen Sie ein verschlüsseltes .bramble-Backup und machen Sie es zum Tresor auf diesem Gerät."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Open attachment"
+msgstr "Anhang öffnen"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Open Bramble on this computer, go to Settings and choose Connect a browser, then enter the code it shows."
@@ -2454,12 +2585,16 @@ msgid "Pick a master password to protect your vault."
 msgstr "Wählen Sie ein Master-Passwort, um Ihren Tresor zu schützen."
 
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
-msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file — we don't keep a copy."
-msgstr "Wählen Sie ein Passwort für die exportierte Datei. Es ist unabhängig von Ihrem Master-Passwort und die einzige Möglichkeit, die Datei zu öffnen – wir speichern keine Kopie."
+#~ msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file — we don't keep a copy."
+#~ msgstr "Wählen Sie ein Passwort für die exportierte Datei. Es ist unabhängig von Ihrem Master-Passwort und die einzige Möglichkeit, die Datei zu öffnen – wir speichern keine Kopie."
 
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file, so we don't keep a copy."
 msgstr "Legen Sie ein Passwort für die exportierte Datei fest. Es ist unabhängig von Ihrem Master-Passwort und der einzige Weg, die Datei zu öffnen, daher bewahren wir es nicht auf."
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file: we don't keep a copy. Your attachments go with it. Passkeys don't yet, so keep a .bramble backup for those."
+msgstr "Legen Sie ein Passwort für die exportierte Datei fest. Es ist von Ihrem Master-Passwort getrennt und die einzige Möglichkeit, die Datei zu öffnen: Wir bewahren keine Kopie auf. Ihre Anhänge werden mit exportiert. Passkeys werden noch nicht mit exportiert; bewahren Sie für diese eine .bramble-Sicherung auf."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Pig"
@@ -2484,6 +2619,10 @@ msgstr "Bitte geben Sie Ihr Master-Passwort ein"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Point your camera at the code on your other device"
 msgstr "Richten Sie Ihre Kamera auf den Code auf Ihrem anderen Gerät"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Popout to window to attach files"
+msgstr "In ein Fenster auslagern, um Dateien anzuhängen"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Press Enter / submit the form right after the credentials are filled in."
@@ -2583,8 +2722,10 @@ msgstr "Ablehnen"
 msgid "Reload"
 msgstr "Neu laden"
 
+#: packages/core/src/app/entry-modes/attachments.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Remove"
 msgstr "Entfernen"
 
@@ -2602,6 +2743,10 @@ msgstr "{host} von der Never-Save-Liste entfernen"
 #: packages/core/src/app/bulk-actions/tags.tsx
 msgid "Remove a tag"
 msgstr "Einen Tag entfernen"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Remove attachment"
+msgstr "Anhang entfernen"
 
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Remove field"
@@ -2629,6 +2774,9 @@ msgid "Removed tag {removed}. {0} tags."
 msgstr "Tag {removed} entfernt. {0} Tags."
 
 #: packages/core/src/app/bulk-actions/tags.tsx
+#: packages/core/src/app/entry-modes/attachments.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Removing…"
 msgstr "Entfernen…"
 
@@ -2682,8 +2830,12 @@ msgid "Restore a backup"
 msgstr "Ein Backup wiederherstellen"
 
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
-msgid "Restore an encrypted .bramble backup. This replaces the vault on this device."
-msgstr "Stellen Sie ein verschlüsseltes .bramble-Backup wieder her. Dies ersetzt den Tresor auf diesem Gerät."
+msgid "Restore an encrypted .bramble backup. It's added as a new vault, so nothing here is replaced."
+msgstr "Stellen Sie eine verschlüsselte .bramble-Sicherung wieder her. Sie wird als neuer Tresor hinzugefügt, daher wird hier nichts ersetzt."
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+#~ msgid "Restore an encrypted .bramble backup. This replaces the vault on this device."
+#~ msgstr "Stellen Sie ein verschlüsseltes .bramble-Backup wieder her. Dies ersetzt den Tresor auf diesem Gerät."
 
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 msgid "Restore entry"
@@ -2726,6 +2878,10 @@ msgstr "Geheimnis rotieren"
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Rotate this vault's secret"
 msgstr "Geheimnis dieses Tresors rotieren"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Rotating the key isn't available yet for a vault with attachments."
+msgstr "Die Schlüsselrotation ist für einen Tresor mit Anhängen noch nicht verfügbar."
 
 #: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
 msgid "Rotating…"
@@ -3258,6 +3414,10 @@ msgstr "Diese Übertragung ist fehlgeschlagen."
 msgid "That year is outside the range cards use."
 msgstr "Dieses Jahr liegt außerhalb des für Karten gültigen Bereichs."
 
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That's a full vault backup. Restore it instead: it's added as a new vault, and nothing here is changed."
+msgstr "Das ist eine vollständige Sicherung des Tresors. Stellen Sie sie stattdessen wieder her: Sie wird als neuer Tresor hinzugefügt, und hier wird nichts geändert."
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "The desktop app answered."
 #~ msgstr ""
@@ -3297,6 +3457,10 @@ msgstr "Die andere Version"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "The signaling relay that introduces devices. Defaults to the hosted relay; point it at your own or any public Nostr relay."
 msgstr "Der Signalisierungs-Relay, der Geräte einführt. Standardmäßig auf den gehosteten Relay eingestellt; richten Sie ihn auf Ihren eigenen oder einen öffentlichen Nostr-Relay."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "The vault locked, so the attachments read from that file were cleared. Open it again to import them."
+msgstr "Der Tresor wurde gesperrt, daher wurden die aus dieser Datei gelesenen Anhänge entfernt. Öffnen Sie die Datei erneut, um sie zu importieren."
 
 #: packages/core/src/hooks/useCryptoErrorMessage.tsx
 msgid "The vault was locked or switched while that was in progress. Try again."
@@ -3351,12 +3515,20 @@ msgid "This authenticator key is invalid and can't generate codes."
 msgstr "Dieser Authentifizierungsschlüssel ist ungültig und kann keine Codes generieren."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "This backup can't be read. It may be damaged, or not a Bramble backup."
+msgstr "Diese Sicherung kann nicht gelesen werden. Sie ist möglicherweise beschädigt oder keine Bramble-Sicherung."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "This backup has no master password, so it can't be restored here."
 msgstr "Dieses Backup hat kein Master-Passwort und kann daher hier nicht wiederhergestellt werden."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "This browser already shares that vault with the desktop app. Opening it just switches you to it; the vault you are in now stays exactly as it is."
 msgstr "Dieser Browser teilt diesen Tresor bereits mit der Desktop-App. Durch das Öffnen wird nur zu ihm gewechselt; der Tresor, in dem Sie sich gerade befinden, bleibt genau so, wie er ist."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "This browser gets files only from the Bramble desktop app."
+msgstr "Dieser Browser empfängt Dateien nur von der Bramble-Desktop-App."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "This can't be undone, and the deletion syncs to your other devices."
@@ -3415,6 +3587,10 @@ msgstr "Dieser Eintrag hat bereits die maximale Anzahl an Tags."
 msgid "This entry was changed on two devices before they synced."
 msgstr "Dieser Eintrag wurde auf zwei Geräten geändert, bevor diese synchronisiert wurden."
 
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "This entry was deleted on another device, so the file wasn't attached."
+msgstr "Dieser Eintrag wurde auf einem anderen Gerät gelöscht, daher wurde die Datei nicht angehängt."
+
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 msgid "This entry was deleted on one device and changed on another before they synced."
 msgstr "Dieser Eintrag wurde auf einem Gerät gelöscht und auf einem anderen geändert, bevor diese synchronisiert wurden."
@@ -3425,8 +3601,8 @@ msgid "This file held {0} {noun}, but none matched a supported format."
 msgstr "Die Datei enthielt {0} {noun}, jedoch konnte kein unterstütztes Format erkannt werden."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
-msgid "This file is too large to be a Bramble backup."
-msgstr "Diese Datei ist zu groß, um ein Bramble-Backup zu sein."
+#~ msgid "This file is too large to be a Bramble backup."
+#~ msgstr "Diese Datei ist zu groß, um ein Bramble-Backup zu sein."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "This file is too large to import ({sizeMb} MB; max {MAX_IMPORT_FILE_MB} MB)."
@@ -3961,6 +4137,10 @@ msgstr "Sie entsperren diesen Tresor nur durch Antippen eines Schlüssels. Wenn 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #~ msgid "You'll unlock this vault with your security key only. If you lose all your security keys, your recovery code is the only way back in. There's no master password to fall back on."
 #~ msgstr "Sie können diesen Tresor nur mit Ihrem Sicherheitsschlüssel entsperren. Wenn Sie alle Ihre Sicherheitsschlüssel verlieren, ist Ihr Wiederherstellungscode der einzige Weg zurück. Es gibt kein Master-Passwort als Rückfallebene."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Your attachments weren't sent. They're still here, and in your backups."
+msgstr "Ihre Anhänge wurden nicht gesendet. Sie sind weiterhin hier und in Ihren Backups."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "Your backup is now the vault on this device."

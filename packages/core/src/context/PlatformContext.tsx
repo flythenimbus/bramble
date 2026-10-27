@@ -7,6 +7,7 @@ import type { ClipboardAdapter } from "../adapters/clipboard";
 import type { CryptoAdapter } from "../adapters/crypto";
 import type { DesktopLinkAdapter } from "../adapters/desktop-link";
 import type { CredentialExchangeAdapter } from "../adapters/exchange";
+import type { FileAdapter } from "../adapters/files";
 import type { HttpTransport } from "../adapters/http";
 import type { PairingAdapter } from "../adapters/pairing";
 import type { ShellAdapter } from "../adapters/shell";
@@ -42,6 +43,9 @@ export interface Platform {
 	/** Backups running outside the settings screen, so it can show them. Mobile only; see
 	 * adapters/backup-activity. */
 	backupActivity?: BackupActivityAdapter;
+	/** File attachments: the sealed-blob store and the platform's sealer. Absent where the
+	 * platform has nowhere to put the bytes, and the UI then hides attachments entirely. */
+	files?: FileAdapter;
 }
 
 const PlatformContext = createContext<Platform | null>(null);

@@ -58,7 +58,15 @@ reqwest = { version = "0.13", default-features = false, features = [
     "rustls",
     "http2",
     "system-proxy",
+    # A large backup goes up as one WebDAV PUT whose body the webview writes in chunks.
+    "stream",
 ] }
+# Turning that chunk channel into the body stream. Already in the tree via reqwest.
+futures-util = { version = "0.3", default-features = false }
+bytes = "1"
+# The bounded channel between those chunk writes and the body: a write waits until the network
+# has taken the last one. Already in the tree via tauri.
+tokio = { version = "1", features = ["sync"] }
 # One formatted timestamp: SigV4's `YYYYMMDDTHHMMSSZ`. Already in the tree via tauri.
 chrono = "0.4"
 # Backup credentials are the only plaintext provider secrets in this process, and they are

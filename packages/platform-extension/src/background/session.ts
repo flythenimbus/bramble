@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
 
 import { CRYPTO_SESSION_CHANGED } from "@core/adapters/crypto";
+import { clearHandoffs } from "../files/idb";
 import { api } from "../platform-api";
 import { isExtensionSender } from "../sender";
 import { ACTIVE_VAULT_SESSION_KEY, CORNER_HANDOFF_KEY, OPENED_VAULT_KEY } from "../session-keys";
@@ -261,6 +262,8 @@ export async function clearSession(): Promise<void> {
 			durableCleanupError = error;
 		}
 		await removeHandoffKeys();
+		// Plaintext parked for an attach or a download in flight: none may outlive the session.
+		void clearHandoffs().catch(() => {});
 		void api.alarms.clear(AUTOLOCK_ALARM);
 		if (durableCleanupError) throw durableCleanupError;
 	} finally {

@@ -27,6 +27,8 @@ import {
 	syncDevicePublicKey,
 	syncSigningPublicKey,
 } from "../sync/sync-manager";
+import { uriFromPath } from "./paths";
+import { spoolToCache } from "./spool";
 import { mobileStorage } from "./storage";
 
 // Single-window in-app navigation to the setup/create-vault and import flows. The
@@ -107,15 +109,24 @@ export const mobileShell: ShellAdapter = {
 	// Save bytes the user keeps (recovery code, encrypted vault export) via the native share
 	// sheet, so "Save to Files", Mail, etc. are offered - WKWebView has no <a download> or
 	// navigator.share. Stage the file in the cache dir, hand its URL to the share sheet, then
-	// clean up. The sheet backgrounds the app, which would trip "Immediate" auto-lock, so arm
-	// the file-pick grace first (see ./auto-lock.ts).
+	// clean up. A KeePass export the native core already wrote is shared from where it is, and
+	// its owner deletes it. The sheet backgrounds the app, which would trip "Immediate"
+	// auto-lock, so arm the file-pick grace first (see ./auto-lock.ts).
 	async exportBytes(suggestedName, bytes, _mimeType) {
-		await Filesystem.writeFile({
-			path: suggestedName,
-			data: bytesToBase64(bytes),
-			directory: Directory.Cache,
-		});
-		const { uri } = await Filesystem.getUri({ path: suggestedName, directory: Directory.Cache });
+		const written = bytes instanceof Uint8Array ? undefined : bytes.path;
+		if (bytes instanceof Uint8Array) {
+			await Filesystem.writeFile({
+				path: suggestedName,
+				data: bytesToBase64(bytes),
+				directory: Directory.Cache,
+			});
+		} else if (!written) {
+			// A backup of any size is written a chunk at a time.
+			await spoolToCache(suggestedName, bytes);
+		}
+		const uri = written
+			? uriFromPath(written)
+			: (await Filesystem.getUri({ path: suggestedName, directory: Directory.Cache })).uri;
 		armFilePickGrace();
 		try {
 			// `files` (not `url`) is the cross-platform file-share path: on Android it routes the
@@ -125,9 +136,11 @@ export const mobileShell: ShellAdapter = {
 			// Dismissing the share sheet rejects; that's a normal cancel, not a failure.
 			if (!/cancel/i.test(String((e as Error)?.message))) throw e;
 		} finally {
-			await Filesystem.deleteFile({ path: suggestedName, directory: Directory.Cache }).catch(
-				() => {},
-			);
+			if (!written) {
+				await Filesystem.deleteFile({ path: suggestedName, directory: Directory.Cache }).catch(
+					() => {},
+				);
+			}
 		}
 	},
 

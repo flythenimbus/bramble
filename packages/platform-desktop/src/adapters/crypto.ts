@@ -14,6 +14,7 @@ import type {
 	PasskeyImportResult,
 	PasskeyRegistration,
 	PasswordSlotBlob,
+	SaveKdbxInput,
 	UnwrapPasswordSlotInput,
 	UnwrapWebauthnSlotInput,
 	VekEncrypted,
@@ -22,7 +23,9 @@ import type {
 	WrapPasswordSlotInput,
 	WrapWebauthnSlotInput,
 } from "@core/adapters/crypto";
+import { bytesToBase64 } from "@core/util/bytes";
 import { invoke } from "@tauri-apps/api/core";
+import { rawBytes } from "./files";
 import { markLocked, markUnlocked, onExternalChange, onExternalLock } from "./vault-session";
 
 /**
@@ -154,14 +157,55 @@ export const desktopCrypto: CryptoAdapter = {
 		invoke<PasskeyImportResult>("crypto_passkey_import_pkcs8", { pkcs8B64 }),
 
 	// Rejects with a bare KDBX_* code string (Tauri rejects with the command's error, not an
-	// Error object); `kdbxErrorMessage` reads either. Import only: `saveKdbx` stays absent
-	// because the whole save half of core-rust's kdbx.rs is `cfg(feature = "wasm")`. Note the
-	// Settings export row is gated on `shell.exportBytes`, which desktop HAS, so that button
-	// is visible here and can only throw "KDBX export isn't available here."
-	openKdbx: (input: OpenKdbxInput) =>
-		invoke<KdbxRawEntry[]>("crypto_open_kdbx", {
-			fileB64: input.fileB64,
+	// Error object); `kdbxErrorMessage` reads either.
+	//
+	// The shell unpacks the attachments into a folder among the decrypted copies (swept on lock),
+	// so the sealer reads each from a path and none crosses back into the webview.
+	async openKdbx(input: OpenKdbxInput) {
+		const opened = await invoke<{
+			entries: KdbxRawEntry[];
+			attachments: { path: string; size: number }[];
+			dir: string;
+		}>("crypto_open_kdbx", {
+			fileB64: bytesToBase64(input.file),
 			password: input.password,
-			keyfileB64: input.keyfileB64,
-		}),
+			keyfileB64: input.keyfile ? bytesToBase64(input.keyfile) : undefined,
+		});
+		return {
+			entries: opened.entries,
+			attachments: opened.attachments.map(({ path, size }) => ({
+				source: { kind: "path" as const, path, size },
+				size,
+			})),
+			release: () => invoke<void>("files_discard_kdbx", { dir: opened.dir }),
+		};
+	},
+
+	// The shell writes the database to a folder among the decrypted copies, opening each
+	// attachment from the store there, and the save dialog's path gets a copy of that file:
+	// neither the database nor an attachment crosses into the webview.
+	async saveKdbx(input: SaveKdbxInput) {
+		const saved = await invoke<{ path: string; size: number; dir: string }>("files_save_kdbx", {
+			vaultId: input.vaultId,
+			name: input.name,
+			entries: input.entries,
+			password: input.password,
+			files: input.files.map(({ entry, record, name }) => ({
+				entry,
+				name,
+				hash: record.hash,
+				size: record.size,
+				wrappedFek: record.wrappedFek,
+				fekIv: record.fekIv,
+				noncePrefix: record.noncePrefix,
+			})),
+		});
+		return {
+			size: saved.size,
+			path: saved.path,
+			read: (offset: number, length: number) =>
+				rawBytes("files_read_kdbx", { path: saved.path, offset, length }),
+			release: () => invoke<void>("files_discard_kdbx", { dir: saved.dir }),
+		};
+	},
 };

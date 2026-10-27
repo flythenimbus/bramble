@@ -1,5 +1,6 @@
 /// <reference types="chrome" />
 
+import { bodyToBlob, type HttpBodySource } from "@core/adapters/http";
 import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/shell";
 import type { Target } from "@core/flags";
 import { loginHosts } from "@core/vault/autofill-index";
@@ -106,8 +107,13 @@ export const extensionShell: ShellAdapter = {
 	},
 	// Export a vault backup as a plain download (goes to the browser's download folder). A
 	// one-shot write, not a persisted handle, so it has none of the FSA re-permission cost.
-	async exportBytes(suggestedName: string, bytes: Uint8Array, mimeType: string) {
-		const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
+	async exportBytes(suggestedName: string, bytes: Uint8Array | HttpBodySource, mimeType: string) {
+		// A backup of a vault with attachments arrives as a source read on demand; assembled into
+		// a Blob a chunk at a time, so the browser holds the file and this page one chunk.
+		const blob =
+			bytes instanceof Uint8Array
+				? new Blob([new Uint8Array(bytes)], { type: mimeType })
+				: new Blob([await bodyToBlob(bytes)], { type: mimeType });
 		const url = URL.createObjectURL(blob);
 		try {
 			const a = document.createElement("a");

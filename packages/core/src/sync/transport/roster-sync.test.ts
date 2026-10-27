@@ -1,11 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { identityWasm, peerPipe, rosterOf } from "../../test/transport-fakes";
 import { decodeRoster, encodeRoster, type RosterEntry, type RosterPayload } from "..";
 import type { Channel } from "./channel";
+import type { PeerSession } from "./mesh";
+import { currentRoster } from "./peer-auth";
+import type { MeshSession } from "./peer-session";
 import {
-	currentRoster,
 	type RosterSyncWasm,
 	reapRevoked,
 	reapStale,
+	startRosterSync,
 	verifyRosterEnvelope,
 } from "./roster-sync";
 
@@ -301,5 +305,139 @@ describe("reapRevoked", () => {
 		expect(peers.has("activepk")).toBe(true);
 		expect(revokedClose).toHaveBeenCalledOnce();
 		expect(activeClose).not.toHaveBeenCalled();
+	});
+});
+
+// The vault goes out whole only when it changed since a peer last got it; the other ticks carry a
+// heartbeat. See docs/sync-rebroadcast.md. Real sessions over in-memory pipes, on fake timers.
+describe("what each tick sends", () => {
+	const TICK = 4000;
+	const sessions: MeshSession[] = [];
+
+	/** One device: its vault is `vault.payload`, and every payload a peer sends it lands in `got`. */
+	async function device(
+		pub: string,
+		peers: PeerSession[],
+		vault: { payload: string },
+		merge: (json: string) => Promise<void> = async () => {},
+	) {
+		const got: string[] = [];
+		const session = await startRosterSync({
+			relayUrl: "wss://relay.invalid",
+			groupKeyB64: "unused",
+			devicePrivB64: `priv-${pub}`,
+			devicePubB64: pub,
+			roster: rosterOf(["aaaa", "bbbb", "cccc"]),
+			wasm: identityWasm(),
+			report: () => {},
+			fetchLocalPayload: async () => vault.payload,
+			pushRemotePayload: async (json) => {
+				await merge(json);
+				got.push(json);
+			},
+			peerSource: async ({ onPeer }) => {
+				for (const peer of peers) onPeer(peer);
+				return { stop() {} };
+			},
+		});
+		sessions.push(session);
+		return got;
+	}
+
+	/** Two ends of a pipe, renamed for the device each end is talking to. */
+	const pipe = (from: string, to: string) => {
+		const { a, b } = peerPipe();
+		return { [from]: { ...a, remotePubkey: to }, [to]: { ...b, remotePubkey: from } } as Record<
+			string,
+			PeerSession
+		>;
+	};
+
+	beforeEach(() => vi.useFakeTimers({ toFake: ["setInterval", "setTimeout", "Date"] }));
+	afterEach(() => {
+		for (const s of sessions.splice(0)) s.stop();
+		vi.useRealTimers();
+	});
+
+	it("sends an unchanged vault once, and keeps the peer with heartbeats", async () => {
+		const ab = pipe("aaaa", "bbbb");
+		const vaultA = { payload: "vault-1" };
+		await device("aaaa", [ab.aaaa!], vaultA);
+		const gotB = await device("bbbb", [ab.bbbb!], { payload: "b" });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(gotB).toEqual(["vault-1"]);
+
+		// Long past the 20 s a silent peer is dropped after: heartbeats kept it.
+		await vi.advanceTimersByTimeAsync(10 * TICK);
+		expect(gotB).toEqual(["vault-1"]);
+		vaultA.payload = "vault-2";
+		await vi.advanceTimersByTimeAsync(TICK);
+		expect(gotB).toEqual(["vault-1", "vault-2"]);
+	});
+
+	it("passes a merged change on to the next device", async () => {
+		const ab = pipe("aaaa", "bbbb");
+		const bc = pipe("bbbb", "cccc");
+		const vaultA = { payload: "a-1" };
+		const vaultB = { payload: "b-1" };
+		await device("aaaa", [ab.aaaa!], vaultA);
+		// B's merge rewrites its own vault, which is what makes its next tick a change for C.
+		await device("bbbb", [ab.bbbb!, bc.bbbb!], vaultB, async (json) => {
+			vaultB.payload = `b+${json}`;
+		});
+		const gotC = await device("cccc", [bc.cccc!], { payload: "c" });
+		await vi.advanceTimersByTimeAsync(0);
+		vaultA.payload = "a-2";
+		await vi.advanceTimersByTimeAsync(2 * TICK);
+		expect(gotC.at(-1)).toBe("b+a-2");
+	});
+
+	it("passes a change on between two sessions over one vault, as across the desktop link", async () => {
+		// The desktop app and the extension each run one session per transport (relay and local
+		// link) over the same vault. A change merged through one is the other's to send on: here A
+		// reaches only B's first session, and C only B's second.
+		const ab = pipe("aaaa", "bbbb");
+		const bc = pipe("bbbb", "cccc");
+		const vaultA = { payload: "a-1" };
+		const vaultB = { payload: "b-1" };
+		const merge = async (json: string) => {
+			vaultB.payload = `b+${json}`;
+		};
+		await device("aaaa", [ab.aaaa!], vaultA);
+		await device("bbbb", [ab.bbbb!], vaultB, merge);
+		await device("bbbb", [bc.bbbb!], vaultB, merge);
+		const gotC = await device("cccc", [bc.cccc!], { payload: "c" });
+		await vi.advanceTimersByTimeAsync(0);
+		vaultA.payload = "a-2";
+		await vi.advanceTimersByTimeAsync(2 * TICK);
+		expect(gotC.at(-1)).toBe("b+a-2");
+	});
+
+	it("sends everything again when a merge fails", async () => {
+		const ab = pipe("aaaa", "bbbb");
+		await device("aaaa", [ab.aaaa!], { payload: "vault-1" });
+		let failures = 1;
+		const attempts: string[] = [];
+		await device("bbbb", [ab.bbbb!], { payload: "b" }, async (json) => {
+			attempts.push(json);
+			if (failures-- > 0) throw new Error("background asleep");
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(attempts).toEqual(["vault-1"]);
+		await vi.advanceTimersByTimeAsync(TICK);
+		expect(attempts).toEqual(["vault-1", "vault-1"]);
+		await vi.advanceTimersByTimeAsync(3 * TICK);
+		expect(attempts).toHaveLength(2);
+	});
+
+	it("sends an unchanged vault again after 10 minutes, for a loss nobody noticed", async () => {
+		const ab = pipe("aaaa", "bbbb");
+		await device("aaaa", [ab.aaaa!], { payload: "vault-1" });
+		const gotB = await device("bbbb", [ab.bbbb!], { payload: "b" });
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(10 * 60_000 - 2 * TICK);
+		expect(gotB).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(3 * TICK);
+		expect(gotB).toEqual(["vault-1", "vault-1"]);
 	});
 });

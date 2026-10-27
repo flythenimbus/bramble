@@ -113,15 +113,15 @@ test("the extension pairs with the app on the device and its data lands there", 
 		// Worth having here as well as in the mobile-web spec: this is the only run where the
 		// joiner's SAS comes out of the native Rust core's handshake on a real device, so it is
 		// what proves the Android build derives the same number the extension does.
-		const deviceSas = device.locator("p.font-mono.tabular-nums");
+		const deviceSas = device.locator(".font-mono.tabular-nums");
 		await expect(deviceSas).toBeVisible({ timeout: 90_000 });
 		await expect(inviter.page.getByText(/Is this your device\?/i)).toBeVisible({
 			timeout: 90_000,
 		});
-		const inviterSas = inviter.page.locator("p.font-mono.tabular-nums");
+		const inviterSas = inviter.page.locator(".font-mono.tabular-nums");
 		await expect(inviterSas).toHaveText(/^\d{4} \d{4} \d{4}$/);
 		expect(await inviterSas.textContent()).toBe(await deviceSas.textContent());
-		await inviter.page.getByRole("button", { name: /Numbers match, approve/i }).click();
+		await inviter.page.getByRole("button", { name: /They match, approve/i }).click();
 
 		// The device now holds a vault it did not create...
 		await expect(device.getByRole("button", { name: "Lock vault", exact: true })).toBeVisible({

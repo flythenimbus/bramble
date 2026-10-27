@@ -455,7 +455,9 @@ name = "bramble-desktop"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "bytes",
  "chrono",
+ "futures-util",
  "getrandom 0.3.4",
  "interprocess",
  "keyring",
@@ -476,6 +478,7 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "tempfile",
+ "tokio",
  "vault-crypto",
  "widestring",
  "window-vibrancy 0.8.0",

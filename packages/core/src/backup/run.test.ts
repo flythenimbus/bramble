@@ -68,6 +68,7 @@ describe("runScheduledBackups", () => {
 			succeeded: [{ vaultId: "v1", id: "a" }],
 			failed: [],
 			skipped: 0,
+			waiting: 0,
 		});
 		const saved = h.current("v1")[0];
 		expect(saved?.lastBackupAt).toBe(NOW);
@@ -149,7 +150,7 @@ describe("runScheduledBackups", () => {
 		});
 		const res = await runScheduledBackups(h.deps, NOW);
 		expect(h.uploaded).toEqual([]);
-		expect(res).toEqual({ attempted: 0, succeeded: [], failed: [], skipped: 0 });
+		expect(res).toEqual({ attempted: 0, succeeded: [], failed: [], skipped: 0, waiting: 0 });
 	});
 
 	it("skips a due-but-unchanged target (no upload)", async () => {
@@ -259,5 +260,48 @@ describe("runScheduledBackups: retry backoff", () => {
 		const next = await runScheduledBackups(h.deps, NOW + 5 * 60 * 1000);
 		expect(next.succeeded.map((s) => s.id)).toEqual(["fresh"]);
 		expect(next.failed).toHaveLength(0);
+	});
+});
+
+// A vault that cannot be backed up whole is not backed up at all: nothing uploads in its place,
+// and the target says what it is waiting for instead of reading as current.
+describe("runScheduledBackups never makes a partial backup", () => {
+	it("uploads nothing for a blocked vault, marks it waiting, and stays due", async () => {
+		const h = harness({ v1: [target("a", "daily", { lastVaultHash: "OLD" })] });
+		let uploads = 0;
+		h.deps.upload = async () => {
+			uploads++;
+		};
+		h.deps.blocked = async () => ({ reason: "missing" as const, count: 2 });
+
+		const result = await runScheduledBackups(h.deps, NOW);
+		expect(uploads).toBe(0);
+		expect(result.waiting).toBe(1);
+		const t = h.current("v1")[0];
+		expect(t?.waiting).toEqual({ reason: "missing", count: 2 });
+		// Neither a success nor a failure: no new timestamp, no backoff.
+		expect(t?.lastBackupAt).toBeUndefined();
+		expect(t?.failures).toBeUndefined();
+	});
+
+	it("clears the wait with the next backup that is made", async () => {
+		const h = harness({ v1: [target("a", "daily", { lastVaultHash: "OLD" })] });
+		h.deps.blocked = async () => ({ reason: "locked" as const });
+		await runScheduledBackups(h.deps, NOW);
+		expect(h.current("v1")[0]?.waiting).toEqual({ reason: "locked" });
+
+		h.deps.blocked = async () => undefined;
+		await runScheduledBackups(h.deps, NOW + 60_000);
+		expect(h.current("v1")[0]?.waiting).toBeUndefined();
+		expect(h.current("v1")[0]?.lastBackupAt).toBe(NOW + 60_000);
+	});
+
+	it("clears a stale wait when the vault turns out to be backed up already", async () => {
+		const h = harness({
+			v1: [target("a", "daily", { lastVaultHash: "SAME", waiting: { reason: "locked" } })],
+		});
+		h.deps.hashVault = async () => "SAME";
+		await runScheduledBackups(h.deps, NOW);
+		expect(h.current("v1")[0]?.waiting).toBeUndefined();
 	});
 });

@@ -146,6 +146,21 @@ and asserts the extension re-signs itself through the real host and that the pee
 signature. The unit tests mock the shell, so this is the only place a silently no-op backfill (a
 mis-wired host declines, and the code returns rather than throwing) is caught.
 
+The attachments upgrade test (a browser that paired on a build without attachments, then updated)
+needs that old build, and skips without it:
+
+```sh
+git worktree add --detach /tmp/bramble-old 1.32.0-chromium
+(cd /tmp/bramble-old && pnpm install --frozen-lockfile && pnpm wasm:build && pnpm build)
+BRAMBLE_OLD_EXTENSION=/tmp/bramble-old/packages/platform-extension/dist-chromium pnpm test:e2e:sync
+```
+
+Relaunching a profile on another build's `dist-chromium` keeps the **old** background: Chrome
+reuses the stored service worker even when the manifest version changes, so the new pages talk to
+the old worker. The test deletes the profile's `Default/Service Worker` between the two launches,
+as a store update re-registers it. Without that, an old background quietly stripping new fields
+looks exactly like a sync bug.
+
 **Two traps, both of which fail silently rather than loudly:**
 
 - **Set the relay AFTER creating the vault.** Creating the *first* vault calls `resetSyncState()`,

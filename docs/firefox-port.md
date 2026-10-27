@@ -235,8 +235,9 @@ establish a WebRTC data channel (symmetric NAT, no TURN, corporate firewall).
   ordered, both connected). **Implemented:** a **handshake timeout** (roster-sync) so a frame dropped
   mid-handshake abandons cleanly instead of hanging, and a **stale-peer reaper** (the connectionless
   relay transport has no close signal, so a departed peer is dropped after several silent gossip
-  ticks). **Residual:** no per-frame retransmit on the post-handshake data path — a lost gossip frame
-  is recovered by the next 4s re-broadcast rather than resent.
+  ticks). **Residual:** no per-frame retransmit on the post-handshake data path: a lost gossip frame
+  is recovered by a later whole envelope (a reconnect, a resend the receiver asks for after a failed
+  merge, or the 10-minute backstop in [sync-rebroadcast.md](sync-rebroadcast.md)) rather than resent.
 - **Both-online only** — same as the current WebRTC model. Async catch-up would need a
   store-and-forward mailbox (ciphertext at rest on the relay), which we deliberately avoid.
 

@@ -26,7 +26,8 @@ public class NativeHttpPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "NativeHttpPlugin"
     public let jsName = "NativeHttp"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "send", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "send", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "sendFile", returnType: CAPPluginReturnPromise)
     ]
 
     /// Answers every redirect with "do not follow", which surfaces the 3xx as the response.
@@ -58,12 +59,12 @@ public class NativeHttpPlugin: CAPPlugin, CAPBridgedPlugin {
         return URLSession(configuration: config, delegate: redirectDelegate, delegateQueue: nil)
     }()
 
-    @objc func send(_ call: CAPPluginCall) {
+    /// The request `call` describes, minus its body. Nil, with the call rejected, if malformed.
+    private func request(for call: CAPPluginCall) -> URLRequest? {
         guard let raw = call.getString("url"), let url = URL(string: raw) else {
             call.reject("Missing or unparseable url")
-            return
+            return nil
         }
-
         var request = URLRequest(url: url)
         request.httpMethod = call.getString("method") ?? "GET"
         request.httpShouldHandleCookies = false
@@ -74,6 +75,20 @@ public class NativeHttpPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
         }
+        return request
+    }
+
+    /// iOS's request timeout counts only data RECEIVED, and nothing arrives while a body is
+    /// uploading, so it has to cover the whole upload. Measured: a 2 MiB upload at 20 KiB/s,
+    /// bytes moving the entire time, died at exactly 60s with a flat limit. Scaled to the body
+    /// at an 8 KiB/s floor (a poor 2G uplink), a small request keeps ~60s to notice a stall and
+    /// a vault gets time: 2 MiB gets about five minutes.
+    private func timeout(forBody size: Int) -> TimeInterval {
+        60 + Double(size) / 8_192
+    }
+
+    @objc func send(_ call: CAPPluginCall) {
+        guard var request = request(for: call) else { return }
         // Bodies cross as base64, as the crypto plugin's bytes do: the bridge is JSON, and a JSON
         // string cannot carry arbitrary bytes.
         if let encoded = call.getString("body") {
@@ -83,13 +98,33 @@ public class NativeHttpPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             request.httpBody = body
         }
-        // iOS's request timeout counts only data RECEIVED, and nothing arrives while a body is
-        // uploading, so it has to cover the whole upload. Measured: a 2 MiB upload at 20 KiB/s,
-        // bytes moving the entire time, died at exactly 60s with a flat limit. Scaled to the body
-        // at an 8 KiB/s floor (a poor 2G uplink), a small request keeps ~60s to notice a stall and
-        // a vault gets time: 2 MiB gets about five minutes.
-        request.timeoutInterval = 60 + Double(request.httpBody?.count ?? 0) / 8_192
+        request.timeoutInterval = timeout(forBody: request.httpBody?.count ?? 0)
+        run(call) { done in self.session.dataTask(with: request, completionHandler: done) }
+    }
 
+    /// `send`, with the body streamed from a file rather than carried across the bridge: a backup
+    /// too large for one message, spooled to disk by the webview a chunk at a time. The length
+    /// is the file's, declared in full, so a server can tell a short body from a whole one.
+    @objc func sendFile(_ call: CAPPluginCall) {
+        guard var request = request(for: call) else { return }
+        guard let path = call.getString("path") else {
+            call.reject("Missing path")
+            return
+        }
+        let file = URL(fileURLWithPath: path)
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int
+        else {
+            call.reject("The body file is missing")
+            return
+        }
+        request.timeoutInterval = timeout(forBody: size)
+        run(call) { done in self.session.uploadTask(with: request, fromFile: file, completionHandler: done) }
+    }
+
+    private func run(
+        _ call: CAPPluginCall,
+        makeTask: (@escaping @Sendable (Data?, URLResponse?, Error?) -> Void) -> URLSessionTask
+    ) {
         // A request outlives the app being left. iOS suspends an app within seconds of it going to
         // the background, which would freeze an upload partway, so each request asks for the time
         // to finish. If even that runs out, the request is stopped here and reported as
@@ -110,7 +145,7 @@ public class NativeHttpPlugin: CAPPlugin, CAPBridgedPlugin {
         // Resolved from the completion handler, never waited on. The bridge dispatches EVERY
         // plugin call in the app on one serial queue, so blocking here would stall every other
         // plugin for the length of a network request. See BiometricVault's keychainQueue.
-        let task = session.dataTask(with: request) { data, response, error in
+        let task = makeTask { data, response, error in
             defer { finishBackground() }
             state.lock()
             let wasExpired = expired

@@ -14,6 +14,7 @@
 	"dependencies": {
 		"@lingui/core": "^6.6.0",
 		"@lingui/react": "^6.6.0",
+		"@noble/hashes": "2.2.0",
 		"@tanstack/react-router": "^1.170.32",
 		"@tanstack/react-virtual": "^3.14.10",
 		"@vault/theme": "workspace:*",

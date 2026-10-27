@@ -9,6 +9,9 @@ import { invoke } from "@tauri-apps/api/core";
 
 export const desktopHttp: HttpTransport = {
 	async send({ method, url, headers, body }): Promise<HttpResponse> {
+		// Alias providers' small JSON calls; a streamed body is a backup's, which goes through
+		// backup-creds instead.
+		if (body && !(body instanceof Uint8Array)) throw new Error("http_send takes a whole body");
 		// Bytes ride as number arrays, as vault blobs and backup bodies already do over this IPC
 		// (see adapters/storage and adapters/backup-creds): Tauri's channel is JSON.
 		const res = await invoke<{ status: number; body: number[] }>("http_send", {

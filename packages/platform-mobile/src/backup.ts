@@ -12,18 +12,23 @@
 
 import { App as CapacitorApp } from "@capacitor/app";
 import type { BackupActivityAdapter } from "@core/adapters/backup-activity";
-import { createTarget, runBackup, sha256Hex, signingTransport } from "@core/backup";
+import { createTarget, runBackup, signingTransport } from "@core/backup";
+import { planBackup } from "@core/backup/archive";
 import {
 	type BackupSecrets,
 	type BackupTargetConfig,
 	backupTargetsKeyFor,
 	keyVaultIdFor,
+	metaListCache,
 	targetPrefixFor,
 	toProviderConfig,
 } from "@core/backup/config";
-import { runScheduledBackups, type VaultBackup } from "@core/backup/run";
+import { backupPlanner, runScheduledBackups, type VaultBackup } from "@core/backup/run";
+import { onBlobArrived } from "@core/sync/blob-arrivals";
+import type { BlobStore } from "@core/vault/blob-store";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { mobileCrypto } from "./adapters/crypto";
+import { mobileFiles } from "./adapters/files";
 import { mobileHttp } from "./adapters/http";
 import { mobileStorage } from "./adapters/storage";
 import { onVaultStateChange } from "./adapters/vault-session";
@@ -50,6 +55,15 @@ export const mobileBackupActivity: BackupActivityAdapter = {
 		return () => activityListeners.delete(callback);
 	},
 };
+
+/** A vault's attachment store, or null if its id cannot be a folder (then it is backed up alone). */
+function vaultBlobs(vaultId: string): BlobStore | null {
+	try {
+		return mobileFiles.forVault(vaultId).blobs;
+	} catch {
+		return null;
+	}
+}
 
 async function loadTargets(vaultId: string): Promise<BackupTargetConfig[]> {
 	return (await mobileStorage.getMeta<BackupTargetConfig[]>(backupTargetsKeyFor(vaultId))) ?? [];
@@ -86,6 +100,20 @@ async function listVaults(): Promise<VaultBackup[]> {
 export async function runDueBackups(): Promise<void> {
 	if (running || !unlocked) return;
 	running = true;
+	// One plan per vault per run. The plan reads no attachment: an unchanged vault is skipped on its
+	// fingerprint alone, and the archive is laid out (once, whatever the number of targets) only
+	// when something uploads it.
+	const planner = backupPlanner((vault) =>
+		planBackup({
+			vault: vault.blob,
+			blobs: vaultBlobs(vault.id),
+			// The one global key: it opens only the unlocked vault's payload, which is also the only
+			// vault whose targets can run here. Any other vault's list is the one cached at its last
+			// unlock, or the vault waits.
+			decryptWithVek: (iv, ct) => mobileCrypto.decryptWithVek(iv, ct),
+			listCache: metaListCache(mobileStorage, vault.id),
+		}),
+	);
 	try {
 		const result = await runScheduledBackups(
 			{
@@ -100,7 +128,8 @@ export async function runDueBackups(): Promise<void> {
 				loadTargets: loadTargets,
 				saveTargets: (vaultId, targets) =>
 					mobileStorage.setMeta(backupTargetsKeyFor(vaultId), targets),
-				hashVault: (vault) => sha256Hex(vault.blob),
+				hashVault: planner.fingerprint,
+				blocked: planner.blocked,
 				decryptSecrets: async (_vaultId, creds) => {
 					// No VEK once locked, and no new work either: this target stays due and goes next
 					// time, rather than failing.
@@ -125,9 +154,11 @@ export async function runDueBackups(): Promise<void> {
 					// no S3 endpoint or WebDAV server grants CORS to the WebView's origin, so a
 					// plain fetch would fail before reaching the network. See @core/adapters/http.
 					const target = createTarget(cfg, signingTransport(cfg, mobileHttp));
+					const body = await planner.body(vault);
 					setUploading(t.id, true);
 					try {
-						await runBackup(target, vault.blob, {
+						await runBackup(target, body, {
+							fingerprint: await planner.fingerprint(vault),
 							prefix: targetPrefixFor(t, vault.id, vault.isDefault),
 							keep: t.keep,
 							vaultId: keyVaultIdFor(t, vault.id),
@@ -166,8 +197,11 @@ export function startBackupRuns(): () => void {
 		if (!locked) void runDueBackups();
 	});
 	const resume = CapacitorApp.addListener("resume", () => void runDueBackups());
+	// A file a waiting backup needed may just have arrived; the run is a no-op if not.
+	const offArrival = onBlobArrived(() => void runDueBackups());
 	return () => {
 		offState();
+		offArrival();
 		void resume.then((h) => h.remove());
 	};
 }

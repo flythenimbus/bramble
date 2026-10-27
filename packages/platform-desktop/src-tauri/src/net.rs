@@ -54,6 +54,24 @@ pub async fn send(
     body: Vec<u8>,
     timeout: Duration,
 ) -> Res<HttpReply> {
+    send_body(method, url, headers, reqwest::Body::from(body), timeout).await
+}
+
+/// The timeout for a streamed upload of `size` bytes. Scaled, because a fixed one would cut off a
+/// large backup on a slow connection however healthy it was: ten minutes, plus a second for every
+/// 64 KiB, a floor no working home uplink is under.
+pub fn upload_timeout_for(size: u64) -> Duration {
+    UPLOAD_TIMEOUT + Duration::from_secs(size / (64 * 1024))
+}
+
+/// `send`, with any body: a buffer, or a stream read as the request goes out.
+pub async fn send_body(
+    method: &str,
+    url: reqwest::Url,
+    headers: Vec<(String, String)>,
+    body: reqwest::Body,
+    timeout: Duration,
+) -> Res<HttpReply> {
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(CONNECT_TIMEOUT)

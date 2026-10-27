@@ -19,6 +19,7 @@ import { formatDate } from "../../../../util/format-date";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { AdvancedDisclosure } from "../../../components/ui/advanced-disclosure";
 import { Button } from "../../../components/ui/button";
+import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
@@ -400,35 +401,26 @@ export function SyncConnectSection() {
 										</Trans>
 									</div>
 								</div>
-								{d.publicKey !== myPub &&
-									(removingId === d.id ? (
-										<span className="flex shrink-0 items-center gap-2">
-											<button
-												type="button"
-												onClick={() => void remove(d)}
-												className="text-xs text-red-500 hover:underline"
+								{d.publicKey !== myPub && (
+									<InlineConfirm
+										className="shrink-0"
+										armed={removingId === d.id}
+										onArmedChange={(armed) => setRemovingId(armed ? d.id : null)}
+										confirmLabel={<Trans>Remove</Trans>}
+										onConfirm={() => remove(d)}
+										trigger={(arm) => (
+											<Button
+												variant="link"
+												size="none"
+												onClick={arm}
+												aria-label={t`Remove ${d.label || "device"}`}
+												className="shrink-0 p-1 hover:text-red-500 transition-colors"
 											>
-												<Trans>Remove</Trans>
-											</button>
-											<button
-												type="button"
-												onClick={() => setRemovingId(null)}
-												className="text-xs text-muted-foreground hover:underline"
-											>
-												<Trans>Cancel</Trans>
-											</button>
-										</span>
-									) : (
-										<Button
-											variant="link"
-											size="none"
-											onClick={() => setRemovingId(d.id)}
-											aria-label={t`Remove ${d.label || "device"}`}
-											className="shrink-0 p-1 hover:text-red-500 transition-colors"
-										>
-											<Trash2 className="w-4 h-4" />
-										</Button>
-									))}
+												<Trash2 className="w-4 h-4" />
+											</Button>
+										)}
+									/>
+								)}
 							</div>
 						))}
 					</div>
@@ -443,25 +435,23 @@ export function SyncConnectSection() {
 						<Button variant="secondary" size="sm" onClick={beginAddDevice} className="gap-1.5">
 							<Plus className="w-3.5 h-3.5" /> <Trans>Add another device</Trans>
 						</Button>
-						{confirmDisconnect ? (
-							<span className="inline-flex items-center gap-2">
-								<Button variant="destructiveOutline" size="sm" onClick={() => void disconnect()}>
-									<Trans>Confirm disconnect</Trans>
+						<InlineConfirm
+							variant="destructiveOutline"
+							armed={confirmDisconnect}
+							onArmedChange={setConfirmDisconnect}
+							confirmLabel={<Trans>Confirm disconnect</Trans>}
+							onConfirm={disconnect}
+							trigger={(arm) => (
+								<Button
+									variant="secondary"
+									size="sm"
+									onClick={arm}
+									className="gap-1.5 text-muted-foreground"
+								>
+									<Unplug className="w-3.5 h-3.5" /> <Trans>Disconnect</Trans>
 								</Button>
-								<Button variant="secondary" size="sm" onClick={() => setConfirmDisconnect(false)}>
-									<Trans>Cancel</Trans>
-								</Button>
-							</span>
-						) : (
-							<Button
-								variant="secondary"
-								size="sm"
-								onClick={() => setConfirmDisconnect(true)}
-								className="gap-1.5 text-muted-foreground"
-							>
-								<Unplug className="w-3.5 h-3.5" /> <Trans>Disconnect</Trans>
-							</Button>
-						)}
+							)}
+						/>
 					</div>
 					{confirmDisconnect && (
 						<p className="text-xs text-muted-foreground">

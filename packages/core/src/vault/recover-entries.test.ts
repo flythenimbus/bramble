@@ -1,18 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { emptyEntriesPayload } from "../sync/entries-payload";
+import { testVaultBlob } from "../test/vault-fixtures";
 import { bytesToBase64 } from "../util/bytes";
-import {
-	encodeVaultBlob,
-	LEN_IV,
-	LEN_SALT,
-	LEN_SLOT_ID,
-	LEN_VERIFIER,
-	LEN_WRAP_IV,
-	LEN_WRAPPED_VEK,
-	type PasswordSlot,
-	SLOT_KIND_PASSWORD,
-	type VaultBlob,
-} from "../vault-format";
+import { encodeVaultBlob } from "../vault-format";
 import { decryptEntriesOrRecover } from "./recover-entries";
 
 // Issue #27 recovery. Restoring is destructive — it overwrites the live file, the user's only
@@ -22,21 +12,6 @@ import { decryptEntriesOrRecover } from "./recover-entries";
 const LIVE = new Uint8Array([1, 1, 1, 1]);
 const SNAPSHOT = new Uint8Array([2, 2, 2, 2]);
 const PAYLOAD = JSON.stringify(emptyEntriesPayload());
-
-const fill = (n: number, b: number) => Uint8Array.from({ length: n }, (_, i) => (b + i) & 0xff);
-const slot = (): PasswordSlot => ({
-	kind: SLOT_KIND_PASSWORD,
-	slotId: fill(LEN_SLOT_ID, 0x10),
-	salt: fill(LEN_SALT, 0x20),
-	verifier: fill(LEN_VERIFIER, 0x30),
-	wrapIv: fill(LEN_WRAP_IV, 0x40),
-	wrappedVek: fill(LEN_WRAPPED_VEK, 0x50),
-});
-const blob = (entriesCiphertext: Uint8Array): VaultBlob => ({
-	slots: [slot()],
-	entriesIv: fill(LEN_IV, 0x70),
-	entriesCiphertext,
-});
 
 /** `opens` is the set of ciphertexts the loaded key can decrypt; anything else throws like the
  * Rust core does, so live and snapshot can disagree — which is the whole point. */
@@ -55,7 +30,7 @@ function deps(opts: { opens: Uint8Array[]; backup?: Uint8Array | null; hasBackup
 			? {}
 			: {
 					readVaultBackup: vi.fn(async () =>
-						opts.backup === undefined ? encodeVaultBlob(blob(SNAPSHOT)) : opts.backup,
+						opts.backup === undefined ? encodeVaultBlob(testVaultBlob(SNAPSHOT)) : opts.backup,
 					),
 				}),
 	};
@@ -67,7 +42,7 @@ describe("decryptEntriesOrRecover", () => {
 	it("returns the live payload without touching the snapshot when it decrypts", async () => {
 		const d = deps({ opens: [LIVE] });
 
-		await expect(decryptEntriesOrRecover(d, blob(LIVE))).resolves.toBe(PAYLOAD);
+		await expect(decryptEntriesOrRecover(d, testVaultBlob(LIVE))).resolves.toBe(PAYLOAD);
 
 		expect(d.storage.readVaultBackup).not.toHaveBeenCalled();
 		expect(d.storage.restoreVaultFromBackup).not.toHaveBeenCalled();
@@ -76,7 +51,7 @@ describe("decryptEntriesOrRecover", () => {
 	it("restores the snapshot once it verifies under the loaded key", async () => {
 		const d = deps({ opens: [SNAPSHOT] });
 
-		await expect(decryptEntriesOrRecover(d, blob(LIVE))).resolves.toBe(PAYLOAD);
+		await expect(decryptEntriesOrRecover(d, testVaultBlob(LIVE))).resolves.toBe(PAYLOAD);
 
 		expect(d.storage.restoreVaultFromBackup).toHaveBeenCalledTimes(1);
 		expect(d.onRestored).toHaveBeenCalledTimes(1); // never a silent swap
@@ -95,7 +70,7 @@ describe("decryptEntriesOrRecover", () => {
 			return true;
 		});
 
-		await decryptEntriesOrRecover(d, blob(LIVE));
+		await decryptEntriesOrRecover(d, testVaultBlob(LIVE));
 
 		expect(order).toEqual(["decrypt", "decrypt", "restore"]);
 	});
@@ -103,7 +78,7 @@ describe("decryptEntriesOrRecover", () => {
 	it("rethrows the original error when the snapshot is equally unopenable", async () => {
 		const d = deps({ opens: [] });
 
-		await expect(decryptEntriesOrRecover(d, blob(LIVE))).rejects.toThrow(/aead::Error/);
+		await expect(decryptEntriesOrRecover(d, testVaultBlob(LIVE))).rejects.toThrow(/aead::Error/);
 
 		expect(d.storage.restoreVaultFromBackup).not.toHaveBeenCalled();
 	});
@@ -111,7 +86,7 @@ describe("decryptEntriesOrRecover", () => {
 	it("rethrows when there is no snapshot at all", async () => {
 		const d = deps({ opens: [], backup: null });
 
-		await expect(decryptEntriesOrRecover(d, blob(LIVE))).rejects.toThrow(/aead::Error/);
+		await expect(decryptEntriesOrRecover(d, testVaultBlob(LIVE))).rejects.toThrow(/aead::Error/);
 
 		expect(d.storage.restoreVaultFromBackup).not.toHaveBeenCalled();
 	});
@@ -119,7 +94,7 @@ describe("decryptEntriesOrRecover", () => {
 	it("rethrows when the snapshot bytes don't even decode", async () => {
 		const d = deps({ opens: [], backup: new Uint8Array([0, 1, 2]) });
 
-		await expect(decryptEntriesOrRecover(d, blob(LIVE))).rejects.toThrow(/aead::Error/);
+		await expect(decryptEntriesOrRecover(d, testVaultBlob(LIVE))).rejects.toThrow(/aead::Error/);
 
 		expect(d.storage.restoreVaultFromBackup).not.toHaveBeenCalled();
 	});
@@ -127,9 +102,9 @@ describe("decryptEntriesOrRecover", () => {
 	it("refuses an empty snapshot rather than silently blanking the vault", async () => {
 		// An empty entries blob "opens" trivially; restoring it would present a vault with
 		// nothing in it as a successful recovery.
-		const d = deps({ opens: [], backup: encodeVaultBlob(blob(new Uint8Array(0))) });
+		const d = deps({ opens: [], backup: encodeVaultBlob(testVaultBlob(new Uint8Array(0))) });
 
-		await expect(decryptEntriesOrRecover(d, blob(LIVE))).rejects.toThrow(/aead::Error/);
+		await expect(decryptEntriesOrRecover(d, testVaultBlob(LIVE))).rejects.toThrow(/aead::Error/);
 
 		expect(d.storage.restoreVaultFromBackup).not.toHaveBeenCalled();
 	});
@@ -137,7 +112,7 @@ describe("decryptEntriesOrRecover", () => {
 	it("self-disables where the platform has no snapshot store", async () => {
 		const d = deps({ opens: [], hasBackupApi: false });
 
-		await expect(decryptEntriesOrRecover(d, blob(LIVE))).rejects.toThrow(/aead::Error/);
+		await expect(decryptEntriesOrRecover(d, testVaultBlob(LIVE))).rejects.toThrow(/aead::Error/);
 
 		expect(d.storage.restoreVaultFromBackup).not.toHaveBeenCalled();
 	});

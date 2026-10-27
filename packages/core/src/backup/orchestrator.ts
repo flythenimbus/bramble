@@ -1,4 +1,4 @@
-import { sha256Hex } from "./sigv4";
+import type { BackupBody } from "./archive";
 import type { BackupObject, BackupTarget } from "./types";
 
 export interface BackupResult {
@@ -44,6 +44,14 @@ export function uploadTempKey(key: string): string {
 	return `${key.slice(0, slash + 1)}.${key.slice(slash + 1)}.partial`;
 }
 
+/** Whether a snapshot key is this vault's own: what pruning and the incomplete-upload sweep may
+ * touch. See `selectForPruning` for how untagged keys count. */
+function isOwnSnapshotKey(key: string, vaultId?: string): boolean {
+	if (!key.includes("/bramble-")) return false;
+	if (!vaultId) return !/-v[0-9a-f]{8}\.bramble$/i.test(key);
+	return key.endsWith(`-v${vaultTag(vaultId)}.bramble`);
+}
+
 /** How old an upload's temporary file must be before a later run treats it as abandoned. Long
  * enough that another device's upload still in flight to the same folder is never swept from
  * under it. */
@@ -87,31 +95,27 @@ export function selectForPruning(
 	// it `slice(0)` returns every snapshot and the caller deletes the lot. Nothing could reach 0
 	// through the UI before, which is exactly why it was safe to be wrong about.
 	if (keep <= 0) return [];
-	const tag = vaultId ? `-v${vaultTag(vaultId)}.bramble` : undefined;
-	const backups = objects.filter((o) => {
-		if (!o.key.includes("/bramble-")) return false;
-		if (!tag) return !/-v[0-9a-f]{8}\.bramble$/i.test(o.key);
-		return o.key.endsWith(tag);
-	});
+	const backups = objects.filter((o) => isOwnSnapshotKey(o.key, vaultId));
 	const newestFirst = [...backups].sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
 	return newestFirst.slice(keep).map((o) => o.key);
 }
 
 /**
- * Upload the vault blob as a new dated snapshot, then prune to keep-last-N. The
- * caller decides whether a backup is due or changed; this just runs one.
+ * Upload a backup as a new dated snapshot, then prune to keep-last-N. The caller decides
+ * whether a backup is due or changed; this just runs one. `fingerprint` is the plan's (see
+ * planBackup), which names the snapshot: hashing the body here would mean reading all of it.
  */
 export async function runBackup(
 	target: BackupTarget,
-	blob: Uint8Array,
-	opts: { prefix?: string; keep?: number; now?: Date; vaultId?: string } = {},
+	body: BackupBody,
+	opts: { fingerprint: string; prefix?: string; keep?: number; now?: Date; vaultId?: string },
 ): Promise<BackupResult> {
 	const prefix = opts.prefix ?? "bramble";
 	const keep = opts.keep ?? 30;
-	const hash = await sha256Hex(blob);
+	const hash = opts.fingerprint;
 	const now = opts.now ?? new Date();
 	const key = backupKey(prefix, compactStamp(now), hash, opts.vaultId);
-	await target.put(key, blob, "application/octet-stream");
+	await target.put(key, body, "application/octet-stream");
 
 	// Pruning is housekeeping, and the snapshot is already safely uploaded by this point. A
 	// listing that fails (or deletes that do) must not fail the backup: doing so leaves the
@@ -122,7 +126,7 @@ export async function runBackup(
 	// deliberate: nothing is listed and nothing is deleted, so a key with neither permission
 	// produces no failed requests rather than swallowed ones. See docs/cloud-storage-backups.md.
 	let prunedKeys: string[] = [];
-	if (keep <= 0) return { key, hash, uploaded: blob.byteLength, prunedKeys };
+	if (keep <= 0) return { key, hash, uploaded: body.size, prunedKeys };
 	try {
 		const listing = await target.list(`${prefix}/`);
 		prunedKeys = selectForPruning(listing, keep, opts.vaultId);
@@ -136,5 +140,10 @@ export async function runBackup(
 	} catch {
 		prunedKeys = [];
 	}
-	return { key, hash, uploaded: blob.byteLength, prunedKeys };
+	// Uploads in parts that never completed hold storage the user pays for but cannot see. Same
+	// tolerance as the prune: housekeeping never fails a backup that already landed.
+	try {
+		await target.sweepIncomplete?.(`${prefix}/`, now, (k) => isOwnSnapshotKey(k, opts.vaultId));
+	} catch {}
+	return { key, hash, uploaded: body.size, prunedKeys };
 }

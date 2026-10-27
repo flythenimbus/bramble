@@ -13,6 +13,10 @@
 // the socket attachment so they survive that eviction.
 
 import { DurableObject } from "cloudflare:workers";
+import type { GuardEnv } from "./ice-guard";
+import { policyFrom, STUN_ONLY, TICKET_ACTIVE_MS, turnUsernames } from "./ice-policy";
+
+export { IceGuard } from "./ice-guard";
 
 // Keepalive, in parity with node/relay.mjs and @core/sync/signaling-client. Cloudflare drops an
 // idle WebSocket after a minute or two, which for a password manager syncing in the background is
@@ -35,8 +39,7 @@ const MAX_SUBS_PER_CONN = 8;
 const MAX_MSGS_PER_MINUTE = 6000;
 
 // POST /ice-servers mints short-lived Cloudflare TURN creds so peers across
-// networks/VPNs can relay. See docs/p2p-sync.md.
-const TURN_TTL_SECONDS = 86400;
+// networks/VPNs can relay, rationed by the IceGuard. See docs/turn-credentials.md.
 const CORS = {
 	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -44,33 +47,81 @@ const CORS = {
 } as const;
 
 // TURN secrets are `wrangler secret put`, so absent from the generated Env.
-interface RelayEnv extends Env {
-	TURN_KEY_TOKEN_ID?: string;
-	TURN_KEY_API_TOKEN?: string;
-}
+interface RelayEnv extends Env, GuardEnv {}
 
 const jsonCors = (body: string, status = 200): Response =>
 	new Response(body, { status, headers: { "Content-Type": "application/json", ...CORS } });
 
-// Empty list on any failure → client falls back to host-only candidates.
-async function handleIceServers(env: RelayEnv): Promise<Response> {
+/** The relay ticket in an ICE request's plain-text body (see @core/sync/signaling-client). */
+async function ticketOf(req: Request): Promise<string | null> {
+	if (Number(req.headers.get("Content-Length") ?? 0) > 1024) return null;
+	try {
+		const { ticket } = JSON.parse(await req.text()) as { ticket?: unknown };
+		return typeof ticket === "string" && ticket.length > 0 && ticket.length <= 128 ? ticket : null;
+	} catch {
+		return null;
+	}
+}
+
+// Any failure hands out STUN only: devices still connect directly, and nothing is spent.
+async function handleIceServers(req: Request, env: RelayEnv): Promise<Response> {
 	const { TURN_KEY_TOKEN_ID: id, TURN_KEY_API_TOKEN: token } = env;
 	if (!id || !token) return jsonCors(JSON.stringify({ iceServers: [] }));
+	const guard = env.ICE_GUARD.getByName("guard");
+	const ip = req.headers.get("CF-Connecting-IP") ?? "unknown";
+	let ticketed = false;
+	try {
+		const ticket = await ticketOf(req);
+		ticketed = ticket !== null && (await env.RELAY.getByName("relay").ticketLive(ticket));
+		if ((await guard.admit(ip, ticketed)) !== "turn") return jsonCors(JSON.stringify(STUN_ONLY));
+	} catch (e) {
+		console.error("[ice-guard] admit failed", e);
+		return jsonCors(JSON.stringify(STUN_ONLY));
+	}
+	const { ttlSeconds } = policyFrom(env as unknown as Record<string, unknown>);
 	const res = await fetch(
 		`https://rtc.live.cloudflare.com/v1/turn/keys/${id}/credentials/generate-ice-servers`,
 		{
 			method: "POST",
 			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({ ttl: TURN_TTL_SECONDS }),
+			body: JSON.stringify({ ttl: ttlSeconds }),
 		},
 	);
-	if (!res.ok) return jsonCors(JSON.stringify({ iceServers: [], error: `turn ${res.status}` }));
-	return jsonCors(await res.text());
+	if (!res.ok) {
+		await guard.count("stun-mint-failed").catch(() => {});
+		return jsonCors(JSON.stringify({ ...STUN_ONLY, error: `turn ${res.status}` }));
+	}
+	const body = await res.text();
+	try {
+		const usernames = turnUsernames(JSON.parse(body));
+		await guard.record(ip, usernames, Date.now() + ttlSeconds * 1000, ticketed);
+	} catch (e) {
+		// Unrecorded, the credential escapes the per-credential cap: don't hand it out.
+		console.error("[ice-guard] record failed", e);
+		return jsonCors(JSON.stringify(STUN_ONLY));
+	}
+	return jsonCors(body);
 }
 
-/** A subscriber's REQ filters, keyed by subscription id. Stored as the socket
- *  attachment so it persists across hibernation. */
+/** A subscriber's REQ filters, keyed by subscription id. */
 type Subs = Record<string, NostrFilter[]>;
+/**
+ * What a socket carries across hibernation, as its attachment: its subscriptions, its ICE ticket
+ * (also its tag, so a lookup is direct), and when it last published. A socket accepted before
+ * tickets has a bare `Subs` attachment, read here as one with no ticket.
+ */
+type SocketState = { v: 2; subs: Subs; ticket?: string; seenAt?: number };
+
+function stateOf(ws: WebSocket): SocketState {
+	const attached = ws.deserializeAttachment() as SocketState | Subs | null;
+	if (attached && (attached as SocketState).v === 2) return attached as SocketState;
+	return { v: 2, subs: (attached as Subs | null) ?? {} };
+}
+
+const randomTicket = (): string =>
+	btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))))
+		.replaceAll("+", "-")
+		.replaceAll("/", "_");
 type NostrFilter = {
 	kinds?: number[];
 	authors?: string[];
@@ -114,9 +165,18 @@ export class Relay extends DurableObject {
 			return new Response("bramble signaling relay", { status: 200 });
 
 		const [client, server] = Object.values(new WebSocketPair());
-		this.ctx.acceptWebSocket(server); // hibernatable
-		server.serializeAttachment({} satisfies Subs);
+		const ticket = randomTicket();
+		this.ctx.acceptWebSocket(server, [ticket]); // hibernatable
+		server.serializeAttachment({ v: 2, subs: {}, ticket } satisfies SocketState);
 		return new Response(null, { status: 101, webSocket: client });
+	}
+
+	/** Whether `ticket` belongs to an open socket that has published lately: a live sync device. */
+	ticketLive(ticket: string): boolean {
+		const [ws] = this.ctx.getWebSockets(ticket);
+		if (!ws) return false;
+		const state = stateOf(ws);
+		return state.ticket === ticket && Date.now() - (state.seenAt ?? 0) < TICKET_ACTIVE_MS;
 	}
 
 	async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
@@ -135,17 +195,21 @@ export class Relay extends DurableObject {
 		switch (msg[0]) {
 			case "REQ": {
 				const [, subId, ...filters] = msg;
-				const subs = ws.deserializeAttachment() as Subs;
-				if (!(subId in subs) && Object.keys(subs).length >= MAX_SUBS_PER_CONN) return;
-				subs[subId] = filters;
-				ws.serializeAttachment(subs);
+				const state = stateOf(ws);
+				if (!(subId in state.subs) && Object.keys(state.subs).length >= MAX_SUBS_PER_CONN) return;
+				state.subs[subId] = filters;
+				ws.serializeAttachment(state);
 				ws.send(JSON.stringify(["EOSE", subId])); // no stored events: ephemeral only
 				return;
 			}
 			case "CLOSE": {
-				const subs = ws.deserializeAttachment() as Subs;
-				delete subs[msg[1]];
-				ws.serializeAttachment(subs);
+				const state = stateOf(ws);
+				delete state.subs[msg[1]];
+				ws.serializeAttachment(state);
+				return;
+			}
+			case "BRAMBLE_TICKET": {
+				ws.send(JSON.stringify(["BRAMBLE_TICKET", stateOf(ws).ticket ?? null]));
 				return;
 			}
 			case "EVENT": {
@@ -154,12 +218,16 @@ export class Relay extends DurableObject {
 					ws.send(JSON.stringify(["OK", event?.id ?? "", false, "only ephemeral kinds"]));
 					return;
 				}
+				// Publishing is what keeps a ticket live; noted at most once a minute.
+				const own = stateOf(ws);
+				if (own.ticket && Date.now() - (own.seenAt ?? 0) > 60_000) {
+					own.seenAt = Date.now();
+					ws.serializeAttachment(own);
+				}
 				// Fan out to every other socket's matching subscription; store nothing.
 				for (const peer of this.ctx.getWebSockets()) {
 					if (peer === ws) continue;
-					const subs = peer.deserializeAttachment() as Subs | null;
-					if (!subs) continue;
-					for (const [subId, filters] of Object.entries(subs)) {
+					for (const [subId, filters] of Object.entries(stateOf(peer).subs)) {
 						if (filters.some((f) => matches(f, event))) {
 							peer.send(JSON.stringify(["EVENT", subId, event]));
 							break;
@@ -186,20 +254,41 @@ export class Relay extends DurableObject {
 	}
 }
 
+/** Private mode (a self-deployed Worker with RELAY_TOKEN set): the token from the URL's query. */
+function tokenOk(url: URL, token: string | undefined): boolean {
+	if (!token) return true;
+	const enc = new TextEncoder();
+	const given = enc.encode(url.searchParams.get("token") ?? "");
+	const want = enc.encode(token);
+	return given.byteLength === want.byteLength && crypto.subtle.timingSafeEqual(given, want);
+}
+
 export default {
 	// Signaling WS → the global DO; POST /ice-servers handled here in the Worker.
 	async fetch(req: Request, env: RelayEnv): Promise<Response> {
-		const { pathname } = new URL(req.url);
+		const url = new URL(req.url);
+		const { pathname } = url;
+		// The health probe and CORS preflights stay open; sockets and mints need the token.
+		const guarded =
+			req.headers.get("Upgrade") === "websocket" ||
+			(pathname === "/ice-servers" && req.method === "POST");
+		if (guarded && !tokenOk(url, env.RELAY_TOKEN)) {
+			return new Response(null, { status: 401, headers: CORS });
+		}
 		if (pathname === "/ice-servers") {
 			switch (req.method) {
 				case "OPTIONS":
 					return new Response(null, { status: 204, headers: CORS });
 				case "POST":
-					return handleIceServers(env);
+					return handleIceServers(req, env);
 				default:
 					return new Response("method not allowed", { status: 405, headers: CORS });
 			}
 		}
 		return env.RELAY.getByName("relay").fetch(req);
+	},
+	// The ceiling and the per-credential cap, checked against Cloudflare's usage analytics.
+	async scheduled(_controller: ScheduledController, env: RelayEnv): Promise<void> {
+		await env.ICE_GUARD.getByName("guard").enforce();
 	},
 } satisfies ExportedHandler<RelayEnv>;

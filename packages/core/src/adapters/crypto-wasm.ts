@@ -5,7 +5,6 @@
 // transitions; the subscription seams default to no-ops for transports (the offscreen)
 // that don't surface session lifecycle. See CONTEXT.md and docs/cryptography.md.
 
-import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import type { VaultCrypto } from "../wasm";
 import type { CryptoAdapter } from "./crypto";
 
@@ -156,20 +155,18 @@ export function buildCryptoAdapter(
 
 		async openKdbx(i) {
 			const wasm = await getWasm();
-			return wasm.open_kdbx4(
-				base64ToBytes(i.fileB64),
-				i.password,
-				i.keyfileB64 ? base64ToBytes(i.keyfileB64) : undefined,
-			);
-		},
-
-		async saveKdbx(i) {
-			const wasm = await getWasm();
-			// Absent on the mobile native module, which has no export path to feed.
-			if (!wasm.save_kdbx4) throw new Error("KDBX export isn't available here.");
-			// Base64 out, not bytes: the extension hands this back across the offscreen
-			// message channel, which doesn't preserve a Uint8Array.
-			return bytesToBase64(wasm.save_kdbx4(i.entries, i.password));
+			const opened = await wasm.open_kdbx4(i.file, i.password, i.keyfile);
+			return {
+				entries: opened.entries,
+				// Bytes from WASM become a Blob, which every webview's sealer takes; a native core
+				// already wrote each to a file, which the native sealer reads from where it is.
+				attachments: opened.attachments.map((a) =>
+					a instanceof Uint8Array
+						? { source: { kind: "blob" as const, blob: new Blob([a as BlobPart]) }, size: a.length }
+						: { source: { kind: "path" as const, path: a.path, size: a.size }, size: a.size },
+				),
+				release: opened.release ?? (async () => {}),
+			};
 		},
 
 		// Both are absent on a binding layer that hasn't been regenerated with the portable

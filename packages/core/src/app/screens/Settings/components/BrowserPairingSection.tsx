@@ -6,6 +6,7 @@ import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import { formatDate } from "../../../../util/format-date";
 import { Button } from "../../../components/ui/button";
+import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { Row, Section } from "./primitives";
@@ -217,14 +218,21 @@ export function BrowserPairingSection() {
 											<Trans>Connected {formatDate(browser.pairedAt)}</Trans>
 										</p>
 									</div>
-									<Button
-										variant="ghost"
-										size="sm"
-										aria-label={t`Disconnect this browser`}
-										onClick={() => void forget(browser.publicKey)}
-									>
-										<Trash2 className="w-4 h-4" />
-									</Button>
+									<InlineConfirm
+										variant="destructiveOutline"
+										confirmLabel={<Trans>Disconnect</Trans>}
+										onConfirm={() => forget(browser.publicKey)}
+										trigger={(arm) => (
+											<Button
+												variant="ghost"
+												size="sm"
+												aria-label={t`Disconnect this browser`}
+												onClick={arm}
+											>
+												<Trash2 className="w-4 h-4" />
+											</Button>
+										)}
+									/>
 								</div>
 							))}
 						</div>

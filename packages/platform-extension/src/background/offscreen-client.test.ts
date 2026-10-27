@@ -7,7 +7,11 @@ const host = vi.hoisted(() => ({
 	setSyncBridge: vi.fn(),
 	handleHostMessage: vi.fn(async () => ({ ok: true, data: "done" })),
 }));
-vi.mock("./vek-store", () => ({ vekMutationSnapshot: () => 0 }));
+vi.mock("./vek-store", () => ({
+	vekMutationSnapshot: () => 0,
+	getVek: (id: string) => (id === "locked" ? null : `vek:${id}`),
+	resolveActiveVaultId: async () => "active",
+}));
 
 const bridge: SyncBridge = {
 	fetchLocalPayload: async () => "payload",
@@ -106,5 +110,45 @@ describe("lazy in-process sync host", () => {
 		});
 		expect(sendMessage).toHaveBeenCalledWith({ type: "SYNC_ROSTER_SYNC", target: "offscreen" });
 		expect(host.loads).toBe(0);
+	});
+});
+
+// A file op writes to a vault's attachment store, so the store it names and the key it seals
+// under must be the same vault's. Both come from the seam's one resolution, never from the view.
+describe("file ops through the seam", () => {
+	it("injects the vek and the vault id together, over any vault id the view sent", async () => {
+		const client = await import("./offscreen-client");
+		client.setInProcessSyncBridge(bridge);
+		await client.sendToOffscreen({
+			type: "CRYPTO_FILE_SEAL",
+			vaultId: "v1",
+			payload: { handoff: "h", metaJson: "{}", vaultId: "someone-else" },
+		});
+		expect(host.handleHostMessage).toHaveBeenCalledWith("CRYPTO_FILE_SEAL", {
+			handoff: "h",
+			metaJson: "{}",
+			vaultId: "v1",
+			vekB64: "vek:v1",
+		});
+	});
+
+	it("scopes an untagged op to the active vault", async () => {
+		const client = await import("./offscreen-client");
+		client.setInProcessSyncBridge(bridge);
+		await client.sendToOffscreen({ type: "CRYPTO_FILE_OPEN", payload: { hash: "h" } });
+		expect(host.handleHostMessage).toHaveBeenCalledWith("CRYPTO_FILE_OPEN", {
+			hash: "h",
+			vaultId: "active",
+			vekB64: "vek:active",
+		});
+	});
+
+	it("refuses a locked vault without reaching the host", async () => {
+		const client = await import("./offscreen-client");
+		client.setInProcessSyncBridge(bridge);
+		await expect(
+			client.sendToOffscreen({ type: "CRYPTO_FILE_META", vaultId: "locked", payload: {} }),
+		).resolves.toEqual({ ok: false, error: "vault locked" });
+		expect(host.handleHostMessage).not.toHaveBeenCalled();
 	});
 });

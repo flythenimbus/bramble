@@ -22,8 +22,9 @@ use tauri::{AppHandle, Manager};
 type CmdResult<T> = Result<T, String>;
 
 /// Filesystem layer. Takes the data dir rather than an `AppHandle` so it can be driven
-/// against a temp dir from tests; see the `tests` module at the foot of this file.
-mod ops {
+/// against a temp dir from tests; see the `tests` module at the foot of this file. Shared with
+/// files.rs, which lays attachments out under the same rules (id check, owner-only).
+pub(crate) mod ops {
     use std::{
         fs,
         path::{Path, PathBuf},
@@ -52,9 +53,8 @@ mod ops {
         Ok(dir)
     }
 
-    /// Reject anything that could escape the vaults dir; ids reach here from the webview.
-    pub fn vault_paths(root: &Path, vault_id: Option<&str>) -> CmdResult<(PathBuf, PathBuf)> {
-        let id = vault_id.unwrap_or(DEFAULT_VAULT_ID);
+    /// Reject anything that could escape a directory it names; ids reach here from the webview.
+    pub fn validate_vault_id(id: &str) -> CmdResult<()> {
         if id.is_empty()
             || !id
                 .chars()
@@ -62,6 +62,12 @@ mod ops {
         {
             return Err(format!("invalid vault id: {id}"));
         }
+        Ok(())
+    }
+
+    pub fn vault_paths(root: &Path, vault_id: Option<&str>) -> CmdResult<(PathBuf, PathBuf)> {
+        let id = vault_id.unwrap_or(DEFAULT_VAULT_ID);
+        validate_vault_id(id)?;
         let dir = vaults_dir(root)?;
         Ok((dir.join(format!("{id}.vlt")), dir.join(format!("{id}.bak"))))
     }
@@ -83,7 +89,7 @@ mod ops {
     /// process an offline target for the master password, and meta.json holds the sync group key
     /// in the clear, which names the relay room and decrypts its signalling.
     #[cfg(unix)]
-    fn restrict_file(path: &Path) -> CmdResult<()> {
+    pub fn restrict_file(path: &Path) -> CmdResult<()> {
         use std::os::unix::fs::PermissionsExt;
         io(
             fs::set_permissions(path, fs::Permissions::from_mode(0o600)),
@@ -92,7 +98,7 @@ mod ops {
     }
 
     #[cfg(not(unix))]
-    fn restrict_file(_path: &Path) -> CmdResult<()> {
+    pub fn restrict_file(_path: &Path) -> CmdResult<()> {
         // Windows inherits the user profile's ACL, which is already owner-scoped.
         Ok(())
     }

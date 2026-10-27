@@ -21,6 +21,8 @@ export interface SignalingClient {
 	publish(event: NostrEvent): void;
 	/** Replace the room subscription (epoch rollover); reuses the subId so the relay swaps it. */
 	resubscribe(rooms: string | string[]): void;
+	/** This socket's ticket for the relay's ICE endpoint, or null from a relay that issues none. */
+	ticket(): Promise<string | null>;
 	close(): void;
 }
 
@@ -48,6 +50,15 @@ const PING_MS = 25_000;
 const SILENCE_MS = 70_000;
 
 /**
+ * Asked for on open: Bramble's relays answer with a ticket tying this socket to their ICE endpoint,
+ * which hands TURN only to a live sync connection (docs/turn-credentials.md). A stock relay
+ * ignores it or answers with a NOTICE, which nothing here reads.
+ */
+export const RELAY_TICKET = "BRAMBLE_TICKET";
+/** How long a relay gets to answer before the socket counts as ticketless. */
+const TICKET_WAIT_MS = 2_000;
+
+/**
  * Drive a relay socket for one room. Sends the REQ on open, dispatches incoming
  * room events to `onEvent`, and publishes events (buffering any sent before the
  * socket opens). Pings the relay while open, so a socket that is merely idle isn't
@@ -72,6 +83,10 @@ export function connectSignaling(
 		if (heartbeat !== undefined) clearInterval(heartbeat);
 		heartbeat = undefined;
 	};
+	let settleTicket: (ticket: string | null) => void = () => {};
+	const ticketReady = new Promise<string | null>((resolve) => {
+		settleTicket = resolve;
+	});
 
 	const sendRaw = (frame: string) => {
 		if (open) socket.send(frame);
@@ -87,6 +102,8 @@ export function connectSignaling(
 		subscribe(rooms);
 		for (const frame of pending) socket.send(frame);
 		pending.length = 0;
+		socket.send(JSON.stringify([RELAY_TICKET]));
+		setTimeout(() => settleTicket(null), TICKET_WAIT_MS);
 		heartbeat = setInterval(() => {
 			if (pongSeen && Date.now() - lastHeard > SILENCE_MS) {
 				stopHeartbeat();
@@ -110,6 +127,11 @@ export function connectSignaling(
 			return;
 		}
 		if (!Array.isArray(msg)) return;
+		if (msg[0] === RELAY_TICKET) {
+			// Null from a relay of ours that has none for this socket: no need to wait it out.
+			settleTicket(typeof msg[1] === "string" && msg[1] ? msg[1] : null);
+			return;
+		}
 		// ["EVENT", subId, event] addressed to our subscription.
 		if (msg[0] === "EVENT" && msg[1] === subId && msg[2]) onEvent(msg[2] as NostrEvent);
 	};
@@ -126,6 +148,12 @@ export function connectSignaling(
 	return {
 		publish: (event) => sendRaw(JSON.stringify(["EVENT", event])),
 		resubscribe: subscribe,
+		// Bounded even for a socket that never opens, so a caller can always await it.
+		ticket: () =>
+			Promise.race([
+				ticketReady,
+				new Promise<null>((resolve) => setTimeout(() => resolve(null), TICKET_WAIT_MS)),
+			]),
 		close: () => {
 			stopHeartbeat();
 			try {

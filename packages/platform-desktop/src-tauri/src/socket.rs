@@ -145,9 +145,23 @@ enum Request {
     /// INSTALL to this app, the inner one authenticates a roster DEVICE to the group, and only
     /// the inner identity is the one revocation acts on. See docs/desktop-port.md.
     Sync { frame: String },
+    /// What this browser speaks beyond the original protocol, answered with what this app does.
+    ///
+    /// The one way a capability is learned, because both ends have an older self in the wild
+    /// that would misread an unknown frame: an old extension takes any frame that is not sync or
+    /// fill as the answer to its pending request, and an old app answers an unknown op with an
+    /// error the extension would take the same way. So nothing new is sent to a peer until that
+    /// peer has said it understands it, in a request an old app answers harmlessly.
+    Caps { caps: Vec<String> },
+    /// One frame of attachment transfer, on its way to the webview's file session. Relayed
+    /// like `Sync`, on a numbered stream (see @core/sync/transport/blob-link).
+    Blob { stream: u32, frame: String },
 }
 
-#[derive(Serialize)]
+/// The capability that carries attachment bytes over the link.
+const CAP_FILES: &str = "files";
+
+#[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct Answer {
     ok: bool,
@@ -169,19 +183,24 @@ struct Answer {
     password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     totp: Option<String>,
+    /// Set for a caps request, and only then.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    caps: Option<Vec<String>>,
 }
 
 impl Answer {
+    /// Success with nothing set: each answer then sets only the field it carries.
+    fn ok() -> Self {
+        Self {
+            ok: true,
+            ..Self::default()
+        }
+    }
+
     fn error(msg: &str) -> Self {
         Self {
-            ok: false,
             error: Some(msg.to_string()),
-            matches: None,
-            invite: None,
-            identity: None,
-            username: None,
-            password: None,
-            totp: None,
+            ..Self::default()
         }
     }
 }
@@ -243,7 +262,7 @@ pub fn spotlight_request_fill(id: String) -> Result<(), String> {
         // hostname will act, and that decision is deliberately not made here.
         boxes
             .values()
-            .filter(|(_, tx)| tx.send(frame.clone()).is_ok())
+            .filter(|outbox| outbox.tx.send(frame.clone()).is_ok())
             .count()
     };
     log::info!("panel fill: asked {sent} browser(s)");
@@ -333,10 +352,18 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 /// one writer thread that drains it.
 /// The generation distinguishes one link to a browser from its replacement: a reconnect
 /// registers a new one, and the connection it displaced must not remove it on the way out.
-static OUTBOXES: OnceLock<Mutex<HashMap<String, (u64, mpsc::Sender<String>)>>> = OnceLock::new();
+static OUTBOXES: OnceLock<Mutex<HashMap<String, Outbox>>> = OnceLock::new();
 static NEXT_LINK: AtomicU64 = AtomicU64::new(1);
 
-fn outboxes() -> &'static Mutex<HashMap<String, (u64, mpsc::Sender<String>)>> {
+struct Outbox {
+    link: u64,
+    tx: mpsc::Sender<String>,
+    /// The browser said it speaks files (`Caps`). Until then no file frame is sent to it: an
+    /// extension that predates them would take one for the answer to its pending request.
+    files: bool,
+}
+
+fn outboxes() -> &'static Mutex<HashMap<String, Outbox>> {
     OUTBOXES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -357,20 +384,21 @@ fn emit(event: &str, payload: serde_json::Value) {
 /// connected, which is ordinary: a peer that went away is not a failure of the caller.
 #[tauri::command]
 pub fn link_sync_send(peer_id: String, frame: String) -> Result<(), String> {
-    let queued = {
-        let boxes = outboxes().lock().map_err(|_| "outbox lock poisoned")?;
-        match boxes.get(&peer_id) {
-            Some((_, tx)) => tx
-                .send(serde_json::json!({ "sync": frame }).to_string())
-                .is_ok(),
-            None => false,
-        }
-    };
-    if queued {
-        Ok(())
-    } else {
-        Err("no such peer".into())
+    queue(&peer_id, serde_json::json!({ "sync": frame }), false)
+}
+
+/// Queue a frame for one browser. A file frame goes only to a connection that said it speaks
+/// files (see `Outbox::files`).
+fn queue(peer_id: &str, body: serde_json::Value, files: bool) -> Result<(), String> {
+    let boxes = outboxes().lock().map_err(|_| "outbox lock poisoned")?;
+    let outbox = boxes.get(peer_id).ok_or("no such peer")?;
+    if files && !outbox.files {
+        return Err("that browser does not speak files".into());
     }
+    outbox
+        .tx
+        .send(body.to_string())
+        .map_err(|_| "link closed".to_string())
 }
 
 /// One connected browser, as reported to a webview catching up.
@@ -387,17 +415,62 @@ pub struct ConnectedPeer {
 /// rather than waiting for a reconnect that may not come until the browser restarts.
 #[tauri::command]
 pub fn link_sync_peers() -> Vec<ConnectedPeer> {
+    connected(|_| true)
+}
+
+fn connected(keep: impl Fn(&Outbox) -> bool) -> Vec<ConnectedPeer> {
     outboxes()
         .lock()
         .map(|b| {
             b.iter()
-                .map(|(peer_id, (link, _))| ConnectedPeer {
+                .filter(|(_, outbox)| keep(outbox))
+                .map(|(peer_id, outbox)| ConnectedPeer {
                     peer_id: peer_id.clone(),
-                    link: *link,
+                    link: outbox.link,
                 })
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Hand a frame from the webview's file session to one browser, on its stream.
+#[tauri::command]
+pub fn link_blob_send(peer_id: String, stream: u32, frame: String) -> Result<(), String> {
+    queue(
+        &peer_id,
+        serde_json::json!({ "blob": frame, "stream": stream }),
+        true,
+    )
+}
+
+/// Ask one browser to open a file stream. The app never opens one itself, so the two ends
+/// cannot race to (see @core/sync/transport/blob-link).
+#[tauri::command]
+pub fn link_blob_poke(peer_id: String) -> Result<(), String> {
+    queue(&peer_id, serde_json::json!({ "blobPoke": true }), true)
+}
+
+/// The connected browsers that speak files.
+#[tauri::command]
+pub fn link_blob_peers() -> Vec<ConnectedPeer> {
+    connected(|outbox| outbox.files)
+}
+
+/// Record what one connection speaks, and answer with what this app does. The webview is told
+/// separately, once the answer is queued (see read_loop).
+fn answer_caps(peer_id: &str, link: u64, caps: &[String]) -> Answer {
+    let files = caps.iter().any(|c| c == CAP_FILES);
+    if files {
+        if let Ok(mut boxes) = outboxes().lock() {
+            if let Some(outbox) = boxes.get_mut(peer_id).filter(|o| o.link == link) {
+                outbox.files = true;
+            }
+        }
+    }
+    Answer {
+        caps: Some(vec![CAP_FILES.to_string()]),
+        ..Answer::ok()
+    }
 }
 
 /// Serve application traffic over the established session until the browser goes away.
@@ -418,7 +491,14 @@ fn serve_session(session_id: u32, stream: &mut ipc::Stream) -> Result<(), String
     if let Ok(mut boxes) = outboxes().lock() {
         // A reconnect supersedes: the old stream is already dead or dying, and leaving its queue
         // in place would send this browser's frames into a socket nobody reads.
-        boxes.insert(peer_id.clone(), (link, tx.clone()));
+        boxes.insert(
+            peer_id.clone(),
+            Outbox {
+                link,
+                tx: tx.clone(),
+                files: false,
+            },
+        );
     }
     let pump = thread::spawn(move || {
         // Ends when every sender is dropped, which is the read loop finishing plus the registry
@@ -450,7 +530,10 @@ fn serve_session(session_id: u32, stream: &mut ipc::Stream) -> Result<(), String
     // Deregister before dropping our sender, so nothing queues onto a link that is closing.
     if let Ok(mut boxes) = outboxes().lock() {
         // Only if it is still ours: a reconnect may have replaced it while this one was closing.
-        if boxes.get(&peer_id).is_some_and(|(held, _)| *held == link) {
+        if boxes
+            .get(&peer_id)
+            .is_some_and(|outbox| outbox.link == link)
+        {
             boxes.remove(&peer_id);
         }
     }
@@ -500,13 +583,34 @@ fn read_loop(
             );
             continue;
         }
-        let answer = match serde_json::from_str::<Request>(&plaintext) {
+        if let Ok(Request::Blob { stream, frame }) = serde_json::from_str::<Request>(&plaintext) {
+            emit(
+                "link-blob-frame",
+                serde_json::json!({ "peerId": peer_id, "link": link, "stream": stream, "frame": frame }),
+            );
+            continue;
+        }
+        let request = serde_json::from_str::<Request>(&plaintext);
+        let speaks_files =
+            matches!(&request, Ok(Request::Caps { caps }) if caps.iter().any(|c| c == CAP_FILES));
+        let answer = match request {
+            // Before the lock gate in answer_for: what a connection speaks says nothing about
+            // any vault, and a browser reconnecting to a locked app still needs to learn it.
+            Ok(Request::Caps { caps }) => answer_caps(peer_id, link, &caps),
             Ok(request) => answer_for(request),
             Err(e) => Answer::error(&format!("bad request: {e}")),
         };
         let body = serde_json::to_string(&answer).map_err(|e| format!("encode answer: {e}"))?;
         // A closed queue means the writer died; the connection is over either way.
         out.send(body).map_err(|_| "link closed".to_string())?;
+        // After the answer is queued, so nothing the webview sends in response (a poke) can
+        // reach the browser ahead of the answer that tells it the app speaks files.
+        if speaks_files {
+            emit(
+                "link-blob-capable",
+                serde_json::json!({ "peerId": peer_id, "link": link }),
+            );
+        }
     }
 }
 
@@ -522,59 +626,39 @@ fn answer_for(request: Request) -> Answer {
         Request::SyncIdentity => {
             return match sync_identity().lock().ok().and_then(|s| s.clone()) {
                 Some(public_key) => Answer {
-                    ok: true,
-                    error: None,
-                    matches: None,
-                    invite: None,
                     identity: Some(public_key),
-                    username: None,
-                    password: None,
-                    totp: None,
+                    ..Answer::ok()
                 },
                 None => Answer::error("no identity"),
             };
         }
         Request::SyncInvite => match claim_invite() {
             Some(payload) => Answer {
-                ok: true,
-                error: None,
-                matches: None,
                 invite: Some(payload),
-                identity: None,
-                username: None,
-                password: None,
-                totp: None,
+                ..Answer::ok()
             },
             // No invite armed. Indistinguishable from expired or already claimed on purpose:
             // all three mean the same thing to a caller, which is "ask the user again".
             None => Answer::error("no invite"),
         },
         Request::Query { hostname } => Answer {
-            ok: true,
-            error: None,
             matches: Some(index_store::query(&hostname)),
-            invite: None,
-            identity: None,
-            username: None,
-            password: None,
-            totp: None,
+            ..Answer::ok()
         },
         Request::Fetch { id } => match index_store::secret_for(&id) {
             Some(entry) => Answer {
-                ok: true,
-                error: None,
-                matches: None,
-                invite: None,
-                identity: None,
                 username: Some(entry.username),
                 password: Some(entry.password),
                 totp: entry.totp,
+                ..Answer::ok()
             },
             None => Answer::error("unknown entry"),
         },
         // Both handled before this, in read_loop: relayed or recorded, not answered.
         Request::Sync { .. } => Answer::error("sync frames are not answered"),
+        Request::Blob { .. } => Answer::error("file frames are not answered"),
         Request::ActiveTab { .. } => Answer::error("active-tab reports are not answered"),
+        Request::Caps { .. } => Answer::error("caps are answered per link"),
     }
 }
 
@@ -1061,8 +1145,54 @@ mod tests {
     }
 
     #[test]
-    fn a_sync_frame_from_the_browser_is_relayed_rather_than_answered() {
-        // It goes to the webview, so there is nothing to reply with. Answering anyway would put a
+    fn no_file_frame_reaches_a_browser_until_it_says_it_speaks_files() {
+        // An extension that predates files reads any frame that is not sync or fill as the
+        // answer to its pending request, so one sent to it would put the link out of step.
+        let _g = pairing::test_lock();
+        let dir = started();
+        let mut link = Linked::open(&dir);
+        link.await_registered(true);
+        let peer = link.public_key.clone();
+
+        assert!(link_blob_poke(peer.clone()).is_err());
+        assert!(link_blob_send(peer.clone(), 7, "frame".into()).is_err());
+        assert!(!link_blob_peers().iter().any(|p| p.peer_id == peer));
+
+        link.send(serde_json::json!({ "op": "caps", "caps": ["files"] }));
+        let answer = link.recv();
+        assert_eq!(answer["ok"], true, "{answer}");
+        assert_eq!(answer["caps"], serde_json::json!(["files"]));
+        assert!(link_blob_peers().iter().any(|p| p.peer_id == peer));
+
+        link_blob_send(peer.clone(), 7, "frame".into()).expect("send");
+        let pushed = link.recv();
+        assert_eq!(pushed["blob"], "frame");
+        assert_eq!(pushed["stream"], 7);
+        link_blob_poke(peer).expect("poke");
+        assert_eq!(link.recv()["blobPoke"], true);
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn caps_are_answered_while_locked_and_record_nothing_unknown() {
+        // A browser reconnecting to a locked app still has to learn what it speaks. Naming no
+        // capability this app has records nothing, so no file frame follows.
+        let _g = pairing::test_lock();
+        let dir = started();
+        vault_crypto::lock();
+        let mut link = Linked::open(&dir);
+        link.await_registered(true);
+
+        link.send(serde_json::json!({ "op": "caps", "caps": ["teleport"] }));
+        let answer = link.recv();
+        assert_eq!(answer["ok"], true, "{answer}");
+        assert!(link_blob_send(link.public_key.clone(), 1, "frame".into()).is_err());
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn sync_and_file_frames_from_the_browser_are_relayed_rather_than_answered() {
+        // They go to the webview, so there is nothing to reply with. Answering anyway would put a
         // frame on the wire that the browser would mis-read as the response to its next request.
         let _g = pairing::test_lock();
         let dir = started();
@@ -1072,7 +1202,8 @@ mod tests {
         link.await_registered(true);
 
         link.send(serde_json::json!({ "op": "sync", "frame": "from-browser" }));
-        // The next request's answer is the proof: if the sync frame had produced one, this would
+        link.send(serde_json::json!({ "op": "blob", "stream": 3, "frame": "from-browser" }));
+        // The next request's answer is the proof: if either frame had produced one, this would
         // read that instead and the link would be one frame out of step from here on.
         link.send(serde_json::json!({ "op": "query", "hostname": "example.com" }));
 

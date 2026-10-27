@@ -1,11 +1,10 @@
 /** @vitest-environment happy-dom */
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type BackupTargetConfig, backupTargetsKeyFor } from "../backup/config";
-import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import type { Platform } from "../context/PlatformContext";
+import { mountBackup } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
-import { useBackup } from "./useBackup";
-import { VaultRegistryProvider } from "./useVaultRegistry";
 
 afterEach(cleanup);
 
@@ -59,26 +58,12 @@ function makePlatform(opts: { unattended: boolean; targets?: BackupTargetConfig[
 	return { platform, backupCreds, store };
 }
 
-function mount(platform: Platform) {
-	function Consumer() {
-		useBackup();
-		return null;
-	}
-	render(
-		<PlatformProvider platform={platform}>
-			<VaultRegistryProvider>
-				<Consumer />
-			</VaultRegistryProvider>
-		</PlatformProvider>,
-	);
-}
-
 // The app chooses where credentials live and never asks, which is exactly what makes moving them
 // afterwards safe: there is no preference to respect, only a best available place.
 describe("credential upgrade", () => {
 	it("moves a vault-wrapped credential into the store once one is available", async () => {
 		const { platform, backupCreds, store } = makePlatform({ unattended: true });
-		mount(platform);
+		mountBackup(platform);
 		await act(async () => {});
 		await act(async () => {});
 
@@ -95,7 +80,7 @@ describe("credential upgrade", () => {
 
 	it("leaves credentials alone where nothing can hold them outside the vault", async () => {
 		const { platform, backupCreds, store } = makePlatform({ unattended: false });
-		mount(platform);
+		mountBackup(platform);
 		await act(async () => {});
 		await act(async () => {});
 
@@ -111,7 +96,7 @@ describe("credential upgrade", () => {
 		(platform.crypto.decryptWithVek as ReturnType<typeof vi.fn>).mockRejectedValue(
 			new Error("aead::Error"),
 		);
-		mount(platform);
+		mountBackup(platform);
 		await act(async () => {});
 		await act(async () => {});
 
@@ -123,7 +108,7 @@ describe("credential upgrade", () => {
 	it("does not touch a target whose credentials are already outside the vault", async () => {
 		const already: BackupTargetConfig = { ...wrapped(), creds: { wrap: "os" } };
 		const { platform, backupCreds } = makePlatform({ unattended: true, targets: [already] });
-		mount(platform);
+		mountBackup(platform);
 		await act(async () => {});
 		await act(async () => {});
 

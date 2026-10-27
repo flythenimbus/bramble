@@ -36,16 +36,76 @@ export const SyncedSettingSchema = z.object({
 export const SyncedSettingsSchema = z.record(z.string(), SyncedSettingSchema);
 export type SyncedSettings = z.infer<typeof SyncedSettingsSchema>;
 
+/** A blob's address: lowercase hex SHA-256. Exported so the manifest schema and the blob store
+ * validate the same shape, since it is both a record field and a filesystem key. */
+export const BLOB_HASH_RE = /^[0-9a-f]{64}$/;
+
+/**
+ * One file attachment's manifest entry. The bytes are NOT here: they live in the blob store,
+ * addressed by `hash`, and never ride this payload, which is rewritten on every entry edit and
+ * rebroadcast to every peer every few seconds. See docs/file-attachments.md.
+ *
+ * `hash` and `size` sit outside the sealed metadata on purpose: the transfer layer needs them to
+ * decide what to fetch and to verify what arrived, and keeping them in the clear (under the VEK,
+ * like everything else here) is what lets blobs move without any key entering the transfer code.
+ * Name and MIME type stay sealed in `metaBlob`, because a filename is often the whole secret.
+ */
+export const FileRecordSchema = z.object({
+	id: z.string(),
+	hlc: HlcSchema,
+	/** The owning entry, or absent for a standalone Files item. */
+	entryId: z.string().optional(),
+	/** Lowercase hex SHA-256 of the sealed blob. Hex, not base64, because this is also the blob's
+	 * filename on the mobile and desktop stores, and base64's `/` and `+` are not filename-safe. */
+	hash: z.string().regex(BLOB_HASH_RE, "hash must be lowercase hex sha-256"),
+	/** Sealed blob length in bytes (plaintext plus one AEAD tag per chunk). */
+	size: z.number().int().nonnegative(),
+	/** The file's FEK, wrapped under the VEK exactly as an entry's DEK is. */
+	wrappedFek: z.string(),
+	fekIv: z.string(),
+	/**
+	 * The 7-byte STREAM nonce prefix, base64. In the clear like every other IV here
+	 * (`fekIv`, `metaIv`, an entry's `dekIv`), because a nonce is not a secret.
+	 *
+	 * Keeping it out of the sealed metadata is also what lets TypeScript build that metadata
+	 * before sealing starts, which is the codebase's convention: Rust seals a string it was
+	 * handed, it does not construct JSON. The chunk count is likewise absent, being a pure
+	 * function of `size` (`chunk_count_from_sealed`).
+	 */
+	noncePrefix: z.string(),
+	/** {name, mime, plaintextSize}, sealed under the FEK's meta subkey. */
+	metaBlob: z.string(),
+	metaIv: z.string(),
+});
+export type FileRecord = z.infer<typeof FileRecordSchema>;
+
 /** The decrypted entries payload: displayed entries, the deletion graveyard, any vault-scoped
- * settings, and the concurrent versions not displayed (`conflicts`, still sealed). The optional
- * fields let a payload written before they existed still parse. */
+ * settings, the concurrent versions not displayed (`conflicts`, still sealed), and the file
+ * manifest. The optional fields let a payload written before they existed still parse.
+ *
+ * File deletions get their own graveyard rather than sharing `tombstones`. Entry ids and file
+ * ids are separate namespaces, so one list would make every entry's liveness check consult
+ * deletions that can never apply to it, and would grow the entry graveyard with file churn.
+ *
+ * `fileCascades` marks each file a deleted entry took with it: one per attachment the deleting
+ * device held. The record stays in `files`, so keeping a delete-conflicted entry brings its
+ * files back, and a file with no mark was attached where the delete couldn't see it. See
+ * docs/file-attachments.md, "Deleting an entry hides its attachments". */
 export const EntriesPayloadSchema = z.object({
 	entries: z.array(EncryptedEntrySchema),
 	tombstones: z.array(TombstoneSchema),
 	settings: SyncedSettingsSchema.optional(),
+	files: z.array(FileRecordSchema).optional(),
+	fileTombstones: z.array(TombstoneSchema).optional(),
+	fileCascades: z.array(TombstoneSchema).optional(),
 	conflicts: z.array(EncryptedEntrySchema).optional(),
 });
 export type EntriesPayload = z.infer<typeof EntriesPayloadSchema>;
+
+/** The file-manifest half of a payload. One value because the records, their graveyard and the
+ * cascade marks have to be carried together or a delete is lost, and because every writer that
+ * rebuilds a payload has to thread all three through. */
+export type FileManifest = Pick<EntriesPayload, "files" | "fileTombstones" | "fileCascades">;
 
 /** An empty payload, for a fresh vault. */
 export function emptyEntriesPayload(): EntriesPayload {
@@ -74,11 +134,19 @@ export function sanitizeRemoteEntriesPayload(
 				Object.entries(payload.settings).filter(([, rec]) => !isFutureStamp(rec.hlc, now)),
 			)
 		: undefined;
+	// Files get the same guard: a future-stamped FileRecord would be an attachment no device
+	// could delete, and a future-stamped fileTombstone would make one permanently unrestorable.
+	const files = payload.files?.filter((f) => !isFutureStamp(f.hlc, now));
+	const fileTombstones = payload.fileTombstones?.filter((t) => !isFutureStamp(t.hlc, now));
+	const fileCascades = payload.fileCascades?.filter((t) => !isFutureStamp(t.hlc, now));
 	const conflicts = payload.conflicts?.filter((e) => !isFutureVersion(e, now));
 	return {
 		entries: payload.entries.filter((e) => !isFutureVersion(e, now)),
 		tombstones: payload.tombstones.filter((t) => !isFutureVersion(t, now)),
 		...(settings ? { settings } : {}),
+		...(files ? { files } : {}),
+		...(fileTombstones ? { fileTombstones } : {}),
+		...(fileCascades ? { fileCascades } : {}),
 		...(conflicts ? { conflicts } : {}),
 	};
 }

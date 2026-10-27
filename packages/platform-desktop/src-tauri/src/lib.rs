@@ -7,6 +7,7 @@
 mod autostart;
 mod backup;
 mod crypto;
+mod files;
 mod i18n;
 mod index_store;
 // Shared with the proxy binary through `#[path]`, like socket_addr: both ends have to agree on
@@ -27,6 +28,7 @@ mod socket;
 mod socket_addr;
 mod spotlight;
 mod storage;
+mod stream;
 mod sync_crypto;
 
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -236,6 +238,27 @@ pub fn run() {
             tray_theme,
             hide_to_tray,
             quit_app,
+            files::files_pick,
+            files::files_seal,
+            files::files_open_meta,
+            files::files_reseal_meta,
+            files::files_open,
+            files::files_sweep_opened,
+            files::files_discard_kdbx,
+            files::files_save_kdbx,
+            files::files_read_kdbx,
+            files::files_export_kdbx,
+            files::files_has,
+            files::files_size,
+            files::files_read,
+            files::files_remove,
+            files::files_list,
+            files::files_append_staged,
+            files::files_staged_size,
+            files::files_read_staged,
+            files::files_publish_staged,
+            files::files_discard_staged,
+            files::files_delete_vault,
             autostart::autostart_repoint,
             crypto::crypto_is_locked,
             crypto::crypto_lock,
@@ -286,6 +309,9 @@ pub fn run() {
             index_store::link_clear_index,
             socket::link_sync_send,
             socket::link_sync_peers,
+            socket::link_blob_send,
+            socket::link_blob_poke,
+            socket::link_blob_peers,
             socket::link_arm_sync_invite,
             socket::link_clear_sync_invite,
             socket::link_set_sync_identity,
@@ -299,6 +325,12 @@ pub fn run() {
             backup::backup_creds_save,
             backup::backup_creds_remove,
             backup::backup_send,
+            backup::backup_send_raw,
+            backup::backup_stream_open,
+            stream::shell_export_open,
+            stream::stream_write,
+            stream::stream_finish,
+            stream::stream_abort,
             net::http_send,
             sync_crypto::sync_handshake_generate_keypair,
             sync_crypto::sync_handshake_start_initiator,

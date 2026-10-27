@@ -98,6 +98,24 @@ export async function seedExampleLogin(popup: Page, url = "https://example.com")
 	await expect(popup.getByText("Example Login")).toBeVisible();
 }
 
+/**
+ * A new vault holding Example Login, open in the popup. `detached` is the pop-out window, where a
+ * file picker survives; the attached popup closes under one.
+ */
+export async function openExampleLogin(
+	context: BrowserContext,
+	extensionId: string,
+	opts: { detached?: boolean } = {},
+): Promise<Page> {
+	await createVault(await context.newPage(), extensionId);
+	const popup = await context.newPage();
+	await popup.goto(`${popupUrl(extensionId)}${opts.detached ? "?detached=1" : ""}`);
+	await expect(popup.locator("#root")).not.toBeEmpty();
+	await seedExampleLogin(popup);
+	await popup.getByText("Example Login").click();
+	return popup;
+}
+
 /** Add a login for example.com carrying an authenticator key, through the popup's own UI. */
 export async function seedTotpLogin(popup: Page, name: string, key: string) {
 	await popup.getByRole("button", { name: /Add New/i }).click();

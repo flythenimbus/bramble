@@ -707,7 +707,9 @@ Each phase is independently shippable.
   landed earlier (existing vault -> add a new one, never overwrite). Scheduled backups
   cover **every** vault, not just the primary: `runScheduledBackups` walks all registered
   vaults (the sealed blob needs no VEK) and uploads each as its own file. Each backup file
-  is a standalone VLT1 blob, so restore opens one file -> one vault.
+  is one vault: a standalone VLT1 blob, or for a vault with attachments one ZIP holding
+  that blob and its attachments (see cloud-storage-backups.md, "Backups with attachments").
+  Either way restore opens one file -> one vault.
 
   Phase 4 first shipped with backup *targets* still device-global (one config backing up
   every vault), which turned out to be wrong in use: configuring Nextcloud in a personal

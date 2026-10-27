@@ -290,7 +290,8 @@ transport-free core, three thin entry points (offscreen, FF event page, mobile w
 or a full-tunnel VPN like Proton that binds the app's sockets to the tunnel so the LAN path is
 gone), direct fails and the channel needs a **TURN relay** both peers can always reach. Before
 each connection the client fetches ICE servers from a minting endpoint (`POST /ice-servers` on the
-relay Worker, which mints short-lived Cloudflare TURN credentials server-side) and passes them to
+relay Worker, which mints short-lived Cloudflare TURN credentials server-side, rationed as in
+[turn-credentials.md](turn-credentials.md)) and passes them to
 `RTCPeerConnection`; the fetch failing degrades to host-only, not an error. TURN only ever relays
 the **DTLS + Noise ciphertext**, so it is the same "dumb untrusted pipe" as the signaling relay
 (it learns that the two endpoints synced and the byte volume, nothing more; behind a VPN it sees
@@ -602,14 +603,18 @@ device management). Notes on how it maps to code:
   `{entries, roster}` envelope) so revocations converge; see "Device management & revocation".
 - **Separate rooms.** `deriveRoomId(groupKey, label)`: enrollment uses
   `bramble/enroll`, ongoing sync uses `bramble/sync`, so the enroll handshake never
-  collides with running sync meshes.
+  collides with running sync meshes. Attachment bytes use a third, `bramble/blob`,
+  on a session that is WebRTC-only (TURN allowed, no relay-forward); see
+  [file-attachments.md](file-attachments.md), "Transfer".
 - **Enrollment** seals `{vek, roster, entries}` Noise-only; the joiner rebuilds its
   vault entirely in the offscreen via `core/vault/build-vault` (the VEK never reaches
   the popup) and hands the inviter its roster entry so both rosters stay symmetric.
 - **Headless sync** is background-driven: started on unlock / SW-startup, the offscreen
   runs `roster-sync` continuously; the merge runs in the background via `vault-io`
-  (`SYNC_LOCAL_PAYLOAD` / `SYNC_APPLY_REMOTE`). Re-broadcast is periodic (~4s) +
-  on-connect; an instant on-change nudge is a follow-up.
+  (`SYNC_LOCAL_PAYLOAD` / `SYNC_APPLY_REMOTE`). Each ~4 s tick sends a peer the whole
+  envelope if it changed since that peer's last copy and a heartbeat if not, plus on connect,
+  on a resend request after a failed merge, and every 10 minutes regardless (see
+  [sync-rebroadcast.md](sync-rebroadcast.md)).
 - **Fully headless writes:** the vault lives in `chrome.storage.local` (see
   [storage.md](storage.md)), which the background reads and writes with no gesture and no
   permission, so headless merge just writes through. The `canReadFromBackground` /

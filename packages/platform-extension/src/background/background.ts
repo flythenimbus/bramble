@@ -6,6 +6,7 @@
 // router (./background/router) owns the single onMessage dispatcher.
 
 import { isBackupTargetsKey } from "@core/backup/config";
+import { onBlobArrived } from "@core/sync/blob-arrivals";
 import { api } from "../platform-api";
 import { BACKUP_ALARM, runDueBackups, scheduleBackups } from "./backup";
 import "./backup-connect";
@@ -17,6 +18,7 @@ import "./sync";
 import "./theme";
 import "./webauthn-proxy-init";
 import "./webauthn-content-transport";
+import { clearHandoffs } from "../files/idb";
 import { isVaultBlobKey } from "../storage";
 import { isSyncGroupKey } from "../sync/sync-config";
 import { indexHydration } from "./autofill-index";
@@ -75,6 +77,9 @@ api.runtime.onInstalled.addListener(() => {
 
 api.runtime.onStartup.addListener(() => {
 	void ensureOffscreen();
+	// Plaintext a crash left parked mid-attach or mid-open. A lock clears it too; this is for the
+	// browser that was quit before one.
+	void clearHandoffs().catch(() => {});
 });
 
 // Firefox stores the vault in storage.local (no File System Access), and that is the
@@ -167,4 +172,9 @@ api.storage.onChanged.addListener((changes, area) => {
 	}
 	// Re-arm or clear the backup poke when any vault's target list or schedule changes.
 	if (Object.keys(changes).some(isBackupTargetsKey)) void scheduleBackups();
+});
+
+// An attachment a waiting backup needed may just have arrived; the runner no-ops if not.
+onBlobArrived(() => {
+	if (!vaultLocked()) void runDueBackups();
 });

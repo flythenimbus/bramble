@@ -1,12 +1,11 @@
 /** @vitest-environment happy-dom */
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { BackupActivityAdapter } from "../adapters/backup-activity";
 import { type BackupTargetConfig, backupTargetsKeyFor } from "../backup/config";
-import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import type { Platform } from "../context/PlatformContext";
+import { mountBackup } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
-import { useBackup } from "./useBackup";
-import { VaultRegistryProvider } from "./useVaultRegistry";
 
 // Mobile backs up on unlock and on resume, from outside React. Before this, that run was invisible
 // on the settings screen: no "Backing up", a "Back up now" button that could start a second upload
@@ -55,25 +54,9 @@ function makePlatform() {
 	return { platform, store, metaSubs, push: (ids: string[]) => push(new Set(ids)) };
 }
 
-function mount(platform: Platform) {
-	const seen: { current: ReturnType<typeof useBackup> | null } = { current: null };
-	function Probe() {
-		seen.current = useBackup();
-		return null;
-	}
-	render(
-		<PlatformProvider platform={platform}>
-			<VaultRegistryProvider>
-				<Probe />
-			</VaultRegistryProvider>
-		</PlatformProvider>,
-	);
-	return seen;
-}
-
 it("shows a backup started elsewhere as running, and stops when it ends", async () => {
 	const p = makePlatform();
-	const hook = mount(p.platform);
+	const hook = mountBackup(p.platform);
 	await act(async () => {});
 	expect(hook.current?.runningIds.has("t1")).toBe(false);
 
@@ -86,7 +69,7 @@ it("shows a backup started elsewhere as running, and stops when it ends", async 
 
 it("picks up a result written outside the screen without being reopened", async () => {
 	const p = makePlatform();
-	const hook = mount(p.platform);
+	const hook = mountBackup(p.platform);
 	await act(async () => {});
 	expect(hook.current?.targets?.[0]?.lastBackupAt).toBeUndefined();
 

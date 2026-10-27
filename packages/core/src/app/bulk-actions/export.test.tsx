@@ -5,13 +5,17 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../context/PlatformContext";
 import type { Entry } from "../../hooks/useVault";
-import type { EntryConflict } from "../../sync";
+import type { EntryConflict, FileRecord } from "../../sync";
+import { fileRecord } from "../../test/vault-fixtures";
 import { exportAction } from "./export";
 
-const h = vi.hoisted(() => ({ conflicts: new Map<string, EntryConflict>() }));
+const h = vi.hoisted(() => ({
+	conflicts: new Map<string, EntryConflict>(),
+	files: [] as FileRecord[],
+}));
 
 vi.mock("../../hooks/useVault", () => ({
-	useVault: () => ({ conflicts: h.conflicts }),
+	useVaultState: () => ({ conflicts: h.conflicts, files: h.files }),
 }));
 
 afterEach(cleanup);
@@ -64,5 +68,19 @@ describe("the selection export dialog", () => {
 		]);
 		show(["1", "3"]);
 		expect(screen.queryByText(/sync conflict/)).toBeNull();
+	});
+
+	it("says how many files on the selected entries stay behind", () => {
+		h.conflicts = new Map();
+		h.files = [
+			fileRecord({ id: "f1", entryId: "1" }),
+			fileRecord({ id: "f2", entryId: "1" }),
+			fileRecord({ id: "f3", entryId: "9" }),
+			fileRecord({ id: "f4" }),
+		];
+		show(["1", "2"]);
+		expect(
+			screen.getByText(/Attachments aren't transferred: 2 files on these entries won't be in/),
+		).toBeTruthy();
 	});
 });

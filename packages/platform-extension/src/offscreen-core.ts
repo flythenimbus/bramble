@@ -16,10 +16,18 @@ import type {
 	VekEncrypted,
 } from "@core/adapters/crypto";
 import { buildCryptoAdapter } from "@core/adapters/crypto-wasm";
+import { decodeEntriesPayload } from "@core/sync/entries-payload";
 import { canonicalRosterEntry, encodeRoster, RosterEntrySchema } from "@core/sync/roster";
+import { blobLinkDialer } from "@core/sync/transport/blob-link";
+import {
+	type BlobSyncSession,
+	startBlobSync,
+	wantedFromPayload,
+} from "@core/sync/transport/blob-sync";
 import { type EnrollWasm, startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { type RosterSyncWasm, startRosterSync } from "@core/sync/transport/roster-sync";
+import { base64ToBytes } from "@core/util/bytes";
 import {
 	CryptoDecryptBatchSchema,
 	CryptoDecryptIndexSchema,
@@ -27,6 +35,10 @@ import {
 	CryptoDecryptSchema,
 	CryptoEncryptOuterSchema,
 	CryptoEncryptSchema,
+	CryptoFileMetaSchema,
+	CryptoFileOpenSchema,
+	CryptoFileResealMetaSchema,
+	CryptoFileSealSchema,
 	CryptoOpenKdbxSchema,
 	CryptoOpenPortableVaultSchema,
 	CryptoPasskeyGetSchema,
@@ -42,11 +54,21 @@ import {
 	CryptoWrapPasswordSlotSchema,
 	CryptoWrapWebauthnSlotSchema,
 } from "./crypto/messages";
+import {
+	type FileWasm,
+	type KdbxWasm,
+	openToHandoff,
+	saveKdbxToHandoff,
+	sealFromHandoff,
+} from "./files/host";
+import { idbBlobStore, putHandoff, readHandoff } from "./files/idb";
+import { type HttpJobRequest, pollHttpJob, startHttpJob } from "./http-host";
 import { makeLinkPeerSource } from "./link-peer-source";
 import { api } from "./platform-api";
 import {
 	AdmissionPubkeyMsgSchema,
 	AdmissionSignHostMsgSchema,
+	BlobStatusMsgSchema,
 	EnrollApproveMsgSchema,
 	type EnrollInviteMsg,
 	EnrollInviteMsgSchema,
@@ -73,6 +95,15 @@ export interface SyncBridge {
 	pushRemotePayload: (vaultId: string, payloadJson: string) => Promise<void>;
 	fetchLocalRoster: (vaultId: string) => Promise<string>;
 	pushRemoteRoster: (vaultId: string, rosterJson: string) => Promise<void>;
+	/** An attachment arrived from a peer: a backup that was waiting for it can run now. */
+	blobArrived?: () => void;
+	/** Frames to the desktop app over the native link, which the background owns. Bridged rather
+	 * than messaged, because on Firefox this host IS the background, and a page's own
+	 * runtime.sendMessage never reaches its own listeners. False when the link is down. */
+	linkSend?: (frame: string) => Promise<boolean>;
+	linkBlobSend?: (stream: number, frame: string) => Promise<boolean>;
+	/** Whether a link is up to an app that speaks files. */
+	linkBlobUp?: () => Promise<boolean>;
 }
 
 export interface HostResponse {
@@ -111,6 +142,12 @@ let syncSession: MeshSession | null = null;
  * they both feed is serialised in the background.
  */
 let linkSyncSession: MeshSession | null = null;
+/**
+ * The attachment session beside entry sync: WebRTC only (direct or TURN), never the signalling relay
+ * (see @core/sync/transport/blob-sync). Absent on Firefox in effect, whose host has no WebRTC, so
+ * its mesh finds no peer it may use; there the desktop app's local link is the only way in.
+ */
+let blobSession: BlobSyncSession | null = null;
 
 /**
  * The config the live sync sessions were started with. A repeat SYNC_ROSTER_SYNC carrying the same
@@ -156,6 +193,8 @@ function stopSyncSessions(): void {
 	syncSession = null;
 	linkSyncSession?.stop();
 	linkSyncSession = null;
+	blobSession?.stop();
+	blobSession = null;
 	syncConfigKey = null;
 	syncSessionVaultId = null;
 }
@@ -176,41 +215,56 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 		report: reportSyncStatus,
 		// Every callback names the vault this session was started for, never "the active one".
 		fetchLocalPayload: () => bridge.fetchLocalPayload(opts.vaultId),
-		pushRemotePayload: (json: string) => bridge.pushRemotePayload(opts.vaultId, json),
+		// A merge can name attachments this device lacks, so the file session looks again after.
+		pushRemotePayload: async (json: string) => {
+			await bridge.pushRemotePayload(opts.vaultId, json);
+			blobSession?.poke();
+		},
 		fetchLocalRoster: () => bridge.fetchLocalRoster(opts.vaultId),
 		pushRemoteRoster: (json: string) => bridge.pushRemoteRoster(opts.vaultId, json),
 	};
 	syncSession = await startRosterSync(common);
 	// The desktop app on this machine, over the pipe it already has. Started second so
 	// a relay failure does not cost the local peer, which is the one that works offline.
-	linkSyncSession = await startRosterSync({ ...common, peerSource: desktopPeerSource });
-	// Recorded only once both are up, so a half-started pair is rebuilt rather than kept.
+	linkSyncSession = await startRosterSync({
+		...common,
+		peerSource: makeLinkPeerSource({
+			send: (frame) => bridge.linkSend?.(frame) ?? Promise.resolve(false),
+			subscribe: (onFrame) => {
+				linkFrameSinks.add(onFrame);
+				return () => linkFrameSinks.delete(onFrame);
+			},
+		}),
+	});
+	blobSession = await startBlobSync({
+		...common,
+		blobs: idbBlobStore(opts.vaultId),
+		wanted: async () =>
+			wantedFromPayload(decodeEntriesPayload(await bridge.fetchLocalPayload(opts.vaultId))),
+		onReceived: () => bridge.blobArrived?.(),
+		// Direct connections need WebRTC, which no Firefox extension context has. There the
+		// desktop app's link is the only path a file has to this browser.
+		relay: typeof RTCPeerConnection !== "undefined",
+		localSources: [
+			blobLinkDialer({
+				up: () => bridge.linkBlobUp?.() ?? Promise.resolve(false),
+				send: (stream, frame) => bridge.linkBlobSend?.(stream, frame) ?? Promise.resolve(false),
+				subscribe: (handlers) => {
+					linkBlobSinks.add(handlers);
+					return () => linkBlobSinks.delete(handlers);
+				},
+			}),
+		],
+	});
+	// Recorded only once all are up, so a half-started set is rebuilt rather than kept.
 	syncConfigKey = key;
 	syncSessionVaultId = opts.vaultId;
 }
 
 /** Sinks for frames the desktop app sends, delivered here by the background. */
 const linkFrameSinks = new Set<(frame: string) => void>();
-
-/** The desktop app as a sync peer. Sends go out through the background, which owns the port. */
-const desktopPeerSource = makeLinkPeerSource({
-	send: async (frame) => {
-		try {
-			const res = (await api.runtime.sendMessage({
-				type: "LINK_SYNC_SEND",
-				payload: { frame },
-			})) as { ok?: boolean; data?: boolean } | undefined;
-			return res?.ok === true && res.data === true;
-		} catch {
-			// No background listening (a torn-down worker) is a link that is down, not a fault.
-			return false;
-		}
-	},
-	subscribe: (onFrame) => {
-		linkFrameSinks.add(onFrame);
-		return () => linkFrameSinks.delete(onFrame);
-	},
-});
+/** The same for its file frames and pokes. */
+const linkBlobSinks = new Set<{ frame(stream: number, frame: string): void; poke(): void }>();
 
 /**
  * The pairing approval the host is waiting on, if any. It lives here rather than in the popup
@@ -330,6 +384,8 @@ type SyncVek = {
 	decrypt_entries(entries: EncryptedPayload[]): (string | null)[];
 	encrypt_with_vek(plaintext: string): VekEncrypted;
 	decrypt_with_vek(iv: string, ciphertext: string): string;
+	open_file_meta(wrappedFek: string, fekIv: string, metaBlob: string, metaIv: string): string;
+	reseal_file_meta(wrappedFek: string, fekIv: string, metaJson: string): VekEncrypted;
 };
 
 /** Load the injected vek (when present) into the scratch slot, then run `op`, as one
@@ -431,6 +487,31 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 			const w = (await getWasm()) as unknown as SyncVek;
 			return withVek(w, p.vekB64, (w) => w.decrypt_with_vek(p.iv, p.ciphertext));
 		}
+		// File attachments: the bytes stay in IndexedDB (files/host.ts). The two streaming ops
+		// take the vek only to construct, so they may await between chunks; the metadata ops are
+		// one synchronous section like the rest.
+		case "CRYPTO_FILE_SEAL": {
+			const p = CryptoFileSealSchema.parse(payload);
+			const sealed = await sealFromHandoff((await getWasm()) as unknown as FileWasm, p);
+			blobSession?.poke();
+			return sealed;
+		}
+		case "CRYPTO_FILE_OPEN": {
+			const p = CryptoFileOpenSchema.parse(payload);
+			return openToHandoff((await getWasm()) as unknown as FileWasm, p);
+		}
+		case "CRYPTO_FILE_META": {
+			const p = CryptoFileMetaSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) =>
+				w.open_file_meta(p.wrappedFek, p.fekIv, p.metaBlob, p.metaIv),
+			);
+		}
+		case "CRYPTO_FILE_RESEAL_META": {
+			const p = CryptoFileResealMetaSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) => w.reseal_file_meta(p.wrappedFek, p.fekIv, p.metaJson));
+		}
 		// SET-VEK unwraps: unwrap leaves the recovered vek in the slot and returns only a
 		// boolean, so unwrap + export_vek MUST be one synchronous section or the exported vek
 		// could be another op's. The background caches vekB64 and strips it back to the boolean.
@@ -507,19 +588,31 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 		}
 
 		case "CRYPTO_OPEN_KDBX": {
-			// Foreign KeePass database decrypted entirely in WASM; only mapped
-			// key/value pairs come back. Unrelated to the vault VEK.
+			// Foreign KeePass database decrypted entirely in WASM. Unrelated to the vault VEK. The
+			// entries come back in the reply; each attachment is parked in a handoff of its own,
+			// which the view drops once the import has sealed it.
 			const p = CryptoOpenKdbxSchema.parse(payload);
-			return a.openKdbx({ fileB64: p.fileB64, password: p.password, keyfileB64: p.keyfileB64 });
+			const file = await readHandoff(p.handoff);
+			if (!file) throw new Error("the database to import is no longer staged");
+			const opened = await a.openKdbx({
+				file: new Uint8Array(await file.arrayBuffer()),
+				password: p.password,
+				keyfile: p.keyfileB64 ? base64ToBytes(p.keyfileB64) : undefined,
+			});
+			const attachments: { token: string; size: number }[] = [];
+			for (const { source, size } of opened.attachments) {
+				if (source.kind !== "blob") throw new Error("expected the attachment as a Blob");
+				attachments.push({ token: await putHandoff(source.blob), size });
+			}
+			return { entries: opened.entries, attachments };
 		}
 
 		case "CRYPTO_SAVE_KDBX": {
-			// Builds a foreign KeePass database in WASM from already-decrypted entries the
-			// caller passed in, under an export password of the user's choosing. Nothing
-			// here touches the vault VEK.
+			// A foreign KeePass database, under an export password of the user's choosing: the
+			// entries the caller decrypted, and each attachment opened here under the vault's key.
+			// Written into a handoff a piece at a time, so its size is not this document's limit.
 			const p = CryptoSaveKdbxSchema.parse(payload);
-			if (!a.saveKdbx) throw new Error("KDBX export isn't available here.");
-			return a.saveKdbx({ entries: p.entries, password: p.password });
+			return saveKdbxToHandoff((await getWasm()) as unknown as KdbxWasm, p);
 		}
 
 		case "CRYPTO_SEAL_PORTABLE_VAULT": {
@@ -648,6 +741,12 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 		switch (type) {
 			case "CLIPBOARD_CLEAR":
 				return { ok: true, data: await clearClipboard() };
+			// A long request the background cannot make itself (see http-host.ts). Not CRYPTO_*:
+			// it carries no key, and the router still admits only extension contexts.
+			case "HTTP_JOB_START":
+				return { ok: true, data: await startHttpJob(payload as HttpJobRequest) };
+			case "HTTP_JOB_POLL":
+				return { ok: true, data: pollHttpJob(String((payload as { id?: unknown })?.id ?? "")) };
 			case "QR_DECODE": {
 				const dataUrl = (payload as { dataUrl?: unknown } | null)?.dataUrl;
 				if (typeof dataUrl !== "string") throw new Error("QR_DECODE requires a dataUrl");
@@ -703,7 +802,16 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				// desktop app only at its next tick.
 				await syncSession?.broadcastNow?.();
 				await linkSyncSession?.broadcastNow?.();
+				// The write may have attached a file: say so to file peers now, too.
+				blobSession?.poke();
 				return { ok: true };
+			case "BLOB_STATUS": {
+				// For the attachment rows. Only the vault this session serves: another vault's
+				// files can't be coming in, and saying why would be about the wrong vault.
+				const { vaultId, hashes } = BlobStatusMsgSchema.parse(payload);
+				if (!blobSession || syncSessionVaultId !== vaultId) return { ok: true, data: null };
+				return { ok: true, data: await blobSession.status(hashes) };
+			}
 			case "LINK_SYNC_FRAME": {
 				// A frame the desktop app pushed, relayed in by the background, which owns the port.
 				const frame = (payload as { frame?: unknown } | null)?.frame;
@@ -711,6 +819,17 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				for (const sink of linkFrameSinks) sink(frame);
 				return { ok: true };
 			}
+			case "LINK_BLOB_FRAME": {
+				const { stream, frame } = (payload ?? {}) as { stream?: unknown; frame?: unknown };
+				if (typeof stream !== "number" || typeof frame !== "string") {
+					throw new Error("LINK_BLOB_FRAME requires a stream and a frame");
+				}
+				for (const sink of linkBlobSinks) sink.frame(stream, frame);
+				return { ok: true };
+			}
+			case "LINK_BLOB_POKE":
+				for (const sink of linkBlobSinks) sink.poke();
+				return { ok: true };
 			case "SYNC_ROSTER_SYNC": {
 				const opts = RosterSyncMsgSchema.parse(payload);
 				const starting = rosterSyncInFlight.then(() => startSyncSessions(opts, bridge));

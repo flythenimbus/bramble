@@ -9,8 +9,10 @@
 //! `@core/adapters/crypto` exactly and need no mapping layer.
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use serde::Serialize;
 use vault_crypto::{
-    CryptoError, EncryptedPayload, MasterEncrypted, OutEntry, PasskeyImportResult, PasswordSlotBlob,
+    CryptoError, EncryptedPayload, KdbxAttachmentFile, MasterEncrypted, OutEntry,
+    PasskeyImportResult, PasswordSlotBlob,
 };
 
 /// Errors ride to JS as a plain string, which `invoke` rejects with. The core already
@@ -219,20 +221,42 @@ pub fn crypto_passkey_import_pkcs8(pkcs8_b64: String) -> CmdResult<PasskeyImport
     map(vault_crypto::passkey_import_pkcs8(pkcs8_b64))
 }
 
+/// A KeePass database opened for import: its entries, its attachments unpacked as files for the
+/// sealer to read, and the folder they are in, for `files_discard_kdbx` once they are sealed.
+#[derive(Serialize)]
+pub struct KdbxImport {
+    entries: Vec<OutEntry>,
+    attachments: Vec<KdbxAttachmentFile>,
+    dir: String,
+}
+
 /// Open a KDBX4 database. The file rides as base64 rather than a byte array because Tauri's
 /// IPC is JSON, where a `Vec<u8>` is a list of decimal numbers (~4x the bytes for a whole
 /// database), and the webview already holds it as base64.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crypto_open_kdbx(
+    window: tauri::Window,
     file_b64: String,
     password: String,
     keyfile_b64: Option<String>,
-) -> CmdResult<Vec<OutEntry>> {
+) -> CmdResult<KdbxImport> {
     let file = decode_b64(&file_b64, "file")?;
     let keyfile = keyfile_b64
         .map(|k| decode_b64(&k, "key file"))
         .transpose()?;
-    map(vault_crypto::open_kdbx4(file, password, keyfile))
+    let dir = crate::files::new_kdbx_dir(&window)?;
+    let dir = dir.to_str().ok_or("import folder is not UTF-8")?.to_owned();
+    let opened = map(vault_crypto::open_kdbx4(
+        file,
+        password,
+        keyfile,
+        dir.clone(),
+    ))?;
+    Ok(KdbxImport {
+        entries: opened.entries,
+        attachments: opened.attachments,
+        dir,
+    })
 }
 
 /// Decode an IPC base64 argument. A failure here is a bug on our side, not a bad database,

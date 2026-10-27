@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { fileRecord } from "../test/vault-fixtures";
 import type { EncryptedEntry } from "../vault-format";
 import {
 	decodeEntriesPayload,
 	type EntriesPayload,
 	emptyEntriesPayload,
 	encodeEntriesPayload,
+	type FileRecord,
 	sanitizeRemoteEntriesPayload,
 } from "./entries-payload";
 import { HLC_MAX_DRIFT_MS } from "./hlc";
@@ -103,5 +105,86 @@ describe("sanitizeRemoteEntriesPayload", () => {
 	it("leaves conflicts absent when it was absent", () => {
 		const safe = sanitizeRemoteEntriesPayload({ entries: [], tombstones: [] }, now);
 		expect("conflicts" in safe).toBe(false);
+	});
+});
+
+const HASH = "0123456789abcdef".repeat(4);
+
+const fileRec = (id: string, wall: number): FileRecord =>
+	fileRecord({ id, hlc: { wall, counter: 0, node: "dev" }, hash: HASH, size: 262160 });
+
+describe("file manifest codec", () => {
+	it("round-trips files, file tombstones, marks and an entryId", () => {
+		const payload: EntriesPayload = {
+			entries: [entry("a", 100)],
+			tombstones: [],
+			files: [fileRec("f1", 100), { ...fileRec("f2", 200), entryId: "a" }],
+			fileTombstones: [{ id: "f3", hlc: { wall: 300, counter: 0, node: "dev" } }],
+			fileCascades: [{ id: "f2", hlc: { wall: 400, counter: 0, node: "dev" } }],
+		};
+		expect(decodeEntriesPayload(encodeEntriesPayload(payload))).toEqual(payload);
+	});
+
+	it("still parses a payload written before the manifest existed", () => {
+		const legacy = JSON.stringify({ entries: [entry("a", 100)], tombstones: [] });
+		const parsed = decodeEntriesPayload(legacy);
+		expect(parsed.files).toBeUndefined();
+		expect(parsed.fileTombstones).toBeUndefined();
+	});
+
+	// The hash doubles as the blob's filename on the mobile and desktop stores, so a value that
+	// is not plain lowercase hex is a path, not a name.
+	it("rejects a hash that is not lowercase hex sha-256", () => {
+		for (const hash of [
+			HASH.toUpperCase(),
+			"../../etc/passwd",
+			`${HASH}a`,
+			HASH.slice(0, 63),
+			"a+/b",
+		]) {
+			expect(() =>
+				encodeEntriesPayload({
+					entries: [],
+					tombstones: [],
+					files: [{ ...fileRec("f", 1), hash }],
+				}),
+			).toThrow();
+		}
+	});
+
+	it("rejects a negative or fractional size", () => {
+		for (const size of [-1, 1.5]) {
+			expect(() =>
+				encodeEntriesPayload({
+					entries: [],
+					tombstones: [],
+					files: [{ ...fileRec("f", 1), size }],
+				}),
+			).toThrow();
+		}
+	});
+
+	it("drops future-stamped files, file tombstones and marks from a remote payload", () => {
+		const now = 1_000_000;
+		const far = { wall: now + 5 * 24 * 3600_000, counter: 0, node: "evil" };
+		const safe = sanitizeRemoteEntriesPayload(
+			{
+				entries: [],
+				tombstones: [],
+				files: [fileRec("ok", now - 1000), { ...fileRec("evil", 0), hlc: far }],
+				fileTombstones: [
+					{ id: "ok-t", hlc: { wall: now - 1000, counter: 0, node: "dev" } },
+					{ id: "evil-t", hlc: far },
+				],
+				fileCascades: [
+					{ id: "ok-c", hlc: { wall: now - 1000, counter: 0, node: "dev" } },
+					{ id: "evil-c", hlc: far },
+				],
+			},
+			now,
+		);
+		expect(safe.files?.map((f) => f.id)).toEqual(["ok"]);
+		expect(safe.fileTombstones?.map((t) => t.id)).toEqual(["ok-t"]);
+		expect(safe.fileCascades?.map((t) => t.id)).toEqual(["ok-c"]);
 	});
 });

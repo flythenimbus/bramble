@@ -36,6 +36,7 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "decryptWithVek", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "passkeyImportPkcs8", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "openKdbx4", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "saveKdbx4", returnType: CAPPluginReturnPromise),
 		// Sync transport: Noise handshake (KK roster-auth + XXpsk3 enrollment) + Nostr.
 		CAPPluginMethod(name: "handshakeGenerateKeypair", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "handshakeStartInitiator", returnType: CAPPluginReturnPromise),
@@ -58,6 +59,12 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "rosterVerify", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "rosterAdmissionPublicKey", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "rosterAdmissionSign", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "sealFile", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "resealFileMeta", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "openFileMeta", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "openFileToPath", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "openFileChunk", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "readFileRange", returnType: CAPPluginReturnPromise),
 	]
 
 	// --- helpers ---
@@ -316,15 +323,35 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 
 	// --- KDBX4 import ---
 
+	// Attachments are written into `dir`, one file each, and only their paths come back: a
+	// database's files can be far larger than is sensible to send over the bridge.
 	@objc func openKdbx4(_ call: CAPPluginCall) {
-		guard let file = bytes(call, "fileB64"), let pw = str(call, "password") else { return }
+		guard let file = bytes(call, "fileB64"), let pw = str(call, "password"),
+			let dir = str(call, "dir") else { return }
 		let keyfile = call.getString("keyfileB64").flatMap { Data(base64Encoded: $0) }
 		do {
-			let entries = try App.openKdbx4(file: file, password: pw, keyfile: keyfile)
-			let js = entries.map { e in
-				["strings": e.strings.map { ["key": $0.key, "value": $0.value, "protected": $0.protected] }]
+			let opened = try App.openKdbx4(file: file, password: pw, keyfile: keyfile, dir: dir)
+			let entries = opened.entries.map { e in
+				[
+					"strings": e.strings.map { ["key": $0.key, "value": $0.value, "protected": $0.protected] },
+					"binaries": e.binaries.map { ["name": $0.name, "index": Int($0.index)] },
+				]
 			}
-			call.resolve(["entries": js])
+			let attachments = opened.attachments.map { ["path": $0.path, "size": Int($0.size)] }
+			call.resolve(["entries": entries, "attachments": attachments])
+		} catch { fail(call, error) }
+	}
+
+	// --- KDBX4 export ---
+
+	// Each attachment is opened here from its blob path and the database written to `outPath`;
+	// only its size comes back.
+	@objc func saveKdbx4(_ call: CAPPluginCall) {
+		guard let entries = str(call, "entriesJson"), let pw = str(call, "password"),
+			let files = str(call, "filesJson"), let out = str(call, "outPath") else { return }
+		do {
+			let size = try App.saveKdbx4(entriesJson: entries, password: pw, filesJson: files, outPath: out)
+			call.resolve(["value": Int(size)])
 		} catch { fail(call, error) }
 	}
 
@@ -481,6 +508,98 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		do {
 			call.resolve([
 				"value": try App.rosterAdmissionSign(password: password, saltB64: salt, message: message)
+			])
+		} catch { fail(call, error) }
+	}
+
+	// --- file attachments (see docs/file-attachments.md) ---
+	//
+	// Path-based on purpose: an attachment's bytes never cross this bridge. The webview hands
+	// over source and destination paths and gets back a few hundred bytes of manifest, so the
+	// plaintext is read, sealed and written entirely on this side. Mirrors NativeCryptoPlugin.kt.
+
+	@objc func sealFile(_ call: CAPPluginCall) {
+		guard let src = str(call, "srcPath"), let dst = str(call, "dstPath"),
+			let metaJson = str(call, "metaJson") else { return }
+		do {
+			let b = try App.sealFile(srcPath: src, dstPath: dst, metaJson: metaJson)
+			call.resolve([
+				"hash": b.hash,
+				// UInt64 -> JS number: a blob is bounded by the backup limit, far inside 2^53.
+				"size": Int(b.size),
+				"noncePrefix": b.noncePrefix,
+				"wrappedFek": b.wrappedFek,
+				"fekIv": b.fekIv,
+				"metaBlob": b.metaBlob,
+				"metaIv": b.metaIv,
+			])
+		} catch { fail(call, error) }
+	}
+
+	@objc func resealFileMeta(_ call: CAPPluginCall) {
+		guard let wrappedFek = str(call, "wrappedFekB64"), let fekIv = str(call, "fekIvB64"),
+			let metaJson = str(call, "metaJson") else { return }
+		do {
+			let m = try App.resealFileMeta(wrappedFekB64: wrappedFek, fekIvB64: fekIv, metaJson: metaJson)
+			call.resolve(["iv": m.iv, "ciphertext": m.ciphertext])
+		} catch { fail(call, error) }
+	}
+
+	@objc func openFileMeta(_ call: CAPPluginCall) {
+		guard let wrappedFek = str(call, "wrappedFekB64"), let fekIv = str(call, "fekIvB64"),
+			let metaBlob = str(call, "metaBlobB64"), let metaIv = str(call, "metaIvB64") else { return }
+		do {
+			call.resolve([
+				"value": try App.openFileMeta(
+					wrappedFekB64: wrappedFek, fekIvB64: fekIv, metaBlobB64: metaBlob, metaIvB64: metaIv)
+			])
+		} catch { fail(call, error) }
+	}
+
+	/// A byte range of a file, base64. Capacitor's Filesystem only reads whole files, which is
+	/// quadratic for anything read in pieces: a backup laid out from an attachment's parts, or a
+	/// peer being sent one. The caller bounds the length to one part.
+	@objc func readFileRange(_ call: CAPPluginCall) {
+		guard let path = str(call, "path") else { return }
+		guard let offset = call.getDouble("offset"), let length = call.getInt("length"),
+			offset >= 0, offset.rounded() == offset, length >= 0
+		else {
+			call.reject("Missing or invalid range")
+			return
+		}
+		do {
+			let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
+			defer { try? handle.close() }
+			try handle.seek(toOffset: UInt64(offset))
+			let data = try handle.read(upToCount: length) ?? Data()
+			call.resolve(["value": data.base64EncodedString()])
+		} catch { fail(call, error) }
+	}
+
+	@objc func openFileToPath(_ call: CAPPluginCall) {
+		guard let wrappedFek = str(call, "wrappedFekB64"), let fekIv = str(call, "fekIvB64"),
+			let noncePrefix = str(call, "noncePrefixB64"), let src = str(call, "srcPath"),
+			let dst = str(call, "dstPath") else { return }
+		do {
+			let written = try App.openFileToPath(
+				wrappedFekB64: wrappedFek, fekIvB64: fekIv, noncePrefixB64: noncePrefix,
+				srcPath: src, dstPath: dst)
+			call.resolve(["value": Int(written)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func openFileChunk(_ call: CAPPluginCall) {
+		guard let wrappedFek = str(call, "wrappedFekB64"), let fekIv = str(call, "fekIvB64"),
+			let noncePrefix = str(call, "noncePrefixB64"), let src = str(call, "srcPath") else { return }
+		guard let index = call.getInt("index"), index >= 0 else {
+			call.reject("Missing or invalid index")
+			return
+		}
+		do {
+			call.resolve([
+				"value": try App.openFileChunk(
+					wrappedFekB64: wrappedFek, fekIvB64: fekIv, noncePrefixB64: noncePrefix,
+					srcPath: src, index: UInt64(index))
 			])
 		} catch { fail(call, error) }
 	}

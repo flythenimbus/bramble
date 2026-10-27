@@ -17,7 +17,10 @@ A Bramble backup is already client-side-encrypted ciphertext: the backed-up
 provider it is.
 
 Note that `.bramble` now covers two things. A **backup** is the whole vault blob,
-copied byte for byte, and opens with the master password. A **portable vault** is a
+copied byte for byte, and opens with the master password. (A vault with file
+attachments is backed up as a ZIP holding that same blob plus the attachments'
+sealed files; see "Backups with attachments" below. Without attachments the file is
+exactly the blob, as it always was.) A **portable vault** is a
 selection exported from the vault list, sealed under a password chosen for that file
 and holding no other key. Both are VLT1, so a reader takes either apart the same
 way; what differs is which key opens it and whether the entries inside are
@@ -252,14 +255,133 @@ which is why testing against it never showed the problem.
 
 ### Restore
 
-Restore already exists: creating a new vault lets the user select a `.bramble`
-file, and a backup `.bramble` is the raw vault blob, so opening one is a full
-restore. No new restore flow is needed for this feature.
+Restore takes either kind of backup file and tells them apart by their first bytes
+(`VLT1` or a ZIP's `PK`), never by the name. A plain backup is written as the vault
+unchanged. An archive's inner vault is written as the vault, then each attachment is
+put into that vault's own store (see "Backups with attachments").
 
-Restore replaces the vault on the device; it is not the same path as importing a
-portable vault, which merges. That split is deliberate: at setup time there is no
-vault to replace, and a user recovering from a backup wants exactly the state in
-the file.
+Restore never overwrites a vault: with none on the device the backup becomes the first
+one and is unlocked; otherwise it is added as a new vault, left locked. It is not the
+same path as importing a portable vault, which merges entries into the open vault, and
+Import turns a full backup away and points at Restore. That split is deliberate: a user
+recovering from a backup wants exactly the state in the file, as its own vault.
+
+The decisions live in `core/backup/restore.ts` rather than in the screen, so they are
+tested: `readPickedBackup` classifies the file, and `commitRestore` runs once the password
+is verified, in a fixed order (record, vault, attachments, unlock) so the restored vault
+never opens with its files missing.
+
+### Backups with attachments
+
+A vault with [file attachments](file-attachments.md) is backed up as **one
+self-contained file**: a ZIP holding `vault.bramble` (the same bytes a plain backup
+has) plus `blobs/<hash>` for each attachment. One file restores everything, with
+nothing else to reach, which is the property a backup exists for. Code:
+`core/backup/archive.ts` and `core/backup/zip.ts`.
+
+**A backup is the whole vault, or it is not made.** There is no size limit and no
+partial backup. An earlier version capped backups at 100 MB and, over it or with files
+missing, uploaded the vault without them and said so in amber. A backup that looks like
+one and is not is worse than none, so that is gone, and the rule now is to scale or to
+refuse loudly, never to drop data quietly.
+
+- **A vault without attachments is unchanged.** It is backed up as its raw blob, byte
+  for byte, fingerprinted with the same hash the runners always stored, so no target
+  re-uploads because the code changed, and older builds still restore those files.
+- **Still `.bramble`.** The ZIP keeps the extension, the way `.1pux` is a ZIP with its
+  own, so the snapshot names the prune matches and the file-picker filters keep working.
+  Anyone can rename one to `.zip` and look inside; `unzip -t` and Python's zipfile
+  accept it, CRCs included.
+- **Our own ZIP, laid out rather than built.** Stored entries only (everything inside is
+  ciphertext, which does not compress), a fixed DOS timestamp so identical content packs
+  to identical bytes, and ZIP64 exactly where a size or offset needs it. The archive is a
+  list of parts, header bytes in memory and references into the blob store, read on
+  demand: its size is exact before anything is read, and no platform ever holds it
+  whole. fflate is not used for this because both its halves hold the archive in memory.
+- **Which attachments go in** is read from the vault's own manifest, so a deleted
+  attachment whose file has not been collected yet never rides along.
+- **When a backup cannot be whole, it waits.** `planBackup` sets `blocked`:
+  - `missing`: the vault lists files this device does not hold (they have not arrived
+    from another device yet).
+  - `locked`: the list is sealed and no key in hand opens it.
+
+  The runner then uploads nothing, marks each due target `waiting` with the reason, shown
+  in amber under the last backup, and leaves it due; the next backup that is made clears
+  it. Waiting is not failing, so it never feeds the retry backoff. "Export a backup" and
+  "Back up now" refuse the same way, with the same reason.
+- **A locked vault is planned from a cached list.** Each plan that can read the list
+  stores it (`backup.attachments:<vaultId>`, just the blob hashes, which already name the
+  files on this device's disk) with the hash of the vault bytes it was read from. While
+  locked, a list cached for those exact bytes stands in: no write reaches a vault without
+  its key, so it is exactly right. Anything else waits for an unlock. An empty store says
+  nothing on its own, because synced records can name files that never arrived; treating
+  it as "no attachments" would upload a vault without them.
+- **Every writer packs the same way.** The scheduled runner, "Back up now" and "Export a
+  backup" all go through `planBackup` and store the same fingerprint (the vault's hash
+  plus the attachment hashes), so a manual backup is not followed by a redundant
+  scheduled one. `backupPlanner` keeps one plan per vault per run, so the fingerprint,
+  the wait and the upload describe the same file and the archive is laid out once.
+- **Deciding reads no attachment.** The fingerprint comes from hashes; only laying out
+  the archive reads each attachment, once, for its CRC.
+
+**Uploading one of any size.** Every provider takes a body read on demand
+(`BackupUpload`), and anything from one part (`PART_SIZE`, 16 MB) up goes up in pieces
+that each fit one request:
+
+- **S3** uses a multipart upload. The object exists only once completed, so it is as
+  atomic as one PUT. The completion's ETags come from the server's own ListParts rather
+  than from response headers, which no transport returns, and that list is checked
+  against what was sent, so a part the server lost stops the completion. On any failure
+  the upload is aborted, and `sweepIncomplete` aborts this vault's stale ones during the
+  prune, since an abandoned multipart upload holds storage the user pays for but cannot
+  see. MinIO sends ETags with `&#34;` for their quotes, which the parser leaves as is;
+  they are decoded before they go back (the real-server test caught this).
+- **Dropbox** uses an upload session (start, append in parts, finish with the commit).
+  The file appears only at the commit, and Dropbox expires abandoned sessions itself.
+- **WebDAV** has no standard way to upload in parts, so a large backup is one PUT whose
+  body the transport streams (see `HttpBodySource` in `core/adapters/http.ts`). Before the
+  temporary file is moved into place its stored size is checked with a PROPFIND, so a
+  server that took a short body without complaint never gets a snapshot out of it.
+
+**Restoring one of any size.** The picked file is read in slices (`fileSource`): the
+vault and the ZIP directory up front, then each attachment streamed into the restored
+vault's store in 1 MiB reads, verified by an incremental SHA-256 (`createBlobHasher`,
+`@noble/hashes`) rather than one that buffers the file. The reader is strict, because a
+backup is untrusted input: only `vault.bramble` and `blobs/<64 lowercase hex>`, no
+duplicates, stored entries whose local headers agree with the directory, no entries
+whose bytes overlap, no comment, and the vault's CRC must match. The archive itself
+needs no trust: the vault authenticates itself, and each attachment is re-hashed
+against its name as it is stored, so no vault key is involved. A tampered archive can
+fail an attachment, and the restore then says so; it cannot deliver wrong data.
+
+**Per platform**, the parts no shared code can do:
+
+- **Extension.** Chrome ends a service worker whose `fetch()` response takes over 30
+  seconds or whose one call takes over 5 minutes, and a large upload does both. So the
+  scheduled runner sends from the offscreen document instead (`http-host.ts`,
+  `background/host-http.ts`): each request is a job started with one message and polled
+  with more, so no message waits on the upload, and each poll is an extension API call
+  that keeps the worker alive meanwhile. Bodies cross as a Blob in the IndexedDB handoff
+  store. Exports are assembled into a Blob a chunk at a time and downloaded.
+- **Desktop.** Large bodies cross the IPC in raw chunks into a sink in the shell
+  (`src-tauri/src/stream.rs`): a request whose body reads from a bounded channel, or an
+  export written beside the chosen file and renamed into place only once it holds every
+  byte. The upload's length is declared rather than chunked, since some WebDAV servers
+  refuse a chunked PUT, and its timeout scales with the size.
+- **Mobile.** Reads go native (`readFileRange`), since Capacitor's Filesystem only reads
+  whole files. A large body is spooled to a cache file a chunk at a time and sent from it
+  natively (`sendFile`), with the file's length declared.
+
+Tested against real servers, not only against mocks: the provider integration suite
+(`BRAMBLE_IT=1`, `docker compose up -d`) uploads past one part to MinIO and Nextcloud
+and reads it back, and `e2e/extension/backup-attachments-servers.spec.ts` attaches 120 MB
+to a vault, lets the scheduled run back it up from the background to each server, reads
+the result back with `mc` and `curl`, checks it with `unzip -t`, restores it, and opens
+the attachments byte for byte.
+
+The extension's runner can reach a locked vault's targets too, on credentials wrapped under
+another unlocked vault's key (the device-global list they were migrated from). A locked vault
+holding attachments is planned from its cached list there, or waits, as on desktop below.
 
 ### Helper text
 
@@ -313,6 +435,17 @@ the shell regardless, the credential has no reason to travel back to JavaScript.
   provider clients in `@core/backup` are unchanged apart from taking a
   `BackupTransport`, so object naming and keep-N retention stay single-sourced
   across every platform.
+  A request with a body goes through `backup_send_raw` instead: the body as raw
+  IPC bytes, the rest of the request base64'd JSON in an `x-bramble-request`
+  header. Tauri's JSON IPC would carry the body as an array of numbers, several
+  hundred megabytes of JSON for one part. A body too large for one call (a large
+  WebDAV backup) streams through `backup_stream_open` instead; see "Backups with
+  attachments".
+- **Locked vaults are planned from a cached list.** Which attachments go in is
+  sealed in the payload, so a locked vault's list cannot be read. The list cached
+  at its last unlock stands in while the vault's bytes are unchanged; without one
+  the vault waits for an unlock rather than going up alone (see "Backups with
+  attachments"). A backup made while locked is as complete as one made unlocked.
 - **Schedule:** a thread in the shell emits `backup://tick` every 5 minutes, and
   the main window runs the same `runScheduledBackups` the extension does. The
   tick is in Rust because this window is usually hidden and a hidden webview's

@@ -1,15 +1,15 @@
 /** @vitest-environment happy-dom */
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { TRANSFER_INTERRUPTED } from "../adapters/http";
 import {
 	type BackupTargetConfig,
 	backupTargetsKeyFor,
 	FOREIGN_CREDS_ERROR,
 } from "../backup/config";
-import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import type { Platform } from "../context/PlatformContext";
+import { mountBackup } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
-import { useBackup } from "./useBackup";
-import { VaultRegistryProvider } from "./useVaultRegistry";
 
 // What a vault sees when it inherits a target from the device-global era: the config is in its
 // list, but the secret was sealed under whichever vault entered it, so the unwrap fails here and
@@ -33,7 +33,7 @@ const inherited: BackupTargetConfig = {
 	sharedFolder: true,
 };
 
-function makePlatform() {
+function makePlatform({ locked = false } = {}) {
 	const store = new Map<string, unknown>([
 		[VAULT_REGISTRY_KEY, { vaults: [{ id: VAULT, label: "", createdAt: 1 }] }],
 		[backupTargetsKeyFor(VAULT), [inherited]],
@@ -55,32 +55,16 @@ function makePlatform() {
 				throw new Error("aes decrypt: aead::Error");
 			}),
 			encryptWithVek: vi.fn(async () => ({ iv: "IV2", ciphertext: "CT2" })),
+			isLocked: vi.fn(async () => locked),
 		},
 		shell: {},
 	} as unknown as Platform;
 	return { platform, store };
 }
 
-/** Render the hook and hand back its last value. */
-function mount(platform: Platform) {
-	const seen: { current: ReturnType<typeof useBackup> | null } = { current: null };
-	function Probe() {
-		seen.current = useBackup();
-		return null;
-	}
-	render(
-		<PlatformProvider platform={platform}>
-			<VaultRegistryProvider>
-				<Probe />
-			</VaultRegistryProvider>
-		</PlatformProvider>,
-	);
-	return seen;
-}
-
 it("records a credential from another vault as that, not as a crypto error", async () => {
 	const { platform, store } = makePlatform();
-	const hook = mount(platform);
+	const hook = mountBackup(platform);
 	await act(async () => {});
 	expect(hook.current?.targets).toHaveLength(1);
 
@@ -99,4 +83,24 @@ it("records a credential from another vault as that, not as a crypto error", asy
 	expect(target.failures).toBe(1);
 	expect(target.failedAt).toBeGreaterThan(0);
 	expect(target.lastBackupAt).toBeUndefined();
+});
+
+// Leaving the app mid-backup locks it, and the key goes with it: the credential then fails to open
+// for that reason alone. Calling it another vault's would send someone to re-enter credentials that
+// are fine, and back the target off as if the provider had refused.
+it("records a credential that fails because the vault locked as interrupted", async () => {
+	const { platform, store } = makePlatform({ locked: true });
+	const hook = mountBackup(platform);
+	await act(async () => {});
+
+	await act(async () => {
+		await hook.current?.backupNow();
+	});
+
+	const target = (
+		store.get(backupTargetsKeyFor(VAULT)) as BackupTargetConfig[]
+	)[0] as BackupTargetConfig;
+	expect(target.lastError).toBe(TRANSFER_INTERRUPTED);
+	expect(target.failures).toBeUndefined();
+	expect(target.failedAt).toBeUndefined();
 });

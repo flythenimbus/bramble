@@ -1,25 +1,20 @@
-//! KDBX4 import: opens a KeePass KDBX4 database inside WASM.
+//! KDBX4 import and export: KeePass databases, attachments included, in WASM and natively.
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
-#[cfg(feature = "wasm")]
 use cbc::cipher::BlockEncryptMut;
+use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use chacha20::cipher::StreamCipher;
 use chacha20::ChaCha20;
 use flate2::read::GzDecoder;
-#[cfg(feature = "wasm")]
 use flate2::write::GzEncoder;
-#[cfg(feature = "wasm")]
 use flate2::Compression;
 use hmac::{Hmac, Mac};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use serde::Serialize;
-#[cfg(feature = "wasm")]
 use serde::Deserialize;
+use serde::Serialize;
 use sha2::{Digest, Sha256, Sha512};
 use std::io::Read;
-#[cfg(feature = "wasm")]
 use std::io::Write;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
@@ -27,7 +22,6 @@ use zeroize::Zeroizing;
 
 type HmacSha256 = Hmac<Sha256>;
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
-#[cfg(feature = "wasm")]
 type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
 
 // 16-byte UUIDs as stored in the header / KDF VariantDictionary.
@@ -90,11 +84,20 @@ impl KdbxError {
 type Res<T> = Result<T, KdbxError>;
 
 /// One imported entry: its KeePass String key/value pairs, protected values
-/// already decrypted. JS maps these to `EntryData`.
+/// already decrypted, and the attachments it names. JS maps these to `EntryData`.
 #[derive(Serialize, Debug, PartialEq)]
 #[cfg_attr(feature = "ffi", derive(uniffi::Record))]
 pub struct OutEntry {
     pub strings: Vec<OutString>,
+    pub binaries: Vec<OutBinary>,
+}
+/// An entry's attachment: its name on that entry, and which of the database's attachments it
+/// is. KeePass stores each attachment once and lets entries share it.
+#[derive(Serialize, Debug, PartialEq)]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct OutBinary {
+    pub name: String,
+    pub index: u32,
 }
 #[derive(Serialize, Debug, PartialEq)]
 #[cfg_attr(feature = "ffi", derive(uniffi::Record))]
@@ -105,7 +108,8 @@ pub struct OutString {
     pub protected: bool,
 }
 
-/// WASM entry point. `keyfile` is the raw key-file bytes, if any.
+/// WASM entry point. `keyfile` is the raw key-file bytes, if any. Returns
+/// `{ entries, attachments }`, each attachment a `Uint8Array` the entries refer to by index.
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn open_kdbx4(
@@ -113,8 +117,20 @@ pub fn open_kdbx4(
     password: &str,
     keyfile: Option<Box<[u8]>>,
 ) -> Result<JsValue, JsError> {
-    let entries = open_inner(file, password, keyfile.as_deref()).map_err(|e| JsError::new(&e.code()))?;
-    serde_wasm_bindgen::to_value(&entries).map_err(|e| JsError::new(&format!("KDBX_SERIALIZE:{e}")))
+    let (entries, attachments) =
+        open_full(file, password, keyfile.as_deref()).map_err(|e| JsError::new(&e.code()))?;
+    let entries = serde_wasm_bindgen::to_value(&entries)
+        .map_err(|e| JsError::new(&format!("KDBX_SERIALIZE:{e}")))?;
+    // Byte arrays as Uint8Array, not through serde, which would make each an array of numbers.
+    let list = js_sys::Array::new();
+    for a in &attachments {
+        list.push(&js_sys::Uint8Array::from(a.as_slice()));
+    }
+    let out = js_sys::Object::new();
+    js_sys::Reflect::set(&out, &"entries".into(), &entries)
+        .and_then(|_| js_sys::Reflect::set(&out, &"attachments".into(), &list))
+        .map_err(|_| JsError::new("KDBX_SERIALIZE:result"))?;
+    Ok(out.into())
 }
 
 /// Native entry point: uniffi (Swift/Kotlin), and bare for the desktop shell, which links
@@ -122,14 +138,81 @@ pub fn open_kdbx4(
 /// core as the WASM path; the `KdbxError` code becomes the `CryptoError` message so the TS
 /// layer's switch on the code string (e.g. `KDBX_WRONG_CREDENTIAL`) works identically
 /// across layers.
+///
+/// Attachments are written into `dir` (created if absent, owner-only), one file each, because a
+/// database's attachments can be far larger than is sensible to hand across a bridge as bytes;
+/// the caller seals them from there and deletes the folder. Put it where decrypted copies are
+/// swept on lock, so nothing survives a session that ends mid-import.
 #[cfg(any(feature = "ffi", feature = "native"))]
 #[cfg_attr(feature = "ffi", uniffi::export)]
 pub fn open_kdbx4(
     file: Vec<u8>,
     password: String,
     keyfile: Option<Vec<u8>>,
-) -> Result<Vec<OutEntry>, crate::CryptoError> {
-    open_inner(&file, &password, keyfile.as_deref()).map_err(|e| crate::err(e.code()))
+    dir: String,
+) -> Result<OpenedKdbx, crate::CryptoError> {
+    let (entries, attachments) =
+        open_full(&file, &password, keyfile.as_deref()).map_err(|e| crate::err(e.code()))?;
+    let dir = std::path::Path::new(&dir);
+    let written = write_attachments(dir, &attachments)
+        .map_err(|e| crate::err(format!("KDBX_ATTACHMENT_WRITE:{e}")))?;
+    Ok(OpenedKdbx {
+        entries,
+        attachments: written,
+    })
+}
+
+/// A database opened natively: its entries, and its attachments as files the entries refer to
+/// by index.
+#[cfg(any(feature = "ffi", feature = "native"))]
+#[derive(Serialize, Debug)]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct OpenedKdbx {
+    pub entries: Vec<OutEntry>,
+    pub attachments: Vec<KdbxAttachmentFile>,
+}
+#[derive(Serialize, Debug, PartialEq)]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct KdbxAttachmentFile {
+    pub path: String,
+    pub size: u64,
+}
+
+/// Write each attachment to its own owner-only file in `dir`. Built in every feature set so the
+/// test runs with the rest; only the native bindings call it.
+#[cfg_attr(not(any(feature = "ffi", feature = "native")), allow(dead_code))]
+fn write_attachments(
+    dir: &std::path::Path,
+    attachments: &[Zeroizing<Vec<u8>>],
+) -> std::io::Result<Vec<KdbxAttachmentFile>> {
+    use std::io::Write as _;
+    std::fs::create_dir_all(dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    let mut out = Vec::with_capacity(attachments.len());
+    for (i, bytes) in attachments.iter().enumerate() {
+        let path = dir.join(format!("attachment-{i}"));
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        options.open(&path)?.write_all(bytes)?;
+        let path = path
+            .to_str()
+            .ok_or_else(|| std::io::Error::other("attachment path is not UTF-8"))?
+            .to_owned();
+        out.push(KdbxAttachmentFile {
+            path,
+            size: bytes.len() as u64,
+        });
+    }
+    Ok(out)
 }
 
 /// A forward byte cursor with bounds-checked reads.
@@ -370,8 +453,59 @@ fn sha512_block_key(index: u64, hmac_base: &[u8]) -> [u8; 64] {
     h.finalize().into()
 }
 
-/// Open a KDBX4 database. Returns entries with protected values decrypted.
+/// Open a KDBX4 database, entries only. For the tests, which mostly look at fields.
+#[cfg(test)]
 pub fn open_inner(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Vec<OutEntry>> {
+    Ok(open_full(file, password, keyfile)?.0)
+}
+
+/// The database's attachments, in inner-header order, which is what entries' `index` counts.
+type Attachments = Vec<Zeroizing<Vec<u8>>>;
+
+/// Open a KDBX4 database: entries with protected values decrypted, and its attachments.
+pub fn open_full(
+    file: &[u8],
+    password: &str,
+    keyfile: Option<&[u8]>,
+) -> Res<(Vec<OutEntry>, Attachments)> {
+    let inner_payload = open_payload(file, password, keyfile)?;
+
+    // Inner header (KDBX4): inner stream cipher id + key, then each attachment.
+    let mut ic = Cursor::new(&inner_payload);
+    let mut inner_stream_id = 0u32;
+    let mut inner_stream_key = Vec::new();
+    let mut attachments: Attachments = Vec::new();
+    loop {
+        let id = ic.u8()?;
+        let len = ic.u32()? as usize;
+        let data = ic.take(len)?;
+        match id {
+            0 => break,
+            1 => {
+                inner_stream_id =
+                    u32::from_le_bytes(data.try_into().map_err(|_| KdbxError::Corrupt("stream id"))?)
+            }
+            2 => inner_stream_key = data.to_vec(),
+            // A flag byte (memory protection, which means nothing here), then the bytes.
+            3 => {
+                let (_flags, bytes) = data
+                    .split_first()
+                    .ok_or(KdbxError::Corrupt("empty attachment field"))?;
+                attachments.push(Zeroizing::new(bytes.to_vec()));
+            }
+            _ => {}
+        }
+    }
+    if inner_stream_id != 3 {
+        return Err(KdbxError::UnsupportedStream); // KDBX4 expects ChaCha20
+    }
+    let xml = &inner_payload[ic.p..];
+
+    Ok((parse_inner_xml(xml, &inner_stream_key)?, attachments))
+}
+
+/// Authenticate and decrypt a KDBX4 file down to its inner payload: the inner header, then XML.
+fn open_payload(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Zeroizing<Vec<u8>>> {
     let mut c = Cursor::new(file);
     if c.u32()? != 0x9AA2_D903 || c.u32()? != 0xB54B_FB67 {
         return Err(KdbxError::NotKeepass);
@@ -470,41 +604,37 @@ pub fn open_inner(file: &[u8], password: &str, keyfile: Option<&[u8]>) -> Res<Ve
         return Err(KdbxError::UnsupportedCipher);
     };
 
-    let inner_payload: Zeroizing<Vec<u8>> = match compression {
-        0 => payload,
+    match compression {
+        0 => Ok(payload),
         1 => {
             let mut gz = GzDecoder::new(&payload[..]);
             let mut out = Zeroizing::new(Vec::new());
             gz.read_to_end(&mut out).map_err(|_| KdbxError::Corrupt("gzip"))?;
-            out
+            Ok(out)
         }
-        _ => return Err(KdbxError::Corrupt("compression flag")),
-    };
-
-    // Inner header (KDBX4): inner stream cipher id + key.
-    let mut ic = Cursor::new(&inner_payload);
-    let mut inner_stream_id = 0u32;
-    let mut inner_stream_key = Vec::new();
-    loop {
-        let id = ic.u8()?;
-        let len = ic.u32()? as usize;
-        let data = ic.take(len)?;
-        match id {
-            0 => break,
-            1 => {
-                inner_stream_id =
-                    u32::from_le_bytes(data.try_into().map_err(|_| KdbxError::Corrupt("stream id"))?)
-            }
-            2 => inner_stream_key = data.to_vec(),
-            _ => {} // 3 Binary (attachments out of scope)
-        }
+        _ => Err(KdbxError::Corrupt("compression flag")),
     }
-    if inner_stream_id != 3 {
-        return Err(KdbxError::UnsupportedStream); // KDBX4 expects ChaCha20
-    }
-    let xml = &inner_payload[ic.p..];
+}
 
-    parse_inner_xml(xml, &inner_stream_key)
+/// Record the attachment an entry's `<Binary>` names: `name` on the innermost entry, by `Ref`.
+fn push_binary_ref(
+    value: &quick_xml::events::BytesStart,
+    name: &str,
+    entry_stack: &mut [(Vec<OutString>, Vec<OutBinary>)],
+) -> Res<()> {
+    let index = value
+        .attributes()
+        .flatten()
+        .find(|a| a.key.as_ref() == b"Ref")
+        .and_then(|a| std::str::from_utf8(&a.value).ok()?.parse::<u32>().ok())
+        .ok_or(KdbxError::Corrupt("attachment reference"))?;
+    if let Some(frame) = entry_stack.last_mut() {
+        frame.1.push(OutBinary {
+            name: name.to_owned(),
+            index,
+        });
+    }
+    Ok(())
 }
 
 /// Walk the inner XML, decrypting Protected="True" values with the inner ChaCha20
@@ -519,7 +649,9 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
     let mut buf = Vec::new();
 
     let mut entries: Vec<OutEntry> = Vec::new();
-    let mut entry_stack: Vec<Vec<OutString>> = Vec::new();
+    let mut entry_stack: Vec<(Vec<OutString>, Vec<OutBinary>)> = Vec::new();
+    // Inside an entry's <Binary>: its <Key> names the attachment and its <Value Ref> says which.
+    let mut in_binary = false;
     let mut group_names: Vec<String> = Vec::new();
     let mut history_depth = 0usize;
 
@@ -540,7 +672,12 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"Group" => group_names.push(String::new()),
-                b"Entry" => entry_stack.push(Vec::new()),
+                b"Entry" => entry_stack.push((Vec::new(), Vec::new())),
+                b"Binary" if !entry_stack.is_empty() => in_binary = true,
+                b"Value" if in_binary => {
+                    push_binary_ref(&e, &cur_key, &mut entry_stack)?;
+                    mode = Mode::None;
+                }
                 b"History" => history_depth += 1,
                 // Only an entry's own <Tags>; the Meta block has one too.
                 b"Tags" if !entry_stack.is_empty() => {
@@ -576,7 +713,13 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                     Mode::None => {}
                 }
             }
+            // `<Value Ref="0"/>`, the way KeePass writes an entry's reference to an attachment.
+            Ok(Event::Empty(e)) if in_binary && e.name().as_ref() == b"Value" => {
+                push_binary_ref(&e, &cur_key, &mut entry_stack)?;
+            }
             Ok(Event::End(e)) => match e.name().as_ref() {
+                b"Binary" => in_binary = false,
+                b"Value" if in_binary => {}
                 b"Value" => {
                     let value = if protected && !cur_val.is_empty() {
                         let mut raw = B64.decode(cur_val.as_bytes()).map_err(|_| KdbxError::Corrupt("b64"))?;
@@ -586,7 +729,11 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                         cur_val.clone()
                     };
                     if let Some(frame) = entry_stack.last_mut() {
-                        frame.push(OutString { key: cur_key.clone(), value, protected });
+                        frame.0.push(OutString {
+                            key: cur_key.clone(),
+                            value,
+                            protected,
+                        });
                     }
                     mode = Mode::None;
                 }
@@ -595,7 +742,7 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                     if mode == Mode::Tags {
                         if let Some(frame) = entry_stack.last_mut() {
                             if !cur_val.is_empty() {
-                                frame.push(OutString {
+                                frame.0.push(OutString {
                                     key: TAGS_KEY.to_string(),
                                     value: cur_val.clone(),
                                     protected: false,
@@ -610,7 +757,7 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                     group_names.pop();
                 }
                 b"Entry" => {
-                    if let Some(mut frame) = entry_stack.pop() {
+                    if let Some((mut frame, binaries)) = entry_stack.pop() {
                         // Emit only top-level entries: not History, not Recycle Bin.
                         let in_recycle = group_names.iter().any(|n| n == RECYCLE_BIN);
                         if history_depth == 0 && entry_stack.is_empty() && !in_recycle {
@@ -631,7 +778,10 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
                                     protected: false,
                                 });
                             }
-                            entries.push(OutEntry { strings: frame });
+                            entries.push(OutEntry {
+                                strings: frame,
+                                binaries,
+                            });
                         }
                     }
                 }
@@ -655,51 +805,41 @@ fn parse_inner_xml(xml: &[u8], inner_stream_key: &[u8]) -> Res<Vec<OutEntry>> {
 
 /// Argon2id cost for exported files: the same as the vault's own KEK (64 MiB / 3 passes /
 /// 1 lane), which is comfortably inside the ceilings `argon2_transform` enforces on read.
-#[cfg(feature = "wasm")]
 const OUT_KDF_MEM_BYTES: u64 = 64 * 1024 * 1024;
-#[cfg(feature = "wasm")]
 const OUT_KDF_ITERATIONS: u64 = 3;
-#[cfg(feature = "wasm")]
 const OUT_KDF_PARALLELISM: u32 = 1;
-#[cfg(feature = "wasm")]
 const ARGON2_V13: u32 = 0x13;
 /// KeePass's own payload block size. A single huge block is legal but unconventional.
-#[cfg(feature = "wasm")]
 const BLOCK_SIZE: usize = 1024 * 1024;
 
 /// One entry to write, as KeePass String pairs. The read-side mirror of `OutEntry`; JS
 /// builds these from `EntryData` so the field naming stays in the TS layer.
-#[cfg(feature = "wasm")]
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct SaveEntry {
     pub strings: Vec<SaveString>,
+    /// Attachments, by the index `Writer::begin_binary` gave each one.
+    #[serde(default)]
+    pub binaries: Vec<SaveBinary>,
 }
-#[cfg(feature = "wasm")]
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct SaveString {
     pub key: String,
     pub value: String,
     /// Written as `Protected="True"` and encrypted with the inner stream.
     pub protected: bool,
 }
-
-/// WASM entry point: returns the finished .kdbx bytes.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn save_kdbx4(entries: JsValue, password: &str) -> Result<Box<[u8]>, JsError> {
-    let entries: Vec<SaveEntry> =
-        serde_wasm_bindgen::from_value(entries).map_err(|e| JsError::new(&format!("KDBX_INPUT:{e}")))?;
-    let bytes = save_inner(&entries, password).map_err(|e| JsError::new(&e.code()))?;
-    Ok(bytes.into_boxed_slice())
+/// An entry's reference to one attachment in the inner header. `name` is unique per entry.
+#[derive(Deserialize, Clone)]
+pub struct SaveBinary {
+    pub name: String,
+    pub index: u32,
 }
 
-#[cfg(feature = "wasm")]
 fn rng(buf: &mut [u8]) -> Res<()> {
     crate::random_bytes(buf).map_err(|_| KdbxError::Corrupt("rng"))
 }
 
 /// `[id:u8][len:u32][data]`, the shape of both the outer and inner header fields.
-#[cfg(feature = "wasm")]
 fn push_field(out: &mut Vec<u8>, id: u8, data: &[u8]) {
     out.push(id);
     out.extend_from_slice(&(data.len() as u32).to_le_bytes());
@@ -707,7 +847,6 @@ fn push_field(out: &mut Vec<u8>, id: u8, data: &[u8]) {
 }
 
 /// `[type:u8][klen:u32][key][vlen:u32][val]`, one VariantDictionary item.
-#[cfg(feature = "wasm")]
 fn push_variant(out: &mut Vec<u8>, ty: u8, key: &[u8], val: &[u8]) {
     out.push(ty);
     out.extend_from_slice(&(key.len() as u32).to_le_bytes());
@@ -717,7 +856,6 @@ fn push_variant(out: &mut Vec<u8>, ty: u8, key: &[u8], val: &[u8]) {
 }
 
 /// KDF VariantDictionary for Argon2id. Types: 0x04 u32, 0x05 u64, 0x42 byte array.
-#[cfg(feature = "wasm")]
 fn build_kdf_dict(salt: &[u8]) -> Vec<u8> {
     let mut d = Vec::new();
     d.extend_from_slice(&0x0100u16.to_le_bytes()); // dictionary version 1.0
@@ -736,8 +874,7 @@ fn build_kdf_dict(salt: &[u8]) -> Vec<u8> {
 /// The keystream must advance for every protected value in document order, exactly as
 /// `parse_inner_xml` consumes it. An EMPTY protected value advances it by zero bytes on
 /// both sides (the reader skips empty values), so the two stay in step.
-#[cfg(feature = "wasm")]
-fn build_xml(entries: &[SaveEntry], inner_key: &[u8]) -> Res<Vec<u8>> {
+fn build_xml(entries: &[SaveEntry], inner_key: &[u8], binary_count: u32) -> Res<Vec<u8>> {
     let kd = Sha512::digest(inner_key);
     let mut stream = ChaCha20::new_from_slices(&kd[0..32], &kd[32..44])
         .map_err(|_| KdbxError::Corrupt("inner chacha"))?;
@@ -764,7 +901,11 @@ fn build_xml(entries: &[SaveEntry], inner_key: &[u8]) -> Res<Vec<u8>> {
         // string keyed TAGS_KEY is lifted out and written as one. Carrying it across the
         // JS boundary as an ordinary pair keeps `SaveEntry` (a uniffi Record on the read
         // side's mirror) unchanged, so the generated Swift/Kotlin bindings don't churn.
-        if let Some(tags) = e.strings.iter().find(|s| s.key == TAGS_KEY && !s.value.is_empty()) {
+        if let Some(tags) = e
+            .strings
+            .iter()
+            .find(|s| s.key == TAGS_KEY && !s.value.is_empty())
+        {
             x.push_str("<Tags>");
             x.push_str(&quick_xml::escape::escape(&tags.value));
             x.push_str("</Tags>");
@@ -779,7 +920,10 @@ fn build_xml(entries: &[SaveEntry], inner_key: &[u8]) -> Res<Vec<u8>> {
             if s.protected {
                 let mut raw = s.value.clone().into_bytes();
                 stream.apply_keystream(&mut raw);
-                x.push_str(&format!(r#"<Value Protected="True">{}</Value>"#, B64.encode(&raw)));
+                x.push_str(&format!(
+                    r#"<Value Protected="True">{}</Value>"#,
+                    B64.encode(&raw)
+                ));
             } else {
                 x.push_str("<Value>");
                 x.push_str(&quick_xml::escape::escape(&s.value));
@@ -787,93 +931,426 @@ fn build_xml(entries: &[SaveEntry], inner_key: &[u8]) -> Res<Vec<u8>> {
             }
             x.push_str("</String>");
         }
+        for b in &e.binaries {
+            // A reference to an attachment that was never written would open as a missing
+            // file in every KeePass client: refuse the export rather than write one.
+            if b.index >= binary_count {
+                return Err(KdbxError::Corrupt("attachment reference out of range"));
+            }
+            x.push_str("<Binary><Key>");
+            x.push_str(&quick_xml::escape::escape(&b.name));
+            x.push_str(&format!(r#"</Key><Value Ref="{}"/></Binary>"#, b.index));
+        }
         x.push_str("</Entry>");
     }
     x.push_str("</Group></Root></KeePassFile>");
     Ok(x.into_bytes())
 }
 
-/// Write a KDBX4 database holding `entries`, unlockable with `password` alone (no key file).
-#[cfg(feature = "wasm")]
-pub fn save_inner(entries: &[SaveEntry], password: &str) -> Res<Vec<u8>> {
-    if password.is_empty() {
-        return Err(KdbxError::Corrupt("export password must not be empty"));
-    }
-    let mut master_seed = [0u8; 32];
-    let mut enc_iv = [0u8; 16];
-    let mut kdf_salt = [0u8; 32];
-    let mut inner_key = Zeroizing::new([0u8; 64]);
-    rng(&mut master_seed)?;
-    rng(&mut enc_iv)?;
-    rng(&mut kdf_salt)?;
-    rng(inner_key.as_mut_slice())?;
+/// The encrypted half of the payload: AES-256-CBC applied as bytes arrive, the ciphertext cut
+/// into HMAC blocks as each fills, and the framed blocks queued for the caller to take. Fed by
+/// the gzip encoder, so nothing past one block is ever held.
+struct BlockSink {
+    enc: Aes256CbcEnc,
+    /// Plaintext short of a whole AES block, carried to the next write.
+    partial: Zeroizing<Vec<u8>>,
+    /// Ciphertext short of a whole HMAC block.
+    block: Vec<u8>,
+    index: u64,
+    hmac_base: Zeroizing<[u8; 64]>,
+    out: Vec<u8>,
+}
 
-    // Inner payload: inner header (stream id 3 = ChaCha20, stream key) then the XML.
-    let xml = build_xml(entries, inner_key.as_slice())?;
-    let mut inner = Zeroizing::new(Vec::new());
-    push_field(&mut inner, 1, &3u32.to_le_bytes());
-    push_field(&mut inner, 2, inner_key.as_slice());
-    push_field(&mut inner, 0, &[]);
-    inner.extend_from_slice(&xml);
-
-    let mut gz = GzEncoder::new(Vec::new(), Compression::default());
-    gz.write_all(&inner).map_err(|_| KdbxError::Corrupt("gzip write"))?;
-    let compressed = Zeroizing::new(gz.finish().map_err(|_| KdbxError::Corrupt("gzip finish"))?);
-
-    // Outer header. Everything from the signature through EndOfHeader is what gets hashed.
-    let mut header = Vec::new();
-    header.extend_from_slice(&0x9AA2_D903u32.to_le_bytes());
-    header.extend_from_slice(&0xB54B_FB67u32.to_le_bytes());
-    header.extend_from_slice(&0u16.to_le_bytes()); // minor: 4.0, which every KDBX4 reader takes
-    header.extend_from_slice(&4u16.to_le_bytes()); // major
-    push_field(&mut header, 2, &CIPHER_AES256);
-    push_field(&mut header, 3, &1u32.to_le_bytes()); // gzip
-    push_field(&mut header, 4, &master_seed);
-    push_field(&mut header, 7, &enc_iv);
-    push_field(&mut header, 11, &build_kdf_dict(&kdf_salt));
-    push_field(&mut header, 0, b"\r\n\r\n");
-
-    let kdf = Kdf {
-        uuid: KDF_ARGON2ID.to_vec(),
-        iterations: OUT_KDF_ITERATIONS,
-        mem_bytes: OUT_KDF_MEM_BYTES,
-        parallelism: OUT_KDF_PARALLELISM,
-        salt: kdf_salt.to_vec(),
-        version: ARGON2_V13,
-    };
-    let composite = composite_key(password, None);
-    let transformed = argon2_transform(&kdf, composite.as_slice())?;
-    let keys = derive_keys(&master_seed, &transformed);
-
-    let enc = Aes256CbcEnc::new_from_slices(keys.cipher_key.as_slice(), &enc_iv)
-        .map_err(|_| KdbxError::Corrupt("AES key/iv"))?;
-    let ciphertext = enc.encrypt_padded_vec_mut::<Pkcs7>(&compressed);
-
-    let mut out = header.clone();
-    out.extend_from_slice(&Sha256::digest(&header));
-    let hdr_key = sha512_block_key(u64::MAX, keys.hmac_base.as_slice());
-    let mut mac = HmacSha256::new_from_slice(&hdr_key).unwrap();
-    mac.update(&header);
-    out.extend_from_slice(&mac.finalize().into_bytes());
-
-    // HMAC block stream, terminated by a zero-length block (whose HMAC still counts).
-    let mut index: u64 = 0;
-    let push_block = |out: &mut Vec<u8>, index: u64, data: &[u8]| {
-        let bk = sha512_block_key(index, keys.hmac_base.as_slice());
+impl BlockSink {
+    /// One HMAC block: its MAC over index, length and data, then length and data.
+    fn frame(&mut self, len: usize) {
+        let bk = sha512_block_key(self.index, self.hmac_base.as_slice());
         let mut m = HmacSha256::new_from_slice(&bk).unwrap();
-        m.update(&index.to_le_bytes());
-        m.update(&(data.len() as u32).to_le_bytes());
-        m.update(data);
-        out.extend_from_slice(&m.finalize().into_bytes());
-        out.extend_from_slice(&(data.len() as u32).to_le_bytes());
-        out.extend_from_slice(data);
-    };
-    for chunk in ciphertext.chunks(BLOCK_SIZE) {
-        push_block(&mut out, index, chunk);
-        index += 1;
+        m.update(&self.index.to_le_bytes());
+        m.update(&(len as u32).to_le_bytes());
+        m.update(&self.block[..len]);
+        self.out.extend_from_slice(&m.finalize().into_bytes());
+        self.out.extend_from_slice(&(len as u32).to_le_bytes());
+        self.out.extend_from_slice(&self.block[..len]);
+        self.block.drain(..len);
+        self.index += 1;
     }
-    push_block(&mut out, index, &[]);
+
+    fn encrypt(&mut self, mut plain: Zeroizing<Vec<u8>>) {
+        for b in plain.chunks_exact_mut(16) {
+            self.enc
+                .encrypt_block_mut(cbc::cipher::generic_array::GenericArray::from_mut_slice(b));
+        }
+        self.block.extend_from_slice(&plain);
+        while self.block.len() >= BLOCK_SIZE {
+            self.frame(BLOCK_SIZE);
+        }
+    }
+
+    /// PKCS#7 the tail, frame what is left, and end the stream with the zero-length block
+    /// whose HMAC still counts.
+    fn finish(mut self) -> Vec<u8> {
+        let pad = 16 - self.partial.len() % 16;
+        let mut tail = Zeroizing::new(std::mem::take(&mut *self.partial));
+        tail.extend(std::iter::repeat_n(pad as u8, pad));
+        self.encrypt(tail);
+        if !self.block.is_empty() {
+            let len = self.block.len();
+            self.frame(len);
+        }
+        self.frame(0);
+        self.out
+    }
+}
+
+impl Write for BlockSink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.partial.extend_from_slice(buf);
+        let whole = self.partial.len() / 16 * 16;
+        if whole > 0 {
+            let ready = Zeroizing::new(self.partial.drain(..whole).collect::<Vec<u8>>());
+            self.encrypt(ready);
+        }
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// A KDBX4 database written front to back, so its attachments never have to be held at once.
+///
+/// The format orders it: the inner header carries every attachment, then the XML names which
+/// entry holds which. So attachments go in first (`begin_binary`, `write_binary`), then
+/// `finish` writes the entries. `take` hands over the bytes ready so far, in order, at any point.
+pub struct Writer {
+    gz: GzEncoder<BlockSink>,
+    inner_key: Zeroizing<[u8; 64]>,
+    header: Vec<u8>,
+    binaries: u32,
+    /// Bytes the open attachment still owes.
+    owed: u64,
+}
+
+impl Writer {
+    /// Derive the file's keys from `password` (the slow part: Argon2id) and write the header.
+    pub fn new(password: &str) -> Res<Self> {
+        if password.is_empty() {
+            return Err(KdbxError::Corrupt("export password must not be empty"));
+        }
+        let mut master_seed = [0u8; 32];
+        let mut enc_iv = [0u8; 16];
+        let mut kdf_salt = [0u8; 32];
+        let mut inner_key = Zeroizing::new([0u8; 64]);
+        rng(&mut master_seed)?;
+        rng(&mut enc_iv)?;
+        rng(&mut kdf_salt)?;
+        rng(inner_key.as_mut_slice())?;
+
+        // Outer header. Everything from the signature through EndOfHeader is what gets hashed.
+        let mut header = Vec::new();
+        header.extend_from_slice(&0x9AA2_D903u32.to_le_bytes());
+        header.extend_from_slice(&0xB54B_FB67u32.to_le_bytes());
+        header.extend_from_slice(&0u16.to_le_bytes()); // minor: 4.0, which every KDBX4 reader takes
+        header.extend_from_slice(&4u16.to_le_bytes()); // major
+        push_field(&mut header, 2, &CIPHER_AES256);
+        push_field(&mut header, 3, &1u32.to_le_bytes()); // gzip
+        push_field(&mut header, 4, &master_seed);
+        push_field(&mut header, 7, &enc_iv);
+        push_field(&mut header, 11, &build_kdf_dict(&kdf_salt));
+        push_field(&mut header, 0, b"\r\n\r\n");
+
+        let kdf = Kdf {
+            uuid: KDF_ARGON2ID.to_vec(),
+            iterations: OUT_KDF_ITERATIONS,
+            mem_bytes: OUT_KDF_MEM_BYTES,
+            parallelism: OUT_KDF_PARALLELISM,
+            salt: kdf_salt.to_vec(),
+            version: ARGON2_V13,
+        };
+        let composite = composite_key(password, None);
+        let transformed = argon2_transform(&kdf, composite.as_slice())?;
+        let keys = derive_keys(&master_seed, &transformed);
+
+        let mut out = header.clone();
+        out.extend_from_slice(&Sha256::digest(&header));
+        let hdr_key = sha512_block_key(u64::MAX, keys.hmac_base.as_slice());
+        let mut mac = HmacSha256::new_from_slice(&hdr_key).unwrap();
+        mac.update(&header);
+        out.extend_from_slice(&mac.finalize().into_bytes());
+
+        let sink = BlockSink {
+            enc: Aes256CbcEnc::new_from_slices(keys.cipher_key.as_slice(), &enc_iv)
+                .map_err(|_| KdbxError::Corrupt("AES key/iv"))?,
+            partial: Zeroizing::new(Vec::new()),
+            block: Vec::new(),
+            index: 0,
+            hmac_base: keys.hmac_base,
+            out: Vec::new(),
+        };
+        // Fast rather than default: an export can carry gigabytes of attachments, most of them
+        // already compressed, and the XML is small either way.
+        let mut writer = Self {
+            gz: GzEncoder::new(sink, Compression::fast()),
+            inner_key,
+            header: out,
+            binaries: 0,
+            owed: 0,
+        };
+        // Inner header: stream id 3 = ChaCha20, then its key. Attachments follow.
+        let mut fields = Vec::new();
+        push_field(&mut fields, 1, &3u32.to_le_bytes());
+        push_field(&mut fields, 2, writer.inner_key.as_slice());
+        writer.write_inner(&fields)?;
+        Ok(writer)
+    }
+
+    fn write_inner(&mut self, bytes: &[u8]) -> Res<()> {
+        self.gz
+            .write_all(bytes)
+            .map_err(|_| KdbxError::Corrupt("gzip write"))
+    }
+
+    /// Start an attachment of exactly `len` bytes. Returns the index entries refer to it by.
+    pub fn begin_binary(&mut self, len: u64) -> Res<u32> {
+        if self.owed != 0 {
+            return Err(KdbxError::Corrupt("the previous attachment is unfinished"));
+        }
+        // One header field: a flag byte, then the bytes. The field length is a u32.
+        let field_len = u32::try_from(len + 1)
+            .map_err(|_| KdbxError::Corrupt("attachment too large for KDBX"))?;
+        let mut head = vec![3u8];
+        head.extend_from_slice(&field_len.to_le_bytes());
+        head.push(0x01); // protected in memory, as KeePass does for attachments it is handed
+        self.write_inner(&head)?;
+        self.owed = len;
+        let index = self.binaries;
+        self.binaries += 1;
+        Ok(index)
+    }
+
+    /// More of the open attachment. Never more than it was declared to hold.
+    pub fn write_binary(&mut self, bytes: &[u8]) -> Res<()> {
+        let n = bytes.len() as u64;
+        if n > self.owed {
+            return Err(KdbxError::Corrupt("attachment is longer than declared"));
+        }
+        self.write_inner(bytes)?;
+        self.owed -= n;
+        Ok(())
+    }
+
+    /// The bytes ready so far, in file order. Take them between writes and the file is never
+    /// held whole.
+    pub fn take(&mut self) -> Vec<u8> {
+        let mut ready = std::mem::take(&mut self.header);
+        ready.append(&mut self.gz.get_mut().out);
+        ready
+    }
+
+    /// Write the entries and close the file. Returns the last of its bytes.
+    pub fn finish(mut self, entries: &[SaveEntry]) -> Res<Vec<u8>> {
+        if self.owed != 0 {
+            return Err(KdbxError::Corrupt("an attachment is shorter than declared"));
+        }
+        self.write_inner(&[0, 0, 0, 0, 0])?; // end of inner header
+        let xml = Zeroizing::new(build_xml(
+            entries,
+            self.inner_key.as_slice(),
+            self.binaries,
+        )?);
+        self.write_inner(&xml)?;
+        let mut ready = std::mem::take(&mut self.header);
+        let sink = self
+            .gz
+            .finish()
+            .map_err(|_| KdbxError::Corrupt("gzip finish"))?;
+        ready.extend(sink.finish());
+        Ok(ready)
+    }
+}
+
+/// Write a KDBX4 database holding `entries` in one call, for the tests. The app streams.
+#[cfg(test)]
+pub fn save_inner(entries: &[SaveEntry], password: &str) -> Res<Vec<u8>> {
+    let mut w = Writer::new(password)?;
+    let mut out = w.take();
+    out.extend(w.finish(entries)?);
     Ok(out)
+}
+
+/// One attachment to export natively: its sealed blob where it sits on disk, the key fields to
+/// open it, and where it goes (the entry index in `entries`, and its name there).
+#[cfg_attr(not(any(feature = "ffi", feature = "native")), allow(dead_code))]
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct KdbxExportFile {
+    pub blob_path: String,
+    pub wrapped_fek: String,
+    pub fek_iv: String,
+    pub nonce_prefix: String,
+    /// Sealed length: the blob must be exactly this, or it hasn't arrived whole.
+    pub size: u64,
+    pub entry: u32,
+    pub name: String,
+}
+
+/// Write a KDBX4 database holding `entries` and every file in `files` to `out`, a piece at a
+/// time, for the desktop app and the phones. Returns the file's length.
+///
+/// Whole or not at all, as a backup is: every blob is checked against its recorded size, and
+/// every file's stream keyed under the VEK in the slot now, before a byte is written. The file
+/// is written beside `out` and renamed into place only once complete, so a failed export never
+/// leaves a file under the name the caller asked for.
+#[cfg_attr(not(any(feature = "ffi", feature = "native")), allow(dead_code))]
+pub fn save_to_path(
+    entries: &[SaveEntry],
+    password: &str,
+    files: &[KdbxExportFile],
+    out: &std::path::Path,
+) -> Result<u64, String> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    for f in files {
+        if f.entry as usize >= entries.len() {
+            return Err("an attachment's entry is not in the export".into());
+        }
+        let held = std::fs::metadata(&f.blob_path).map(|m| m.len()).ok();
+        if held != Some(f.size) {
+            return Err("an attachment hasn't reached this device yet".into());
+        }
+    }
+    let mut streams = files
+        .iter()
+        .map(|f| {
+            crate::begin_open_stream_core(&f.wrapped_fek, &f.fek_iv, &f.nonce_prefix, f.size)
+                .map_err(|e| e.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let name = out
+        .file_name()
+        .ok_or("export path has no file name")?
+        .to_string_lossy();
+    let temp = out.with_file_name(format!(".{name}.partial"));
+    let written = (|| -> Result<u64, String> {
+        let io = |e: std::io::Error| format!("export: {}", e.kind());
+        let mut file = std::fs::File::create(&temp).map_err(io)?;
+        let mut w = Writer::new(password).map_err(|e| e.code())?;
+        file.write_all(&w.take()).map_err(io)?;
+        let mut refs: Vec<Vec<SaveBinary>> = vec![Vec::new(); entries.len()];
+        for (f, stream) in files.iter().zip(streams.iter_mut()) {
+            let index = w
+                .begin_binary(stream.plaintext_len())
+                .map_err(|e| e.code())?;
+            let mut blob = std::fs::File::open(&f.blob_path).map_err(io)?;
+            while let Some((offset, len)) = stream.next_range() {
+                let mut sealed = vec![0u8; len as usize];
+                blob.seek(SeekFrom::Start(offset)).map_err(io)?;
+                blob.read_exact(&mut sealed).map_err(io)?;
+                let plain = stream.open_next(&sealed).map_err(|e| e.to_string())?;
+                w.write_binary(&plain).map_err(|e| e.code())?;
+                file.write_all(&w.take()).map_err(io)?;
+            }
+            refs[f.entry as usize].push(SaveBinary {
+                name: f.name.clone(),
+                index,
+            });
+        }
+        let entries: Vec<SaveEntry> = entries
+            .iter()
+            .zip(refs)
+            .map(|(e, binaries)| SaveEntry {
+                strings: e.strings.clone(),
+                binaries,
+            })
+            .collect();
+        file.write_all(&w.finish(&entries).map_err(|e| e.code())?)
+            .map_err(io)?;
+        file.sync_all().map_err(io)?;
+        file.metadata().map(|m| m.len()).map_err(io)
+    })();
+    match written {
+        Ok(len) => {
+            std::fs::rename(&temp, out).map_err(|e| format!("export: {}", e.kind()))?;
+            Ok(len)
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&temp);
+            Err(e)
+        }
+    }
+}
+
+/// The phones' entry point: `save_to_path` with its arguments as JSON (`SaveEntry[]` and
+/// `KdbxExportFile[]`), so the Swift and Kotlin plugins pass through what JS sent rather than
+/// rebuilding each record by hand.
+#[cfg(feature = "ffi")]
+#[uniffi::export]
+pub fn save_kdbx4(
+    entries_json: String,
+    password: String,
+    files_json: String,
+    out_path: String,
+) -> Result<u64, crate::CryptoError> {
+    let entries: Vec<SaveEntry> =
+        serde_json::from_str(&entries_json).map_err(|e| crate::err(format!("KDBX_INPUT:{e}")))?;
+    let files: Vec<KdbxExportFile> =
+        serde_json::from_str(&files_json).map_err(|e| crate::err(format!("KDBX_INPUT:{e}")))?;
+    save_to_path(&entries, &password, &files, std::path::Path::new(&out_path)).map_err(crate::err)
+}
+
+/// The writer, for JS: attachments streamed in from the vault's store, the file streamed out.
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub struct KdbxWriter {
+    w: Option<Writer>,
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+impl KdbxWriter {
+    #[wasm_bindgen(constructor)]
+    pub fn new(password: &str) -> Result<KdbxWriter, JsError> {
+        let w = Writer::new(password).map_err(|e| JsError::new(&e.code()))?;
+        Ok(KdbxWriter { w: Some(w) })
+    }
+
+    fn writer(&mut self) -> Result<&mut Writer, JsError> {
+        self.w
+            .as_mut()
+            .ok_or_else(|| JsError::new("KDBX_CORRUPT:writer finished"))
+    }
+
+    /// `len` as a number rather than a BigInt, since JS has a size as one.
+    pub fn begin_binary(&mut self, len: f64) -> Result<u32, JsError> {
+        if !(len >= 0.0 && len.fract() == 0.0 && len <= 9007199254740991.0) {
+            return Err(JsError::new("KDBX_CORRUPT:attachment length"));
+        }
+        self.writer()?
+            .begin_binary(len as u64)
+            .map_err(|e| JsError::new(&e.code()))
+    }
+
+    pub fn write_binary(&mut self, bytes: &[u8]) -> Result<(), JsError> {
+        self.writer()?
+            .write_binary(bytes)
+            .map_err(|e| JsError::new(&e.code()))
+    }
+
+    pub fn take(&mut self) -> Result<Vec<u8>, JsError> {
+        Ok(self.writer()?.take())
+    }
+
+    /// `entries` as `SaveEntry` objects, binaries referring to the indices handed out above.
+    pub fn finish(&mut self, entries: JsValue) -> Result<Vec<u8>, JsError> {
+        let entries: Vec<SaveEntry> = serde_wasm_bindgen::from_value(entries)
+            .map_err(|e| JsError::new(&format!("KDBX_INPUT:{e}")))?;
+        let w = self
+            .w
+            .take()
+            .ok_or_else(|| JsError::new("KDBX_CORRUPT:writer finished"))?;
+        w.finish(&entries).map_err(|e| JsError::new(&e.code()))
+    }
 }
 
 // Fixtures are AES-256-CBC + Argon2d. Two paths are covered by reasoning, not a
@@ -895,6 +1372,13 @@ mod tests {
     const RAWKEY_DB: &[u8] = fixture!("rawkey.kdbx"); // password + raw 32-byte key file
     const KEYONLY_DB: &[u8] = fixture!("keyonly.kdbx"); // key-file-only, no password
     const RAW_KEY: &[u8] = fixture!("raw.key"); // 32 random bytes
+                                                // Two entries written by our writer (the CLI only creates KDBX3), then every attachment
+                                                // added by keepassxc-cli 2.7.12 attachment-import, which rewrites the whole file as KDBX4:
+                                                // the attachments and XML are KeePassXC's. Passport holds scan.bin and note.txt; Deed holds
+                                                // copy.txt, note.txt's content again, so KeePassXC stores it once and both point at it.
+    const ATTACH_DB: &[u8] = fixture!("attachments.kdbx");
+    const ATTACH_SCAN: &[u8] = fixture!("attachments-scan.bin");
+    const ATTACH_NOTE: &[u8] = fixture!("attachments-note.txt");
     const PASSWORD: &str = "correct horse battery staple";
 
     fn field<'a>(entry: &'a OutEntry, key: &str) -> Option<&'a str> {
@@ -920,6 +1404,58 @@ mod tests {
         assert_eq!(open_inner(KEYFILE_DB, "filevault", None), Err(KdbxError::WrongCredential));
         let entries = open_inner(KEYFILE_DB, "filevault", Some(KEYFILE)).expect("open w/ keyfile");
         assert_eq!(field(by_title(&entries, "GitHub"), "Password"), Some("hunter2"));
+    }
+
+    #[test]
+    fn reads_keepassxc_attachments_and_which_entry_holds_each() {
+        let (entries, attachments) = open_full(ATTACH_DB, "attach-pass", None).expect("open");
+        let bytes_of = |title: &str, name: &str| {
+            let b = by_title(&entries, title)
+                .binaries
+                .iter()
+                .find(|b| b.name == name)
+                .unwrap_or_else(|| panic!("{title} has no {name}"));
+            attachments[b.index as usize].to_vec()
+        };
+        assert_eq!(bytes_of("Passport", "scan.bin"), ATTACH_SCAN);
+        assert_eq!(bytes_of("Passport", "note.txt"), ATTACH_NOTE);
+        assert_eq!(bytes_of("Deed", "copy.txt"), ATTACH_NOTE);
+        assert_eq!(attachments.len(), 2, "shared content is stored once");
+        // A reference is not a field: no String pair named after an attachment.
+        let passport = by_title(&entries, "Passport");
+        assert!(passport
+            .strings
+            .iter()
+            .all(|s| s.key != "scan.bin" && s.key != "note.txt"));
+    }
+
+    #[test]
+    fn a_database_without_attachments_has_none() {
+        let (entries, attachments) = open_full(FIXTURE, PASSWORD, None).unwrap();
+        assert!(attachments.is_empty());
+        assert!(entries.iter().all(|e| e.binaries.is_empty()));
+    }
+
+    #[test]
+    fn writes_each_attachment_to_its_own_owner_only_file() {
+        let dir = std::env::temp_dir().join(format!("bramble-kdbx-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (_, attachments) = open_full(ATTACH_DB, "attach-pass", None).unwrap();
+        let written = write_attachments(&dir.join("import"), &attachments).unwrap();
+        assert_eq!(written.len(), attachments.len());
+        for (file, bytes) in written.iter().zip(&attachments) {
+            assert_eq!(std::fs::read(&file.path).unwrap(), bytes.as_slice());
+            assert_eq!(file.size, bytes.len() as u64);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(&file.path).unwrap().permissions().mode();
+                assert_eq!(mode & 0o777, 0o600, "{}", file.path);
+            }
+        }
+        // A second write into the same folder refuses rather than overwriting.
+        assert!(write_attachments(&dir.join("import"), &attachments).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -1037,7 +1573,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, feature = "wasm"))]
+#[cfg(test)]
 mod export_tests {
     use super::*;
 
@@ -1051,11 +1587,143 @@ mod export_tests {
                     protected: *p,
                 })
                 .collect(),
+            binaries: vec![],
         }
     }
 
+    /// The attachments in a file's inner header, in order, flag byte stripped; and the XML.
+    fn binaries_and_xml(file: &[u8], password: &str) -> (Vec<Vec<u8>>, String) {
+        let payload = open_payload(file, password, None).expect("open payload");
+        let mut c = Cursor::new(&payload);
+        let mut binaries = Vec::new();
+        loop {
+            let id = c.u8().unwrap();
+            let len = c.u32().unwrap() as usize;
+            let data = c.take(len).unwrap();
+            match id {
+                0 => break,
+                3 => binaries.push(data[1..].to_vec()),
+                _ => {}
+            }
+        }
+        (
+            binaries,
+            String::from_utf8(payload[c.p..].to_vec()).unwrap(),
+        )
+    }
+
+    fn body(len: usize, seed: u8) -> Vec<u8> {
+        (0..len)
+            .map(|i| (i as u8).wrapping_mul(seed).wrapping_add((i >> 10) as u8))
+            .collect()
+    }
+
+    /// Write `files` as attachments, taking the output after every write as the extension
+    /// does, so the file is assembled from many takes rather than one finish.
+    fn write_with(entries: &[SaveEntry], files: &[Vec<u8>], password: &str) -> Vec<u8> {
+        let mut w = Writer::new(password).unwrap();
+        let mut out = w.take();
+        for f in files {
+            w.begin_binary(f.len() as u64).unwrap();
+            for chunk in f.chunks(64 * 1024) {
+                w.write_binary(chunk).unwrap();
+                out.extend(w.take());
+            }
+        }
+        out.extend(w.finish(entries).unwrap());
+        out
+    }
+
+    fn with_binaries(mut e: SaveEntry, refs: &[(&str, u32)]) -> SaveEntry {
+        e.binaries = refs
+            .iter()
+            .map(|(n, i)| SaveBinary {
+                name: (*n).into(),
+                index: *i,
+            })
+            .collect();
+        e
+    }
+
+    #[test]
+    fn carries_attachments_byte_for_byte_and_names_them_on_their_entries() {
+        let files = vec![body(70_000, 7), body(0, 1), body(3 * BLOCK_SIZE + 123, 13)];
+        let entries = vec![
+            with_binaries(
+                entry(&[("Title", "Passport", false)]),
+                &[("scan.pdf", 0), ("empty.txt", 1)],
+            ),
+            with_binaries(
+                entry(&[("Title", "Deed", false)]),
+                &[("deed & <copy>.bin", 2)],
+            ),
+        ];
+        let bytes = write_with(&entries, &files, "pw");
+
+        let (binaries, xml) = binaries_and_xml(&bytes, "pw");
+        assert_eq!(binaries, files);
+        // And our own reader brings them back on the entries they were written on.
+        let (read, attachments) = open_full(&bytes, "pw", None).unwrap();
+        let names: Vec<_> = read[0]
+            .binaries
+            .iter()
+            .map(|b| (b.name.as_str(), b.index))
+            .collect();
+        assert_eq!(names, [("scan.pdf", 0), ("empty.txt", 1)]);
+        let held: Vec<Vec<u8>> = attachments.iter().map(|a| a.to_vec()).collect();
+        assert_eq!(held, files);
+        assert!(xml.contains(r#"<Binary><Key>scan.pdf</Key><Value Ref="0"/></Binary>"#));
+        assert!(xml.contains(r#"<Binary><Key>empty.txt</Key><Value Ref="1"/></Binary>"#));
+        assert!(
+            xml.contains(r#"<Binary><Key>deed &amp; &lt;copy&gt;.bin</Key><Value Ref="2"/></Binary>"#)
+        );
+        // The references are not String pairs: entries read back with exactly their own fields.
+        let read = open_inner(&bytes, "pw", None).unwrap();
+        assert_eq!(read.len(), 2);
+        assert_eq!(read[0].strings.len(), 1);
+        assert_eq!(find(&read[1], "Title"), Some("Deed"));
+    }
+
+    #[test]
+    fn streams_to_the_same_file_it_would_have_written_whole() {
+        // Taking output between writes must not change what the file is: the same entries
+        // with no attachments open identically whichever way they were written.
+        let entries = vec![entry(&[("Title", "T", false), ("Password", "p", true)])];
+        let streamed = write_with(&entries, &[], "pw");
+        let whole = save_inner(&entries, "pw").unwrap();
+        assert_eq!(
+            open_inner(&streamed, "pw", None),
+            open_inner(&whole, "pw", None)
+        );
+    }
+
+    #[test]
+    fn refuses_an_attachment_that_does_not_match_its_declared_length() {
+        let mut w = Writer::new("pw").unwrap();
+        w.begin_binary(4).unwrap();
+        assert!(w.write_binary(b"12345").is_err(), "longer than declared");
+        w.write_binary(b"123").unwrap();
+        assert!(w.begin_binary(1).is_err(), "previous one unfinished");
+        assert!(w.finish(&[]).is_err(), "shorter than declared");
+    }
+
+    #[test]
+    fn refuses_a_reference_to_an_attachment_never_written() {
+        let mut w = Writer::new("pw").unwrap();
+        w.begin_binary(1).unwrap();
+        w.write_binary(b"x").unwrap();
+        let entries = [with_binaries(entry(&[("Title", "T", false)]), &[("a", 1)])];
+        assert_eq!(
+            w.finish(&entries).err(),
+            Some(KdbxError::Corrupt("attachment reference out of range"))
+        );
+    }
+
     fn find<'a>(e: &'a OutEntry, key: &str) -> Option<&'a str> {
-        e.strings.iter().find(|s| s.key == key).map(|s| s.value.as_str())
+        e.strings
+            .iter()
+            .find(|s| s.key == key)
+            .map(|s| s.value.as_str())
     }
 
     #[test]
@@ -1162,7 +1830,8 @@ mod export_tests {
     ///   printf 'export-pw-123\n' | keepassxc-cli show -s /tmp/bramble-export.kdbx GitHub
     ///   printf 'export-pw-123\n' | keepassxc-cli show -t /tmp/bramble-export.kdbx GitHub
     /// Verified against keepassxc-cli 2.7.12: entries list, protected values decrypt, the
-    /// `otp` field generates a live code, and custom String fields survive.
+    /// `otp` field generates a live code, custom String fields survive, and both attachments
+    /// export byte for byte.
     #[test]
     #[ignore]
     fn emit_for_keepassxc() {
@@ -1170,6 +1839,7 @@ mod export_tests {
             strings: pairs.iter().map(|(k, v, p)| super::SaveString {
                 key: (*k).into(), value: (*v).into(), protected: *p,
             }).collect(),
+            binaries: vec![],
         };
         let entries = vec![
             e(&[("Title","GitHub",false),("UserName","octocat@example.com",false),
@@ -1182,7 +1852,18 @@ mod export_tests {
             e(&[("Title","Personal Visa",false),("Cardholder","Jane Q. Doe",false),
                 ("Number","4111111111111111",true),("CVV","123",true),("Expiry","08/2027",false)]),
         ];
-        let bytes = super::save_inner(&entries, "export-pw-123").expect("save");
+        // Two attachments on GitHub, one past an HMAC block, written to /tmp beside the file:
+        //   printf 'export-pw-123\n' | keepassxc-cli attachment-export /tmp/bramble-export.kdbx \
+        //     GitHub scan.bin /tmp/out.bin && cmp /tmp/out.bin /tmp/bramble-attach-scan.bin
+        let files = vec![body(2 * BLOCK_SIZE + 77, 11), b"hello from bramble\n".to_vec()];
+        let mut entries = entries;
+        entries[0].binaries = vec![
+            super::SaveBinary { name: "scan.bin".into(), index: 0 },
+            super::SaveBinary { name: "note.txt".into(), index: 1 },
+        ];
+        std::fs::write("/tmp/bramble-attach-scan.bin", &files[0]).unwrap();
+        std::fs::write("/tmp/bramble-attach-note.txt", &files[1]).unwrap();
+        let bytes = write_with(&entries, &files, "export-pw-123");
         std::fs::write("/tmp/bramble-export.kdbx", &bytes).unwrap();
         eprintln!("WROTE {} bytes", bytes.len());
     }

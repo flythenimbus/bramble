@@ -189,7 +189,12 @@ describe("the XML and .kdbx paths agree byte for byte", () => {
 
 		const fromXml = await parseKeePass(xml, { passkeyImportPkcs8: converter() });
 		const fromKdbx = await kdbxEntriesToResult(
-			[{ strings: attributes.map(([key, value]) => ({ key, value, protected: false })) }],
+			{
+				entries: [
+					{ strings: attributes.map(([key, value]) => ({ key, value, protected: false })) },
+				],
+				attachments: [],
+			},
 			{ passkeyImportPkcs8: converter() },
 		);
 

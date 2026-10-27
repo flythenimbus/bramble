@@ -24,17 +24,44 @@ vi.mock("./adapters/vault-session", () => ({
 		return () => {};
 	},
 }));
-vi.mock("./adapters/storage", () => ({
-	mobileStorage: {
-		getMeta: async (key: string) => h.meta.get(key),
-		setMeta: async (key: string, value: unknown) => void h.meta.set(key, value),
-		readVaultBlob: async () => new Uint8Array([1, 2, 3]),
-	},
-}));
+// A real, empty vault: a backup is made only when the vault's attachment list can be read, and
+// an empty one reads as "none" without a key.
+vi.mock("./adapters/storage", async () => {
+	const f = await import("@core/vault-format");
+	const zeros = (n: number) => new Uint8Array(n);
+	const vault = f.encodeVaultBlob({
+		slots: [
+			{
+				kind: f.SLOT_KIND_PASSWORD,
+				slotId: zeros(f.LEN_SLOT_ID),
+				salt: zeros(f.LEN_SALT),
+				verifier: zeros(f.LEN_VERIFIER),
+				wrapIv: zeros(f.LEN_WRAP_IV),
+				wrappedVek: zeros(f.LEN_WRAPPED_VEK),
+			},
+		],
+		entriesIv: zeros(f.LEN_IV),
+		entriesCiphertext: zeros(0),
+	});
+	return {
+		mobileStorage: {
+			getMeta: async (key: string) => h.meta.get(key),
+			setMeta: async (key: string, value: unknown) => void h.meta.set(key, value),
+			readVaultBlob: async () => vault,
+		},
+	};
+});
 vi.mock("./adapters/crypto", () => ({
 	mobileCrypto: { decryptWithVek: async () => JSON.stringify({ username: "u", password: "p" }) },
 }));
 vi.mock("./adapters/http", () => ({ mobileHttp: { send: async () => ({}) } }));
+// An empty in-memory attachment store: the runner plans each vault's backup, and planning may
+// list the store, which on the real adapter is Capacitor's filesystem and never answers here.
+vi.mock("./adapters/files", async () => {
+	const { memoryBlobStore } = await import("@core/test/memory-blob-store");
+	const { store } = memoryBlobStore();
+	return { mobileFiles: { forVault: () => ({ blobs: store }), deleteVault: async () => {} } };
+});
 // Only the network is faked; the runner, the due logic and the outcome folding are all real.
 vi.mock("@core/backup", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@core/backup")>()),

@@ -5,7 +5,7 @@
 // flows stay testable with a fake mesh. See docs/p2p-sync.md.
 
 import { base64ToBytes } from "../../util/bytes";
-import { deriveIceUrl, fetchIceServers } from "./ice";
+import { deriveIceUrl, fetchIceServers, sameHost } from "./ice";
 import { joinMesh, type Mesh, type MeshOptions, type PeerSession } from "./mesh";
 import { makeNostr, type NostrWasm } from "./nostr-signer";
 
@@ -51,13 +51,18 @@ export interface MeshSessionOptions {
 	report: (status: string) => void;
 	/** Rotate the room per epoch (ongoing sync); off for the brief enrollment room. */
 	epochRooms?: boolean;
+	/** WebRTC only, direct or by TURN, never relay-forwarded through the signalling relay. For
+	 * the blob session. See MeshOptions.webrtcOnly. */
+	webrtcOnly?: boolean;
+	/** See MeshOptions.onPeerState. */
+	onPeerState?: MeshOptions["onPeerState"];
 	/** Handle one authenticated peer (run the handshake + the role's phase). */
 	onPeer: (peer: PeerSession) => Promise<void>;
 	/** Caller cleanup beyond the mesh, e.g. a re-broadcast timer. Run once on stop(). */
 	onStop?: () => void;
 	/** The mesh joiner; overridden in tests with a fake. */
 	join?: (opts: MeshOptions) => Promise<Stoppable>;
-	fetchIce?: (iceUrl: string) => Promise<RTCIceServer[]>;
+	fetchIce?: (iceUrl: string, ticket?: string | null) => Promise<RTCIceServer[]>;
 	/** Take peers from here instead of the relay mesh. `relayUrl`, `groupKeyB64`, `iceUrl` and
 	 * `roomLabel` are then unused: there is no room to join and no signalling to do. */
 	peerSource?: PeerSource;
@@ -92,12 +97,16 @@ export async function startMeshSession(opts: MeshSessionOptions): Promise<MeshSe
 		signer: await makeNostr(opts.wasm),
 		// Mint at peer creation, including reconnects: the inviter may wait longer than
 		// a credential's lifetime, and an ongoing mesh can outlive many TURN TTLs.
-		getIceServers: async () => {
-			const servers = await fetchIce(opts.iceUrl || deriveIceUrl(opts.relayUrl));
+		getIceServers: async (ticket) => {
+			const iceUrl = opts.iceUrl || deriveIceUrl(opts.relayUrl);
+			// The ticket is the relay's; an ICE endpoint elsewhere has no use for it.
+			const servers = await fetchIce(iceUrl, sameHost(iceUrl, opts.relayUrl) ? ticket : null);
 			opts.report(servers.length ? "ICE: relay servers ready" : "ICE: direct (host) only");
 			return servers;
 		},
 		epochRooms: opts.epochRooms,
+		webrtcOnly: opts.webrtcOnly,
+		onPeerState: opts.onPeerState,
 		onStatus: opts.report,
 		onPeer: (peer) => void opts.onPeer(peer).catch((e) => opts.report(`peer error: ${String(e)}`)),
 	});

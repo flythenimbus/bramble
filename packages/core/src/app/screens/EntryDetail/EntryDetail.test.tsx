@@ -7,6 +7,9 @@ import { type Platform, PlatformProvider } from "../../../context/PlatformContex
 import type { Entry } from "../../../hooks/useVault";
 import { EntryDetail } from "./EntryDetail";
 
+// The attachments section reads the vault; these cases are about the entry's own actions.
+vi.mock("../../entry-modes/attachments", () => ({ AttachmentsDetail: () => null }));
+
 afterEach(cleanup);
 
 beforeAll(() => {

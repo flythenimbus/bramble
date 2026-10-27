@@ -1,10 +1,11 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, openPopup, optionsUrl, STRONG_PW } from "./helpers";
+import { createVault, openExampleLogin, openPopup, optionsUrl, STRONG_PW } from "./helpers";
 
 // KDBX export, end to end through the real extension: seed a vault, export it as a .kdbx under a
 // password chosen for the FILE, then feed that file back through the app's own .kdbx import. The
@@ -142,4 +143,47 @@ test("a mismatched confirmation blocks the export", async ({ context, extensionI
 	await expect(modal.getByText(/don't match/i)).toBeVisible();
 	// Dialog stays open so the typo is fixable, and nothing was written.
 	await expect(modal.getByRole("heading", { name: /Export as KeePass/i })).toBeVisible();
+});
+
+/** KeePassXC's command line, when it is installed: a reader of the file we did not write. */
+const keepassxc = spawnSync("keepassxc-cli", ["--version"]).status === 0;
+
+// A vault's attachments go into the file as KeePass attachments, on the entry they belong to.
+// KeePassXC extracts each one, and it has to match what was attached byte for byte: a reader we
+// didn't write, so our writer and our reader cannot just agree with each other.
+test("carries every attachment, byte for byte, as KeePassXC reads it", async ({
+	context,
+	extensionId,
+}) => {
+	test.skip(!keepassxc, "needs keepassxc-cli (brew install keepassxc)");
+	const popup = await openExampleLogin(context, extensionId, { detached: true });
+	const files = [
+		// Past one sealed chunk and past one KDBX block, so neither boundary is skipped.
+		{
+			name: "scan.pdf",
+			body: Buffer.from(
+				Uint8Array.from({ length: 1_200_000 }, (_, i) => (i * 13 + (i >> 8)) % 251),
+			),
+		},
+		{ name: "note.txt", body: Buffer.from("the spare key is under the mat\n") },
+	];
+	const sources = mkdtempSync(path.join(tmpdir(), "bramble-kdbx-attach-"));
+	for (const f of files) {
+		const source = path.join(sources, f.name);
+		writeFileSync(source, f.body);
+		await popup.locator('input[type="file"]').setInputFiles(source);
+		await expect(popup.getByText(f.name)).toBeVisible({ timeout: 30_000 });
+	}
+
+	const { out } = await exportKdbx(popup, FILE_PW);
+
+	for (const f of files) {
+		const extracted = path.join(sources, `out-${f.name}`);
+		execFileSync(
+			"keepassxc-cli",
+			["attachment-export", "-q", out, "Example Login", f.name, extracted],
+			{ input: `${FILE_PW}\n` },
+		);
+		expect(readFileSync(extracted).equals(f.body)).toBe(true);
+	}
 });

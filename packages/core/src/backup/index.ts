@@ -31,7 +31,8 @@ export function createTarget(cfg: ProviderConfig, transport?: BackupTransport): 
 		case "webdav":
 			return createWebdavTarget(cfg, transport);
 		case "dropbox":
-			return createDropboxTarget(cfg);
+			// Bearer auth is the target's own, so a transport here only carries the requests.
+			return createDropboxTarget(cfg, transport);
 	}
 }
 

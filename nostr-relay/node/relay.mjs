@@ -12,11 +12,15 @@
 //
 // Configure ICE_SERVERS and TURN_SECRET for cross-network peers; see ../README.md.
 
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 
 const PORT = Number(process.env.PORT ?? 7400);
+// Tests only: count the event bytes relayed, served at /stats, so a test can show that what it
+// moved between peers did not pass through here. Off unless asked for.
+const STATS = process.env.RELAY_STATS === "1";
+let eventBytes = 0;
 
 // Cheap abuse guards (kept in parity with cf-worker): a signaling blob is a few
 // KB of encrypted SDP/ICE, so reject larger frames before parsing, and bound
@@ -54,7 +58,8 @@ const trace = (message) => {
 };
 const short = (s) => (typeof s === "string" ? s.slice(0, 8) : typeof s);
 
-// Forwarded addresses are untrusted debug data, never used for access control.
+// Forwarded addresses are untrusted debug data here; only requesterOf believes them, and only
+// from a proxy named in TRUST_PROXY.
 const clientOf = (req) => {
 	const xff = req.headers["x-forwarded-for"];
 	const last = typeof xff === "string" ? xff.split(",").pop().trim() : "";
@@ -111,9 +116,29 @@ function parseIceServers() {
 	});
 }
 
+// IPv4-mapped IPv6 (how a dual-stack socket reports an IPv4 peer) as the plain IPv4 address.
+const normalizeAddress = (ip) =>
+	typeof ip === "string" ? ip.replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, "") : "";
+
 const TURN_SECRET = process.env.TURN_SECRET ?? "";
-const TURN_TTL_SECONDS = Number(process.env.TURN_TTL_SECONDS ?? 86400);
+const TURN_TTL_SECONDS = Number(process.env.TURN_TTL_SECONDS ?? 7200);
+const ICE_REQUESTS_PER_MINUTE = Number(process.env.ICE_REQUESTS_PER_MINUTE ?? 20);
+// For an ICE request without a live ticket (an app predating tickets, or a device on another
+// relay); with ICE_REQUIRE_TICKET=1 those get STUN only. In parity with cf-worker.
+const ICE_TICKETLESS_PER_MINUTE = Number(process.env.ICE_TICKETLESS_PER_MINUTE ?? 4);
+const ICE_REQUIRE_TICKET = process.env.ICE_REQUIRE_TICKET === "1";
+// The reverse proxy in front of the relay, whose X-Forwarded-For names the real requester.
+const TRUST_PROXY = new Set(
+	(process.env.TRUST_PROXY ?? "")
+		.split(",")
+		.map((s) => normalizeAddress(s.trim()))
+		.filter(Boolean),
+);
+// Private mode: sockets and ICE requests must carry ?token=. It rides in the relay URL, which
+// pairing codes carry, so a joining device needs no setting of its own.
+const RELAY_TOKEN = process.env.RELAY_TOKEN ?? "";
 let ICE_SERVERS;
+let STUN_SERVERS;
 try {
 	ICE_SERVERS = parseIceServers();
 	const hasTurn = ICE_SERVERS.some((server) => server.urls.some(isTurnUrl));
@@ -126,15 +151,120 @@ try {
 	if (!Number.isInteger(TURN_TTL_SECONDS) || TURN_TTL_SECONDS < 1 || TURN_TTL_SECONDS > 86400) {
 		throw new Error("TURN_TTL_SECONDS must be an integer between 1 and 86400");
 	}
+	if (!Number.isInteger(ICE_REQUESTS_PER_MINUTE) || ICE_REQUESTS_PER_MINUTE < 1) {
+		throw new Error("ICE_REQUESTS_PER_MINUTE must be a positive integer");
+	}
+	if (!Number.isInteger(ICE_TICKETLESS_PER_MINUTE) || ICE_TICKETLESS_PER_MINUTE < 1) {
+		throw new Error("ICE_TICKETLESS_PER_MINUTE must be a positive integer");
+	}
+	if (RELAY_TOKEN && !/^[A-Za-z0-9._~-]{16,}$/.test(RELAY_TOKEN)) {
+		throw new Error("RELAY_TOKEN must be at least 16 URL-safe characters (A-Z a-z 0-9 . _ ~ -)");
+	}
+	// What a requester over its allowance gets: the configured STUN, so it can still connect directly.
+	STUN_SERVERS = ICE_SERVERS.map((server) => ({
+		urls: server.urls.filter((url) => !isTurnUrl(url)),
+	})).filter((server) => server.urls.length > 0);
 } catch (error) {
 	log(error.message);
 	process.exit(1);
 }
 
-function mintIceServers() {
+/** The address limits apply to, in parity with cf-worker ipKey: IPv6 cut to its /64. */
+function ipKey(ip) {
+	if (!ip.includes(":")) return ip;
+	const [head = "", tail = ""] = ip.toLowerCase().split("::");
+	const left = head ? head.split(":") : [];
+	const right = tail ? tail.split(":") : [];
+	const missing = ip.includes("::") ? 8 - left.length - right.length : 0;
+	const groups = [...left, ...Array(Math.max(missing, 0)).fill("0"), ...right];
+	return `${groups
+		.slice(0, 4)
+		.map((g) => g.replace(/^0+(?=.)/, ""))
+		.join(":")}::/64`;
+}
+
+/** Who is asking: the socket's peer, or the address a trusted proxy forwarded for. */
+function requesterOf(req) {
+	const peer = normalizeAddress(req.socket.remoteAddress);
+	if (!TRUST_PROXY.has(peer)) return peer;
+	const xff = req.headers["x-forwarded-for"];
+	const last = typeof xff === "string" ? normalizeAddress(xff.split(",").pop().trim()) : "";
+	return last || peer;
+}
+
+function tokenOk(req) {
+	if (!RELAY_TOKEN) return true;
+	const given = Buffer.from(new URL(req.url ?? "/", "http://relay").searchParams.get("token") ?? "");
+	const want = Buffer.from(RELAY_TOKEN);
+	return given.length === want.length && timingSafeEqual(given, want);
+}
+
+// One-minute windows per requester. Pruned as they lapse, so the map holds only recent askers.
+const iceWindows = new Map();
+setInterval(() => {
+	const now = Date.now();
+	for (const [key, window] of iceWindows) if (now - window.start >= 60_000) iceWindows.delete(key);
+}, 60_000).unref();
+
+function admitIce(key, limit) {
+	const now = Date.now();
+	const prev = iceWindows.get(key);
+	const window =
+		prev && now - prev.start < 60_000
+			? { start: prev.start, count: prev.count + 1 }
+			: { start: now, count: 1 };
+	iceWindows.set(key, window);
+	return window.count <= limit;
+}
+
+// A ticket per socket, handed over when the client asks: an ICE request carrying one that names an
+// open socket which has published lately comes from a live sync device. See
+// ../../docs/turn-credentials.md.
+const TICKET_ACTIVE_MS = 5 * 60_000;
+const tickets = new Map(); // ticket -> socket
+
+function ticketLive(ticket) {
+	const ws = typeof ticket === "string" ? tickets.get(ticket) : undefined;
+	return (
+		ws !== undefined && ws.readyState === WebSocket.OPEN && Date.now() - ws.seenAt < TICKET_ACTIVE_MS
+	);
+}
+
+/** The ticket in an ICE request's plain-text body, or null. Reads at most 1 KB. */
+function readTicket(req) {
+	return new Promise((resolve) => {
+		let body = "";
+		req.setEncoding("utf8");
+		req.on("data", (chunk) => {
+			if (body.length <= 1024) body += chunk;
+		});
+		req.on("end", () => {
+			try {
+				const { ticket } = JSON.parse(body);
+				resolve(typeof ticket === "string" && ticket.length <= 128 ? ticket : null);
+			} catch {
+				resolve(null);
+			}
+		});
+		req.on("error", () => resolve(null));
+	});
+}
+
+// Tags each credential with its requester, so the TURN server's logs say who used what, without
+// naming an address. Per process: a restart starts new tags.
+const REQUESTER_SALT = randomBytes(32);
+const requesterTag = (key) =>
+	createHmac("sha256", REQUESTER_SALT).update(key).digest("hex").slice(0, 16);
+
+function mintIceServers(requester, ticketed) {
 	if (!TURN_SECRET) return { iceServers: ICE_SERVERS };
+	if (!ticketed && ICE_REQUIRE_TICKET) return { iceServers: STUN_SERVERS };
+	const key = ipKey(requester);
+	if (!admitIce(key, ticketed ? ICE_REQUESTS_PER_MINUTE : ICE_TICKETLESS_PER_MINUTE)) {
+		return { iceServers: STUN_SERVERS };
+	}
 	// The TURN server verifies the REST API credential's HMAC and username expiry.
-	const username = `${Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS}:bramble`;
+	const username = `${Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS}:${requesterTag(key)}`;
 	const credential = createHmac("sha1", TURN_SECRET).update(username).digest("base64");
 	return {
 		iceServers: ICE_SERVERS.map((server) =>
@@ -184,19 +314,31 @@ function matches(filter, event) {
 const sockets = new Set();
 let connSeq = 0;
 
-// Plain HTTP for the health probe and the ICE mint; the WS server shares the
-// same listener and handles the Upgrade handshake itself.
+// Plain HTTP for the health probe, the ICE mint and (in tests) the byte count; the WS server
+// shares the same listener and handles the Upgrade handshake itself.
 const httpServer = createServer((req, res) => {
+	if (STATS && req.url === "/stats") {
+		res.writeHead(200, { "content-type": "application/json" });
+		res.end(JSON.stringify({ eventBytes }));
+		return;
+	}
 	if (req.method === "POST" && req.url.split("?")[0] === "/ice-servers") {
 		trace(`http  ice-servers  ${clientOf(req)}`);
-		res.writeHead(200, {
-			"content-type": "application/json",
-			"cache-control": "no-store",
-			"access-control-allow-origin": "*",
-			"access-control-allow-methods": "POST, OPTIONS",
-			"access-control-allow-headers": "Content-Type",
+		if (!tokenOk(req)) {
+			res.writeHead(401, { "access-control-allow-origin": "*" });
+			res.end();
+			return;
+		}
+		void readTicket(req).then((ticket) => {
+			res.writeHead(200, {
+				"content-type": "application/json",
+				"cache-control": "no-store",
+				"access-control-allow-origin": "*",
+				"access-control-allow-methods": "POST, OPTIONS",
+				"access-control-allow-headers": "Content-Type",
+			});
+			res.end(JSON.stringify(mintIceServers(requesterOf(req), ticketLive(ticket))));
 		});
-		res.end(JSON.stringify(mintIceServers()));
 		return;
 	}
 	if (req.url.split("?")[0] === "/ice-servers") {
@@ -212,10 +354,17 @@ const httpServer = createServer((req, res) => {
 	res.end("bramble signaling relay");
 });
 
-const wss = new WebSocketServer({ server: httpServer, maxPayload: MAX_MSG_BYTES });
+const wss = new WebSocketServer({
+	server: httpServer,
+	maxPayload: MAX_MSG_BYTES,
+	verifyClient: ({ req }) => tokenOk(req),
+});
 
 wss.on("connection", (ws, req) => {
 	ws.subs = new Map(); // per-connection: subId -> filters
+	ws.ticket = randomBytes(24).toString("base64url");
+	ws.seenAt = 0; // when it last published, which is what keeps its ticket live
+	tickets.set(ws.ticket, ws);
 	const id = `conn${String(++connSeq).padStart(3, "0")}`;
 	const openedAt = Date.now();
 	sockets.add(ws);
@@ -223,6 +372,7 @@ wss.on("connection", (ws, req) => {
 	trace(`${id} open  ${clientOf(req)} (${sockets.size} peers)`);
 	ws.on("close", () => {
 		sockets.delete(ws);
+		tickets.delete(ws.ticket);
 		trace(`${id} close ${Math.round((Date.now() - openedAt) / 1000)}s (${sockets.size} peers)`);
 	});
 
@@ -252,6 +402,11 @@ wss.on("connection", (ws, req) => {
 		}
 		if (!Array.isArray(msg)) return;
 		const [type] = msg;
+
+		if (type === "BRAMBLE_TICKET") {
+			ws.send(JSON.stringify(["BRAMBLE_TICKET", ws.ticket]));
+			return;
+		}
 
 		if (type === "REQ") {
 			const [, subId, ...filters] = msg;
@@ -283,6 +438,7 @@ wss.on("connection", (ws, req) => {
 			return;
 		}
 		if (type === "EVENT") {
+			eventBytes += raw.length;
 			const event = msg[1];
 			const kind = typeof event?.kind === "number" ? event.kind : typeof event?.kind;
 			if (
@@ -322,6 +478,7 @@ wss.on("connection", (ws, req) => {
 				ws.send(JSON.stringify(["OK", event.id ?? "", false, "invalid: event nesting"]));
 				return;
 			}
+			ws.seenAt = Date.now();
 			// Fan out to every other socket's matching subscription; store nothing.
 			let fanout = 0;
 			for (const peer of sockets) {
@@ -359,6 +516,6 @@ process.once("SIGINT", shutdown);
 
 httpServer.listen(PORT, () => {
 	log(
-		`bramble signaling relay on ws://localhost:${httpServer.address().port} (${ICE_SERVERS.length} ice server entries)`,
+		`bramble signaling relay on ws://localhost:${httpServer.address().port} (${ICE_SERVERS.length} ice server entries${RELAY_TOKEN ? ", private" : ""})`,
 	);
 });

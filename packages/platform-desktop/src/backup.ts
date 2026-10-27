@@ -13,26 +13,31 @@
 // The tick comes from Rust (`backup::start_ticker`), not from a timer here: this window is
 // usually hidden and a hidden webview's timers are throttled by the platform.
 
-import { createTarget, runBackup, sha256Hex } from "@core/backup";
+import { createTarget, runBackup } from "@core/backup";
+import { planBackup } from "@core/backup/archive";
 import {
 	type BackupSecrets,
 	type BackupTargetConfig,
 	backupTargetsKeyFor,
 	keyVaultIdFor,
+	metaListCache,
 	migrateBackupTargetsToVaults,
 	targetPrefixFor,
 	toProviderConfig,
 } from "@core/backup/config";
 import {
+	backupPlanner,
 	runScheduledBackups,
 	type ScheduledBackupResult,
 	type VaultBackup,
 } from "@core/backup/run";
+import { onBlobArrived } from "@core/sync/blob-arrivals";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { desktopBackupCreds } from "./adapters/backup-creds";
 import { desktopCrypto } from "./adapters/crypto";
+import { desktopFiles } from "./adapters/files";
 import { desktopStorage } from "./adapters/storage";
 
 const TICK_EVENT = "backup://tick";
@@ -76,6 +81,16 @@ let running = false;
 export async function runDueBackups(): Promise<void> {
 	if (running) return;
 	running = true;
+	const planner = backupPlanner((vault) =>
+		planBackup({
+			vault: vault.blob,
+			blobs: desktopFiles.forVault(vault.id).blobs,
+			// One VEK in the shell, the active vault's; any other vault's list cannot be read, and
+			// is the one cached at its last unlock, valid only while its bytes are unchanged.
+			decryptWithVek: (iv, ct) => desktopCrypto.decryptWithVek(iv, ct),
+			listCache: metaListCache(desktopStorage, vault.id),
+		}),
+	);
 	try {
 		const result = await runScheduledBackups(
 			{
@@ -83,8 +98,13 @@ export async function runDueBackups(): Promise<void> {
 				loadTargets,
 				saveTargets: (vaultId, targets) =>
 					desktopStorage.setMeta(backupTargetsKeyFor(vaultId), targets),
-				// Per vault, so editing one vault does not re-upload the others.
-				hashVault: (vault) => sha256Hex(vault.blob),
+				// Per vault, so editing one vault does not re-upload the others. The runner plans only
+				// a vault with a target due, so a tick with nothing due decrypts nothing.
+				hashVault: planner.fingerprint,
+				// This is the one platform that backs up while locked. A locked vault is planned from
+				// the attachment list cached at its last unlock; with none for its current bytes it
+				// waits, rather than going up without attachments its sealed list may name.
+				blocked: planner.blocked,
 				// Only reached for a VEK-wrapped target (the OS-held ones never come through here).
 				// The Rust side holds one VEK for the active vault, so a locked vault yields null,
 				// which the runner treats as "not yet" rather than as a failure.
@@ -107,7 +127,8 @@ export async function runDueBackups(): Promise<void> {
 							? desktopBackupCreds.transport(vaultId, t)
 							: desktopBackupCreds.transportWithSecrets(t, secrets),
 					);
-					await runBackup(target, vault.blob, {
+					await runBackup(target, await planner.body(vault), {
+						fingerprint: await planner.fingerprint(vault),
 						prefix: targetPrefixFor(t, vault.id, vault.isDefault),
 						keep: t.keep,
 						vaultId: keyVaultIdFor(t, vault.id),
@@ -154,8 +175,14 @@ async function report(result: ScheduledBackupResult): Promise<void> {
 
 /** Listen for the shell's tick. Returns an unsubscribe; call once, from the main window. */
 export function startBackupSchedule(): () => void {
-	const stop = listen(TICK_EVENT, () => {
+	const run = () => {
 		void runDueBackups().catch((e) => console.warn("[bramble] backup tick failed:", e));
-	});
-	return () => void stop.then((off) => off());
+	};
+	const stop = listen(TICK_EVENT, run);
+	// A file a waiting backup needed may just have arrived; the run is a no-op if not.
+	const offArrival = onBlobArrived(run);
+	return () => {
+		offArrival();
+		void stop.then((off) => off());
+	};
 }

@@ -5,6 +5,7 @@ import { useCan } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import type { WebauthnKeyKind } from "../../../../vault/webauthn-ceremony";
 import { Button } from "../../../components/ui/button";
+import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { useWebauthnHandoff, type WebauthnHandoff } from "../../../hooks/useWebauthnHandoff";
 import { Row } from "./primitives";
 
@@ -121,16 +122,23 @@ export function TapToUnlockSection() {
 									</span>
 								)}
 							</span>
-							<Button
-								variant="link"
-								size="none"
-								onClick={() => void handleRevoke(k.slotIdB64)}
-								className="hover:text-destructive transition-colors"
-								aria-label={t`Remove ${k.label}`}
-								title={t`Remove ${k.label}`}
-							>
-								×
-							</Button>
+							<InlineConfirm
+								confirmLabel={<Trans>Remove</Trans>}
+								busyLabel={<Trans>Removing…</Trans>}
+								onConfirm={() => handleRevoke(k.slotIdB64)}
+								trigger={(arm) => (
+									<Button
+										variant="link"
+										size="none"
+										onClick={arm}
+										className="hover:text-destructive transition-colors"
+										aria-label={t`Remove ${k.label}`}
+										title={t`Remove ${k.label}`}
+									>
+										×
+									</Button>
+								)}
+							/>
 						</li>
 					))}
 				</ul>

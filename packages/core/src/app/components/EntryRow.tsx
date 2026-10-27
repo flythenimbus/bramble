@@ -15,6 +15,7 @@ import { useLongPress } from "../../hooks/useLongPress";
 import type { CopyItem } from "../entry-modes/types";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
+import { InlineConfirm } from "./ui/inline-confirm";
 
 interface EntryRowProps {
 	id: string;
@@ -79,7 +80,6 @@ export const EntryRow = memo(function EntryRow({
 	const [copyOpen, setCopyOpen] = useState(false);
 	const [moreOpen, setMoreOpen] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
-	const [deleting, setDeleting] = useState(false);
 	const [copied, setCopied] = useState<string | null>(null);
 	const passkeyLabel = passkeys === 1 ? t`Holds a passkey` : t`Holds ${passkeys} passkeys`;
 	const copyRef = useRef<HTMLDivElement>(null);
@@ -125,11 +125,9 @@ export const EntryRow = memo(function EntryRow({
 	};
 
 	const handleDelete = async () => {
-		setDeleting(true);
 		try {
 			await onDelete(id);
 		} finally {
-			setDeleting(false);
 			setConfirmingDelete(false);
 			setMoreOpen(false);
 		}
@@ -300,49 +298,33 @@ export const EntryRow = memo(function EntryRow({
 							</Button>
 							{moreOpen && (
 								<div className="absolute right-0 mt-2 min-w-44 rounded-lg border border-border/50 bg-card shadow-xl shadow-black/10 overflow-hidden z-50">
-									{confirmingDelete ? (
-										<div className="p-3 space-y-2">
-											<p className="text-xs text-foreground">
-												<Trans>Delete this entry?</Trans>
-											</p>
-											<div className="flex items-center gap-2">
-												<Button
-													variant="secondary"
-													size="none"
-													onClick={() => setConfirmingDelete(false)}
-													disabled={deleting}
-													className="flex-1 px-3 py-1.5 text-xs rounded-md hover:bg-background/50 hover:border-border"
+									<InlineConfirm
+										layout="stacked"
+										className="p-3"
+										armed={confirmingDelete}
+										onArmedChange={setConfirmingDelete}
+										prompt={<Trans>Delete this entry?</Trans>}
+										confirmLabel={<Trans>Delete</Trans>}
+										busyLabel={<Trans>Deleting…</Trans>}
+										onConfirm={handleDelete}
+										trigger={(arm) => (
+											<>
+												<MenuItem
+													icon={<Pencil className="w-3 h-3 text-muted-foreground" />}
+													onClick={handleEdit}
 												>
-													<Trans>Cancel</Trans>
-												</Button>
-												<Button
-													variant="destructive"
-													size="none"
-													onClick={handleDelete}
-													disabled={deleting}
-													className="flex-1 px-3 py-1.5 text-xs rounded-md"
+													<Trans>Edit</Trans>
+												</MenuItem>
+												<MenuItem
+													icon={<Trash2 className="w-3 h-3 text-destructive" />}
+													destructive
+													onClick={arm}
 												>
-													{deleting ? <Trans>Deleting…</Trans> : <Trans>Delete</Trans>}
-												</Button>
-											</div>
-										</div>
-									) : (
-										<>
-											<MenuItem
-												icon={<Pencil className="w-3 h-3 text-muted-foreground" />}
-												onClick={handleEdit}
-											>
-												<Trans>Edit</Trans>
-											</MenuItem>
-											<MenuItem
-												icon={<Trash2 className="w-3 h-3 text-destructive" />}
-												destructive
-												onClick={() => setConfirmingDelete(true)}
-											>
-												<Trans>Delete</Trans>
-											</MenuItem>
-										</>
-									)}
+													<Trans>Delete</Trans>
+												</MenuItem>
+											</>
+										)}
+									/>
 								</div>
 							)}
 						</div>

@@ -124,6 +124,11 @@ decided 2026-10-23). It stays visible until someone chooses: hiding it would mak
 as invisible as dropping it. There's no cap: siblings only come from real concurrency, and
 capping them would silently drop data.
 
+An attachment the delete never saw raises a delete conflict too: the entry's newest version stays
+shown, so the file has somewhere to be. A kept entry shows its attachments, including those the
+delete marked. See [file-attachments.md](file-attachments.md), "Deleting an entry hides its
+attachments".
+
 ### Wire format
 
 - `vv` and `floor` on each `EncryptedEntry` and each tombstone, in the outer index, so choosing

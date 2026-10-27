@@ -7,6 +7,7 @@ import type { EntryConflict } from "../../../sync";
 import { formatDateTime } from "../../../util/format-date";
 import { Button } from "../../components/ui/button";
 import { getEntryMode } from "../../entry-modes";
+import { AttachmentsDetail } from "../../entry-modes/attachments";
 import { CustomFieldsDetail } from "../../entry-modes/custom-fields";
 import { TagsDetail } from "../../entry-modes/tags";
 import { ConflictBanner } from "./ConflictBanner";
@@ -164,6 +165,8 @@ export function EntryDetail({
 					{entry.customFields && entry.customFields.length > 0 && (
 						<CustomFieldsDetail fields={entry.customFields} copied={copied} copy={copy} />
 					)}
+
+					<AttachmentsDetail entryId={entry.id} />
 
 					{entry.tags && entry.tags.length > 0 && (
 						<TagsDetail tags={entry.tags} onSelect={onSelectTag} />

@@ -1413,7 +1413,8 @@ Each phase retires a risk.
 - **Phase 3, sync hub. IN PROGRESS.** Enrollment (invite and join), host-side admission signing,
   and ongoing roster sync all run in the vault window on the webview's own WebRTC, with the
   crypto routed to Rust. Browsers on this machine sync over the native link instead of the relay,
-  on both ends. Device identity lives in the OS credential store. Tray residency landed with
+  on both ends, and attachments ride the same link once the browser has said it speaks files
+  (the `caps` request; see [file-attachments.md](file-attachments.md), "The desktop link"). Device identity lives in the OS credential store. Tray residency landed with
   `lifetime`. **Scheduled backups landed**: a 5-minute tick in the shell drives the shared
   `runScheduledBackups`, with target credentials in the OS credential store and the HTTP done in
   Rust (the webview has no CORS grant for `tauri://localhost`), so every vault's schedule is kept

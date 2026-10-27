@@ -30,17 +30,26 @@ import {
 	type StorageAdapter,
 	SYNC_LAST_SYNCED_KEY,
 } from "@core/index";
+import { blobArrived } from "@core/sync/blob-arrivals";
+import { answerBlobStatus } from "@core/sync/blob-status";
 import { addDevice } from "@core/sync/roster";
 import { syncKeyFor } from "@core/sync/sync-keys";
+import {
+	type BlobSyncSession,
+	startBlobSync,
+	wantedFromPayload,
+} from "@core/sync/transport/blob-sync";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { startRosterSync } from "@core/sync/transport/roster-sync";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { desktopCrypto } from "../adapters/crypto";
+import { desktopFiles } from "../adapters/files";
 import { desktopStorage } from "../adapters/storage";
 import { notifyExternalChange, onVaultStateChange } from "../adapters/vault-session";
 import { desktopSyncCrypto } from "../sync-crypto";
 import { emit, report } from "./bus";
 import { deviceKeypair, publishSyncIdentity } from "./keys";
+import { linkBlobSource } from "./link-blob";
 import { linkPeerSource } from "./link-peers";
 
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
@@ -141,8 +150,16 @@ function makeBlobStore(vaultId: string) {
  * one blob.
  */
 let rosterSessions: MeshSession[] = [];
+/** Attachment bytes, beside entry sync: WebRTC (direct or TURN) and the browser link only, never
+ * the signalling relay (see @core/sync/transport/blob-sync). Bound to the same vault as the sessions. */
+let blobSession: BlobSyncSession | null = null;
 /** The vault the live sessions sync. Null when nothing is running. */
 let sessionVaultId: string | null = null;
+
+// The attachment rows ask why a file hasn't arrived; only this vault's session can say.
+answerBlobStatus(async (vaultId, hashes) =>
+	blobSession && sessionVaultId === vaultId ? blobSession.status(hashes) : {},
+);
 /** Bumped on every teardown or retarget. A merge captures it on entry and refuses to write if
  * it has moved, so an apply that began before a vault switch cannot land after it. */
 let sessionGen = 0;
@@ -164,6 +181,8 @@ async function startRoster(): Promise<void> {
 
 	for (const session of rosterSessions) session.stop();
 	rosterSessions = [];
+	blobSession?.stop();
+	blobSession = null;
 	// Everything below is pinned to THIS vaultId for the life of the session. A retarget stops
 	// the session and bumps the gen rather than letting a running one follow the active vault.
 	const blobStore = makeBlobStore(vaultId);
@@ -219,6 +238,8 @@ async function startRoster(): Promise<void> {
 					onChanged: notifyExternalChange,
 				});
 				await applyRemotePayload(port, decodeEntriesPayload(json), { rejected });
+				// The merge may name attachments this device lacks.
+				blobSession?.poke();
 
 				// Every reconcile, changed or not, means "up to date with a peer".
 				const at = Date.now();
@@ -240,6 +261,19 @@ async function startRoster(): Promise<void> {
 		// failure does not cost the local peers, which are the ones that work offline.
 		await startRosterSync({ ...common, peerSource: linkPeerSource }),
 	];
+	if (gen !== sessionGen) return; // torn down while the sessions started
+	// Its own failure, reported: entry sync carries on without it.
+	try {
+		blobSession = await startBlobSync({
+			...common,
+			blobs: desktopFiles.forVault(vaultId).blobs,
+			wanted: async () => wantedFromPayload(await blobStore.readEntriesPayload()),
+			localSources: [linkBlobSource],
+			onReceived: blobArrived,
+		});
+	} catch (e) {
+		report(`file sync error: ${(e as Error).message}`);
+	}
 }
 
 async function maybeStartRosterSync(): Promise<void> {
@@ -254,6 +288,8 @@ async function maybeStartRosterSync(): Promise<void> {
 export function stopRosterSync(): void {
 	for (const session of rosterSessions) session.stop();
 	rosterSessions = [];
+	blobSession?.stop();
+	blobSession = null;
 	sessionVaultId = null;
 	// Invalidate any merge still queued: it captured the old gen and must not write.
 	sessionGen++;

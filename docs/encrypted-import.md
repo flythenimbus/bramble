@@ -61,7 +61,10 @@ Code: `seal_portable_vault` / `open_portable_vault` in
 - **A full vault backup is refused, by name.** Its payload decrypts fine but holds
   entries still sealed under per-entry DEKs; importing them would write entries whose
   every field is ciphertext, so `openPortableVaultFile` detects that shape and points
-  the user at restore instead.
+  the user at restore instead. A backup of a vault with attachments (a ZIP) is refused
+  the same way, recognized by parsing it with the backup reader, so an unrelated ZIP is
+  not mistaken for one. The message is a code (`FULL_BACKUP_ERROR`) that the Import
+  screen turns into translated copy.
 - **Wrong password is not an error.** The core answers `None`/`null`, kept distinct
   from a corrupt or non-Bramble file so the UI can say which happened.
 
@@ -74,7 +77,9 @@ field off: only KeePass has those.
 
 Importing a KeePass KDBX4 database. Code: `packages/core-rust/src/kdbx.rs`,
 driven from `keepass.ts` on the JS side. This is the spike for reading external
-vaults; export reuses the same VariantDictionary codec and `derive_keys` chain.
+vaults; export reuses the same VariantDictionary codec and `derive_keys` chain, and
+writes attachments (see [file-attachments.md](file-attachments.md), "Export, backup,
+import").
 
 ## Scope and boundary
 
@@ -91,7 +96,8 @@ Supported, by deliberate choice:
 - Outer cipher **AES-256-CBC** or **ChaCha20**. Twofish rejected.
 - KDF **Argon2d** (KeePass default) or **Argon2id**. AES-KDF rejected.
 - Inner stream **ChaCha20**.
-- Attachments/binaries are ignored.
+- Attachments are imported, each onto the entry that holds it. See
+  [file-attachments.md](file-attachments.md), "Export, backup, import".
 
 Each rejection has a stable machine code (`KdbxError::code()`, for example
 `KDBX_UNSUPPORTED_CIPHER`, `KDBX_WRONG_CREDENTIAL`) so the JS layer can show the
@@ -137,7 +143,7 @@ Recycle Bin entries that are ultimately discarded, so decryption always applies
 the keystream and emission is decided separately.
 
 Only top-level current entries are emitted. Excluded: History revisions, entries
-under the Recycle Bin group, and attachments/binaries.
+under the Recycle Bin group, and those entries' attachments with them.
 
 ## Test coverage
 

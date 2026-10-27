@@ -10,6 +10,8 @@ const GROUP_KEY = new Uint8Array(32).fill(7);
 const REMOTE = "ff".repeat(32);
 const sockets: FakeSocket[] = [];
 const sessions: MeshSession[] = [];
+/** Whether the fake relay answers a ticket request, as Bramble's relays do. */
+let relayTickets = true;
 
 class FakeSocket {
 	onopen: (() => void) | null = null;
@@ -23,6 +25,11 @@ class FakeSocket {
 	}
 	send(data: string): void {
 		this.sent.push(data);
+		if (relayTickets && data === JSON.stringify(["BRAMBLE_TICKET"])) {
+			queueMicrotask(() =>
+				this.onmessage?.({ data: JSON.stringify(["BRAMBLE_TICKET", "ticket-1"]) }),
+			);
+		}
 	}
 	close(): void {}
 	open(): void {
@@ -40,9 +47,13 @@ const server = (username: string): RTCIceServer => ({
 	credential: "hmac",
 });
 
-async function start(fetchIce?: () => Promise<RTCIceServer[]>): Promise<MeshSession> {
+async function start(
+	fetchIce?: () => Promise<RTCIceServer[]>,
+	iceUrl?: string,
+): Promise<MeshSession> {
 	const session = await startMeshSession({
 		relayUrl: "wss://relay.example.com",
+		iceUrl,
 		groupKeyB64: bytesToBase64(GROUP_KEY),
 		roomLabel: "bramble/sync",
 		wasm: {
@@ -73,6 +84,7 @@ async function deliver(payload: object): Promise<void> {
 
 beforeEach(() => {
 	sockets.length = 0;
+	relayTickets = true;
 	vi.useFakeTimers({ toFake: ["Date"] });
 	vi.setSystemTime(new Date("2026-10-08T10:00:00Z"));
 	vi.stubGlobal("WebSocket", FakeSocket);
@@ -127,6 +139,32 @@ describe("ICE credentials for new peer connections", () => {
 		);
 		expect(second.iceServers![0]!.username).not.toBe(first.iceServers![0]!.username);
 		expect(mint).toHaveBeenLastCalledWith("https://relay.example.com/ice-servers", {
+			method: "POST",
+			headers: { "Content-Type": "text/plain" },
+			body: JSON.stringify({ ticket: "ticket-1" }),
+		});
+	});
+
+	it("asks a relay that issues no tickets without one, once it has had its chance", async () => {
+		relayTickets = false;
+		const mint = vi.fn(async () => ({ ok: true, json: async () => ({ iceServers: [] }) }));
+		vi.stubGlobal("fetch", mint);
+		await start();
+
+		await deliver({ kind: "hello", rtc: true });
+		// Real time: the socket's 2 s for an answer has to run out first.
+		await vi.waitFor(() => expect(createPeer).toHaveBeenCalledTimes(1), { timeout: 10_000 });
+		expect(mint).toHaveBeenCalledWith("https://relay.example.com/ice-servers", { method: "POST" });
+	}, 15_000);
+
+	it("keeps the relay's ticket from an ICE endpoint on another host", async () => {
+		const mint = vi.fn(async () => ({ ok: true, json: async () => ({ iceServers: [] }) }));
+		vi.stubGlobal("fetch", mint);
+		await start(undefined, "https://ice.elsewhere.example/ice-servers");
+
+		await deliver({ kind: "hello", rtc: true });
+		await vi.waitFor(() => expect(createPeer).toHaveBeenCalledTimes(1));
+		expect(mint).toHaveBeenCalledWith("https://ice.elsewhere.example/ice-servers", {
 			method: "POST",
 		});
 	});

@@ -12,6 +12,7 @@ import type {
 	Causal,
 	EntriesPayload,
 	EntryConflict,
+	FileManifest,
 	Hlc,
 	HybridClock,
 	SyncedSettings,
@@ -30,6 +31,7 @@ import type { EncryptedEntry, VaultBlob } from "../vault-format";
 import { toAutofillIndex } from "./autofill-index";
 import { createEntriesBlobStore } from "./entries-blob";
 import { entryDataSchema } from "./entry-normalize";
+import { cascadeFilesForEntries, type SealedFile, withSealedFiles } from "./file-mutations";
 import { withPartStamps } from "./parts";
 import { withPasswordChangelog, withSupersededPasswords } from "./password-changelog";
 import { normalizeTags, tagKey, tagsEqual } from "./tags";
@@ -63,7 +65,18 @@ export interface VaultEntries {
 	 * See docs/synced-settings.md.
 	 */
 	settings?: SyncedSettings;
+	/**
+	 * The file manifest, carried for exactly the reason `settings` is: `buildPayload` rebuilds
+	 * the whole payload on every write, so a manifest not held here is erased by the next entry
+	 * edit. Nothing in this module mutates it; attaching and removing files is its own seam.
+	 * See docs/file-attachments.md.
+	 */
+	manifest?: FileManifest;
 }
+
+/** A sealed attachment an import brings: on the batch's item at `item`, or on an entry the
+ * vault already has (a re-import bringing the files an earlier import could not). */
+export type ImportedFile = { sealed: SealedFile } & ({ item: number } | { entryId: string });
 
 /**
  * The version an edit form opened: its stamp, history and decrypted data. Saving supersedes this
@@ -97,7 +110,15 @@ export interface EntryMutationsDeps {
 
 export interface EntryMutations {
 	add(current: VaultEntries, data: EntryData): Promise<VaultEntries>;
-	importMany(current: VaultEntries, items: EntryData[]): Promise<VaultEntries>;
+	/**
+	 * Add a batch in one write, with any attachments it brings, so a batch arrives whole or not
+	 * at all. Each file is already sealed into the store (see `sealAttachment`).
+	 */
+	importMany(
+		current: VaultEntries,
+		items: EntryData[],
+		files?: ImportedFile[],
+	): Promise<VaultEntries>;
 	/**
 	 * Save an edit. With `opened`, the save supersedes that version; if another one is displayed
 	 * by then, that one becomes its sibling instead of being overwritten.
@@ -169,6 +190,13 @@ export interface EntryMutations {
 	 * this while the old key still exists and hands the result to `sealAll`.
 	 */
 	openConflicts(current: VaultEntries): Promise<(string | null)[]>;
+	/**
+	 * Encrypt + write a whole VaultEntries in one go, then refresh the autofill index.
+	 *
+	 * Exposed so FileMutations writes through the SAME path rather than opening a second one:
+	 * the index can then never drift from disk, whichever kind of change caused the write.
+	 */
+	persist(next: VaultEntries): Promise<VaultEntries>;
 	/** Decrypt the on-disk entries payload (empty for a fresh vault). */
 	readEntriesPayload(): Promise<EntriesPayload>;
 	/**
@@ -216,7 +244,15 @@ export function vaultEntriesFromPayload(payload: EntriesPayload, decrypted: Entr
 		tombstoneCausal,
 		conflicts: payload.conflicts ?? [],
 	};
-	return payload.settings ? { ...state, settings: payload.settings } : state;
+	if (payload.settings) state.settings = payload.settings;
+	if (payload.files || payload.fileTombstones || payload.fileCascades) {
+		state.manifest = {
+			files: payload.files,
+			fileTombstones: payload.fileTombstones,
+			fileCascades: payload.fileCascades,
+		};
+	}
+	return state;
 }
 
 const displayedOf = (s: VaultEntries, id: string): Versioned | undefined => {
@@ -299,11 +335,16 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			hlc,
 			...next.tombstoneCausal.get(id),
 		}));
-		// Threaded through rather than rebuilt: this is the seam where a synced setting, or a
-		// sibling version, would otherwise be dropped by an ordinary entry edit.
+		// Threaded through rather than rebuilt: this is the seam where a synced setting, a sibling
+		// version or a file manifest would otherwise be dropped by an ordinary entry edit. Each is
+		// emitted only when it has content, so a vault that has none keeps the payload shape it has.
 		const payload: EntriesPayload = { entries, tombstones };
 		if (next.settings) payload.settings = next.settings;
 		if (next.conflicts.length > 0) payload.conflicts = next.conflicts;
+		if (next.manifest?.files?.length) payload.files = next.manifest.files;
+		if (next.manifest?.fileTombstones?.length)
+			payload.fileTombstones = next.manifest.fileTombstones;
+		if (next.manifest?.fileCascades?.length) payload.fileCascades = next.manifest.fileCascades;
 		return payload;
 	};
 
@@ -384,6 +425,8 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			tombstones.set(id, hlc);
 			tombstoneCausal.set(id, nextCausal({ hlc, bases: held, held }));
 		}
+		// Deleting an entry takes its attachments: each one held here is marked, and hidden while
+		// the entry is gone. A file attached elsewhere that this delete never saw is not.
 		return persist({
 			...current,
 			entries: current.entries.filter((e) => !doomed.has(e.id)),
@@ -392,6 +435,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			tombstones,
 			tombstoneCausal,
 			conflicts: current.conflicts.filter((e) => !doomed.has(e.id)),
+			manifest: cascadeFilesForEntries(current, doomed, () => c.send()),
 		});
 	};
 
@@ -475,6 +519,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 
 	return {
 		readEntriesPayload,
+		persist,
 		writeEntriesBlob,
 
 		add: async (current, data) => {
@@ -511,7 +556,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 
 		// One encrypt-and-write for the whole batch (not N), so a large import is a
 		// single disk write.
-		importMany: async (current, items) => {
+		importMany: async (current, items, files = []) => {
 			const valid = items.map(validate);
 			const c = await clock();
 			const stamps = new Map(current.stamps);
@@ -537,11 +582,22 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 					hlc,
 				);
 			});
+			const known = new Set(current.entries.map((e) => e.id));
+			const placed = files.map(({ sealed, ...on }) => {
+				const entryId = "item" in on ? withIds[on.item]?.id : on.entryId;
+				// An attachment with nowhere to go would be listed and never shown: refuse the batch.
+				if (entryId === undefined || ("entryId" in on && !known.has(entryId))) {
+					throw new Error("an attachment's entry is not in the vault");
+				}
+				return { sealed, entryId };
+			});
 			return persist({
 				...current,
 				entries: [...current.entries, ...withIds],
 				stamps,
 				causal,
+				manifest:
+					placed.length > 0 ? withSealedFiles(current, placed, () => c.send()) : current.manifest,
 			});
 		},
 

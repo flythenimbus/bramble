@@ -12,7 +12,10 @@ import {
 import type { IndexEntry, SubdomainMatchMode } from "../adapters/autofill";
 import type { BiometryType } from "../adapters/biometric";
 import { VAULT_OPEN_FAILED } from "../adapters/crypto";
+import type { PickedAttachment } from "../adapters/files";
+import { buildBackup } from "../backup/archive";
 import { usePlatform } from "../context/PlatformContext";
+import type { PlacedAttachment } from "../import/types";
 import {
 	decodeVaultBlob,
 	type EncryptedEntry,
@@ -188,7 +191,7 @@ export type DeleteVaultAuth = { password: string } | { webauthnKey: true };
 import { aliasConfigKeyFor, aliasConfiguredHintKeyFor, aliasHintValue } from "../aliases/config";
 import { backupTargetsKeyFor } from "../backup/config";
 import { exportToOs } from "../exchange";
-import { toKdbxEntries } from "../export/kdbx";
+import { toKdbxExport } from "../export/kdbx";
 import {
 	COMBINE_CONCURRENT_EDITS,
 	combinePayload,
@@ -200,13 +203,17 @@ import {
 	type EntryConflict,
 	emptyEntriesPayload,
 	ensureDeviceId,
+	type FileRecord,
 	type Hlc,
 	type HybridClock,
+	liveFiles,
 	makeClock,
 	mergeEntriesPayload,
 	type SyncedSettings,
+	shownFiles,
 } from "../sync";
 import { PER_VAULT_SYNC_KEYS, syncKeyFor } from "../sync/sync-keys";
+import type { FileTransferStatus } from "../sync/transport/blob-sync";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { UserFacingError } from "../util/user-facing-error";
 import { toAutofillIndex } from "../vault/autofill-index";
@@ -225,11 +232,18 @@ import {
 	conflictsOf,
 	createEntryMutations,
 	emptyVaultEntries,
+	type ImportedFile,
 	type OpenedVersion,
 	type VaultEntries,
 	vaultEntriesFromPayload,
 } from "../vault/entry-mutations";
 import { entryDataSchema, normalizeEntryData } from "../vault/entry-normalize";
+import {
+	type AttachInput,
+	createFileMutations,
+	type FileMeta,
+	sealAttachment,
+} from "../vault/file-mutations";
 import { quarantineEntries } from "../vault/quarantine";
 import { decryptEntriesOrRecover } from "../vault/recover-entries";
 import {
@@ -286,6 +300,19 @@ export interface VaultState {
 	/** The last setup-flow join failure (e.g. password mismatch), or null. */
 	joinError: string | null;
 	entries: Entry[];
+	/**
+	 * Every attachment the vault shows (see `shownFiles`): not detached, and not taken by a
+	 * delete of its entry. Empty where the platform has no file adapter. State, not an action,
+	 * or the actions object stops being referentially stable across a change (see
+	 * useVault.split.test.tsx).
+	 */
+	files: FileRecord[];
+	/** Whether this platform can store attachments at all; gates the UI. */
+	canAttachFiles: boolean;
+	/** Whether this platform can hand a decrypted attachment to another app; gates Open. */
+	canOpenFiles: boolean;
+	/** Whether this platform picks attachments with its own dialog rather than `<input>`. */
+	canPickFiles: boolean;
 	/** Entries with sibling versions or a concurrent delete, by id (docs/sync-conflicts.md). */
 	conflicts: ReadonlyMap<string, EntryConflict>;
 	error: string | null;
@@ -320,6 +347,8 @@ export interface VaultActions {
 	 */
 	deleteVault(auth: DeleteVaultAuth): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
+	/** Save a backup file. Resolves with any attachments it had to leave out. */
+	/** Throws BackupIncompleteError rather than save a backup missing any of the vault. */
 	exportVault(): Promise<void>;
 	/**
 	 * Save the vault as a KeePass `.kdbx` (KDBX4), encrypted with `password` — chosen for the
@@ -335,7 +364,34 @@ export interface VaultActions {
 	 */
 	exportToApp(): Promise<string[]>;
 	addEntry(data: EntryData): Promise<void>;
-	importEntries(items: EntryData[]): Promise<void>;
+	/**
+	 * Attach a file to an entry, or to none for a standalone Files item. Rejects where the
+	 * platform has no file adapter, so check `canAttachFiles` first.
+	 */
+	attachFile(input: AttachInput): Promise<void>;
+	/** Tombstone an attachment. Its blob stays until a sweep collects it. */
+	detachFile(fileId: string): Promise<void>;
+	/** Rename an attachment. Reseals metadata only; no bytes move. */
+	renameFile(fileId: string, name: string): Promise<void>;
+	/** An attachment's sealed name and type. Decrypted on demand, since the manifest never
+	 * holds them in the clear. */
+	describeFile(record: FileRecord): Promise<FileMeta>;
+	/** Decrypt an attachment and hand it to the OS to open, share or save. Rejects where the
+	 * platform cannot, so check `canOpenFiles` first. */
+	openFile(record: FileRecord): Promise<void>;
+	/** Whether this device holds an attachment's bytes yet. A file attached on another device
+	 * is named by the vault before its bytes arrive (see docs/file-attachments.md). */
+	hasFile(record: FileRecord): Promise<boolean>;
+	/** Why each of these missing files hasn't arrived; see VaultFiles.transferStatus. */
+	fileStatus(hashes: string[]): Promise<Record<string, FileTransferStatus>>;
+	/** Pick a file with the platform's own dialog, or null if cancelled. Rejects where there
+	 * is none, so check `canPickFiles` first; elsewhere the UI uses `<input type=file>`. */
+	pickFile(): Promise<PickedAttachment | null>;
+	/**
+	 * Add entries in one write, with any files the import brings. Every file is sealed first,
+	 * so one that cannot be stops the import before anything is written: whole or not at all.
+	 */
+	importEntries(items: EntryData[], attachments?: PlacedAttachment[]): Promise<void>;
 	/** The displayed version of an entry, for an edit form to save against (see `updateEntry`). */
 	openVersion(id: string): OpenedVersion | undefined;
 	/**
@@ -460,6 +516,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		biometric,
 		exchange,
 		backupCreds,
+		files: fileAdapter,
 	} = usePlatform();
 	// Vault actions reject with copy the screens render directly, so it has to be translated
 	// here rather than at each call site. Internal invariants below stay untranslated on purpose.
@@ -533,6 +590,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// merge lands one. The ref is what mutations thread; this is what the UI reads.
 	const [syncedSettings, setSyncedSettings] = useState<SyncedSettings | undefined>(undefined);
 	const [conflicts, setConflicts] = useState<ReadonlyMap<string, EntryConflict>>(NO_CONFLICTS);
+	// The file manifest rides in vaultStateRef with the rest of the sync state, so every mutation
+	// threads it through (docs/file-attachments.md). Mirrored in state so attachment lists
+	// re-render, the way syncedSettings is. Only the files shown: the manifest also holds those a
+	// deleted entry took, kept in case the entry comes back.
+	const [files, setFiles] = useState<FileRecord[]>([]);
+	// Read by actions through a ref, as entries are through latestRef, so they stay stable.
+	const filesRef = useRef(files);
+	filesRef.current = files;
 
 	/** Lazily load this device's id and build its clock. The device id is per-vault (each vault
 	 * is its own sync group with its own roster membership), so read/write it under the active
@@ -643,6 +708,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				latestRef.current = { ...latestRef.current, entries: [] };
 				setConflicts(NO_CONFLICTS);
 				setSyncedSettings(undefined);
+				setFiles([]);
 				setEntries([]);
 				await publishIndex([], indexLease);
 				return;
@@ -694,6 +760,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				}
 			}
 			setSyncedSettings(payload.settings);
+			setFiles(liveFiles(payload));
 			// Advance this device's clock past every stamp it just read, so the next
 			// local write is causally ordered after them.
 			const clock = await ensureClock();
@@ -867,6 +934,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			vaultStateRef.current = emptyVaultSyncState();
 			setConflicts(NO_CONFLICTS);
 			setSyncedSettings(undefined);
+			setFiles([]);
 			setEntries([]);
 			setIsLocked(true);
 		});
@@ -934,6 +1002,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		vaultStateRef.current = emptyVaultSyncState();
 		setConflicts(NO_CONFLICTS);
 		setSyncedSettings(undefined);
+		setFiles([]);
 		setEntries([]);
 		setIsLocked(true);
 		setLockedByUser(true);
@@ -1144,6 +1213,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			vaultStateRef.current = emptyVaultSyncState();
 			setConflicts(NO_CONFLICTS);
 			setSyncedSettings(undefined);
+			setFiles([]);
 			setHasVault(true);
 			setEntries([]);
 			setIsLocked(false);
@@ -1156,12 +1226,30 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	/** Download an encrypted backup of the vault as a `.bramble` file (the encrypted VLT1
 	 * blob, so it is safe at rest and still needs the master password to open). */
-	const exportVault = useCallback(async () => {
+	// Bound to the active vault: each vault has its own attachment store, so nothing here can
+	// read, pack or sweep another vault's files.
+	const vaultFiles = useMemo(
+		() => (fileAdapter && activeId ? fileAdapter.forVault(activeId) : null),
+		[fileAdapter, activeId],
+	);
+
+	// Packed exactly as a scheduled backup is, so an exported file restores the same way and
+	// carries the vault's attachments with it. Whole or not at all: buildBackup throws rather than
+	// lay out a backup missing any of the vault, and the file is streamed, never held.
+	const exportVault = useCallback(async (): Promise<void> => {
 		if (!shell.exportBytes) throw new Error(t`Export isn't available here.`);
-		const bytes = await storage.readVaultBlob();
+		const backup = await buildBackup({
+			vault: await storage.readVaultBlob(),
+			blobs: vaultFiles?.blobs ?? null,
+			decryptWithVek: (iv, ct) => crypto.decryptWithVek(iv, ct),
+		});
 		const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-		await shell.exportBytes(`bramble-vault-${stamp}.bramble`, bytes, "application/octet-stream");
-	}, [shell, storage, t]);
+		await shell.exportBytes(
+			`bramble-vault-${stamp}.bramble`,
+			backup.body,
+			"application/octet-stream",
+		);
+	}, [shell, storage, crypto, vaultFiles, t]);
 
 	/** Export to a KeePass .kdbx under a password the user picks for the file. Reads the
 	 * already-decrypted entries (so it needs an unlocked vault) and re-encrypts them in
@@ -1171,25 +1259,48 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			if (!shell.exportBytes) throw new Error(t`Export isn't available here.`);
 			if (!crypto.saveKdbx) throw new Error(t`KDBX export isn't available here.`);
 			if (!password) throw new Error(t`Choose a password for the exported file.`);
-			const b64 = await crypto.saveKdbx({
-				entries: toKdbxEntries(latestRef.current.entries),
-				password,
-			});
-			const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-			await shell.exportBytes(
-				`bramble-vault-${stamp}.kdbx`,
-				base64ToBytes(b64),
-				"application/octet-stream",
+			if (!activeId) throw new Error(t`KDBX export isn't available here.`);
+			const describe = (record: FileRecord) => {
+				if (!vaultFiles) throw new Error("this platform cannot store file attachments");
+				return vaultFiles.sealer.describe(record);
+			};
+			const out = await toKdbxExport(
+				latestRef.current.entries,
+				filesRef.current,
+				t`Attachments`,
+				describe,
 			);
+			// Whole or not at all, as a backup is: a file that hasn't reached this device yet would
+			// be missing from an export that looks complete.
+			for (const { record } of out.files) {
+				if (!(await vaultFiles?.blobs.has(record.hash))) {
+					throw new Error(
+						t`An attachment hasn't reached this device yet, so the export would be missing it. Try again once it has.`,
+					);
+				}
+			}
+			const stamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+			const name = `bramble-vault-${stamp}.kdbx`;
+			const file = await crypto.saveKdbx({ ...out, vaultId: activeId, name, password });
+			try {
+				await shell.exportBytes(name, file, "application/octet-stream");
+			} finally {
+				// The written file is the vault under a weaker password: it goes once saved.
+				await file.release?.().catch(() => {});
+			}
 		},
-		[shell, crypto, t],
+		[shell, crypto, vaultFiles, activeId, t],
 	);
 
 	/** Send the decrypted entries to another app through the OS. The payload is built inside
 	 * the callback, which the adapter runs only after the user has picked a destination. */
 	const exportToApp = useCallback(async () => {
 		if (!exchange) throw new Error(t`Transferring to another app isn't available here.`);
-		return exportToOs(exchange, latestRef.current.entries, shell.appName);
+		const warnings = await exportToOs(exchange, latestRef.current.entries, shell.appName);
+		// First, because only the first is shown: a file left behind matters more than a field.
+		return filesRef.current.length > 0
+			? [t`Your attachments weren't sent. They're still here, and in your backups.`, ...warnings]
+			: warnings;
 	}, [exchange, shell.appName, t]);
 
 	/** Re-encrypt all entries with their stamps plus the tombstone list, and write
@@ -1201,6 +1312,22 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const mutations = useMemo(
 		() => createEntryMutations({ crypto, storage, autofill, readDecodedBlob, clock: ensureClock }),
 		[crypto, storage, autofill, readDecodedBlob, ensureClock],
+	);
+
+	// Attachments write through the SAME persist as entry mutations, so the vault keeps one
+	// writer and the autofill index cannot drift from disk whichever kind of change caused the
+	// write. Null where the platform has no file adapter; the three methods below then reject
+	// and the UI hides attachments. See docs/file-attachments.md.
+	const fileMutations = useMemo(
+		() =>
+			vaultFiles
+				? createFileMutations({
+						sealer: vaultFiles.sealer,
+						persist: mutations.persist,
+						clock: ensureClock,
+					})
+				: null,
+		[vaultFiles, mutations, ensureClock],
 	);
 
 	// Snapshot the current entry state (latest entries + the stamp/tombstone refs).
@@ -1220,6 +1347,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		// before it lands must snapshot the first one's committed result.
 		latestRef.current = { ...latestRef.current, entries: next.entries };
 		setSyncedSettings(next.settings);
+		setFiles(
+			next.manifest ? shownFiles(next.manifest, new Set(next.entries.map((e) => e.id))) : [],
+		);
 		setEntries(next.entries);
 	}, []);
 
@@ -1227,10 +1357,71 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (data: EntryData) => commitEntries(await mutations.add(snapshotEntries(), data)),
 		[mutations, snapshotEntries, commitEntries],
 	);
+	const canAttachFiles = fileMutations !== null;
+	const requireFiles = useCallback(() => {
+		if (!fileMutations) throw new Error("this platform cannot store file attachments");
+		return fileMutations;
+	}, [fileMutations]);
+	const attachFile = useCallback(
+		async (input: AttachInput) =>
+			commitEntries(await requireFiles().attach(snapshotEntries(), input)),
+		[requireFiles, snapshotEntries, commitEntries],
+	);
+	const detachFile = useCallback(
+		async (fileId: string) => commitEntries(await requireFiles().detach(snapshotEntries(), fileId)),
+		[requireFiles, snapshotEntries, commitEntries],
+	);
+	const renameFile = useCallback(
+		async (fileId: string, name: string) =>
+			commitEntries(await requireFiles().rename(snapshotEntries(), fileId, name)),
+		[requireFiles, snapshotEntries, commitEntries],
+	);
+	const describeFile = useCallback(
+		async (record: FileRecord): Promise<FileMeta> => {
+			if (!vaultFiles) throw new Error("this platform cannot store file attachments");
+			return vaultFiles.sealer.describe(record);
+		},
+		[vaultFiles],
+	);
+	const canOpenFiles = !!vaultFiles?.present;
+	const canPickFiles = !!vaultFiles?.pick;
+	const pickFile = useCallback(async (): Promise<PickedAttachment | null> => {
+		if (!vaultFiles?.pick) throw new Error("this platform has no file dialog of its own");
+		return vaultFiles.pick();
+	}, [vaultFiles]);
+	const openFile = useCallback(
+		async (record: FileRecord): Promise<void> => {
+			if (!vaultFiles?.present) throw new Error("this platform cannot open attachments");
+			await vaultFiles.present(record);
+		},
+		[vaultFiles],
+	);
+	const hasFile = useCallback(
+		async (record: FileRecord): Promise<boolean> => !!(await vaultFiles?.blobs.has(record.hash)),
+		[vaultFiles],
+	);
+	const fileStatus = useCallback(
+		async (hashes: string[]): Promise<Record<string, FileTransferStatus>> =>
+			(await vaultFiles?.transferStatus?.(hashes)) ?? {},
+		[vaultFiles],
+	);
+
 	const importEntries = useCallback(
-		async (items: EntryData[]) =>
-			commitEntries(await mutations.importMany(snapshotEntries(), items)),
-		[mutations, snapshotEntries, commitEntries],
+		async (items: EntryData[], attachments: PlacedAttachment[] = []) => {
+			const files: ImportedFile[] = [];
+			const sealer = vaultFiles?.sealer;
+			for (const a of attachments) {
+				if (!sealer) throw new Error("this platform cannot store file attachments");
+				const sealed = await sealAttachment(sealer, a);
+				files.push(
+					"item" in a.onto
+						? { sealed, item: items.indexOf(a.onto.item) }
+						: { sealed, entryId: a.onto.entryId },
+				);
+			}
+			commitEntries(await mutations.importMany(snapshotEntries(), items, files));
+		},
+		[mutations, snapshotEntries, commitEntries, vaultFiles],
 	);
 	const openVersion = useCallback((id: string): OpenedVersion | undefined => {
 		const data = latestRef.current.entries.find((e) => e.id === id);
@@ -1462,6 +1653,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			if (await crypto.isLocked()) throw new Error(t`Unlock the vault before rotating.`);
 			if (!(await verifyMasterPassword(password))) {
 				throw new Error(t`That password is incorrect.`);
+			}
+			// Each attachment's key is wrapped under the vault key, and nothing here re-wraps it yet:
+			// rotating would leave every attachment unreadable, the hidden ones a kept entry brings
+			// back included.
+			if ((vaultStateRef.current.manifest?.files?.length ?? 0) > 0) {
+				throw new Error(t`Rotating the key isn't available yet for a vault with attachments.`);
 			}
 			// Read before rotating: this is the last moment the old key can open anything.
 			const { blob } = await readDecodedBlob();
@@ -1814,6 +2011,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			ready,
 			joining: pendingJoin !== null,
 			joinError,
+			files,
+			canAttachFiles,
+			canOpenFiles,
+			canPickFiles,
 			entries,
 			conflicts,
 			error,
@@ -1835,6 +2036,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			ready,
 			pendingJoin,
 			joinError,
+			files,
+			canAttachFiles,
+			canOpenFiles,
+			canPickFiles,
 			entries,
 			conflicts,
 			error,
@@ -1863,6 +2068,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await lock();
 			// The only place a vault's (encrypted) bytes are erased, gated on the re-auth above.
 			await storage.deleteVaultBlob(activeId).catch(() => {});
+			// Its attachments too: sealed, but they are this vault's contents, and a deleted vault
+			// must not leave copies of them behind.
+			await fileAdapter?.deleteVault(activeId).catch(() => {});
 			// Everything else keyed to this vault, or the blob is gone while copies of its
 			// contents and its key material live on. Each is best-effort: a native or storage
 			// failure here must not abort a delete whose bytes are already erased.
@@ -1919,6 +2127,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			autofill,
 			biometric,
 			backupCreds,
+			fileAdapter,
 		],
 	);
 
@@ -1933,6 +2142,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			exportVault,
 			exportKdbx,
 			exportToApp,
+			attachFile,
+			detachFile,
+			renameFile,
+			describeFile,
+			openFile,
+			hasFile,
+			fileStatus,
+			pickFile,
 			addEntry,
 			importEntries,
 			openVersion,
@@ -1975,6 +2192,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			exportVault,
 			exportKdbx,
 			exportToApp,
+			attachFile,
+			detachFile,
+			renameFile,
+			describeFile,
+			openFile,
+			hasFile,
+			fileStatus,
+			pickFile,
 			addEntry,
 			importEntries,
 			openVersion,

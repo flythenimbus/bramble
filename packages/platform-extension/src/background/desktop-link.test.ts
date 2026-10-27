@@ -32,6 +32,11 @@ const h = vi.hoisted(() => ({
 	/** Plaintext, keyed by the sealed blob standing in for it. Sealing here is a rename. */
 	sealed: new Map<string, string>(),
 	stored: {} as Record<string, unknown>,
+	/** What the app answers a caps request with; null for an app from before caps, which
+	 * answers an op it does not know with an error. */
+	appCaps: ["files"] as string[] | null,
+	/** A seal whose plaintext contains this takes a while, as a busy crypto host's might. */
+	slowSeal: null as string | null,
 }));
 
 /** The native port chrome.runtime.connectNative hands back. */
@@ -40,6 +45,14 @@ const nativePort = () => {
 	return {
 		postMessage: (msg: Record<string, unknown>) => {
 			h.posted.push(msg);
+			// The app answers caps as soon as the link is up, as socket.rs does.
+			const plain = typeof msg.sealed === "string" ? h.sealed.get(msg.sealed) : undefined;
+			if (plain && JSON.parse(plain).op === "caps") {
+				const answer = h.appCaps
+					? { ok: true, caps: h.appCaps }
+					: { ok: false, error: "bad request: unknown variant `caps`" };
+				queueMicrotask(() => deliver({ sealed: `sealed:${JSON.stringify(answer)}` }));
+			}
 		},
 		onMessage: { addListener: (cb: (msg: unknown) => void) => h.onMessage.push(cb) },
 		onDisconnect: { addListener: (cb: () => void) => h.onDisconnect.push(cb) },
@@ -104,6 +117,9 @@ vi.mock("./offscreen-client", () => ({
 				return { ok: true, data: { message: "xx3", done: false } };
 			case "LINK_SEAL": {
 				const plaintext = msg.payload?.plaintext as string;
+				if (h.slowSeal && plaintext.includes(h.slowSeal)) {
+					await new Promise((r) => setTimeout(r, 30));
+				}
 				const blob = `sealed:${plaintext}`;
 				h.sealed.set(blob, plaintext);
 				return { ok: true, data: blob };
@@ -134,6 +150,12 @@ const deliver = (msg: unknown) => {
 /** Answer the KK handshake so the held link finishes opening. */
 const completeHandshake = () => deliver({ ok: true, done: true, message: "kk2" });
 
+/** The ops of the sealed frames posted so far, in order. */
+const postedOps = () =>
+	h.posted
+		.filter((m): m is { sealed: string } => typeof m.sealed === "string")
+		.map((m) => JSON.parse(h.sealed.get(m.sealed) ?? "{}").op as string);
+
 /** The app pushing a sync frame, unprompted. */
 const pushSync = (frame: string) =>
 	deliver({ sealed: `sealed:${JSON.stringify({ sync: frame })}` });
@@ -150,6 +172,8 @@ async function load() {
 	h.permitted = true;
 	h.hasBinding = true;
 	h.sealed.clear();
+	h.appCaps = ["files"];
+	h.slowSeal = null;
 	h.stored = {
 		desktopLink: {
 			privateKey: "priv",
@@ -192,7 +216,7 @@ describe("the held sync link", () => {
 		await open(mod, frames);
 
 		const asked = mod.askDesktop({ op: "query", hostname: "example.com" });
-		await vi.waitFor(() => expect(h.posted.some((m) => "sealed" in m)).toBe(true));
+		await vi.waitFor(() => expect(postedOps()).toContain("query"));
 
 		pushSync("interleaved");
 		deliver({ sealed: `sealed:${JSON.stringify({ ok: true, matches: [] })}` });
@@ -210,7 +234,7 @@ describe("the held sync link", () => {
 		const afterOpen = h.connects;
 
 		const asked = mod.askDesktop({ op: "query", hostname: "example.com" });
-		await vi.waitFor(() => expect(h.posted.some((m) => "sealed" in m)).toBe(true));
+		await vi.waitFor(() => expect(postedOps()).toContain("query"));
 		deliver({ sealed: `sealed:${JSON.stringify({ ok: true, matches: [] })}` });
 		await asked;
 
@@ -289,6 +313,72 @@ describe("the held sync link", () => {
 		const settled = expect(asked).rejects.toThrow(/did not answer/);
 		await vi.advanceTimersByTimeAsync(11_000);
 		await settled;
+	});
+});
+
+describe("files over the held link", () => {
+	it("routes the app's file frames and pokes, and sends file frames it can read", async () => {
+		const mod = await load();
+		const frames: string[] = [];
+		const files: [number, string][] = [];
+		let pokes = 0;
+		mod.openBlobLink(
+			(stream, frame) => files.push([stream, frame]),
+			() => pokes++,
+		);
+		await open(mod, frames);
+		await vi.waitFor(() => expect(mod.blobLinkUp()).toBe(true));
+
+		deliver({ sealed: `sealed:${JSON.stringify({ blob: "f1", stream: 4 })}` });
+		deliver({ sealed: `sealed:${JSON.stringify({ blobPoke: true })}` });
+		await vi.waitFor(() => expect(pokes).toBe(1));
+		expect(files).toEqual([[4, "f1"]]);
+		expect(frames).toEqual([]);
+
+		expect(await mod.sendBlobFrame(4, "back")).toBe(true);
+		const sent = h.posted.at(-1) as { sealed: string };
+		expect(JSON.parse(h.sealed.get(sent.sealed) ?? "")).toEqual({
+			op: "blob",
+			stream: 4,
+			frame: "back",
+		});
+	});
+
+	it("sends no file frame to an app from before files, and stays in step with it", async () => {
+		// Such an app answers caps with an error. If that answer were left for the next request,
+		// every later fill would read the previous request's answer.
+		const mod = await load();
+		h.appCaps = null;
+		const frames: string[] = [];
+		await open(mod, frames);
+		await vi.waitFor(() => expect(postedOps()).toContain("caps"));
+
+		expect(mod.blobLinkUp()).toBe(false);
+		const before = h.posted.length;
+		expect(await mod.sendBlobFrame(1, "frame")).toBe(false);
+		expect(h.posted.length).toBe(before);
+
+		const asked = mod.askDesktop({ op: "query", hostname: "example.com" });
+		await vi.waitFor(() => expect(postedOps()).toContain("query"));
+		deliver({ sealed: `sealed:${JSON.stringify({ ok: true, matches: [] })}` });
+		expect(await asked).toEqual({ ok: true, matches: [] });
+	});
+
+	it("puts frames on the pipe in the order they were sealed", async () => {
+		// The app opens them in order; one sent ahead of an earlier seal breaks the session.
+		const mod = await load();
+		const frames: string[] = [];
+		await open(mod, frames);
+		await vi.waitFor(() => expect(mod.blobLinkUp()).toBe(true));
+		h.slowSeal = "first";
+
+		await Promise.all([mod.sendBlobFrame(1, "first"), mod.sendBlobFrame(1, "second")]);
+
+		const lastTwo = h.posted.slice(-2) as { sealed: string }[];
+		expect(lastTwo.map((m) => JSON.parse(h.sealed.get(m.sealed) ?? "{}").frame)).toEqual([
+			"first",
+			"second",
+		]);
 	});
 });
 

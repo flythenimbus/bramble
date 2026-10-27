@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDropboxTarget } from "./dropbox";
+import { PART_SIZE } from "./types";
+import { bytesSource } from "./zip";
 
 const UPLOAD = "https://content.dropboxapi.com/2/files/upload";
 const LIST = "https://api.dropboxapi.com/2/files/list_folder";
@@ -35,7 +37,7 @@ describe("createDropboxTarget", () => {
 	it("uploads to the content endpoint with the app-folder path and bearer auth", async () => {
 		const calls = route(() => ok());
 		const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "AT" });
-		await t.put("bramble/bramble-x.bramble", new Uint8Array([1, 2, 3]));
+		await t.put("bramble/bramble-x.bramble", bytesSource(new Uint8Array([1, 2, 3])));
 
 		expect(calls).toHaveLength(1);
 		expect(calls[0]!.url).toBe(UPLOAD);
@@ -51,14 +53,14 @@ describe("createDropboxTarget", () => {
 			accessToken: "AT",
 			path: "/Backups",
 		});
-		await t.put("bramble/bramble-x.bramble", new Uint8Array([1]));
+		await t.put("bramble/bramble-x.bramble", bytesSource(new Uint8Array([1])));
 		expect(argOf(calls[0]!.init).path).toBe("/Backups/bramble/bramble-x.bramble");
 	});
 
 	it("mints an access token from the refresh token before the first call", async () => {
 		const calls = route((url) => (url === TOKEN ? ok({ access_token: "MINTED" }) : ok()));
 		const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT" });
-		await t.put("bramble/x.bramble", new Uint8Array([9]));
+		await t.put("bramble/x.bramble", bytesSource(new Uint8Array([9])));
 
 		expect(calls[0]!.url).toBe(TOKEN);
 		expect(calls[1]!.url).toBe(UPLOAD);
@@ -76,7 +78,7 @@ describe("createDropboxTarget", () => {
 			return ok();
 		});
 		const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "STALE" });
-		await t.put("bramble/x.bramble", new Uint8Array([1]));
+		await t.put("bramble/x.bramble", bytesSource(new Uint8Array([1])));
 
 		expect(uploads).toBe(2);
 		const last = calls[calls.length - 1]!;
@@ -103,7 +105,9 @@ describe("createDropboxTarget", () => {
 		const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "AT" });
 		const items = await t.list("bramble/");
 
-		expect(JSON.parse(calls[0]!.init.body as string).path).toBe("/bramble");
+		expect(JSON.parse(new TextDecoder().decode(calls[0]!.init.body as Uint8Array)).path).toBe(
+			"/bramble",
+		);
 		expect(items).toEqual([
 			{ key: "bramble/bramble-1.bramble", size: 10, lastModified: "2026-01-01T00:00:00Z" },
 		]);
@@ -127,6 +131,42 @@ describe("createDropboxTarget", () => {
 		await expect(t.remove("bramble/x.bramble")).rejects.toThrow(/500/);
 	});
 
+	// Dropbox caps a single upload call at 150 MB, so a larger backup goes as a session: the
+	// file appears only at the commit, so a session cut off partway leaves nothing behind.
+	it("uploads a large backup as a session and commits it to the right path", async () => {
+		const calls = route((url) =>
+			url.endsWith("/upload_session/start") ? ok({ session_id: "S1" }) : ok(),
+		);
+		const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "AT" });
+		const size = PART_SIZE + 9;
+		await t.put("bramble/big.bramble", { size, read: async (_o, l) => new Uint8Array(l) });
+
+		const steps = calls.map((c) => c.url.split("/").pop());
+		expect(steps).toEqual(["start", "append_v2", "append_v2", "finish"]);
+		const appends = calls.filter((c) => c.url.endsWith("/append_v2"));
+		expect(appends.map((c) => argOf(c.init).cursor)).toEqual([
+			{ session_id: "S1", offset: 0 },
+			{ session_id: "S1", offset: PART_SIZE },
+		]);
+		const finish = argOf(calls[calls.length - 1]!.init);
+		expect(finish.cursor).toEqual({ session_id: "S1", offset: size });
+		expect(finish.commit).toEqual({ path: "/bramble/big.bramble", mode: "overwrite", mute: true });
+	});
+
+	it("fails the backup if any session step fails", async () => {
+		route((url) =>
+			url.endsWith("/upload_session/start")
+				? ok({ session_id: "S1" })
+				: url.endsWith("/append_v2")
+					? status(500)
+					: ok(),
+		);
+		const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "AT" });
+		await expect(
+			t.put("bramble/big.bramble", { size: PART_SIZE, read: async (_o, l) => new Uint8Array(l) }),
+		).rejects.toThrow(/append_v2 failed \(500/);
+	});
+
 	it("says what Dropbox said: its user_message first, else its error_summary tag", async () => {
 		const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "AT" });
 		route(() =>
@@ -135,17 +175,17 @@ describe("createDropboxTarget", () => {
 				user_message: { text: "Your Dropbox is full.", locale: "en" },
 			}),
 		);
-		await expect(t.put("bramble/x.bramble", new Uint8Array([1]))).rejects.toThrow(
+		await expect(t.put("bramble/x.bramble", bytesSource(new Uint8Array([1])))).rejects.toThrow(
 			"Dropbox upload failed (409: Your Dropbox is full.)",
 		);
 		route(() => status(409, { error_summary: "path/insufficient_space/..." }));
-		await expect(t.put("bramble/x.bramble", new Uint8Array([1]))).rejects.toThrow(
+		await expect(t.put("bramble/x.bramble", bytesSource(new Uint8Array([1])))).rejects.toThrow(
 			"Dropbox upload failed (409: path/insufficient_space)",
 		);
 		route(
 			() => new Response('Error in call to API function "files/upload": bad arg', { status: 400 }),
 		);
-		await expect(t.put("bramble/x.bramble", new Uint8Array([1]))).rejects.toThrow(
+		await expect(t.put("bramble/x.bramble", bytesSource(new Uint8Array([1])))).rejects.toThrow(
 			'Dropbox upload failed (400: Error in call to API function "files/upload": bad arg)',
 		);
 	});
@@ -163,7 +203,7 @@ describe("createDropboxTarget", () => {
 			let n = 0;
 			const calls = route(() => (n++ === 0 ? limited("2") : ok()));
 			const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "AT" });
-			const done = t.put("bramble/x.bramble", new Uint8Array([7]));
+			const done = t.put("bramble/x.bramble", bytesSource(new Uint8Array([7])));
 			await vi.advanceTimersByTimeAsync(1999);
 			expect(calls).toHaveLength(1);
 			await vi.advanceTimersByTimeAsync(1);
@@ -175,9 +215,9 @@ describe("createDropboxTarget", () => {
 		it("gives up after three retries and says why", async () => {
 			const calls = route(() => limited());
 			const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "AT" });
-			const done = expect(t.put("bramble/x.bramble", new Uint8Array([1]))).rejects.toThrow(
-				"Dropbox upload failed (429: too_many_write_operations)",
-			);
+			const done = expect(
+				t.put("bramble/x.bramble", bytesSource(new Uint8Array([1]))),
+			).rejects.toThrow("Dropbox upload failed (429: too_many_write_operations)");
 			await vi.advanceTimersByTimeAsync(1000 + 2000 + 4000);
 			await done;
 			expect(calls).toHaveLength(4);
@@ -186,7 +226,9 @@ describe("createDropboxTarget", () => {
 		it("leaves a long wait to the next run instead of holding this one open", async () => {
 			const calls = route(() => limited("300"));
 			const t = createDropboxTarget({ kind: "dropbox", refreshToken: "RT", accessToken: "AT" });
-			await expect(t.put("bramble/x.bramble", new Uint8Array([1]))).rejects.toThrow(/429/);
+			await expect(t.put("bramble/x.bramble", bytesSource(new Uint8Array([1])))).rejects.toThrow(
+				/429/,
+			);
 			expect(calls).toHaveLength(1);
 		});
 	});

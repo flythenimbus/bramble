@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { encodeRoster, type RosterPayload } from "..";
+import { identityWasm, rosterOf } from "../../test/transport-fakes";
+import { encodeRoster } from "..";
 import { makeChannel } from "./channel";
 import type { PeerSession } from "./mesh";
 import type { PeerSource, Stoppable } from "./peer-session";
-import { type RosterSyncWasm, startRosterSync } from "./roster-sync";
+import { startRosterSync } from "./roster-sync";
 
 // The receive loop reaps revoked peers after every merge. Which roster it reaps against is the
 // whole behaviour: the copy read before the merge is already out of date by the time the merge
@@ -73,33 +74,7 @@ function manualSource(): { source: PeerSource; hand: (peer: PeerSession) => void
 }
 
 /** Identity transport with a two-message handshake, so both roles complete against each other. */
-function wasm(): RosterSyncWasm {
-	return {
-		nostr_generate_key: () => {
-			throw new Error("signed a relay event despite a peerSource");
-		},
-		nostr_sign: () => "",
-		nostr_verify: () => true,
-		handshake_start_initiator: () => ({ sessionId: 1, message: "open" }),
-		handshake_start_responder: () => 1,
-		handshake_read: (_sid: number, msg: string) =>
-			msg === "open" ? { message: "answer", done: true } : { done: true },
-		handshake_remote_static: () => "",
-		handshake_encrypt: (_sid: number, pt: string) => pt,
-		handshake_decrypt: (_sid: number, ct: string) => ct,
-	} as unknown as RosterSyncWasm;
-}
 
-const rosterOf = (pubkeys: string[]): RosterPayload => ({
-	devices: pubkeys.map((pk, i) => ({
-		id: `d${i}`,
-		publicKey: pk,
-		label: `d${i}`,
-		addedAt: 0,
-		hlc: { wall: i, counter: 0, node: `d${i}` },
-	})),
-	revoked: [],
-});
 const entriesOf = (marker: string) => JSON.stringify({ entries: [{ marker }], tombstones: [] });
 
 const A = "aaaa";
@@ -128,7 +103,7 @@ describe("the reap that follows a merge", () => {
 			devicePrivB64: "privA",
 			devicePubB64: A,
 			roster: onDisk,
-			wasm: wasm(),
+			wasm: identityWasm(),
 			report: (s) => reports.push(s),
 			fetchLocalPayload: async () => entriesOf("from-a"),
 			fetchLocalRoster: async () => encodeRoster(onDisk),
@@ -150,7 +125,7 @@ describe("the reap that follows a merge", () => {
 			devicePrivB64: "privB",
 			devicePubB64: B,
 			roster: rosterOf([A, B]),
-			wasm: wasm(),
+			wasm: identityWasm(),
 			report: () => {},
 			fetchLocalPayload: async () => entriesOf("from-b"),
 			pushRemotePayload: async () => {},
@@ -172,7 +147,7 @@ describe("the reap that follows a merge", () => {
 			devicePrivB64: "privD",
 			devicePubB64: D,
 			roster: onDisk,
-			wasm: wasm(),
+			wasm: identityWasm(),
 			report: () => {},
 			fetchLocalPayload: async () => entriesOf("from-d"),
 			pushRemotePayload: async () => {},
@@ -219,7 +194,7 @@ describe("the reap that follows a merge", () => {
 			devicePrivB64: "privA",
 			devicePubB64: A,
 			roster: onDisk,
-			wasm: wasm(),
+			wasm: identityWasm(),
 			report: (s) => reports.push(s),
 			fetchLocalPayload: async () => entriesOf("from-a"),
 			fetchLocalRoster: async () => encodeRoster(onDisk),
@@ -240,7 +215,7 @@ describe("the reap that follows a merge", () => {
 			devicePrivB64: "privB",
 			devicePubB64: B,
 			roster: rosterOf([A, B]),
-			wasm: wasm(),
+			wasm: identityWasm(),
 			report: () => {},
 			fetchLocalPayload: async () => entriesOf("from-b"),
 			pushRemotePayload: async () => {},

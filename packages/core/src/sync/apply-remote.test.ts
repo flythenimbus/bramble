@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { fileRecord } from "../test/vault-fixtures";
 import type { EncryptedEntry } from "../vault-format";
 import { applyRemotePayload, payloadsEquivalent, type VaultSyncPort } from "./apply-remote";
-import { type EntriesPayload, emptyEntriesPayload, type Tombstone } from "./entries-payload";
+import {
+	type EntriesPayload,
+	emptyEntriesPayload,
+	type FileRecord,
+	type Tombstone,
+} from "./entries-payload";
 import type { Hlc } from "./hlc";
 
 const hlc = (wall: number, node: string): Hlc => ({ wall, counter: 0, node });
@@ -171,6 +177,94 @@ describe("payloadsEquivalent", () => {
 		expect(payloadsEquivalent(b, { ...b, conflicts: [{ ...sibling, ciphertext: "z" }] })).toBe(
 			true,
 		);
+	});
+});
+
+const fileRec = (id: string, stamp: Hlc, hash = "a".repeat(64)): FileRecord =>
+	fileRecord({ id, hlc: stamp, hash, size: 1024 });
+
+describe("the file manifest propagates", () => {
+	// The settings trap, applied to files. A peer that attaches a file touches no entry, so if
+	// the manifest were left out of the equivalence check the merge would be judged redundant,
+	// no write would happen, no re-broadcast would follow, and the attachment would appear to
+	// sync only if the user later happened to edit an entry.
+	it("a file-only remote change is not judged equivalent", () => {
+		const base = payload([env("1", "a", hlc(100, "a"))]);
+		const withFile: EntriesPayload = { ...base, files: [fileRec("f1", hlc(200, "b"))] };
+		expect(payloadsEquivalent(base, withFile)).toBe(false);
+		expect(payloadsEquivalent(withFile, base)).toBe(false);
+	});
+
+	it("a file-only remote change writes and re-broadcasts", async () => {
+		const local = payload([env("1", "a", hlc(100, "a"))]);
+		const { port, writes } = fakePort(local);
+		const remote: EntriesPayload = { ...local, files: [fileRec("f1", hlc(200, "b"))] };
+		const result = await applyRemotePayload(port, remote);
+		expect(result.changed).toBe(true);
+		expect(writes).toHaveLength(1);
+		expect(writes[0]?.files?.map((f) => f.id)).toEqual(["f1"]);
+	});
+
+	it("a file-only deletion is not judged equivalent", () => {
+		const a: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [fileRec("f1", hlc(100, "a"))],
+		};
+		const b: EntriesPayload = {
+			...a,
+			fileTombstones: [{ id: "f1", hlc: hlc(200, "b") }],
+		};
+		expect(payloadsEquivalent(a, b)).toBe(false);
+	});
+
+	it("a delete's mark on a file is not judged equivalent to no mark", () => {
+		const a: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [fileRec("f1", hlc(100, "a"))],
+		};
+		const b: EntriesPayload = { ...a, fileCascades: [{ id: "f1", hlc: hlc(200, "b") }] };
+		expect(payloadsEquivalent(a, b)).toBe(false);
+	});
+
+	it("witnesses file stamps, so a later local write sorts after them", async () => {
+		const { port, witnessed } = fakePort(emptyEntriesPayload());
+		await applyRemotePayload(port, {
+			entries: [],
+			tombstones: [],
+			files: [fileRec("f1", hlc(900, "b"))],
+			fileTombstones: [{ id: "f2", hlc: hlc(950, "b") }],
+			fileCascades: [{ id: "f1", hlc: hlc(960, "b") }],
+		});
+		expect(witnessed[0]).toEqual(
+			expect.arrayContaining([hlc(900, "b"), hlc(950, "b"), hlc(960, "b")]),
+		);
+	});
+
+	it("drops a future-dated file record and tombstone (poisoned stamps)", async () => {
+		const far = { wall: Date.now() + 5 * 24 * 3600_000, counter: 0, node: "evil" };
+		const { port, writes } = fakePort(emptyEntriesPayload());
+		const result = await applyRemotePayload(port, {
+			entries: [],
+			tombstones: [],
+			files: [fileRec("f1", far)],
+			fileTombstones: [{ id: "f2", hlc: far }],
+		});
+		expect(result.changed).toBe(false);
+		expect(writes).toHaveLength(0);
+	});
+
+	it("an unchanged manifest is still redundant", async () => {
+		const local: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [fileRec("f1", hlc(100, "a"))],
+		};
+		const { port, writes } = fakePort(local);
+		const result = await applyRemotePayload(port, local);
+		expect(result.changed).toBe(false);
+		expect(writes).toHaveLength(0);
 	});
 });
 

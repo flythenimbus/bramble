@@ -43,9 +43,16 @@ mod passkey;
 // crate root (`handshake` and `nostr` are public for the same reason). Re-exported instead
 // of publishing the modules, so the surface stays the entry points and their records.
 #[cfg(any(feature = "ffi", feature = "native"))]
-pub use kdbx::{open_kdbx4, OutEntry, OutString};
+pub use kdbx::{open_kdbx4, OutBinary, OutEntry, OutString};
+#[cfg(any(feature = "ffi", feature = "native"))]
+pub use kdbx::{save_to_path, KdbxAttachmentFile, KdbxExportFile, OpenedKdbx, SaveEntry};
 #[cfg(any(feature = "ffi", feature = "native"))]
 pub use passkey::{PasskeyAssertion, PasskeyImportResult, PasskeyRegistration};
+// Chunked content encryption for file attachments. Pure and VEK-free (it takes a FEK as a
+// parameter), so it is declared unconditionally and `cargo test` covers it in every feature set.
+// Nothing references it yet: the binding layers land with the attachment feature and will be
+// handle-based, so file bytes never cross the IPC or FFI boundary. See docs/file-attachments.md.
+pub mod files;
 // Ed25519 device-key signing for authenticated sync-roster mutations (Item A). Pure + sync,
 // compiled into both layers (all devices sign). See docs/p2p-sync-revocation-hardening.md.
 pub mod roster_sig;
@@ -145,7 +152,8 @@ fn random_bytes(buf: &mut [u8]) -> Result<(), CryptoError> {
 }
 
 fn b64_decode(s: &str) -> Result<Vec<u8>, CryptoError> {
-    B64.decode(s.as_bytes()).map_err(|e| err(format!("base64: {e}")))
+    B64.decode(s.as_bytes())
+        .map_err(|e| err(format!("base64: {e}")))
 }
 
 fn iv_from(bytes: Vec<u8>) -> Result<[u8; IV_LEN], CryptoError> {
@@ -154,8 +162,13 @@ fn iv_from(bytes: Vec<u8>) -> Result<[u8; IV_LEN], CryptoError> {
 
 /// Derive a 32-byte KEK from a password and salt via Argon2id.
 fn derive_kek(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, CryptoError> {
-    let params = Params::new(ARGON2_MEM_KIB, ARGON2_TIME, ARGON2_PARALLELISM, Some(KEY_LEN))
-        .map_err(|e| err(format!("argon2 params: {e}")))?;
+    let params = Params::new(
+        ARGON2_MEM_KIB,
+        ARGON2_TIME,
+        ARGON2_PARALLELISM,
+        Some(KEY_LEN),
+    )
+    .map_err(|e| err(format!("argon2 params: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut out = Zeroizing::new([0u8; KEY_LEN]);
     argon2
@@ -189,7 +202,11 @@ fn aes_encrypt(key: &[u8], iv: &[u8; IV_LEN], plaintext: &[u8]) -> Result<Vec<u8
         .map_err(|e| err(format!("aes encrypt: {e}")))
 }
 
-fn aes_decrypt(key: &[u8], iv: &[u8; IV_LEN], ct: &[u8]) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
+fn aes_decrypt(
+    key: &[u8],
+    iv: &[u8; IV_LEN],
+    ct: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
     Aes256Gcm::new_from_slice(key)
         .map_err(|_| err("key must be 32 bytes"))?
         .decrypt(Nonce::from_slice(iv), ct)
@@ -246,6 +263,25 @@ pub struct EncryptedPayload {
     pub iv: String,
     pub wrapped_dek: String,
     pub dek_iv: String,
+}
+
+/// What sealing a file produced. The blob is already written at the staging path the caller
+/// named; only these manifest fields come back, which is the point of the handle-based design.
+///
+/// `nonce_prefix` rides in the clear beside the IVs for the same reason they do: a nonce is not
+/// a secret, and keeping it out of the sealed metadata is what lets the caller build that
+/// metadata before sealing begins. See docs/file-attachments.md.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct SealedFileBlob {
+    pub hash: String,
+    pub size: u64,
+    pub nonce_prefix: String,
+    pub wrapped_fek: String,
+    pub fek_iv: String,
+    pub meta_blob: String,
+    pub meta_iv: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -417,6 +453,198 @@ fn encrypt_entry_core(plaintext_json: &str) -> Result<EncryptedPayload, CryptoEr
             dek_iv: B64.encode(dek_iv),
         })
     })
+}
+
+/// Seal a file at `src_path` into `dst_path`, returning its manifest fields.
+///
+/// This is the VEK-owning half of file sealing: `files.rs` is deliberately VEK-free and takes a
+/// content key, so generating the FEK and wrapping it belongs here. `meta_json` is built by the
+/// caller and sealed verbatim, matching `encrypt_entry`: this crate does not construct JSON.
+///
+/// `dst_path` must be a staging path. A blob is addressed by the hash of its own ciphertext,
+/// so the caller renames to `blobs/<hash>` once this returns.
+#[cfg_attr(not(any(feature = "ffi", feature = "native")), allow(dead_code))]
+fn seal_file_core(
+    src_path: &str,
+    dst_path: &str,
+    meta_json: &str,
+) -> Result<SealedFileBlob, CryptoError> {
+    with_vek(|vek| {
+        let mut fek = Zeroizing::new([0u8; KEY_LEN]);
+        random_bytes(fek.as_mut_slice())?;
+        let subkeys = files::derive_file_subkeys(fek.as_slice())?;
+
+        let content = files::seal_file_at_path(
+            subkeys.content.as_slice(),
+            std::path::Path::new(src_path),
+            std::path::Path::new(dst_path),
+        )?;
+        let envelope = seal_file_envelope(vek, fek.as_slice(), &subkeys, meta_json)?;
+        Ok(envelope.with_content(&content))
+    })
+}
+
+/// A file's key material and metadata, sealed: everything in its record but the content.
+struct FileEnvelope {
+    wrapped_fek: String,
+    fek_iv: String,
+    meta_blob: String,
+    meta_iv: String,
+}
+
+impl FileEnvelope {
+    fn with_content(self, content: &files::SealedFileContent) -> SealedFileBlob {
+        SealedFileBlob {
+            hash: content.hash.clone(),
+            size: content.size,
+            nonce_prefix: B64.encode(content.nonce_prefix),
+            wrapped_fek: self.wrapped_fek,
+            fek_iv: self.fek_iv,
+            meta_blob: self.meta_blob,
+            meta_iv: self.meta_iv,
+        }
+    }
+}
+
+/// Seal `meta_json` under the FEK's meta subkey and wrap the FEK under the VEK.
+fn seal_file_envelope(
+    vek: &[u8],
+    fek: &[u8],
+    subkeys: &files::FileSubkeys,
+    meta_json: &str,
+) -> Result<FileEnvelope, CryptoError> {
+    let mut meta_iv = [0u8; IV_LEN];
+    random_bytes(&mut meta_iv)?;
+    let meta_blob = aes_encrypt(subkeys.meta.as_slice(), &meta_iv, meta_json.as_bytes())?;
+
+    let mut fek_iv = [0u8; IV_LEN];
+    random_bytes(&mut fek_iv)?;
+    let wrapped_fek = aes_encrypt(vek, &fek_iv, fek)?;
+
+    Ok(FileEnvelope {
+        wrapped_fek: B64.encode(&wrapped_fek),
+        fek_iv: B64.encode(fek_iv),
+        meta_blob: B64.encode(&meta_blob),
+        meta_iv: B64.encode(meta_iv),
+    })
+}
+
+/// Begin sealing a file whose chunks the caller will feed in. The VEK is needed only here, to
+/// wrap the fresh FEK: the stream holds the content subkey alone, so a binding can release the
+/// VEK before the first chunk and never hold it across its own async reads.
+#[cfg_attr(not(feature = "wasm"), allow(dead_code))]
+fn begin_seal_stream_core(
+    meta_json: &str,
+) -> Result<(files::SealStream, FileEnvelope), CryptoError> {
+    with_vek(|vek| {
+        let mut fek = Zeroizing::new([0u8; KEY_LEN]);
+        random_bytes(fek.as_mut_slice())?;
+        let subkeys = files::derive_file_subkeys(fek.as_slice())?;
+        let stream = files::SealStream::new(subkeys.content.as_slice())?;
+        let envelope = seal_file_envelope(vek, fek.as_slice(), &subkeys, meta_json)?;
+        Ok((stream, envelope))
+    })
+}
+
+/// Begin opening a file chunk by chunk. Like the seal side, the VEK is used once, here.
+fn begin_open_stream_core(
+    wrapped_fek_b64: &str,
+    fek_iv_b64: &str,
+    nonce_prefix_b64: &str,
+    sealed_len: u64,
+) -> Result<files::OpenStream, CryptoError> {
+    let subkeys = file_subkeys_from(wrapped_fek_b64, fek_iv_b64)?;
+    files::OpenStream::new(
+        subkeys.content.as_slice(),
+        &nonce_prefix_from(nonce_prefix_b64)?,
+        sealed_len,
+    )
+}
+
+/// Reseal a file's metadata under its existing FEK: a rename moves no bytes, so the blob, its
+/// hash and the content key are all untouched and only these two fields change.
+fn reseal_file_meta_core(
+    wrapped_fek_b64: &str,
+    fek_iv_b64: &str,
+    meta_json: &str,
+) -> Result<MasterEncrypted, CryptoError> {
+    let subkeys = file_subkeys_from(wrapped_fek_b64, fek_iv_b64)?;
+    let mut meta_iv = [0u8; IV_LEN];
+    random_bytes(&mut meta_iv)?;
+    let meta_blob = aes_encrypt(subkeys.meta.as_slice(), &meta_iv, meta_json.as_bytes())?;
+    Ok(MasterEncrypted {
+        iv: B64.encode(meta_iv),
+        ciphertext: B64.encode(&meta_blob),
+    })
+}
+
+/// Unwrap a file's FEK under the in-memory VEK and expand its subkeys.
+fn file_subkeys_from(
+    wrapped_fek_b64: &str,
+    fek_iv_b64: &str,
+) -> Result<files::FileSubkeys, CryptoError> {
+    let fek = with_vek(|vek| {
+        let iv = iv_from(b64_decode(fek_iv_b64)?)?;
+        aes_decrypt(vek, &iv, &b64_decode(wrapped_fek_b64)?)
+    })?;
+    files::derive_file_subkeys(fek.as_slice())
+}
+
+/// Open a file's sealed metadata, returning the JSON the caller sealed.
+fn open_file_meta_core(
+    wrapped_fek_b64: &str,
+    fek_iv_b64: &str,
+    meta_blob_b64: &str,
+    meta_iv_b64: &str,
+) -> Result<String, CryptoError> {
+    let subkeys = file_subkeys_from(wrapped_fek_b64, fek_iv_b64)?;
+    let iv = iv_from(b64_decode(meta_iv_b64)?)?;
+    let plain = aes_decrypt(subkeys.meta.as_slice(), &iv, &b64_decode(meta_blob_b64)?)?;
+    String::from_utf8(plain.to_vec()).map_err(|_| err("file metadata is not utf-8"))
+}
+
+fn nonce_prefix_from(b64: &str) -> Result<[u8; files::NONCE_PREFIX_LEN], CryptoError> {
+    b64_decode(b64)?
+        .try_into()
+        .map_err(|_| err("nonce prefix must be 7 bytes"))
+}
+
+/// Decrypt a whole sealed blob to `dst_path`. Returns the plaintext length.
+#[cfg_attr(not(any(feature = "ffi", feature = "native")), allow(dead_code))]
+fn open_file_to_path_core(
+    wrapped_fek_b64: &str,
+    fek_iv_b64: &str,
+    nonce_prefix_b64: &str,
+    src_path: &str,
+    dst_path: &str,
+) -> Result<u64, CryptoError> {
+    let subkeys = file_subkeys_from(wrapped_fek_b64, fek_iv_b64)?;
+    files::open_file_at_path(
+        subkeys.content.as_slice(),
+        &nonce_prefix_from(nonce_prefix_b64)?,
+        std::path::Path::new(src_path),
+        std::path::Path::new(dst_path),
+    )
+}
+
+/// Decrypt ONE chunk of a sealed blob, base64. For previews: page one of a large PDF costs a
+/// seek and 256 KiB rather than the whole file.
+#[cfg_attr(not(any(feature = "ffi", feature = "native")), allow(dead_code))]
+fn open_file_chunk_core(
+    wrapped_fek_b64: &str,
+    fek_iv_b64: &str,
+    nonce_prefix_b64: &str,
+    src_path: &str,
+    index: u64,
+) -> Result<String, CryptoError> {
+    let subkeys = file_subkeys_from(wrapped_fek_b64, fek_iv_b64)?;
+    let plain = files::open_file_chunk_at_path(
+        subkeys.content.as_slice(),
+        &nonce_prefix_from(nonce_prefix_b64)?,
+        std::path::Path::new(src_path),
+        index,
+    )?;
+    Ok(B64.encode(&plain))
 }
 
 fn encrypt_with_vek_core(plaintext: &str) -> Result<MasterEncrypted, CryptoError> {
@@ -781,6 +1009,132 @@ mod wasm_exports {
         )?;
         serde_wasm_bindgen::to_value(&a).map_err(|e| err(format!("serialize: {e}")))
     }
+
+    // --- file attachments ---
+    // The extension has no filesystem, so its files are sealed and opened in memory, one chunk
+    // at a time, between IndexedDB reads and writes. Each stream takes the VEK only in its
+    // constructor, so the host can load the VEK and construct in one synchronous section (the
+    // atomicity rule in docs/multiple-vaults.md) and then await IndexedDB freely. Mobile and
+    // desktop go native instead, by path. See docs/file-attachments.md.
+
+    /// Seals one file as its chunks are fed in. Call `free()` when done, finished or not: that
+    /// zeroizes the content key.
+    #[wasm_bindgen]
+    pub struct FileSealStream {
+        stream: Option<files::SealStream>,
+        envelope: Option<FileEnvelope>,
+    }
+
+    #[wasm_bindgen]
+    impl FileSealStream {
+        /// Generate the file's key and seal `meta_json`, under the VEK in the slot now.
+        #[wasm_bindgen(constructor)]
+        pub fn new(meta_json: String) -> Result<FileSealStream, CryptoError> {
+            let (stream, envelope) = begin_seal_stream_core(&meta_json)?;
+            Ok(FileSealStream {
+                stream: Some(stream),
+                envelope: Some(envelope),
+            })
+        }
+
+        /// Seal the next chunk: exactly CHUNK_LEN bytes unless it is the last.
+        pub fn seal_next(
+            &mut self,
+            plaintext: &[u8],
+            is_last: bool,
+        ) -> Result<Vec<u8>, CryptoError> {
+            self.stream
+                .as_mut()
+                .ok_or_else(|| err("seal stream is finished"))?
+                .seal_next(plaintext, is_last)
+        }
+
+        /// The record's fields. Once only, and only after the last chunk.
+        pub fn finish(&mut self) -> Result<JsValue, CryptoError> {
+            let stream = self
+                .stream
+                .take()
+                .ok_or_else(|| err("seal stream is finished"))?;
+            let envelope = self
+                .envelope
+                .take()
+                .ok_or_else(|| err("seal stream is finished"))?;
+            let blob = envelope.with_content(&stream.finish()?);
+            serde_wasm_bindgen::to_value(&blob).map_err(|e| err(format!("serialize: {e}")))
+        }
+    }
+
+    /// Opens one sealed blob chunk by chunk, in order. Call `free()` when done.
+    #[wasm_bindgen]
+    pub struct FileOpenStream {
+        stream: files::OpenStream,
+    }
+
+    #[wasm_bindgen]
+    impl FileOpenStream {
+        /// Unwrap the file's key under the VEK in the slot now. `sealed_len` is the blob's
+        /// length, a number rather than a BigInt so JS can pass a size as it has one.
+        #[wasm_bindgen(constructor)]
+        pub fn new(
+            wrapped_fek_b64: String,
+            fek_iv_b64: String,
+            nonce_prefix_b64: String,
+            sealed_len: f64,
+        ) -> Result<FileOpenStream, CryptoError> {
+            if !(sealed_len >= 0.0 && sealed_len.fract() == 0.0 && sealed_len <= 9007199254740991.0)
+            {
+                return Err(err("sealed length must be a whole number of bytes"));
+            }
+            let stream = begin_open_stream_core(
+                &wrapped_fek_b64,
+                &fek_iv_b64,
+                &nonce_prefix_b64,
+                sealed_len as u64,
+            )?;
+            Ok(FileOpenStream { stream })
+        }
+
+        /// The file's length once open, known before any chunk is: what a KDBX attachment
+        /// declares ahead of its bytes.
+        pub fn plaintext_len(&self) -> f64 {
+            self.stream.plaintext_len() as f64
+        }
+
+        /// `[offset, length]` of the next chunk to read, or undefined once every chunk is open.
+        pub fn next_range(&self) -> Option<Vec<f64>> {
+            self.stream
+                .next_range()
+                .map(|(offset, len)| vec![offset as f64, len as f64])
+        }
+
+        /// Open the next chunk. `sealed` must be exactly the range `next_range` named.
+        pub fn open_next(&mut self, sealed: &[u8]) -> Result<Vec<u8>, CryptoError> {
+            // Copied out of the zeroizing buffer: wasm-bindgen hands JS its own copy either way.
+            Ok(self.stream.open_next(sealed)?.to_vec())
+        }
+    }
+
+    /// Open a file's sealed metadata, returning the JSON that was sealed.
+    #[wasm_bindgen]
+    pub fn open_file_meta(
+        wrapped_fek_b64: String,
+        fek_iv_b64: String,
+        meta_blob_b64: String,
+        meta_iv_b64: String,
+    ) -> Result<String, CryptoError> {
+        open_file_meta_core(&wrapped_fek_b64, &fek_iv_b64, &meta_blob_b64, &meta_iv_b64)
+    }
+
+    /// Reseal a file's metadata under its existing FEK, for a rename.
+    #[wasm_bindgen]
+    pub fn reseal_file_meta(
+        wrapped_fek_b64: String,
+        fek_iv_b64: String,
+        meta_json: String,
+    ) -> Result<JsValue, CryptoError> {
+        let out = reseal_file_meta_core(&wrapped_fek_b64, &fek_iv_b64, &meta_json)?;
+        serde_wasm_bindgen::to_value(&out).map_err(|e| err(format!("serialize: {e}")))
+    }
 }
 
 // ---- Native binding layer (uniffi -> Swift + Kotlin; plain Rust for the desktop app) ----
@@ -882,6 +1236,76 @@ mod ffi_exports {
             user_verified,
         )
     }
+
+    // --- file attachments (see docs/file-attachments.md) ---
+
+    /// Seal a file into a staging path, returning its manifest fields. Path-based so a large
+    /// attachment never crosses this bridge.
+    #[cfg_attr(feature = "ffi", uniffi::export)]
+    pub fn seal_file(
+        src_path: String,
+        dst_path: String,
+        meta_json: String,
+    ) -> Result<SealedFileBlob, CryptoError> {
+        seal_file_core(&src_path, &dst_path, &meta_json)
+    }
+
+    /// Open a file's sealed metadata, returning the JSON that was sealed.
+    #[cfg_attr(feature = "ffi", uniffi::export)]
+    pub fn open_file_meta(
+        wrapped_fek_b64: String,
+        fek_iv_b64: String,
+        meta_blob_b64: String,
+        meta_iv_b64: String,
+    ) -> Result<String, CryptoError> {
+        open_file_meta_core(&wrapped_fek_b64, &fek_iv_b64, &meta_blob_b64, &meta_iv_b64)
+    }
+
+    /// Reseal a file's metadata under its existing FEK, for a rename.
+    #[cfg_attr(feature = "ffi", uniffi::export)]
+    pub fn reseal_file_meta(
+        wrapped_fek_b64: String,
+        fek_iv_b64: String,
+        meta_json: String,
+    ) -> Result<MasterEncrypted, CryptoError> {
+        reseal_file_meta_core(&wrapped_fek_b64, &fek_iv_b64, &meta_json)
+    }
+
+    /// Decrypt a whole sealed blob to a path. Returns the plaintext length.
+    #[cfg_attr(feature = "ffi", uniffi::export)]
+    pub fn open_file_to_path(
+        wrapped_fek_b64: String,
+        fek_iv_b64: String,
+        nonce_prefix_b64: String,
+        src_path: String,
+        dst_path: String,
+    ) -> Result<u64, CryptoError> {
+        open_file_to_path_core(
+            &wrapped_fek_b64,
+            &fek_iv_b64,
+            &nonce_prefix_b64,
+            &src_path,
+            &dst_path,
+        )
+    }
+
+    /// Decrypt one chunk of a sealed blob, base64. For previews.
+    #[cfg_attr(feature = "ffi", uniffi::export)]
+    pub fn open_file_chunk(
+        wrapped_fek_b64: String,
+        fek_iv_b64: String,
+        nonce_prefix_b64: String,
+        src_path: String,
+        index: u64,
+    ) -> Result<String, CryptoError> {
+        open_file_chunk_core(
+            &wrapped_fek_b64,
+            &fek_iv_b64,
+            &nonce_prefix_b64,
+            &src_path,
+            index,
+        )
+    }
 }
 
 // Drive the primitives directly with known IVs/keys/salts; the global VEK slot
@@ -970,8 +1394,7 @@ mod tests {
         let kek_real = derive_kek_hkdf(&[0xaa; 32]).unwrap();
         let kek_attacker = derive_kek_hkdf(&[0xab; 32]).unwrap();
         let verifier_real = compute_verifier(kek_real.as_slice(), &magic_version, &slot_id);
-        let verifier_attacker =
-            compute_verifier(kek_attacker.as_slice(), &magic_version, &slot_id);
+        let verifier_attacker = compute_verifier(kek_attacker.as_slice(), &magic_version, &slot_id);
         assert!(!ct_eq(&verifier_real, &verifier_attacker));
     }
 
@@ -1003,7 +1426,10 @@ mod tests {
         wrapped[0] ^= 0x01;
         let cipher = Aes256Gcm::new_from_slice(kek.as_slice()).unwrap();
         let result = cipher.decrypt(Nonce::from_slice(&wrap_iv), wrapped.as_slice());
-        assert!(result.is_err(), "AES-GCM should reject a flipped ciphertext bit");
+        assert!(
+            result.is_err(),
+            "AES-GCM should reject a flipped ciphertext bit"
+        );
     }
 
     // The WebAuthn and password KEK derivations must not collide even on shared
@@ -1029,6 +1455,226 @@ mod tests {
         assert_eq!(back, plaintext);
         lock();
         assert!(is_locked());
+    }
+
+    // The KeePass export the desktop app and the phones run: sealed blobs on disk in, a KDBX on
+    // disk out, each attachment opened under the VEK and read back by the KDBX reader.
+    #[test]
+    fn saves_a_kdbx_with_attachments_from_sealed_blobs_on_disk() {
+        let _guard = VEK_SLOT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unlock_with_vek(B64.encode([0x3du8; KEY_LEN])).unwrap();
+        let dir = std::env::temp_dir().join(format!("bramble-kdbx-out-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let body: Vec<u8> = (0..3 * 262_144 + 99u32).map(|i| (i % 241) as u8).collect();
+        std::fs::write(dir.join("in.bin"), &body).unwrap();
+        let blob = dir.join("blob");
+        let sealed = seal_file_core(
+            dir.join("in.bin").to_str().unwrap(),
+            blob.to_str().unwrap(),
+            r#"{"name":"scan.pdf","mime":"application/pdf"}"#,
+        )
+        .unwrap();
+        let entries = vec![kdbx::SaveEntry {
+            strings: vec![kdbx::SaveString {
+                key: "Title".into(),
+                value: "Passport".into(),
+                protected: false,
+            }],
+            binaries: vec![],
+        }];
+        let file = kdbx::KdbxExportFile {
+            blob_path: blob.to_str().unwrap().into(),
+            wrapped_fek: sealed.wrapped_fek.clone(),
+            fek_iv: sealed.fek_iv.clone(),
+            nonce_prefix: sealed.nonce_prefix.clone(),
+            size: sealed.size,
+            entry: 0,
+            name: "scan.pdf".into(),
+        };
+
+        let out = dir.join("export.kdbx");
+        let len = kdbx::save_to_path(&entries, "pw", std::slice::from_ref(&file), &out).unwrap();
+        assert_eq!(len, std::fs::metadata(&out).unwrap().len());
+        assert!(!dir.join(".export.kdbx.partial").exists());
+        let (read, attachments) =
+            kdbx::open_full(&std::fs::read(&out).unwrap(), "pw", None).unwrap();
+        assert_eq!(read[0].binaries[0].name, "scan.pdf");
+        assert_eq!(
+            attachments[read[0].binaries[0].index as usize].as_slice(),
+            body.as_slice()
+        );
+
+        // A blob not at its recorded size has not arrived whole: nothing is written at all.
+        let short = kdbx::KdbxExportFile {
+            size: sealed.size + 1,
+            ..file
+        };
+        let refused = dir.join("refused.kdbx");
+        assert!(kdbx::save_to_path(&entries, "pw", &[short], &refused).is_err());
+        assert!(!refused.exists() && !dir.join(".refused.kdbx.partial").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // The VEK-owning half of file sealing: FEK generated and wrapped here, content sealed by
+    // the VEK-free module in files.rs. Uses real files on disk, because path-based is the whole
+    // point of this surface.
+    #[test]
+    fn file_seal_open_round_trip_core() {
+        let _guard = VEK_SLOT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unlock_with_vek(B64.encode([0x7cu8; KEY_LEN])).unwrap();
+
+        let dir = std::env::temp_dir().join(format!("bramble-seal-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("in.bin");
+        let staging = dir.join("staging");
+        let out = dir.join("out.bin");
+        let plaintext: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+        std::fs::write(&src, &plaintext).unwrap();
+
+        let meta_json =
+            r#"{"name":"passport.pdf","mime":"application/pdf","plaintextSize":300000}"#;
+        let sealed =
+            seal_file_core(src.to_str().unwrap(), staging.to_str().unwrap(), meta_json).unwrap();
+
+        // The blob on disk is what the hash names, and its length is the manifest's `size`.
+        assert_eq!(std::fs::metadata(&staging).unwrap().len(), sealed.size);
+        assert_eq!(
+            files::blob_hash(&std::fs::read(&staging).unwrap()),
+            sealed.hash
+        );
+
+        // Metadata comes back verbatim: this crate seals the caller's JSON, it does not build it.
+        let meta = open_file_meta_core(
+            &sealed.wrapped_fek,
+            &sealed.fek_iv,
+            &sealed.meta_blob,
+            &sealed.meta_iv,
+        )
+        .unwrap();
+        assert_eq!(meta, meta_json);
+
+        let written = open_file_to_path_core(
+            &sealed.wrapped_fek,
+            &sealed.fek_iv,
+            &sealed.nonce_prefix,
+            staging.to_str().unwrap(),
+            out.to_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(written, plaintext.len() as u64);
+        assert_eq!(std::fs::read(&out).unwrap(), plaintext);
+
+        // A ranged read decrypts one chunk, which is what a preview does.
+        let chunk0 = B64
+            .decode(
+                open_file_chunk_core(
+                    &sealed.wrapped_fek,
+                    &sealed.fek_iv,
+                    &sealed.nonce_prefix,
+                    staging.to_str().unwrap(),
+                    0,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        assert_eq!(chunk0, plaintext[..files::CHUNK_LEN.min(plaintext.len())]);
+
+        // A rename reseals metadata under the same FEK: no bytes move, so the blob and its
+        // address are untouched and only the two metadata fields change.
+        let renamed = reseal_file_meta_core(
+            &sealed.wrapped_fek,
+            &sealed.fek_iv,
+            r#"{"name":"renamed.pdf","mime":"application/pdf","plaintextSize":300000}"#,
+        )
+        .unwrap();
+        assert_ne!(renamed.ciphertext, sealed.meta_blob);
+        assert_eq!(
+            open_file_meta_core(
+                &sealed.wrapped_fek,
+                &sealed.fek_iv,
+                &renamed.ciphertext,
+                &renamed.iv
+            )
+            .unwrap(),
+            r#"{"name":"renamed.pdf","mime":"application/pdf","plaintextSize":300000}"#
+        );
+        assert_eq!(
+            files::blob_hash(&std::fs::read(&staging).unwrap()),
+            sealed.hash,
+            "a rename must not touch the blob"
+        );
+
+        // A different vault's VEK cannot unwrap the FEK.
+        unlock_with_vek(B64.encode([0x01u8; KEY_LEN])).unwrap();
+        assert!(open_file_meta_core(
+            &sealed.wrapped_fek,
+            &sealed.fek_iv,
+            &sealed.meta_blob,
+            &sealed.meta_iv
+        )
+        .is_err());
+
+        lock();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // The extension's streams take the VEK in their constructor and never again, which is what
+    // lets its host release the slot before awaiting IndexedDB. So the stream must keep working
+    // with the slot empty, and what it produces must open with the same readers as a path seal.
+    #[test]
+    fn file_streams_need_the_vek_only_to_begin() {
+        let _guard = VEK_SLOT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unlock_with_vek(B64.encode([0x3du8; KEY_LEN])).unwrap();
+        let plaintext: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+        let meta_json = r#"{"name":"scan.png","mime":"image/png"}"#;
+
+        let (mut stream, envelope) = begin_seal_stream_core(meta_json).unwrap();
+        lock();
+        let mut blob = stream
+            .seal_next(&plaintext[..files::CHUNK_LEN], false)
+            .unwrap();
+        blob.extend(
+            stream
+                .seal_next(&plaintext[files::CHUNK_LEN..], true)
+                .unwrap(),
+        );
+        let sealed = envelope.with_content(&stream.finish().unwrap());
+        assert_eq!(files::blob_hash(&blob), sealed.hash);
+        assert_eq!(blob.len() as u64, sealed.size);
+
+        assert!(begin_open_stream_core(
+            &sealed.wrapped_fek,
+            &sealed.fek_iv,
+            &sealed.nonce_prefix,
+            sealed.size
+        )
+        .is_err());
+        unlock_with_vek(B64.encode([0x3du8; KEY_LEN])).unwrap();
+        assert_eq!(
+            open_file_meta_core(
+                &sealed.wrapped_fek,
+                &sealed.fek_iv,
+                &sealed.meta_blob,
+                &sealed.meta_iv
+            )
+            .unwrap(),
+            meta_json
+        );
+        let mut opener = begin_open_stream_core(
+            &sealed.wrapped_fek,
+            &sealed.fek_iv,
+            &sealed.nonce_prefix,
+            sealed.size,
+        )
+        .unwrap();
+        lock();
+        let mut opened = Vec::new();
+        while let Some((offset, len)) = opener.next_range() {
+            let range = offset as usize..(offset + len) as usize;
+            opened.extend_from_slice(&opener.open_next(&blob[range]).unwrap());
+        }
+        assert_eq!(opened, plaintext);
     }
 
     // Entry-level (per-item DEK) round-trip through the shared core.

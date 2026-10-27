@@ -1,16 +1,21 @@
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { ArrowLeft, ArrowLeftRight, Check, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isBackupArchive } from "../../../backup/archive";
 import { usePlatform } from "../../../context/PlatformContext";
 import { importFromOs } from "../../../exchange";
-import { openPortableVaultFile, readPortableVaultFile } from "../../../export/portable-vault";
+import {
+	FULL_BACKUP_ERROR,
+	openPortableVaultFile,
+	readPortableVaultFile,
+} from "../../../export/portable-vault";
 import {
 	exchangeBlockedReason,
 	useExchangeAvailability,
 } from "../../../hooks/useExchangeAvailability";
 import { type EntryData, useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
-import type { ImportParserContext, ImportProvider } from "../../../import";
+import type { ImportParserContext, ImportProvider, PlacedAttachment } from "../../../import";
 import {
 	IMPORT_PROVIDERS,
 	type ImportProviderInfo,
@@ -19,8 +24,9 @@ import {
 	parseImport,
 	tallyByType,
 } from "../../../import";
-import { base64ToBytes, bytesToBase64 } from "../../../util/bytes";
+import { base64ToBytes } from "../../../util/bytes";
 import { splitAlreadyImported } from "../../../vault/entry-identity";
+import { plaintextSize } from "../../../vault/file-mutations";
 import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
 import { VaultChoiceList } from "../../components/VaultChoiceList";
@@ -40,20 +46,45 @@ const MAX_IMPORT_FILE_BYTES = MAX_IMPORT_FILE_MB * 1024 * 1024;
  * `onClose` (single-window hosts like mobile) returns to the app; the extension opens import
  * in its own tab and passes nothing. */
 export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
-	const { ready, hasVault, isLocked, unlock, importEntries, entries } = useVault();
+	const { ready, hasVault, isLocked, unlock, importEntries, entries, files, describeFile } =
+		useVault();
 	const { shell, crypto, exchange } = usePlatform();
 	const { vaults, selectVault } = useVaultRegistry();
 	const { t } = useLingui();
 	const [provider, setProvider] = useState<ImportProviderInfo | null>(null);
 	const [result, setResult] = useState<ImportResult | null>(null);
 	const [imported, setImported] = useState<number | null>(null);
+	const [importedFiles, setImportedFiles] = useState(0);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	// Encrypted .kdbx picked, awaiting its master password.
 	const [kdbxPending, setKdbxPending] = useState<{
 		provider: ImportProviderInfo;
-		fileB64: string;
+		file: Uint8Array;
 	} | null>(null);
+	// The files a KeePass import brings, placed on their entries, and what holds them until then:
+	// they are the database's attachments in the clear, so they go as soon as they are sealed,
+	// or as soon as the import is abandoned.
+	const [attachments, setAttachments] = useState<PlacedAttachment[]>([]);
+	const releaseRef = useRef<(() => Promise<void>) | null>(null);
+	const release = useCallback(() => {
+		const drop = releaseRef.current;
+		releaseRef.current = null;
+		void drop?.().catch(() => {});
+	}, []);
+	useEffect(() => release, [release]);
+	// A lock clears what an import unpacked, so a preview that outlived one would offer files
+	// that are gone. Start over instead, and say why.
+	useEffect(() => {
+		if (!isLocked || !releaseRef.current) return;
+		release();
+		setResult(null);
+		setProvider(null);
+		setAttachments([]);
+		setError(
+			t`The vault locked, so the attachments read from that file were cleared. Open it again to import them.`,
+		);
+	}, [isLocked, release, t]);
 
 	// The OS-transfer card shows wherever the build has the plugin; when this particular
 	// device can't transfer, the card says why instead of disappearing.
@@ -92,13 +123,17 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	// The same credential in another manager's shape: kept out unless the user asks for it.
 	const [heldBack, setHeldBack] = useState<EntryData[]>([]);
 	const [passwordDiffers, setPasswordDiffers] = useState(0);
+	// The previewed file as parsed, before the split, so held-back entries can be placed again.
+	const source = useRef<ImportResult | null>(null);
 	const showResult = useCallback(
-		(res: ImportResult) => {
+		(res: ImportResult, placed: PlacedAttachment[] = []) => {
 			const split = splitAlreadyImported(entries, res.imported);
+			source.current = res;
 			setDuplicates(split.duplicates);
 			setHeldBack(split.likelyDuplicates);
 			setPasswordDiffers(split.passwordDiffers);
-			const offered = split.fresh.length + split.likelyDuplicates.length;
+			setAttachments(placed);
+			const offered = split.fresh.length + split.likelyDuplicates.length + placed.length;
 			if (offered > 0) {
 				setResult({ ...res, imported: split.fresh, byType: tallyByType(split.fresh) });
 			}
@@ -106,13 +141,46 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		},
 		[entries],
 	);
-	const importHeldBack = () => {
+
+	// Each file follows its entry: onto the copy kept of an entry the file repeats, or, for one
+	// the vault already holds, onto that entry. That is what lets re-importing a database bring
+	// the files an earlier import could not, unless that entry already has them. A held-back
+	// entry counts as the one it resembles until the user imports it anyway.
+	const placeAttachments = useCallback(
+		async (res: ImportResult, withHeldBack = false): Promise<PlacedAttachment[]> => {
+			const { sameAs, resembles } = splitAlreadyImported(entries, res.imported);
+			const placed: PlacedAttachment[] = [];
+			for (const { entry, ...file } of res.attachments ?? []) {
+				let to = sameAs.get(entry) ?? entry;
+				if (typeof to !== "string" && !withHeldBack) to = resembles.get(to) ?? to;
+				if (typeof to !== "string") {
+					placed.push({ ...file, onto: { item: to } });
+					continue;
+				}
+				let present = false;
+				for (const held of files) {
+					if (held.entryId !== to || plaintextSize(held.size) !== file.size) continue;
+					if ((await describeFile(held).catch(() => null))?.name === file.name) {
+						present = true;
+						break;
+					}
+				}
+				if (!present) placed.push({ ...file, onto: { entryId: to } });
+			}
+			return placed;
+		},
+		[entries, files, describeFile],
+	);
+	const importHeldBack = async () => {
 		setResult((r) => {
 			if (!r) return r;
 			const imported = [...r.imported, ...heldBack];
 			return { ...r, imported, byType: tallyByType(imported) };
 		});
 		setHeldBack([]);
+		if (source.current?.attachments?.length) {
+			setAttachments(await placeAttachments(source.current, true));
+		}
 	};
 
 	const claimed = useRef(false);
@@ -198,8 +266,21 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 						<Check className="w-7 h-7 text-primary-foreground" />
 					</div>
 					<h1 className="text-2xl">
-						<Trans>Imported {imported} items</Trans>
+						{imported > 0 ? (
+							<Trans>Imported {imported} items</Trans>
+						) : (
+							<Plural value={importedFiles} one="Added # attachment" other="Added # attachments" />
+						)}
 					</h1>
+					{imported > 0 && importedFiles > 0 && (
+						<p className="text-sm">
+							<Plural
+								value={importedFiles}
+								one="# attachment came with them."
+								other="# attachments came with them."
+							/>
+						</p>
+					)}
 					<p className="text-sm text-muted-foreground">
 						{provider?.viaSystem ? (
 							// Nothing was written to disk: the OS moved the payload app to app.
@@ -236,8 +317,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			}
 			// Encrypted .kdbx: stash bytes, collect the password in the next step.
 			if (p.needsCredential) {
-				const bytes = new Uint8Array(await file.arrayBuffer());
-				setKdbxPending({ provider: p, fileB64: bytesToBase64(bytes) });
+				setKdbxPending({ provider: p, file: new Uint8Array(await file.arrayBuffer()) });
 				return;
 			}
 			const raw = p.reads === "text" ? await file.text() : new Uint8Array(await file.arrayBuffer());
@@ -302,17 +382,22 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	// (caught by KdbxUnlock) so a wrong password keeps the user on this step.
 	const openKdbxAndPreview = async (password: string, keyfileB64?: string) => {
 		if (!kdbxPending) return;
-		const res =
-			kdbxPending.provider.id === "bramble"
-				? await openBrambleFile(password)
-				: await openKdbxFile(password, keyfileB64);
-		if (res.imported.length === 0) {
-			throw new Error(t`No importable items were found in this database.`);
+		try {
+			const res =
+				kdbxPending.provider.id === "bramble"
+					? await openBrambleFile(password)
+					: await openKdbxFile(password, keyfileB64);
+			if (res.imported.length === 0) {
+				throw new Error(t`No importable items were found in this database.`);
+			}
+			if (showResult(res, await placeAttachments(res)) === 0)
+				throw new Error(
+					t`Everything in this file is already in your vault, so there is nothing to import.`,
+				);
+		} catch (e) {
+			release();
+			throw e;
 		}
-		if (showResult(res) === 0)
-			throw new Error(
-				t`Everything in this file is already in your vault, so there is nothing to import.`,
-			);
 		setProvider(kdbxPending.provider);
 		setKdbxPending(null);
 	};
@@ -320,12 +405,13 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	const openKdbxFile = async (password: string, keyfileB64?: string) => {
 		if (!kdbxPending) throw new Error("no pending file");
 		try {
-			const entries = await crypto.openKdbx({
-				fileB64: kdbxPending.fileB64,
+			const opened = await crypto.openKdbx({
+				file: kdbxPending.file,
 				password,
-				keyfileB64,
+				keyfile: keyfileB64 ? base64ToBytes(keyfileB64) : undefined,
 			});
-			return await kdbxEntriesToResult(entries, parserContext);
+			releaseRef.current = opened.release;
+			return await kdbxEntriesToResult(opened, parserContext);
 		} catch (err) {
 			throw new Error(kdbxErrorMessage(err));
 		}
@@ -335,9 +421,21 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	// format there is nothing to map: passkeys and password history ride along untouched.
 	const openBrambleFile = async (password: string): Promise<ImportResult> => {
 		if (!kdbxPending) throw new Error("no pending file");
-		const file = readPortableVaultFile(base64ToBytes(kdbxPending.fileB64));
+		// Import merges entries into this vault; a full backup is a whole vault and belongs in
+		// Restore, which adds it as a new one. Said the same way for both kinds, the plain vault
+		// (found once its payload is open) and the archive with attachments (found by its shape).
+		const fullBackup = t`That's a full vault backup. Restore it instead: it's added as a new vault, and nothing here is changed.`;
+		const bytes = kdbxPending.file;
+		if (await isBackupArchive(bytes)) throw new Error(fullBackup);
+		const file = readPortableVaultFile(bytes);
 		if (!file) throw new Error(t`That doesn't look like a Bramble export (.bramble) file.`);
-		const entries = await openPortableVaultFile(crypto, file, password);
+		let entries: Awaited<ReturnType<typeof openPortableVaultFile>>;
+		try {
+			entries = await openPortableVaultFile(crypto, file, password);
+		} catch (e) {
+			if (e instanceof Error && e.message === FULL_BACKUP_ERROR) throw new Error(fullBackup);
+			throw e;
+		}
 		// null is a wrong password, distinct from a file this can't read at all.
 		if (entries === null) throw new Error(t`That password didn't open the file.`);
 		return { imported: entries, byType: tallyByType(entries), skipped: 0, warnings: [] };
@@ -348,8 +446,10 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		setBusy(true);
 		setError(null);
 		try {
-			await importEntries(result.imported);
+			await importEntries(result.imported, attachments);
 			setImported(result.imported.length);
+			setImportedFiles(attachments.length);
+			release();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : t`Couldn't write to the vault.`);
 		} finally {
@@ -366,12 +466,24 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 						<div className="flex items-center gap-2.5">
 							<ShieldCheck className="w-5 h-5 text-primary shrink-0" />
 							<p className="text-sm">
-								<Trans>
-									<span className="text-base">{result.imported.length}</span> items ready to import
-								</Trans>
+								{result.imported.length > 0 ? (
+									<Trans>
+										<span className="text-base">{result.imported.length}</span> items ready to
+										import
+									</Trans>
+								) : (
+									<Trans>Attachments ready to add to entries you already have</Trans>
+								)}
 							</p>
 						</div>
-						<p className="text-xs text-muted-foreground">{countLine(result)}</p>
+						{result.imported.length > 0 && (
+							<p className="text-xs text-muted-foreground">{countLine(result)}</p>
+						)}
+						{attachments.length > 0 && (
+							<p className="text-xs text-muted-foreground">
+								<AttachmentsLine placed={attachments} />
+							</p>
+						)}
 						{duplicates > 0 && (
 							<p className="text-xs text-muted-foreground">
 								<Trans>
@@ -419,7 +531,9 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							variant="secondary"
 							size="none"
 							onClick={() => {
+								release();
 								setResult(null);
+								setAttachments([]);
 								setProvider(null);
 								setError(null);
 							}}
@@ -433,15 +547,21 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							variant="primary"
 							size="md"
 							onClick={runImport}
-							disabled={busy || result.imported.length === 0}
+							disabled={busy || (result.imported.length === 0 && attachments.length === 0)}
 						>
 							{busy ? (
 								<>
 									<Loader2 className="w-3.5 h-3.5 animate-spin" />
 									<Trans>Importing…</Trans>
 								</>
-							) : (
+							) : result.imported.length > 0 ? (
 								<Trans>Import {result.imported.length} items</Trans>
+							) : (
+								<Plural
+									value={attachments.length}
+									one="Add # attachment"
+									other="Add # attachments"
+								/>
 							)}
 						</Button>
 					</div>
@@ -517,5 +637,30 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				</Trans>
 			</p>
 		</Shell>
+	);
+}
+
+/** What the files an import brings will do: go with new items, or join entries already here. */
+function AttachmentsLine({ placed }: { placed: PlacedAttachment[] }) {
+	const withNew = placed.filter((p) => "item" in p.onto).length;
+	const toExisting = placed.length - withNew;
+	return (
+		<>
+			{withNew > 0 && (
+				<Plural
+					value={withNew}
+					one="# attachment goes with them."
+					other="# attachments go with them."
+				/>
+			)}
+			{withNew > 0 && toExisting > 0 && " "}
+			{toExisting > 0 && (
+				<Plural
+					value={toExisting}
+					one="# attachment will be added to an entry you already have."
+					other="# attachments will be added to entries you already have."
+				/>
+			)}
+		</>
 	);
 }

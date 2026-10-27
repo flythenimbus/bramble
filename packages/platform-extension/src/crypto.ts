@@ -20,6 +20,9 @@ import type {
 	WrapPasswordSlotInput,
 	WrapWebauthnSlotInput,
 } from "@core/adapters/crypto";
+import { fileSource } from "@core/backup/restore";
+import { bytesToBase64 } from "@core/util/bytes";
+import type { FileSource } from "@core/vault/file-mutations";
 import type { PortableVaultBlob } from "@core/wasm";
 import type {
 	CryptoDecrypt,
@@ -38,30 +41,38 @@ import type {
 	CryptoWrapPasswordSlot,
 	CryptoWrapWebauthnSlot,
 } from "./crypto/messages";
+import { dropHandoff, putHandoff, readHandoff } from "./files/idb";
 import { api } from "./platform-api";
 
 // Backstop a stalled offscreen round-trip (e.g. a cold-start createDocument that
 // never resolves) so the UI surfaces a retryable error instead of hanging forever.
 const SEND_TIMEOUT_MS = 30_000;
 
-function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+/** For an op over a whole file or several (attach, open, a KeePass export): hundreds of chunks
+ * through IndexedDB, not one entry's round trip, so longer before it is called stalled. */
+export const FILE_OP_TIMEOUT_MS = 5 * 60_000;
+
+function withTimeout<T>(promise: Promise<T>, label: string, ms: number): Promise<T> {
 	return new Promise((resolve, reject) => {
-		const t = setTimeout(
-			() => reject(new Error(`${label} timed out — try again`)),
-			SEND_TIMEOUT_MS,
-		);
+		const t = setTimeout(() => reject(new Error(`${label} timed out — try again`)), ms);
 		promise.then(resolve, reject).finally(() => clearTimeout(t));
 	});
 }
 
 // Every CRYPTO_* op carries an optional top-level vaultId (set by withVault). The background's
 // vek-store keys the per-vault VEK map by it; an absent id resolves to the active vault.
-async function dispatch<T = unknown>(
+// Exported for the attachment adapter, whose ops take longer than one entry's (see files.ts).
+export async function dispatch<T = unknown>(
 	type: string,
 	payload: unknown,
 	vaultId: string | undefined,
+	timeoutMs = SEND_TIMEOUT_MS,
 ): Promise<T> {
-	const res = await withTimeout(api.runtime.sendMessage({ type, vaultId, payload }), type);
+	const res = await withTimeout(
+		api.runtime.sendMessage({ type, vaultId, payload }),
+		type,
+		timeoutMs,
+	);
 	if (!res?.ok) throw new Error(res?.error ?? `crypto ${type} failed`);
 	return res.data as T;
 }
@@ -179,9 +190,65 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 		decryptWithVek: (iv, ciphertext) =>
 			send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext } satisfies CryptoDecryptOuter),
 
-		openKdbx: (input: OpenKdbxInput) => send<KdbxRawEntry[]>("CRYPTO_OPEN_KDBX", input),
-		// Reply is the .kdbx as base64; the message channel wouldn't preserve raw bytes.
-		saveKdbx: (input: SaveKdbxInput) => send<string>("CRYPTO_SAVE_KDBX", input),
+		// The database goes over as a handoff rather than in the message, and its attachments come
+		// back the same way, each staged until the import seals it or the import is dropped.
+		async openKdbx(input: OpenKdbxInput) {
+			const handoff = await putHandoff(new Blob([input.file as BlobPart]));
+			let out: { entries: KdbxRawEntry[]; attachments: { token: string; size: number }[] };
+			try {
+				out = await dispatch(
+					"CRYPTO_OPEN_KDBX",
+					{
+						handoff,
+						password: input.password,
+						keyfileB64: input.keyfile ? bytesToBase64(input.keyfile) : undefined,
+					},
+					vaultId,
+					FILE_OP_TIMEOUT_MS,
+				);
+			} finally {
+				await dropHandoff(handoff).catch(() => {});
+			}
+			const release = async () => {
+				for (const a of out.attachments) await dropHandoff(a.token).catch(() => {});
+			};
+			const attachments: { source: FileSource; size: number }[] = [];
+			for (const a of out.attachments) {
+				const blob = await readHandoff(a.token);
+				if (!blob) {
+					await release();
+					throw new Error("an attachment from the database is no longer staged");
+				}
+				attachments.push({ source: { kind: "blob", blob }, size: a.size });
+			}
+			return { entries: out.entries, attachments, release };
+		},
+		// The host writes the file into a handoff; it is read back here as a Blob and handed on
+		// as a source read in slices, and the parked copy goes as soon as it is read.
+		async saveKdbx(input: SaveKdbxInput) {
+			const token = await dispatch<string>(
+				"CRYPTO_SAVE_KDBX",
+				{
+					entries: input.entries,
+					password: input.password,
+					files: input.files.map(({ entry, record, name }) => ({
+						entry,
+						name,
+						hash: record.hash,
+						size: record.size,
+						wrappedFek: record.wrappedFek,
+						fekIv: record.fekIv,
+						noncePrefix: record.noncePrefix,
+					})),
+				},
+				vaultId,
+				FILE_OP_TIMEOUT_MS,
+			);
+			const file = await readHandoff(token);
+			await dropHandoff(token).catch(() => {});
+			if (!file) throw new Error("the exported file is no longer staged");
+			return fileSource(file);
+		},
 
 		// Portable vault (.bramble). Everything is already base64 except magicVersion, which
 		// goes as number[] like the slot ops: sendMessage mangles a Uint8Array.

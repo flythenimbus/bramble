@@ -128,6 +128,8 @@ test("an existing device-global target list is adopted by every vault, once", as
 
 	// Removing it from vault 1 leaves vault 2's copy alone: the lists are independent now.
 	await popup.getByRole("button", { name: /Remove/i }).click();
+	// Removing asks first, in place.
+	await popup.getByRole("group").getByRole("button", { name: "Remove" }).click();
 	await expect(popup.getByText(/Choose where to store encrypted backups/i)).toBeVisible();
 	const after = await sw.evaluate(
 		async (keysToRead) => {

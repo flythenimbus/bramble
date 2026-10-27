@@ -24,19 +24,42 @@ const chromeBridge: SyncBridge = {
 	},
 	pushRemotePayload: async (vaultId, payloadJson) => {
 		const payload: ApplyRemoteMsg = { vaultId, payloadJson };
-		await api.runtime.sendMessage({ type: "SYNC_APPLY_REMOTE", payload });
+		const r = await api.runtime.sendMessage({ type: "SYNC_APPLY_REMOTE", payload });
+		// A failed merge has to reach the session, which asks for the vault again: peers no longer
+		// resend it every tick (docs/sync-rebroadcast.md).
+		if (!r?.ok) throw new Error(r?.error ?? "merge failed");
 	},
 	fetchLocalRoster: async (vaultId) => {
 		const r = await api.runtime.sendMessage({ type: "SYNC_LOCAL_ROSTER", payload: { vaultId } });
 		return r?.ok && typeof r.data === "string" ? r.data : "";
 	},
 	pushRemoteRoster: async (vaultId, rosterJson) => {
-		await api.runtime.sendMessage({
+		const r = await api.runtime.sendMessage({
 			type: "SYNC_APPLY_ROSTER",
 			payload: { vaultId, rosterJson },
 		});
+		if (!r?.ok) throw new Error(r?.error ?? "roster merge failed");
 	},
+	blobArrived: () => {
+		void api.runtime.sendMessage({ type: "BLOB_ARRIVED" }).catch(() => {});
+	},
+	linkSend: (frame) => askBackground("LINK_SYNC_SEND", { frame }),
+	linkBlobSend: (stream, frame) => askBackground("LINK_BLOB_SEND", { stream, frame }),
+	linkBlobUp: () => askBackground("LINK_BLOB_UP"),
 };
+
+/** A yes/no from the background, which owns the native port. No answer (a worker that is gone)
+ * is a link that is down, not a fault. */
+async function askBackground(type: string, payload?: Record<string, unknown>): Promise<boolean> {
+	try {
+		const res = (await api.runtime.sendMessage({ type, payload })) as
+			| { ok?: boolean; data?: boolean }
+			| undefined;
+		return res?.ok === true && res.data === true;
+	} catch {
+		return false;
+	}
+}
 setSyncBridge(chromeBridge);
 
 // Report the OS colour scheme so the background can pick the matching monochrome

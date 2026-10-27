@@ -35,7 +35,35 @@ export interface HttpRequest {
 	method: string;
 	url: string;
 	headers?: Record<string, string>;
-	body?: Uint8Array;
+	/** Bytes in hand, or a body too large to hold, read on demand (see HttpBodySource). */
+	body?: Uint8Array | HttpBodySource;
+}
+
+/**
+ * A request body read on demand, for the one request that cannot be split: a WebDAV PUT of a
+ * large backup (WebDAV has no standard way to upload in parts). Every transport must send one
+ * whole without holding it, each in its own way: the browser builds a Blob a piece at a time,
+ * the desktop streams it through Rust, mobile spools it to a file the native side sends.
+ */
+export interface HttpBodySource {
+	size: number;
+	read(offset: number, length: number): Promise<Uint8Array>;
+	/** Where the bytes already sit on this device, when they do (an export a native core wrote):
+	 * a shell can then hand the file on rather than copy it back through the webview. */
+	path?: string;
+}
+
+/** How much of a body source is read at a time. */
+const BODY_CHUNK = 4 * 1024 * 1024;
+
+/** Assemble a body source into a Blob, one chunk at a time. Each chunk becomes a Blob of its own
+ * before the next is read, so the browser holds the bytes and this script holds one chunk. */
+export async function bodyToBlob(body: HttpBodySource): Promise<Blob> {
+	const parts: Blob[] = [];
+	for (let at = 0; at < body.size; at += BODY_CHUNK) {
+		parts.push(new Blob([(await body.read(at, Math.min(BODY_CHUNK, body.size - at))) as BlobPart]));
+	}
+	return new Blob(parts);
 }
 
 /** Body arrives whole: these are API replies and vault blobs, never a stream. */
@@ -43,6 +71,8 @@ export interface HttpResponse {
 	status: number;
 	ok: boolean;
 	body: Uint8Array;
+	/** Response headers, names lower-cased, where the transport carries them. */
+	headers?: Record<string, string>;
 }
 
 /**
@@ -57,7 +87,9 @@ export const fetchTransport: HttpTransport = {
 		const res = await fetch(url, {
 			method,
 			headers,
-			body: body as BodyInit | undefined,
+			body: (body && !(body instanceof Uint8Array) ? await bodyToBlob(body) : body) as
+				| BodyInit
+				| undefined,
 			credentials: "omit",
 			redirect: "manual",
 		});
@@ -65,6 +97,7 @@ export const fetchTransport: HttpTransport = {
 			status: res.status,
 			ok: res.ok,
 			body: new Uint8Array(await res.arrayBuffer()),
+			headers: Object.fromEntries(res.headers),
 		};
 	},
 };

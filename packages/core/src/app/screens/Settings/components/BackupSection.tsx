@@ -16,6 +16,7 @@ import { useAutostart } from "../../../../hooks/useAutostart";
 import { type SaveTargetInput, useBackup } from "../../../../hooks/useBackup";
 import { usePrefs } from "../../../../hooks/usePrefs";
 import { formatDateTime, formatIn } from "../../../../util/format-date";
+import { blockedMessage } from "../../../components/backup-blocked";
 import { Backblaze } from "../../../components/icons/Backblaze";
 import { CloudflareR2 } from "../../../components/icons/CloudflareR2";
 import { Dropbox } from "../../../components/icons/Dropbox";
@@ -23,6 +24,7 @@ import { NextCloud } from "../../../components/icons/NextCloud";
 import { Wasabi } from "../../../components/icons/Wasabi";
 import { AdvancedDisclosure } from "../../../components/ui/advanced-disclosure";
 import { Button } from "../../../components/ui/button";
+import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { SelectField } from "../../../components/ui/select-field";
@@ -388,7 +390,7 @@ function TargetCard({
 	onEdit: () => void;
 	// Present for OAuth targets: re-run sign-in in place instead of editing credential fields.
 	onReconnect?: () => void;
-	onRemove: () => void;
+	onRemove: () => Promise<void>;
 }) {
 	const { t } = useLingui();
 	const Icon = def.Icon;
@@ -467,15 +469,24 @@ function TargetCard({
 						) : (
 							// Wraps rather than truncating: on a phone the frequency picker takes half the
 							// row, and the time is the one fact this line exists to give.
-							<p className="text-xs text-muted-foreground break-words">
-								{target.lastBackupAt ? (
-									<Trans>Last backed up {formatWhen(target.lastBackupAt)}</Trans>
-								) : summary ? (
-									summary
-								) : (
-									<Trans>Not backed up yet</Trans>
+							<>
+								<p className="text-xs text-muted-foreground break-words">
+									{target.lastBackupAt ? (
+										<Trans>Last backed up {formatWhen(target.lastBackupAt)}</Trans>
+									) : summary ? (
+										summary
+									) : (
+										<Trans>Not backed up yet</Trans>
+									)}
+								</p>
+								{/* Amber, not red: nothing failed, and it resolves on its own. But the last
+								    backup above is now behind the vault, and has to read that way. */}
+								{target.waiting && (
+									<p className="text-xs text-amber-500 break-words">
+										{blockedMessage(target.waiting)}
+									</p>
 								)}
-							</p>
+							</>
 						)}
 						{folder && (
 							<p className="text-xs text-muted-foreground truncate" title={folder}>
@@ -518,14 +529,21 @@ function TargetCard({
 						<Trans>Edit</Trans>
 					</Button>
 				)}
-				<Button
-					variant="link"
-					size="none"
-					onClick={onRemove}
-					className="text-xs hover:text-red-500 transition-colors"
-				>
-					<Trans>Remove</Trans>
-				</Button>
+				<InlineConfirm
+					confirmLabel={<Trans>Remove</Trans>}
+					busyLabel={<Trans>Removing…</Trans>}
+					onConfirm={onRemove}
+					trigger={(arm) => (
+						<Button
+							variant="link"
+							size="none"
+							onClick={arm}
+							className="text-xs hover:text-red-500 transition-colors"
+						>
+							<Trans>Remove</Trans>
+						</Button>
+					)}
+				/>
 			</div>
 		</div>
 	);
@@ -755,7 +773,7 @@ export function BackupSection() {
 											? () => surface(backup.connectOAuth(oauthId, { targetId: target.id }))
 											: undefined
 									}
-									onRemove={() => void backup.removeTarget(target.id)}
+									onRemove={() => backup.removeTarget(target.id)}
 								/>
 							);
 						})}

@@ -1,7 +1,16 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "./fixtures";
-import { createVault, expectUnlocked, openPopup, optionsUrl } from "./helpers";
+import {
+	createVault,
+	expectUnlocked,
+	lock,
+	openPopup,
+	optionsUrl,
+	popupUrl,
+	STRONG_PW,
+} from "./helpers";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string) =>
@@ -235,4 +244,132 @@ test("imports a passkey from a database KeePassXC itself wrote", async ({
 		.first()
 		.click();
 	await expect(popup.getByText(/KPEX_PASSKEY/)).toHaveCount(0);
+});
+
+// Attachments. A KeePass user's files are theirs as much as their passwords, so an import that
+// left them behind would lose them without a word. The database is made by KeePassXC (see the
+// fixture's note in core-rust/src/kdbx.rs): Passport holds scan.bin and note.txt, Deed holds
+// copy.txt, which is note.txt's content stored once and shared.
+const kdbxFixture = (name: string) =>
+	path.join(dir, "../../packages/core-rust/tests/fixtures", name);
+const ATTACH_PASSWORD = "attach-pass";
+
+/** Open a .kdbx on the import screen, up to its preview. */
+async function openDatabase(
+	page: import("@playwright/test").Page,
+	extensionId: string,
+	file: string,
+) {
+	await page.goto(`${optionsUrl(extensionId)}?screen=import`);
+	const card = page
+		.locator("label")
+		.filter({ hasText: /KeePass \(\.kdbx\)/ })
+		.first();
+	await card.locator('input[type="file"]').setInputFiles(kdbxFixture(file));
+	await page
+		.getByLabel(/password/i)
+		.first()
+		.fill(ATTACH_PASSWORD);
+	await page.getByRole("button", { name: /Open database/i }).click();
+}
+
+/** In the popup, open `entry` and download `file` from it. */
+async function downloadAttachment(
+	popup: import("@playwright/test").Page,
+	entry: string,
+	file: string,
+) {
+	await popup.getByText(entry, { exact: true }).click();
+	const row = popup
+		.locator("div")
+		.filter({ hasText: file })
+		.filter({ has: popup.getByRole("button", { name: "Open attachment" }) })
+		.last();
+	const downloading = popup.waitForEvent("download");
+	await row.getByRole("button", { name: "Open attachment" }).click();
+	const saved = readFileSync((await (await downloading).path()) as string);
+	await popup
+		.getByRole("button", { name: /^(Back|Go back)/i })
+		.first()
+		.click();
+	return saved;
+}
+
+test("imports a database's attachments onto the entries that hold them", async ({
+	context,
+	extensionId,
+}) => {
+	const page = await context.newPage();
+	await createVault(page, extensionId);
+	await openDatabase(page, extensionId, "attachments.kdbx");
+	await expect(page.getByText(/3 attachments go with them/i)).toBeVisible({ timeout: 30_000 });
+	await page.getByRole("button", { name: /Import 2 items/i }).click();
+	await expect(page.getByText(/3 attachments came with them/i)).toBeVisible();
+
+	const popup = await context.newPage();
+	await popup.goto(`${popupUrl(extensionId)}?detached=1`);
+	await expectUnlocked(popup);
+	const scan = readFileSync(kdbxFixture("attachments-scan.bin"));
+	const note = readFileSync(kdbxFixture("attachments-note.txt"));
+	expect((await downloadAttachment(popup, "Passport", "scan.bin")).equals(scan)).toBe(true);
+	expect((await downloadAttachment(popup, "Passport", "note.txt")).equals(note)).toBe(true);
+	expect((await downloadAttachment(popup, "Deed", "copy.txt")).equals(note)).toBe(true);
+});
+
+// A lock clears what an import unpacked (the desktop app and the phones sweep it), so a preview
+// that outlived one would offer files that are gone. It starts over instead, and says why.
+test("a lock drops a preview that holds attachments, and says why", async ({
+	context,
+	extensionId,
+}) => {
+	const page = await context.newPage();
+	await createVault(page, extensionId);
+	await openDatabase(page, extensionId, "attachments.kdbx");
+	await expect(page.getByText(/3 attachments go with them/i)).toBeVisible({ timeout: 30_000 });
+
+	const popup = await context.newPage();
+	await openPopup(popup, extensionId);
+	await lock(popup);
+	await page.locator('input[type="password"]').first().fill(STRONG_PW);
+	await page.getByRole("button", { name: "Unlock", exact: true }).click();
+
+	await expect(page.getByText(/the attachments read from that file were cleared/i)).toBeVisible();
+	await expect(page.getByRole("button", { name: /Import 2 items/i })).toHaveCount(0);
+});
+
+// Someone who imported before attachments came over gets them by importing the same database
+// again: the entries are already here, so their files are added to them, once.
+test("re-importing brings the attachments an earlier import lacked, and only once", async ({
+	context,
+	extensionId,
+}) => {
+	const page = await context.newPage();
+	await createVault(page, extensionId);
+	// The same two entries, with no attachments: what an import used to leave.
+	await openDatabase(page, extensionId, "attachments-base.kdbx");
+	await page.getByRole("button", { name: /Import 2 items/i }).click();
+	await expect(page.getByRole("heading", { name: /Imported 2 items/i })).toBeVisible();
+
+	await openDatabase(page, extensionId, "attachments.kdbx");
+	await expect(
+		page.getByText(/3 attachments will be added to entries you already have/i),
+	).toBeVisible({
+		timeout: 30_000,
+	});
+	await page.getByRole("button", { name: /Add 3 attachments/i }).click();
+	await expect(page.getByRole("heading", { name: /Added 3 attachments/i })).toBeVisible();
+
+	const popup = await context.newPage();
+	await popup.goto(`${popupUrl(extensionId)}?detached=1`);
+	await expectUnlocked(popup);
+	const scan = readFileSync(kdbxFixture("attachments-scan.bin"));
+	expect((await downloadAttachment(popup, "Passport", "scan.bin")).equals(scan)).toBe(true);
+
+	// A third time there is nothing left to bring.
+	await openDatabase(page, extensionId, "attachments.kdbx");
+	await expect(page.getByText(/already in your vault, so there is nothing to import/i)).toBeVisible(
+		{
+			timeout: 30_000,
+		},
+	);
 });

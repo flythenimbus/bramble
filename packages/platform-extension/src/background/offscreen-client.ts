@@ -106,7 +106,16 @@ const USE_VEK = new Set([
 	"CRYPTO_DECRYPT_INDEX",
 	"CRYPTO_ENCRYPT_OUTER",
 	"CRYPTO_DECRYPT_OUTER",
+	"CRYPTO_FILE_SEAL",
+	"CRYPTO_FILE_OPEN",
+	"CRYPTO_FILE_META",
+	"CRYPTO_FILE_RESEAL_META",
+	"CRYPTO_SAVE_KDBX",
 ]);
+
+// The file ops that touch a vault's attachment store. They get the vault id injected beside the
+// vek, from the same resolution, so a file is always stored under the vault whose key sealed it.
+const SCOPED_TO_STORE = new Set(["CRYPTO_FILE_SEAL", "CRYPTO_FILE_OPEN", "CRYPTO_SAVE_KDBX"]);
 
 /**
  * The single seam between the background and the crypto host, and the one place per-vault key
@@ -157,7 +166,11 @@ export async function sendToOffscreen(
 		if (vaultId === null) return { ok: false, error: "vault locked" };
 		const vek = vekStore.getVek(vaultId);
 		if (vek === null) return { ok: false, error: "vault locked" };
-		const payload = { ...(message.payload as Record<string, unknown>), vekB64: vek };
+		const payload = {
+			...(message.payload as Record<string, unknown>),
+			vekB64: vek,
+			...(SCOPED_TO_STORE.has(type) ? { vaultId } : {}),
+		};
 		return deliver({ ...message, payload });
 	}
 

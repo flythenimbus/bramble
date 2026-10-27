@@ -70,22 +70,16 @@ export const CryptoDecryptOuterSchema = z.object({
 	ciphertext: z.string(),
 	...vekInject,
 });
+/** A KeePass database to open: parked in a handoff by the view, since one can be far larger than
+ * a message may be. Its attachments come back as handoffs too. */
 export const CryptoOpenKdbxSchema = z.object({
-	fileB64: z.string(),
+	handoff: z.string(),
 	password: z.string(),
 	keyfileB64: z.string().optional(),
 });
 
 // KDBX4 export. Carries the entries as KeePass String pairs already shaped by the core
 // mapper, plus the user's chosen file password; the reply is the .kdbx as base64.
-export const CryptoSaveKdbxSchema = z.object({
-	entries: z.array(
-		z.object({
-			strings: z.array(z.object({ key: z.string(), value: z.string(), protected: z.boolean() })),
-		}),
-	),
-	password: z.string(),
-});
 
 // Portable vault (.bramble export/import). No VEK field: the core seals under a key it
 // generates per file, so these never touch the session key and carry no vaultId.
@@ -127,6 +121,58 @@ export const CryptoPasskeyGetSchema = z.object({
 });
 export const CryptoPasskeyImportPkcs8Schema = z.object({
 	pkcs8B64: z.string(),
+});
+
+// File attachments. The bytes never ride these messages: they move through IndexedDB
+// (files/idb.ts), and only a handoff key or a blob's address travels here. The vek and the vault
+// id are both injected by the background, together, so the store a file is written to is always
+// the one whose key sealed it; neither is optional, since these ops have no legacy callers.
+const fileKey = { wrappedFek: z.string(), fekIv: z.string() };
+const fileScope = { vaultId: z.string(), vekB64: z.string() };
+const blobHash = z.string().regex(/^[0-9a-f]{64}$/);
+/** A KeePass export: entries the view decrypted, and every attachment by its address, opened
+ * where the key is. The file comes back as a handoff, never in a message. */
+export const CryptoSaveKdbxSchema = z.object({
+	entries: z.array(
+		z.object({
+			strings: z.array(z.object({ key: z.string(), value: z.string(), protected: z.boolean() })),
+		}),
+	),
+	password: z.string(),
+	files: z.array(
+		z.object({
+			entry: z.number().int().nonnegative(),
+			hash: blobHash,
+			size: z.number().int().nonnegative(),
+			noncePrefix: z.string(),
+			name: z.string(),
+			...fileKey,
+		}),
+	),
+	...fileScope,
+});
+export type CryptoSaveKdbx = z.infer<typeof CryptoSaveKdbxSchema>;
+export const CryptoFileSealSchema = z.object({
+	handoff: z.string(),
+	metaJson: z.string(),
+	...fileScope,
+});
+export const CryptoFileOpenSchema = z.object({
+	hash: blobHash,
+	noncePrefix: z.string(),
+	...fileKey,
+	...fileScope,
+});
+export const CryptoFileMetaSchema = z.object({
+	metaBlob: z.string(),
+	metaIv: z.string(),
+	...fileKey,
+	vekB64: z.string(),
+});
+export const CryptoFileResealMetaSchema = z.object({
+	metaJson: z.string(),
+	...fileKey,
+	vekB64: z.string(),
 });
 
 export type CryptoUnlockWithVek = z.infer<typeof CryptoUnlockWithVekSchema>;

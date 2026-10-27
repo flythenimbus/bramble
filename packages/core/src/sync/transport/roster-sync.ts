@@ -8,7 +8,6 @@
 // See docs/p2p-sync.md.
 
 import { flags } from "../../flags";
-import { withTimeout } from "../../util/with-timeout";
 import {
 	canonicalRosterEntry,
 	decodeRoster,
@@ -18,26 +17,12 @@ import {
 	verifyRemoteRoster,
 } from "..";
 import type { Channel } from "./channel";
-import { type Awaitable, type PumpWasm, runInitiator, runResponder } from "./handshake";
+import type { Awaitable } from "./handshake";
 import type { PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
+import { authenticatePeer, currentRoster, inRoster, type RosterHandshakeWasm } from "./peer-auth";
 import { type MeshSession, type PeerSource, startMeshSession } from "./peer-session";
 import { recvSecure, sendSecure } from "./secure-channel";
-
-/** The Noise KK roster-auth + transport exports. Returns are Awaitable so the native
- * plugin (async bridge) and the in-webview WASM module share one interface. */
-interface RosterHandshakeWasm extends PumpWasm {
-	handshake_start_initiator(
-		privB64: string,
-		remotePubB64: string,
-	): Awaitable<{
-		sessionId: number;
-		message: string;
-	}>;
-	handshake_start_responder(privB64: string, remotePubB64: string): Awaitable<number>;
-	handshake_encrypt(sessionId: number, plaintext: string): Awaitable<string>;
-	handshake_decrypt(sessionId: number, ciphertextB64: string): Awaitable<string>;
-}
 
 /** Ed25519 roster-entry verification (Item A). Optional: absent on hosts not yet wired for roster
  * signing (e.g. an older mobile native-crypto shim), where verification degrades to
@@ -50,11 +35,17 @@ export type RosterSyncWasm = NostrWasm & RosterHandshakeWasm & RosterVerifyWasm;
 type Report = (status: string) => void;
 
 const REBROADCAST_MS = 4000;
-// The relay is best-effort live fan-out (ephemeral, no store), so a frame dropped mid
-// handshake would hang recv() forever. Bound the handshake; on timeout we abandon this
-// attempt and the periodic resume (Firefox keep-alive / a peer's re-announce) retries.
-// The post-handshake receive loop is intentionally unbounded (it idles between changes).
-const HANDSHAKE_TIMEOUT_MS = 15_000;
+/**
+ * What an unchanged tick carries instead of the whole envelope: it keeps the peer from being
+ * reaped and applies nothing, since every version skips an envelope with neither `entries` nor
+ * `roster`. Over TURN the whole vault every 4 s was most of the metered traffic. See
+ * docs/sync-rebroadcast.md.
+ */
+const HEARTBEAT = "{}";
+/** What a receiver sends when a merge failed: the sender's next tick then carries everything. */
+const RESEND = JSON.stringify({ resend: true });
+/** The whole envelope goes out this often regardless, for a loss nobody noticed. */
+const FULL_RESEND_MS = 10 * 60_000;
 
 export interface RosterSyncOptions {
 	relayUrl: string;
@@ -77,10 +68,12 @@ export interface RosterSyncOptions {
 	peerSource?: PeerSource;
 }
 
-/** What a peer broadcast carries: entries always, the roster when wired. */
+/** What a peer broadcast carries: entries and the roster when it changed, nothing on a heartbeat,
+ * and `resend` from a receiver asking for everything again. */
 interface SyncEnvelope {
-	entries: string;
+	entries?: string;
 	roster?: string;
+	resend?: boolean;
 }
 
 async function localEnvelope(opts: RosterSyncOptions): Promise<string> {
@@ -89,22 +82,26 @@ async function localEnvelope(opts: RosterSyncOptions): Promise<string> {
 	return JSON.stringify({ entries, roster } satisfies SyncEnvelope);
 }
 
+/** Merge what a peer sent. True when it asked for the whole envelope again. Rejects when a merge
+ * fails, so the receive loop can ask for it again: nothing else will resend it. */
 async function applyEnvelope(
 	opts: RosterSyncOptions,
 	json: string,
 	local: RosterPayload,
-): Promise<void> {
+): Promise<boolean> {
 	let env: SyncEnvelope;
 	try {
 		env = JSON.parse(json) as SyncEnvelope;
 	} catch {
-		return;
+		return false;
 	}
+	if (env.resend === true) return true;
 	if (env.roster && opts.pushRemoteRoster) {
 		const verified = await verifyRosterEnvelope(opts, env.roster, local);
 		if (verified !== null) await opts.pushRemoteRoster(verified);
 	}
 	if (env.entries) await opts.pushRemotePayload(env.entries);
+	return false;
 }
 
 /** Verify a gossiped roster before it is pushed to merge (Item A): drop entries that fail Ed25519
@@ -175,7 +172,16 @@ interface AuthedPeer {
 	lastSeen: number;
 	/** Reap: stop the receive loop and tear down the transport. */
 	close: () => void;
+	/** Send one message once the last is out: two at once would interleave their Noise frames. */
+	send: (json: string) => Promise<void>;
+	/** The last whole envelope this peer was sent; null sends the whole one next tick. */
+	lastSent: string | null;
+	/** When it was sent, for FULL_RESEND_MS. */
+	lastFullAt: number;
 }
+
+/** What the reapers need of a peer. */
+type Reapable = Pick<AuthedPeer, "lastSeen" | "close">;
 
 // Relay-forward has no connection-liveness signal, so a peer that went away (e.g. a
 // Firefox device that suspended and restarted with a fresh identity) would linger in the
@@ -212,31 +218,12 @@ export async function startRosterSync(opts: RosterSyncOptions): Promise<MeshSess
 	return { ...session, broadcastNow: () => broadcast(opts, peers) };
 }
 
-function inRoster(roster: RosterPayload, pubkey: string): boolean {
-	return roster.devices.some((d) => d.publicKey === pubkey);
-}
-
-/** The CURRENT roster membership, read fresh each time (fetchLocalRoster hits storage) so a
- * revocation takes effect on a live session instead of at the next lock/unlock. Falls back to
- * the initial snapshot when fetchLocalRoster is not wired or returns something unparseable.
- * Exported for tests. */
-export async function currentRoster(
-	opts: Pick<RosterSyncOptions, "roster" | "fetchLocalRoster">,
-): Promise<RosterPayload> {
-	if (!opts.fetchLocalRoster) return opts.roster;
-	try {
-		return decodeRoster(await opts.fetchLocalRoster());
-	} catch {
-		return opts.roster;
-	}
-}
-
 /** Drop (and tear down) peers no longer active in `roster` — a device revoked mid-session.
  * Closing the peer also breaks its receive loop, so a revoked device loses access in both
  * directions without waiting for a relock. Exported for tests. */
 export function reapRevoked(
 	opts: Pick<RosterSyncOptions, "report">,
-	peers: Map<string, AuthedPeer>,
+	peers: Map<string, Reapable>,
 	roster: RosterPayload,
 ): void {
 	for (const [pub, peer] of peers) {
@@ -248,23 +235,32 @@ export function reapRevoked(
 	}
 }
 
-/** Send our current payload to every authenticated peer (closed channels no-op). */
+/** Send every authenticated peer our envelope if it changed since it last got one, and a
+ * heartbeat if not (closed channels no-op). */
 async function broadcast(opts: RosterSyncOptions, peers: Map<string, AuthedPeer>): Promise<void> {
 	if (peers.size === 0) return;
 	// Enforce revocation on the live session before sending: a device revoked since the session
 	// started must stop receiving our vault now, not at the next lock/unlock.
 	reapRevoked(opts, peers, await currentRoster(opts));
 	if (peers.size === 0) return;
-	const payload = await localEnvelope(opts);
-	for (const { channel, sessionId } of peers.values()) {
-		await sendSecure(channel, opts.wasm, sessionId, payload);
+	// Built every tick, as before: comparing is what notices an edit on a host that doesn't push
+	// one (desktop, mobile) and a merge that changed the vault for the other peers.
+	const envelope = await localEnvelope(opts);
+	const now = Date.now();
+	for (const peer of peers.values()) {
+		const whole = peer.lastSent !== envelope || now - peer.lastFullAt >= FULL_RESEND_MS;
+		if (whole) {
+			peer.lastSent = envelope;
+			peer.lastFullAt = now;
+		}
+		await peer.send(whole ? envelope : HEARTBEAT);
 	}
 }
 
 /** Drop peers that have gone silent past STALE_MS (see AuthedPeer). Exported for tests. */
 export function reapStale(
 	opts: Pick<RosterSyncOptions, "report">,
-	peers: Map<string, AuthedPeer>,
+	peers: Map<string, Reapable>,
 	now: number = Date.now(),
 ): void {
 	for (const [pub, peer] of peers) {
@@ -282,37 +278,16 @@ async function syncPeer(
 	peers: Map<string, AuthedPeer>,
 ): Promise<void> {
 	const { channel } = peer;
-	const { wasm, devicePrivB64: priv, devicePubB64: pub } = opts;
-
-	channel.send(pub);
-	let peerPub: string;
-	let sess: { sessionId: number };
-	try {
-		peerPub = await withTimeout(channel.recv(), HANDSHAKE_TIMEOUT_MS, "roster-auth");
-		// Gate on the CURRENT roster (read fresh), so a device revoked since this session started
-		// cannot (re-)authenticate against a stale snapshot.
-		if (!inRoster(await currentRoster(opts), peerPub)) {
-			opts.report(`⚠ ${peerPub.slice(0, 8)} not in roster — ignoring`);
-			peer.close();
-			return;
-		}
-		sess = await withTimeout(
-			pub < peerPub
-				? runInitiator(wasm, channel, () => wasm.handshake_start_initiator(priv, peerPub))
-				: runResponder(wasm, channel, () => wasm.handshake_start_responder(priv, peerPub)),
-			HANDSHAKE_TIMEOUT_MS,
-			"handshake",
-		);
-	} catch (e) {
-		// A stalled/failed handshake: abandon this attempt cleanly instead of hanging.
-		opts.report(`handshake failed: ${(e as Error).message}`);
-		peer.close();
-		return;
-	}
+	const { wasm } = opts;
+	const authed = await authenticatePeer(opts, peer);
+	if (!authed) return;
+	const { peerPub } = authed;
+	const sess = { sessionId: authed.sessionId };
 	let wakeAbort: (() => void) | null = null;
 	const aborted = new Promise<null>((resolve) => {
 		wakeAbort = () => resolve(null);
 	});
+	let sendTail: Promise<void> = Promise.resolve();
 	const entry: AuthedPeer = {
 		channel,
 		sessionId: sess.sessionId,
@@ -321,11 +296,21 @@ async function syncPeer(
 			wakeAbort?.();
 			peer.close();
 		},
+		send: (json) => {
+			const run = sendTail.then(() => sendSecure(channel, wasm, sess.sessionId, json));
+			sendTail = run.catch(() => {});
+			return run;
+		},
+		lastSent: null,
+		lastFullAt: 0,
 	};
 	peers.set(peerPub, entry);
 	opts.report(`synced with ${peerPub.slice(0, 8)} ✅`);
 
-	await sendSecure(channel, wasm, sess.sessionId, await localEnvelope(opts));
+	const first = await localEnvelope(opts);
+	entry.lastSent = first;
+	entry.lastFullAt = Date.now();
+	await entry.send(first);
 	// Race each frame's (unbounded) receive against reaping, so a dropped peer's loop exits
 	// instead of leaking a pending recv() forever (relay channels have no close event).
 	const recvFrame = () => Promise.race([channel.recv(), aborted]);
@@ -341,7 +326,14 @@ async function syncPeer(
 			peers.delete(peerPub);
 			break;
 		}
-		await applyEnvelope(opts, envelope, roster);
+		try {
+			// Asked for everything again: the next tick sends the whole envelope.
+			if (await applyEnvelope(opts, envelope, roster)) entry.lastSent = null;
+		} catch (e) {
+			// The sender won't send this again unless asked, so ask, and keep the session.
+			opts.report(`merge from ${peerPub.slice(0, 8)} failed, asking again: ${String(e)}`);
+			await entry.send(RESEND).catch(() => {});
+		}
 		// The envelope may have gossiped a revocation of another peer; drop it now rather than
 		// waiting for the next re-broadcast tick, so a revocation propagates across the mesh at once.
 		// Fresh read, not the copy above: the merge can outlast an enrollment finishing elsewhere,

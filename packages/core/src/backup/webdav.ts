@@ -1,11 +1,13 @@
 import { XMLParser } from "fast-xml-parser";
-import { fetchTransport, type HttpTransport } from "../adapters/http";
+import { fetchTransport, type HttpRequest, type HttpTransport } from "../adapters/http";
 import { uploadTempKey } from "./orchestrator";
 import {
 	type BackupHttpResponse,
 	type BackupObject,
 	type BackupTarget,
 	type BackupTransport,
+	PART_SIZE,
+	readAll,
 	responseText,
 	type WebdavConfig,
 } from "./types";
@@ -68,7 +70,7 @@ export function createWebdavTarget(
 	async function req(
 		method: string,
 		url: string,
-		init: { body?: Uint8Array; headers?: Record<string, string> } = {},
+		init: { body?: HttpRequest["body"]; headers?: Record<string, string> } = {},
 	): Promise<BackupHttpResponse> {
 		const res = await transport.send({ method, url, ...init });
 		if (!res.ok) throw new Error(`WebDAV ${method} failed (${res.status})${reason(res)}`);
@@ -109,10 +111,26 @@ export function createWebdavTarget(
 			// prune and only found out at restore. A MOVE within one server is atomic.
 			const temp = uploadTempKey(key);
 			try {
+				// WebDAV has no standard way to upload in parts, so a large backup goes as one request
+				// whose body the transport reads on demand instead of holding.
 				await req("PUT", fileUrl(temp), {
-					body,
+					body: body.size < PART_SIZE ? await readAll(body) : body,
 					headers: contentType ? { "Content-Type": contentType } : undefined,
 				});
+				// What the server kept, before it gets a snapshot's name: a server that took a short
+				// body without complaint must not turn it into a backup that only fails at restore.
+				const stored = await req("PROPFIND", fileUrl(temp), { headers: { Depth: "0" } });
+				const response = xml.parse(responseText(stored))?.multistatus?.response;
+				const propstats = [response?.propstat ?? []].flat();
+				const length = Number(
+					propstats.find(
+						(p: { prop?: { getcontentlength?: unknown } }) =>
+							p?.prop?.getcontentlength !== undefined,
+					)?.prop?.getcontentlength,
+				);
+				if (length !== body.size) {
+					throw new Error(`WebDAV stored ${length} bytes of a ${body.size}-byte backup`);
+				}
 				await req("MOVE", fileUrl(temp), {
 					headers: { Destination: fileUrl(key), Overwrite: "T" },
 				});

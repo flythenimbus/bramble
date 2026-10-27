@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { EntryData } from "../hooks/useVault";
 import { kdbxEntriesToResult } from "../import/kdbx";
-import { toKdbxEntries } from "./kdbx";
+import type { FileRecord } from "../sync";
+import { fileRecord } from "../test/vault-fixtures";
+import { toKdbxEntries, toKdbxExport } from "./kdbx";
 
 /** No KeePass fixture here carries a passkey, so reaching the crypto bridge is itself a bug. */
 const noPasskeys = {
@@ -11,7 +13,8 @@ const noPasskeys = {
 /** Export then re-import through the real KDBX import path, which is what a user
  * moving a file between Bramble installs actually goes through. */
 const roundTrip = async (e: EntryData): Promise<EntryData> => {
-	const [back] = (await kdbxEntriesToResult(toKdbxEntries([e]), noPasskeys)).imported;
+	const opened = { entries: toKdbxEntries([e]), attachments: [] };
+	const [back] = (await kdbxEntriesToResult(opened, noPasskeys)).imported;
 	if (!back) throw new Error("nothing re-imported");
 	return back;
 };
@@ -234,5 +237,86 @@ describe("export/import agree", () => {
 				{ key: "CVV", value: "123", hidden: true },
 			]),
 		);
+	});
+});
+
+describe("toKdbxExport", () => {
+	const login = (id: string, name: string): EntryData & { id: string } => ({
+		id,
+		type: "login",
+		name,
+		urls: [],
+		username: "u",
+		password: "p",
+	});
+	/** Each record's sealed name, by id; "scan.pdf" for any not listed. */
+	const named =
+		(names: Record<string, string> = {}) =>
+		async (record: FileRecord) => ({ name: names[record.id] ?? "scan.pdf", mime: "x/y" });
+
+	it("puts each attachment on its own entry's index", async () => {
+		const out = await toKdbxExport(
+			[login("e1", "Passport"), login("e2", "Deed")],
+			[fileRecord({ id: "f1", entryId: "e2" }), fileRecord({ id: "f2", entryId: "e1" })],
+			"Attachments",
+			named(),
+		);
+		expect(out.entries).toHaveLength(2);
+		expect(out.files.map((f) => [f.record.id, f.entry])).toEqual([
+			["f1", 1],
+			["f2", 0],
+		]);
+	});
+
+	// A file whose entry was deleted elsewhere is still the user's file: exported, not dropped.
+	it("gathers attachments with no entry onto one extra entry", async () => {
+		const out = await toKdbxExport(
+			[login("e1", "Passport")],
+			[
+				fileRecord({ id: "f1", entryId: "gone" }),
+				fileRecord({ id: "f2" }),
+				fileRecord({ id: "f3", entryId: "e1" }),
+			],
+			"Attachments",
+			named({ f1: "a.pdf", f2: "b.pdf" }),
+		);
+		expect(out.entries).toHaveLength(2);
+		expect(out.entries[1]?.strings).toEqual([
+			{ key: "Title", value: "Attachments", protected: false },
+		]);
+		expect(out.files.map((f) => f.entry)).toEqual([1, 1, 0]);
+	});
+
+	it("adds no extra entry when every attachment has one", async () => {
+		const out = await toKdbxExport(
+			[login("e1", "A")],
+			[fileRecord({ entryId: "e1" })],
+			"Attachments",
+			named(),
+		);
+		expect(out.entries).toHaveLength(1);
+	});
+
+	// KeePass keys an entry's attachments by name, so two of one name on one entry would collide.
+	it("names each attachment as sealed, made unique on its entry only", async () => {
+		const out = await toKdbxExport(
+			[login("e1", "A"), login("e2", "B")],
+			[
+				fileRecord({ id: "f1", entryId: "e1" }),
+				fileRecord({ id: "f2", entryId: "e1" }),
+				fileRecord({ id: "f3", entryId: "e1" }),
+				fileRecord({ id: "f4", entryId: "e2" }),
+				fileRecord({ id: "f5", entryId: "e1" }),
+			],
+			"Attachments",
+			named({ f5: "README" }),
+		);
+		expect(out.files.map((f) => f.name)).toEqual([
+			"scan.pdf",
+			"scan (2).pdf",
+			"scan (3).pdf",
+			"scan.pdf",
+			"README",
+		]);
 	});
 });

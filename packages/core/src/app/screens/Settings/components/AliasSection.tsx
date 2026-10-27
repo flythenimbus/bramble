@@ -13,6 +13,7 @@ import {
 import { type SaveAliasInput, useAliasProvider } from "../../../../hooks/useAliasProvider";
 import { AdvancedDisclosure } from "../../../components/ui/advanced-disclosure";
 import { Button } from "../../../components/ui/button";
+import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { SelectField } from "../../../components/ui/select-field";
 import { TextField } from "../../../components/ui/text-field";
 import { Section } from "./primitives";
@@ -301,15 +302,22 @@ export function AliasSection() {
 							<Trans>Check key</Trans>
 						</Button>
 						{config && (
-							<Button
-								variant="secondary"
-								size="sm"
-								onClick={onDisconnect}
-								disabled={busy}
-								className="gap-1.5 text-muted-foreground"
-							>
-								<Unplug className="w-3.5 h-3.5" /> <Trans>Disconnect</Trans>
-							</Button>
+							<InlineConfirm
+								variant="destructiveOutline"
+								confirmLabel={<Trans>Disconnect</Trans>}
+								onConfirm={onDisconnect}
+								trigger={(arm) => (
+									<Button
+										variant="secondary"
+										size="sm"
+										onClick={arm}
+										disabled={busy}
+										className="gap-1.5 text-muted-foreground"
+									>
+										<Unplug className="w-3.5 h-3.5" /> <Trans>Disconnect</Trans>
+									</Button>
+								)}
+							/>
 						)}
 					</div>
 
@@ -338,15 +346,22 @@ export function AliasSection() {
 				// needs is a way to stop using it.
 				config && (
 					<div>
-						<Button
-							variant="secondary"
-							size="sm"
-							onClick={onDisconnect}
-							disabled={busy}
-							className="gap-1.5 text-muted-foreground"
-						>
-							<Unplug className="w-3.5 h-3.5" /> <Trans>Disconnect</Trans>
-						</Button>
+						<InlineConfirm
+							variant="destructiveOutline"
+							confirmLabel={<Trans>Disconnect</Trans>}
+							onConfirm={onDisconnect}
+							trigger={(arm) => (
+								<Button
+									variant="secondary"
+									size="sm"
+									onClick={arm}
+									disabled={busy}
+									className="gap-1.5 text-muted-foreground"
+								>
+									<Unplug className="w-3.5 h-3.5" /> <Trans>Disconnect</Trans>
+								</Button>
+							)}
+						/>
 					</div>
 				)
 			)}

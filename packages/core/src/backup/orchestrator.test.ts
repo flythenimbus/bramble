@@ -7,14 +7,25 @@ import {
 	selectStaleUploads,
 	uploadTempKey,
 } from "./orchestrator";
-import type { BackupObject, BackupTarget } from "./types";
+import { sha256Hex } from "./sigv4";
+import { type BackupObject, type BackupTarget, readAll } from "./types";
+import { bytesSource } from "./zip";
+
+/** One backup of these bytes, fingerprinted the way a plain vault is. */
+async function run(
+	target: BackupTarget,
+	bytes: Uint8Array,
+	opts: Omit<Parameters<typeof runBackup>[2], "fingerprint"> = {},
+) {
+	return runBackup(target, bytesSource(bytes), { fingerprint: await sha256Hex(bytes), ...opts });
+}
 
 function mockTarget() {
 	const store = new Map<string, Uint8Array>();
 	const removed: string[] = [];
 	const target: BackupTarget = {
 		async put(key, body) {
-			store.set(key, body);
+			store.set(key, await readAll(body));
 		},
 		async get(key) {
 			const v = store.get(key);
@@ -100,7 +111,7 @@ describe("backup orchestrator", () => {
 		target.list = async () => {
 			throw new Error("listing denied");
 		};
-		const res = await runBackup(target, new TextEncoder().encode("vault"), { keep: 1 });
+		const res = await run(target, new TextEncoder().encode("vault"), { keep: 1 });
 		expect(store.size).toBe(1);
 		expect(res.prunedKeys).toEqual([]);
 		expect(res.hash).toHaveLength(64);
@@ -109,7 +120,7 @@ describe("backup orchestrator", () => {
 	it("uploads a dated snapshot and keeps only the newest N", async () => {
 		const { target, store } = mockTarget();
 		for (let day = 1; day <= 4; day++) {
-			await runBackup(target, new TextEncoder().encode(`vault-${day}`), {
+			await run(target, new TextEncoder().encode(`vault-${day}`), {
 				keep: 2,
 				now: new Date(Date.UTC(2026, 0, day)),
 			});
@@ -151,7 +162,7 @@ describe("append-only: keep everything", () => {
 			},
 		};
 		for (let i = 0; i < 3; i++) {
-			await runBackup(watched, new Uint8Array([i]), {
+			await run(watched, new Uint8Array([i]), {
 				keep: 0,
 				now: new Date(Date.UTC(2026, 0, i + 1)),
 			});
@@ -173,7 +184,7 @@ describe("append-only: keep everything", () => {
 			},
 		};
 		for (let i = 0; i < 3; i++) {
-			await runBackup(readOnly, new Uint8Array([i]), {
+			await run(readOnly, new Uint8Array([i]), {
 				keep: 1,
 				now: new Date(Date.UTC(2026, 0, i + 1)),
 			});
@@ -190,7 +201,7 @@ describe("append-only: keep everything", () => {
 				throw new Error("403 AccessDenied");
 			},
 		};
-		const result = await runBackup(noList, new Uint8Array([1]), { keep: 1 });
+		const result = await run(noList, new Uint8Array([1]), { keep: 1 });
 		expect(result.prunedKeys).toEqual([]);
 		expect(store.size).toBe(1);
 	});
@@ -246,12 +257,31 @@ describe("abandoned upload temporaries", () => {
 				removed.push(key);
 			},
 		};
-		await runBackup(target, new Uint8Array([1]), {
+		await run(target, new Uint8Array([1]), {
 			prefix: "b",
 			keep: 5,
 			now: NOW,
 			vaultId: VAULT,
 		});
 		expect(removed).toEqual([stale]);
+	});
+});
+
+describe("sweeping uploads that never finished", () => {
+	it("asks the target to sweep with this vault's own keys, and survives a failing sweep", async () => {
+		const target = mockTarget().target;
+		const own: ((key: string) => boolean)[] = [];
+		const sweeping: BackupTarget = {
+			...target,
+			async sweepIncomplete(_prefix, _now, isOwn) {
+				own.push(isOwn);
+				throw new Error("ListMultipartUploads denied");
+			},
+		};
+		const vaultId = "aaaaaaaa-1111-4222-8333-444444444444";
+		await expect(run(sweeping, new Uint8Array([1]), { keep: 3, vaultId })).resolves.toBeDefined();
+		expect(own).toHaveLength(1);
+		expect(own[0]?.("bramble/bramble-20260101T000000Z-12345678-vaaaaaaaa.bramble")).toBe(true);
+		expect(own[0]?.("bramble/bramble-20260101T000000Z-12345678-vbbbbbbbb.bramble")).toBe(false);
 	});
 });

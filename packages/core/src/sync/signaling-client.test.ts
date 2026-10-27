@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NostrEvent } from "./nostr";
-import { connectSignaling, RELAY_PING, RELAY_PONG, type SocketLike } from "./signaling-client";
+import {
+	connectSignaling,
+	RELAY_PING,
+	RELAY_PONG,
+	RELAY_TICKET,
+	type SocketLike,
+} from "./signaling-client";
 
 function fakeSocket() {
 	const sent: string[] = [];
@@ -91,6 +97,48 @@ describe("connectSignaling", () => {
 // Cloudflare drops an idle WebSocket after a minute or two, which for a password manager syncing
 // in the background is most of the time. Each drop rebuilt the socket, and on Chrome woke the
 // suspended service worker, which restarted the whole sync session. See PING_MS in the module.
+describe("the relay's ICE ticket", () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
+	it("is asked for once the subscription and buffered events are out", () => {
+		const f = fakeSocket();
+		const client = connectSignaling(f.sock, "room", () => {});
+		client.publish(event("a"));
+		f.open();
+		expect(f.sent.map((frame) => JSON.parse(frame)[0])).toEqual(["REQ", "EVENT", RELAY_TICKET]);
+	});
+
+	it("is what the relay answers", async () => {
+		const f = fakeSocket();
+		const client = connectSignaling(f.sock, "room", () => {});
+		f.open();
+		f.deliver(["NOTICE", "unknown message"]);
+		f.deliver([RELAY_TICKET, "t-1"]);
+		expect(await client.ticket()).toBe("t-1");
+	});
+
+	it("is null at once from a relay that says it has none", async () => {
+		const f = fakeSocket();
+		const client = connectSignaling(f.sock, "room", () => {});
+		f.open();
+		f.deliver([RELAY_TICKET, null]);
+		expect(await client.ticket()).toBeNull();
+	});
+
+	it("is null from a relay that doesn't answer in time", async () => {
+		const f = fakeSocket();
+		const client = connectSignaling(f.sock, "room", () => {});
+		f.open();
+		const ticket = client.ticket();
+		await vi.advanceTimersByTimeAsync(2_000);
+		expect(await ticket).toBeNull();
+		// Settled once: later connections don't wait again.
+		f.deliver([RELAY_TICKET, "late"]);
+		expect(await client.ticket()).toBeNull();
+	});
+});
+
 describe("the relay keepalive", () => {
 	beforeEach(() => vi.useFakeTimers());
 	afterEach(() => vi.useRealTimers());

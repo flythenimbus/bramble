@@ -1,6 +1,3 @@
-import { execFileSync } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, test } from "./fixtures";
 import {
 	backgroundWorker,
@@ -12,6 +9,7 @@ import {
 	openPopup,
 	selectVault,
 } from "./helpers";
+import { fillS3Form, s3Keys } from "./it-servers";
 
 // The device-global -> per-vault backup migration (issue #49), against a real S3 server.
 //
@@ -30,45 +28,8 @@ import {
 // Skipped without BRAMBLE_IT, like the provider integration suite: a machine with no containers
 // stays green rather than failing for a reason that is not about the code.
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-
-const S3 = {
-	endpoint: process.env.BRAMBLE_IT_S3 ?? "http://localhost:9000",
-	bucket: process.env.BRAMBLE_IT_S3_BUCKET ?? "bramble-test",
-	key: process.env.BRAMBLE_IT_S3_KEY ?? "bramble",
-	secret: process.env.BRAMBLE_IT_S3_SECRET ?? "bramble-test-secret",
-	region: "us-east-1",
-};
-
 /** A folder of its own per run, so a failed run cannot poison the next one. */
 const PREFIX = `e2e-migration-${Date.now().toString(36)}`;
-
-/**
- * What is actually in the bucket, read with `mc` rather than with our own S3 client.
- *
- * Deliberately a different implementation from the one under test: verifying a signer's uploads
- * by asking the same signer to list them proves the two agree, not that either is right. `mc`
- * runs inside the compose network, which is also how it reaches `minio` by name.
- */
-function objectsUnder(prefix: string): string[] {
-	const script =
-		`mc alias set local http://minio:9000 ${S3.key} ${S3.secret} > /dev/null && ` +
-		`mc ls --recursive local/${S3.bucket}/${prefix}/ || true`;
-	const out = execFileSync(
-		"docker",
-		["compose", "run", "--rm", "--entrypoint", "sh", "minio-init", "-c", script],
-		{ cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-	);
-	return (
-		out
-			.split("\n")
-			.map((line) => line.trim())
-			.filter(Boolean)
-			// `[date] size STANDARD some/key`: the key is the last field.
-			.map((line) => line.split(/\s+/).at(-1) as string)
-			.filter((key) => key && !key.endsWith("/"))
-	);
-}
 
 /** Every registered vault id, in registry order (the first is the default vault). */
 async function vaultIds(context: Parameters<typeof backgroundWorker>[0]): Promise<string[]> {
@@ -110,24 +71,14 @@ test.describe("cloud backup migration", () => {
 
 		// Through the real form, not a seeded fixture: the credential has to be sealed the way the
 		// app seals it, or the run on the other side of the migration would prove nothing.
-		await popup.getByRole("button", { name: /Other S3-compatible/i }).click();
-		await popup.getByLabel("Bucket").fill(S3.bucket);
-		await popup.getByLabel("Access key ID").fill(S3.key);
-		await popup.getByLabel("Secret access key").fill(S3.secret);
-		// Already open for the generic S3 tile, which has no endpoint to default to. Clicking it
-		// unconditionally would close it, and the fields inside would never be found.
-		const advanced = popup.getByRole("button", { name: "Advanced" });
-		if ((await advanced.getAttribute("aria-expanded")) !== "true") await advanced.click();
-		await popup.getByLabel("Endpoint").fill(S3.endpoint);
-		await popup.getByLabel("Region").fill(S3.region);
-		await popup.getByLabel(/Path prefix/i).fill(PREFIX);
+		await fillS3Form(popup, PREFIX);
 		await popup.getByRole("button", { name: "Save" }).click();
 
 		// It works before the migration. Without this the test could not tell a migration that
 		// broke the target from a target that never worked.
 		await popup.getByRole("button", { name: /Back up now/i }).click();
 		await expect(popup.getByText(/Last backed up/i)).toBeVisible();
-		const before = objectsUnder(PREFIX);
+		const before = s3Keys(PREFIX);
 		expect(before).toHaveLength(1);
 
 		// Now the pre-upgrade profile, built from the working target rather than written by hand:
@@ -168,9 +119,7 @@ test.describe("cloud backup migration", () => {
 		await popup.getByRole("button", { name: /Back up now/i }).click();
 		await expect(popup.getByText(/Last backed up/i)).toBeVisible();
 		await expect(popup.getByText(/failed|error|denied/i)).toHaveCount(0);
-		await expect
-			.poll(() => objectsUnder(PREFIX).length, { timeout: 30_000, intervals: [2_000] })
-			.toBe(2);
+		await expect.poll(() => s3Keys(PREFIX).length, { timeout: 30_000, intervals: [2_000] }).toBe(2);
 
 		// And it landed the way a migrated target is supposed to land. Keys are
 		// `bramble-<stamp>-<hash>[-v<vault>].bramble`, and the marker is where the migration shows
@@ -178,7 +127,7 @@ test.describe("cloud backup migration", () => {
 		// where a migrated one must not, because the folder it inherited is full of untagged
 		// snapshots and tagging only the new ones would leave the old ones unprunable. Keys sort
 		// chronologically by construction, so this is the before and the after.
-		const [tagged, untagged] = objectsUnder(PREFIX).sort();
+		const [tagged, untagged] = s3Keys(PREFIX).sort();
 		expect(tagged).toMatch(/^bramble-\d{8}T\d{6}Z-[0-9a-f]{8}-v[0-9a-z]+\.bramble$/);
 		expect(untagged).toMatch(/^bramble-\d{8}T\d{6}Z-[0-9a-f]{8}\.bramble$/);
 	});

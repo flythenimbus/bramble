@@ -6,6 +6,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import okhttp3.Call
@@ -15,6 +16,8 @@ import okhttp3.Headers.Companion.toHeaders
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
@@ -70,33 +73,65 @@ class NativeHttpPlugin : Plugin() {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    @PluginMethod
-    fun send(call: PluginCall) {
-        val url = call.getString("url") ?: return call.reject("Missing url")
-        val method = call.getString("method") ?: "GET"
-
+    private fun headersOf(call: PluginCall): MutableMap<String, String> {
         val headers = mutableMapOf<String, String>()
         call.getObject("headers")?.let { obj ->
             for (key in obj.keys()) obj.getString(key)?.let { headers[key] = it }
         }
+        return headers
+    }
+
+    @PluginMethod
+    fun send(call: PluginCall) {
+        val url = call.getString("url") ?: return call.reject("Missing url")
+        val method = call.getString("method") ?: "GET"
+        val headers = headersOf(call)
 
         // Bodies cross as base64, as the crypto plugin's bytes do: the bridge is JSON, and a
         // JSON string cannot carry arbitrary bytes.
         val body = call.getString("body")?.let { Base64.decode(it, Base64.NO_WRAP) }
 
+        // OkHttp refuses a body on GET/HEAD and insists on one for POST/PUT/PATCH, so absence
+        // has to mean "empty" everywhere else. Phrased as "which methods take no body" rather
+        // than listing the ones that need one, so WebDAV's verbs (PROPFIND, MKCOL, REPORT)
+        // work when backups start using this in turn.
+        val requestBody = when {
+            method in BODYLESS_METHODS -> null
+            else -> (body ?: ByteArray(0))
+                .toRequestBody(headers["Content-Type"]?.toMediaTypeOrNull())
+        }
+        enqueue(call, url, method, headers, requestBody, (body?.size ?: 0).toLong())
+    }
+
+    /**
+     * `send`, with the body streamed from a file rather than carried across the bridge: a backup
+     * too large for one message, spooled to disk by the webview a chunk at a time. OkHttp sends
+     * the file's length as Content-Length, so a server can tell a short body from a whole one.
+     */
+    @PluginMethod
+    fun sendFile(call: PluginCall) {
+        val url = call.getString("url") ?: return call.reject("Missing url")
+        val method = call.getString("method") ?: "PUT"
+        val path = call.getString("path") ?: return call.reject("Missing path")
+        val file = File(path)
+        if (!file.isFile) return call.reject("The body file is missing")
+        val headers = headersOf(call)
+        val requestBody = file.asRequestBody(headers["Content-Type"]?.toMediaTypeOrNull())
+        enqueue(call, url, method, headers, requestBody, file.length())
+    }
+
+    private fun enqueue(
+        call: PluginCall,
+        url: String,
+        method: String,
+        headers: Map<String, String>,
+        requestBody: RequestBody?,
+        bodySize: Long,
+    ) {
         // Keeps the process running if Bramble is left mid-request. See TransferService.
         val transfer = Transfers.begin(context)
         val pending: Call
         try {
-            // OkHttp refuses a body on GET/HEAD and insists on one for POST/PUT/PATCH, so absence
-            // has to mean "empty" everywhere else. Phrased as "which methods take no body" rather
-            // than listing the ones that need one, so WebDAV's verbs (PROPFIND, MKCOL, REPORT)
-            // work when backups start using this in turn.
-            val requestBody = when {
-                method in BODYLESS_METHODS -> null
-                else -> (body ?: ByteArray(0))
-                    .toRequestBody(headers["Content-Type"]?.toMediaTypeOrNull())
-            }
             val request = Request.Builder()
                 .url(url)
                 .method(method, requestBody)
@@ -107,7 +142,7 @@ class NativeHttpPlugin : Plugin() {
             // megabytes of it over a slow uplink, so a flat read limit fails an upload that is still
             // moving. Scaled to the body at an 8 KiB/s floor, as on iOS; the call limit covers the
             // send and the wait after it.
-            val idle = 60L + (body?.size ?: 0) / 8_192L
+            val idle = 60L + bodySize / 8_192L
             pending = client.newBuilder()
                 .readTimeout(idle, TimeUnit.SECONDS)
                 .callTimeout(maxOf(600L, 2 * idle), TimeUnit.SECONDS)

@@ -21,6 +21,7 @@ import {
 	SYNC_LAST_SYNCED_KEY,
 	type VaultSyncPort,
 } from "@core/sync";
+import { blobArrived } from "@core/sync/blob-arrivals";
 import { syncKeyFor } from "@core/sync/sync-keys";
 import { encodeVaultBlob, type VaultBlob } from "@core/vault-format";
 import { api } from "../platform-api";
@@ -31,6 +32,7 @@ import {
 	AdmissionSignEntryMsgSchema,
 	ApplyRemoteMsgSchema,
 	ApplyRosterMsgSchema,
+	BlobStatusMsgSchema,
 	RosterSignEntryMsgSchema,
 	type RosterSyncMsg,
 	type SyncEventMsg,
@@ -50,7 +52,15 @@ import {
 	storeKeypair,
 	storeSigningKey,
 } from "../sync/sync-config";
-import { closeSyncLink, openSyncLink } from "./desktop-link";
+import {
+	blobLinkUp,
+	closeBlobLink,
+	closeSyncLink,
+	openBlobLink,
+	openSyncLink,
+	sendBlobFrame,
+	sendSyncFrame,
+} from "./desktop-link";
 import { keepEventPageAlive, releaseEventPage } from "./event-page-keepalive";
 import { sendToOffscreen, setInProcessSyncBridge, useOffscreenDoc } from "./offscreen-client";
 import { extensionOnly, type MessageEnvelope, on } from "./router";
@@ -317,6 +327,14 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 	// Hold the desktop link open for as long as sync runs, so the app's pushed frames have
 	// somewhere to arrive. Failure is silent and expected: most browsers have no desktop app
 	// paired, and the ones that do may not have it running.
+	openBlobLink(
+		(stream, frame) => {
+			void sendToOffscreen({ type: "LINK_BLOB_FRAME", payload: { stream, frame } }).catch(() => {});
+		},
+		() => {
+			void sendToOffscreen({ type: "LINK_BLOB_POKE" }).catch(() => {});
+		},
+	);
 	void openSyncLink((frame) => {
 		void sendToOffscreen({ type: "LINK_SYNC_FRAME", payload: { frame } }).catch(() => {});
 	}).catch(() => {});
@@ -331,6 +349,7 @@ export async function stopSync({
 	const stopEpoch = ++syncEpoch;
 	syncRunning = false;
 	syncVaultId = null;
+	closeBlobLink();
 	// The pipe must not outlive sync: it exists to carry sync, and holding it open would keep a
 	// native host process alive for nothing.
 	void closeSyncLink().catch(() => {});
@@ -572,4 +591,28 @@ setInProcessSyncBridge({
 	pushRemotePayload: (vaultId, payloadJson) => syncApplyRemote(vaultId, payloadJson).then(() => {}),
 	fetchLocalRoster: syncLocalRoster,
 	pushRemoteRoster: syncApplyRoster,
+	blobArrived,
+	linkSend: sendSyncFrame,
+	linkBlobSend: sendBlobFrame,
+	linkBlobUp: async () => blobLinkUp(),
 });
+
+// The attachment rows ask why a file hasn't arrived; the file session in the host knows.
+on(
+	"BLOB_STATUS",
+	extensionOnly(async (message) =>
+		sendToOffscreen({
+			type: "BLOB_STATUS",
+			payload: BlobStatusMsgSchema.parse({ ...message.payload, vaultId: message.vaultId }),
+		}),
+	),
+);
+
+// Chrome: the offscreen host reports a received attachment here.
+on(
+	"BLOB_ARRIVED",
+	extensionOnly(async () => {
+		blobArrived();
+		return { ok: true };
+	}),
+);

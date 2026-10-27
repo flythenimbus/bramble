@@ -11,11 +11,13 @@
 //
 // Archived entries are exported alongside live ones with an `Archived` String field. The
 // natural KeePass home for them would be the recycle-bin group, but this writer emits a
-// flat entry list (`save_kdbx4` takes entries, not groups), and an archived entry is not
+// flat entry list (the KDBX writer takes entries, not groups), and an archived entry is not
 // deleted anyway. So the state rides as a field, on the same terms as the type label.
 
-import type { KdbxSaveEntry } from "../adapters/crypto";
+import type { KdbxSaveEntry, KdbxSaveFile } from "../adapters/crypto";
 import type { EntryData } from "../hooks/useVault";
+import type { FileRecord } from "../sync";
+import type { FileMeta } from "../vault/file-mutations";
 
 type Pair = { key: string; value: string; protected: boolean };
 
@@ -99,4 +101,43 @@ function toFields(e: EntryData): Pair[] {
 /** Map decrypted vault entries to the String pairs the KDBX writer expects. */
 export function toKdbxEntries(entries: readonly EntryData[]): KdbxSaveEntry[] {
 	return entries.map((e) => ({ strings: toFields(e) }));
+}
+
+/**
+ * A whole vault's KeePass export: its entries, and every attachment on the entry it belongs to.
+ * One whose entry is gone (deleted on another device before the file's record caught up) goes
+ * on one extra entry titled `looseTitle`, rather than not at all.
+ */
+export async function toKdbxExport(
+	entries: readonly (EntryData & { id: string })[],
+	files: readonly FileRecord[],
+	looseTitle: string,
+	describe: (record: FileRecord) => Promise<FileMeta>,
+): Promise<{ entries: KdbxSaveEntry[]; files: KdbxSaveFile[] }> {
+	const out = toKdbxEntries(entries);
+	const at = new Map(entries.map((e, i) => [e.id, i]));
+	let loose: number | undefined;
+	const taken = new Map<number, Set<string>>();
+	const placed: KdbxSaveFile[] = [];
+	for (const record of files) {
+		let entry = record.entryId === undefined ? undefined : at.get(record.entryId);
+		if (entry === undefined) {
+			loose ??= out.push({ strings: [{ key: "Title", value: looseTitle, protected: false }] }) - 1;
+			entry = loose;
+		}
+		const names = taken.get(entry) ?? new Set<string>();
+		taken.set(entry, names);
+		placed.push({ entry, record, name: uniqueName((await describe(record)).name, names) });
+	}
+	return { entries: out, files: placed };
+}
+
+/** `name`, or `name (2).ext` and on, so no two attachments on one entry share a name. */
+function uniqueName(name: string, taken: Set<string>): string {
+	let candidate = name;
+	const dot = name.lastIndexOf(".");
+	const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+	for (let n = 2; taken.has(candidate); n++) candidate = `${stem} (${n})${ext}`;
+	taken.add(candidate);
+	return candidate;
 }

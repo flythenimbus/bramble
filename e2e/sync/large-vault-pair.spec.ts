@@ -1,12 +1,20 @@
 import type { Page } from "@playwright/test";
 import { popupUrl } from "../extension/helpers";
-import { createVault, expect, gotoSync, PW, RELAY_URL, test } from "./fixtures";
+import {
+	createVault,
+	enterCode,
+	expect,
+	gotoSync,
+	invite,
+	PW,
+	test,
+	useLocalRelay,
+	withoutWebRTC,
+} from "./fixtures";
 
 // A bundle spanning many Noise frames, over a real transport, torn down straight after the send.
 // Neither the unit tests (in-memory channels model framing, not teardown) nor pair-and-sync (a
 // two-login vault is single-frame) can reach that. See docs/sec-audit-ghsa-x4f5.md.
-
-const LOCAL_RELAY_HOST = "localhost:7400";
 
 // Comfortably past CHUNK_BYTES once encrypted, so a barely-multi-frame payload can't go green.
 const ENTRY_COUNT = 400;
@@ -71,11 +79,7 @@ test("a multi-frame vault survives the transfer and the teardown that follows it
 	// Force the relay data path (the mesh needs BOTH sides to advertise a data channel). Two
 	// reasons: it is what hardened Firefox and hard NATs actually get, and over loopback WebRTC the
 	// SCTP queue drains as fast as sendSecure fills it, so the truncation never reproduces.
-	await mobile.page.addInitScript(() => {
-		delete (window as unknown as Record<string, unknown>).RTCPeerConnection;
-	});
-	await mobile.page.reload({ waitUntil: "domcontentloaded" });
-	await mobile.page.locator("#root").waitFor();
+	await withoutWebRTC(mobile.page);
 
 	// --- inviter: a vault whose bundle cannot fit in one frame ---
 	await createVault(ext.page);
@@ -90,33 +94,14 @@ test("a multi-frame vault survives the transfer and the teardown that follows it
 	await ext.page.getByLabel(/Search vault/i).fill("");
 
 	await gotoSync(ext.page);
-	await ext.page.getByRole("button", { name: /Advanced/i }).click();
-	await ext.page.getByLabel(/Nostr relay URL/i).fill(RELAY_URL);
-	await ext.page.getByLabel(/TURN \/ ICE servers URL/i).fill("");
+	await useLocalRelay(ext.page);
 
-	await ext.page
-		.getByRole("button", { name: /^Add a device$/i })
-		.last()
-		.click();
-	await ext.page.locator('input[type="password"]').first().fill(PW);
-	await ext.page.getByRole("button", { name: "Continue", exact: true }).click();
-
-	const codeField = ext.page.locator("input[readonly]");
-	await expect(codeField).toBeVisible();
-	const code = await codeField.inputValue();
-	const decoded = JSON.parse(
-		Buffer.from(code.replace("bramble-pair-1.", ""), "base64").toString("utf8"),
-	) as { relay: string };
-	expect(decoded.relay).toContain(LOCAL_RELAY_HOST);
+	const code = await invite(ext.page);
 
 	// --- joiner ---
 	await mobile.page.getByRole("button", { name: /Create your vault/i }).click();
 	await mobile.page.getByRole("button", { name: /Join a device/i }).click();
-	const paste = mobile.page.getByRole("button", { name: /Paste code instead/i });
-	if (await paste.isVisible().catch(() => false)) await paste.click();
-	await mobile.page.getByPlaceholder(/Paste the code from your other device/i).fill(code);
-	await mobile.page.getByLabel(/Master password/i).fill(PW);
-	await mobile.page.getByRole("button", { name: /Join vault/i }).click();
+	await enterCode(mobile.page, code);
 
 	// --- approve, comparing the digits as a user would ---
 	const joinerSas = mobile.page.locator(".font-mono.tabular-nums");

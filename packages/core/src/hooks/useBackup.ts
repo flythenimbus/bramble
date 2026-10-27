@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createTarget, runBackup, sha256Hex, signingTransport } from "../backup";
+import { TRANSFER_INTERRUPTED } from "../adapters/http";
+import { createTarget, runBackup, signingTransport } from "../backup";
+import { planBackup } from "../backup/archive";
 import {
 	applyBackupOutcomes,
 	type BackupFrequency,
@@ -62,7 +64,7 @@ function originOf(t: {
  * reaches any provider via host permissions. See docs/cloud-storage-backups.md.
  */
 export function useBackup() {
-	const { storage, crypto, shell, backupCreds, http, backupActivity } = usePlatform();
+	const { storage, crypto, shell, backupCreds, http, backupActivity, files } = usePlatform();
 	// Targets, credentials and snapshots all belong to the vault the user is currently in.
 	const { activeId, vaults, ready } = useVaultRegistry();
 	const vaultId = activeId ?? vaults[0]?.id;
@@ -301,8 +303,27 @@ export function useBackup() {
 			// This vault's own targets: read its blob and place snapshots in its own folder,
 			// matching where scheduled backups put this vault.
 			const blob = await storage.readVaultBlob(vaultId);
+			// Packed exactly as the scheduler packs it, and fingerprinted the same way. Storing the
+			// uploaded body's hash here instead would never match what the scheduler compares, so
+			// every "Back up now" of a vault with attachments would trigger a redundant rerun.
+			const plan = await planBackup({
+				vault: blob,
+				blobs: files && vaultId ? files.forVault(vaultId).blobs : null,
+				decryptWithVek: (iv, ct) => crypto.decryptWithVek(iv, ct),
+			});
+			// A vault that cannot be backed up whole is not backed up at all: each target says what
+			// it is waiting for, and nothing partial goes up in its place.
+			if (plan.blocked) {
+				const waiting = new Map(toRun.map((t) => [t.id, { blocked: plan.blocked }]));
+				const latest = vaultId
+					? ((await storage.getMeta<BackupTargetConfig[]>(backupTargetsKeyFor(vaultId))) ?? list)
+					: list;
+				await persist(applyBackupOutcomes(latest, waiting, Date.now()));
+				return;
+			}
+			const body = await plan.body();
 			// Carried by a failed outcome too, so an interrupted repeat of a finished backup is not flagged.
-			const blobHash = await sha256Hex(blob);
+			const blobHash = plan.fingerprint;
 			setRunningIds(new Set(toRun.map((t) => t.id)));
 			const results = await Promise.all(
 				toRun.map(async (t) => {
@@ -325,7 +346,10 @@ export function useBackup() {
 									await crypto.decryptWithVek(creds.iv, creds.ciphertext),
 								) as BackupSecrets;
 							} catch {
-								throw new Error(FOREIGN_CREDS_ERROR);
+								// Locked meanwhile (the app was left, and auto-lock took the key): the run was
+								// cut off rather than refused, so it is interrupted and goes again next time.
+								const locked = await crypto.isLocked?.().catch(() => false);
+								throw new Error(locked ? TRANSFER_INTERRUPTED : FOREIGN_CREDS_ERROR);
 							}
 						}
 						// Which transport, if any, and it turns on two separate questions: can this
@@ -344,14 +368,15 @@ export function useBackup() {
 								(http ? signingTransport(providerCfg, http) : undefined),
 						);
 						const prefix = targetPrefixFor(t, vaultId ?? "", isDefault);
-						const r = await runBackup(bt, blob, {
+						await runBackup(bt, body, {
+							fingerprint: plan.fingerprint,
 							prefix,
 							keep: t.keep,
 							vaultId: keyVaultIdFor(t, vaultId ?? ""),
 						});
 						return {
 							id: t.id,
-							hash: r.hash as string | undefined,
+							hash: blobHash as string | undefined,
 							error: undefined as string | undefined,
 						};
 					} catch (e) {
@@ -370,7 +395,7 @@ export function useBackup() {
 			await persist(applyBackupOutcomes(latest, byId, Date.now()));
 			setRunningIds(new Set());
 		},
-		[targets, storage, crypto, persist, vaultId, isDefault, backupCreds, http],
+		[targets, storage, crypto, persist, vaultId, isDefault, backupCreds, http, files],
 	);
 
 	// The folder this vault's snapshots actually land in for a target, so the UI can show a

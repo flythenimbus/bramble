@@ -146,7 +146,7 @@ describe("request through an injected transport", () => {
 		expect(req.method).toBe("POST");
 		expect(req.url).toBe("https://p.example/x");
 		expect(req.headers).toEqual({ Authorization: "Bearer k" });
-		expect(JSON.parse(new TextDecoder().decode(req.body))).toEqual({ note: "hi" });
+		expect(JSON.parse(new TextDecoder().decode(req.body as Uint8Array))).toEqual({ note: "hi" });
 	});
 
 	// `fetch` reports a refused redirect as an opaque response with status 0; a native transport

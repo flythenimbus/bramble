@@ -13,6 +13,10 @@ const h = vi.hoisted(() => ({
 	blobWrites: [] as { vaultId: string | undefined }[],
 	rosterOpts: null as Record<string, (...a: never[]) => unknown> | null,
 	sessionStops: 0,
+	/** The file session's options, and what was done to it. */
+	blobStarts: [] as Record<string, unknown>[],
+	blobStops: 0,
+	blobPokes: 0,
 	stateListener: null as ((locked: boolean) => void) | null,
 	// Swapped per test to drive what a "merge" does.
 	applyRemote: async (_port: unknown, _payload: unknown, _opts?: unknown): Promise<void> => {},
@@ -55,6 +59,26 @@ vi.mock("@core/sync/transport/roster-sync", () => ({
 			},
 		};
 	},
+}));
+
+vi.mock("@core/sync/transport/blob-sync", () => ({
+	startBlobSync: async (opts: Record<string, unknown>) => {
+		h.blobStarts.push(opts);
+		return {
+			stop: () => {
+				h.blobStops++;
+			},
+			poke: () => {
+				h.blobPokes++;
+			},
+		};
+	},
+	wantedFromPayload: () => [],
+}));
+
+// Which store the file session is handed is the assertion, so each vault's is just its id.
+vi.mock("../adapters/files", () => ({
+	mobileFiles: { forVault: (vaultId: string) => ({ blobs: { vaultId } }) },
 }));
 
 vi.mock("../adapters/storage", () => ({
@@ -147,6 +171,9 @@ beforeEach(() => {
 	h.blobWrites.length = 0;
 	h.rosterOpts = null;
 	h.sessionStops = 0;
+	h.blobStarts.length = 0;
+	h.blobStops = 0;
+	h.blobPokes = 0;
 	h.stateListener = null;
 	h.applyRemote = async () => {};
 	vi.stubGlobal("crypto", { randomUUID: () => "id", getRandomValues: (a: Uint8Array) => a });
@@ -210,6 +237,35 @@ describe("session vault binding", () => {
 		// An id-less write falls back to registry[0] in the storage adapter, which is the other
 		// half of the bug; the pinned store must always pass one explicitly.
 		expect(h.blobWrites.every((w) => w.vaultId !== undefined)).toBe(true);
+	});
+});
+
+describe("the file session", () => {
+	it("holds the session's own vault's files, over direct connections, and stops with sync", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A, VAULT_B));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadManager();
+		await startSession(mod);
+		await vi.waitFor(() => expect(h.blobStarts).toHaveLength(1));
+
+		expect(h.blobStarts[0]?.blobs).toEqual({ vaultId: VAULT_A });
+		expect(h.blobStarts[0]?.localSources).toBeUndefined();
+
+		await mod.retargetActiveVault(VAULT_B);
+		expect(h.blobStops).toBe(1);
+	});
+
+	it("looks again for attachments after every merge", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadManager();
+		await startSession(mod);
+		await vi.waitFor(() => expect(h.blobStarts).toHaveLength(1));
+
+		await opts().pushRemotePayload(PAYLOAD);
+		expect(h.blobPokes).toBe(1);
 	});
 });
 

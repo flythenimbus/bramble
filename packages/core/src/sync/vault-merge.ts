@@ -13,8 +13,15 @@ import {
 	type Versioned,
 	writerOf,
 } from "./causal";
-import type { EntriesPayload, SyncedSettings, Tombstone } from "./entries-payload";
-import { compareHlc } from "./hlc";
+import type {
+	EntriesPayload,
+	FileManifest,
+	FileRecord,
+	SyncedSettings,
+	Tombstone,
+} from "./entries-payload";
+import { compareHlc, type Hlc } from "./hlc";
+import { liveRecords, mergeReplicas, type ReplicaState, replicaFrom } from "./merge";
 
 /** What a payload says about one entry beyond its displayed version. */
 export interface EntryConflict {
@@ -22,6 +29,47 @@ export interface EntryConflict {
 	versions: number;
 	/** Deleted on another device concurrently with an edit that is still shown. */
 	deleted: boolean;
+}
+
+/** The file manifest as a replica. Absent lists are empty, never deletions: a client predating
+ * the manifest strips the keys and writes the payload back without them, so "the other side said
+ * nothing" has to mean exactly that, as it does for settings. */
+function filesToReplica(manifest: FileManifest): ReplicaState<FileRecord> {
+	return replicaFrom(
+		manifest.files ?? [],
+		(manifest.fileTombstones ?? []).map((t) => [t.id, t.hlc] as const),
+	);
+}
+
+/** One mark per file, at the latest stamp of any delete that took it. Marks are only added. */
+function mergeCascades(a: readonly Tombstone[], b: readonly Tombstone[]): Tombstone[] {
+	const latest = new Map<string, Hlc>();
+	for (const t of [...a, ...b]) {
+		const cur = latest.get(t.id);
+		if (!cur || compareHlc(t.hlc, cur) > 0) latest.set(t.id, t.hlc);
+	}
+	return [...latest].map(([id, hlc]) => ({ id, hlc }));
+}
+
+/**
+ * The attachments a vault shows: not detached, and not taken by a delete of their entry. A file
+ * whose entry is displayed shows whatever deleted it, so keeping a delete-conflicted entry brings
+ * its files back. The single implementation of "live" for files: GC, backups, blob sync and the
+ * UI all read it, so the rule is written once.
+ */
+export function shownFiles(
+	manifest: FileManifest,
+	shownEntries: ReadonlySet<string>,
+): FileRecord[] {
+	const taken = new Set((manifest.fileCascades ?? []).map((t) => t.id));
+	return liveRecords(filesToReplica(manifest)).filter(
+		(f) => f.entryId === undefined || shownEntries.has(f.entryId) || !taken.has(f.id),
+	);
+}
+
+/** `shownFiles` for a stored payload, whose displayed entries are its `entries`. */
+export function liveFiles(payload: EntriesPayload): FileRecord[] {
+	return shownFiles(payload, new Set(payload.entries.map((e) => e.id)));
 }
 
 /** Same-stamp copies are one version: keep the one that has a history, else the first seen. */
@@ -55,6 +103,11 @@ function mergeTombstones(
 	return floor ? { id: x.id, hlc, vv, floor } : { id: x.id, hlc, vv };
 }
 
+/** The highest-stamp version, alone, or none. */
+function newest(versions: readonly EncryptedEntry[]): EncryptedEntry[] {
+	return [...collapse(versions)].sort((p, q) => compareHlc(q.hlc, p.hlc)).slice(0, 1);
+}
+
 /** The surviving live versions of one entry, highest stamp first. */
 function survivors(live: readonly EncryptedEntry[], tomb: Tombstone | undefined): EncryptedEntry[] {
 	const kept: EncryptedEntry[] = [];
@@ -71,8 +124,9 @@ function survivors(live: readonly EncryptedEntry[], tomb: Tombstone | undefined)
  * Merge two entries payloads into one. Commutative, associative, and idempotent over histories
  * built by the rules in docs/sync-conflicts.md, so pairwise gossip across devices converges.
  * Per entry: the highest-stamp surviving version is displayed (`entries`), the other survivors
- * are kept sealed in `conflicts`, and deletes join into one tombstone kept forever. Envelopes are
- * carried verbatim.
+ * are kept sealed in `conflicts`, and deletes join into one tombstone kept forever. An entry
+ * holding a file that no delete of it marked survives the delete as a delete conflict. Envelopes
+ * are carried verbatim.
  */
 export function mergeEntriesPayload(a: EntriesPayload, b: EntriesPayload): EntriesPayload {
 	const order: string[] = [];
@@ -97,17 +151,44 @@ export function mergeEntriesPayload(a: EntriesPayload, b: EntriesPayload): Entri
 		if (merged) tombs.set(t.id, merged);
 	}
 
+	// The file manifest stays last-writer-wins per id: greatest HLC wins, a tombstone beats an
+	// equal stamp, and a record whose blob this device lacks still merges (the bytes are fetched
+	// separately, so the manifest never waits on them). A delete's marks only hide a file, so its
+	// record is kept for an entry that comes back.
+	const fileState = mergeReplicas(filesToReplica(a), filesToReplica(b));
+	const files = liveRecords(fileState);
+	const fileTombstones = [...fileState.tombstones].map(([id, hlc]) => ({ id, hlc }));
+	const fileCascades = mergeCascades(a.fileCascades ?? [], b.fileCascades ?? []);
+	const marked = new Set(fileCascades.map((t) => t.id));
+	// Entries holding a file no delete of them marked: attached where the delete hadn't reached.
+	const contested = new Set(
+		files.flatMap((f) => (f.entryId !== undefined && !marked.has(f.id) ? [f.entryId] : [])),
+	);
+
 	const entries: EncryptedEntry[] = [];
 	const conflicts: EncryptedEntry[] = [];
 	for (const id of order) {
-		const [shown, ...rest] = survivors(live.get(id) ?? [], tombs.get(id));
+		const versions = live.get(id) ?? [];
+		let kept = survivors(versions, tombs.get(id));
+		// A delete that didn't see one of the entry's files doesn't take it: the newest version
+		// stays shown as a delete conflict, as an edit the delete didn't see would.
+		if (kept.length === 0 && contested.has(id)) kept = newest(versions);
+		const [shown, ...rest] = kept;
 		if (shown) entries.push(shown);
 		conflicts.push(...rest);
 	}
 	const out: EntriesPayload = { entries, tombstones: [...tombs.values()] };
 	if (conflicts.length > 0) out.conflicts = conflicts;
 	const settings = mergeSyncedSettings(a.settings, b.settings);
-	return settings ? { ...out, settings } : out;
+	return {
+		...out,
+		...(settings ? { settings } : {}),
+		// Emitted only when non-empty, so a vault that has never held a file keeps the exact
+		// payload shape it has today rather than gaining empty arrays on its next write.
+		...(files.length > 0 ? { files } : {}),
+		...(fileTombstones.length > 0 ? { fileTombstones } : {}),
+		...(fileCascades.length > 0 ? { fileCascades } : {}),
+	};
 }
 
 /** The displayed version, its siblings and its tombstone, for building a write's history. */

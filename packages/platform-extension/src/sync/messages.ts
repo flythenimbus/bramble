@@ -85,6 +85,13 @@ export const ApplyRosterMsgSchema = z.object({ vaultId: z.string(), rosterJson: 
 /** offscreen -> background: which vault a pinned sync callback is for. */
 export const SyncVaultMsgSchema = z.object({ vaultId: z.string() });
 
+/** popup -> background -> offscreen (BLOB_STATUS): why these attachments of a vault haven't arrived.
+ * Answered by the file session only for the vault it serves, and null otherwise. */
+export const BlobStatusMsgSchema = z.object({
+	vaultId: z.string(),
+	hashes: z.array(z.string().regex(/^[0-9a-f]{64}$/)).max(256),
+});
+
 /** background -> offscreen: stop roster sync unless it serves this vault. Enrollment is untouched. */
 export const RosterStopMsgSchema = z.object({ keepVaultId: z.string().nullable() });
 

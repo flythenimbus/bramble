@@ -34,17 +34,26 @@ export interface VaultSyncPort {
 
 /** Every stamp the remote carries (winners, losers, siblings and histories), for clock witnessing. */
 function remoteStamps(remote: EntriesPayload): Hlc[] {
-	return [...remote.entries, ...(remote.conflicts ?? []), ...remote.tombstones].flatMap((v) => [
-		v.hlc,
-		...(v.floor ? [v.floor] : []),
-		...Object.values(v.vv ?? {}),
-	]);
+	return [
+		...[...remote.entries, ...(remote.conflicts ?? []), ...remote.tombstones].flatMap((v) => [
+			v.hlc,
+			...(v.floor ? [v.floor] : []),
+			...Object.values(v.vv ?? {}),
+		]),
+		...(remote.files ?? []).map((f) => f.hlc),
+		...(remote.fileTombstones ?? []).map((t) => t.hlc),
+		...(remote.fileCascades ?? []).map((t) => t.hlc),
+	];
 }
 
 export interface ApplyResult {
 	payload: EntriesPayload;
 	/** Whether the merge actually changed local state (false = remote was redundant). */
 	changed: boolean;
+}
+
+function stampMap(items: { id: string; hlc: Hlc }[]): Map<string, Hlc> {
+	return new Map(items.map((i) => [i.id, i.hlc]));
 }
 
 function stampMapsEqual(a: Map<string, Hlc>, b: Map<string, Hlc>): boolean {
@@ -72,19 +81,24 @@ function setsEqual(a: Set<string>, b: Set<string>): boolean {
 
 /**
  * True if both payloads hold the same entries, conflicts and tombstones (by id, stamp and causal
- * history) and the same settings.
+ * history), the same settings and the same files.
  *
  * Settings are part of this or they never propagate: the caller writes and re-broadcasts only
  * when a merge changed something, so a settings-only change judged equivalent would be dropped
  * on the floor and appear to sync only when it rode along with an entry edit. The same goes for
- * conflicts and for history gained under an unchanged stamp.
+ * conflicts, for history gained under an unchanged stamp, and for the file manifest: attaching a
+ * file touches no entry, so leaving it out would make an attachment propagate only when the user
+ * happened to edit an entry afterwards.
  */
 export function payloadsEquivalent(a: EntriesPayload, b: EntriesPayload): boolean {
 	return (
 		setsEqual(versionKeys(a.entries), versionKeys(b.entries)) &&
 		setsEqual(versionKeys(a.conflicts), versionKeys(b.conflicts)) &&
 		setsEqual(versionKeys(a.tombstones), versionKeys(b.tombstones)) &&
-		stampMapsEqual(settingsStamps(a.settings), settingsStamps(b.settings))
+		stampMapsEqual(settingsStamps(a.settings), settingsStamps(b.settings)) &&
+		stampMapsEqual(stampMap(a.files ?? []), stampMap(b.files ?? [])) &&
+		stampMapsEqual(stampMap(a.fileTombstones ?? []), stampMap(b.fileTombstones ?? [])) &&
+		stampMapsEqual(stampMap(a.fileCascades ?? []), stampMap(b.fileCascades ?? []))
 	);
 }
 

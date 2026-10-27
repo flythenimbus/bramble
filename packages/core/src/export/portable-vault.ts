@@ -101,6 +101,13 @@ export function readPortableVaultFile(bytes: Uint8Array): PortableVaultBlob | nu
 }
 
 /**
+ * Thrown for a full vault backup handed to the importer. A code rather than a sentence: this is
+ * a .ts file, which the Lingui transform does not cover, so the Import screen supplies the copy.
+ * The message still reads as English on its own, for logs and for any caller that shows it raw.
+ */
+export const FULL_BACKUP_ERROR = "That's a full vault backup. Restore it instead.";
+
+/**
  * The entries in a .bramble, or null for a wrong password. Accepts a full vault backup as
  * well as a portable export: a backup's payload is an `EntriesPayload` of ENCRYPTED entries,
  * which this cannot read, so it reports that distinctly rather than pretending it is empty.
@@ -122,10 +129,6 @@ export async function openPortableVaultFile(
 	if (!Array.isArray(entries)) throw new Error("That .bramble file has no entries in it.");
 	// A full-vault backup's entries are `{ id, ciphertext, ... }` records still sealed under
 	// their own DEKs. Importing those would silently produce garbage entries.
-	if (entries.some((e) => "ciphertext" in e)) {
-		throw new Error(
-			"That's a full vault backup. Restore it from Settings instead, which replaces this device's vault.",
-		);
-	}
+	if (entries.some((e) => "ciphertext" in e)) throw new Error(FULL_BACKUP_ERROR);
 	return entries as EntryData[];
 }

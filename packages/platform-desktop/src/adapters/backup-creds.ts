@@ -8,9 +8,11 @@
 // See @core/adapters/backup-creds and docs/cloud-storage-backups.md.
 
 import type { BackupCredentialsAdapter } from "@core/adapters/backup-creds";
+import type { HttpBodySource } from "@core/adapters/http";
 import type { BackupSecrets, BackupTargetConfig } from "@core/backup/config";
 import type { BackupHttpResponse } from "@core/backup/types";
 import { invoke } from "@tauri-apps/api/core";
+import { streamInto } from "./stream";
 
 /** Which stored secret the shell should apply, decided by the provider kind. */
 function authFor(target: BackupTargetConfig): { kind: "s3"; region: string } | { kind: "basic" } {
@@ -32,6 +34,14 @@ function inlineAuthFor(target: BackupTargetConfig, secrets: BackupSecrets) {
 	return { kind: "basicInline" as const, username: s.username, password: s.password };
 }
 
+/** JSON, UTF-8, then base64, so a header can carry a URL or header value that is not ASCII. */
+function base64Json(value: unknown): string {
+	const bytes = new TextEncoder().encode(JSON.stringify(value));
+	let binary = "";
+	for (const b of bytes) binary += String.fromCharCode(b);
+	return btoa(binary);
+}
+
 /** One authenticated request through the shell. `auth` decides where the secret comes from. */
 async function send(
 	vaultId: string,
@@ -42,20 +52,34 @@ async function send(
 		url,
 		headers,
 		body,
-	}: { method: string; url: string; headers?: Record<string, string>; body?: Uint8Array },
+	}: {
+		method: string;
+		url: string;
+		headers?: Record<string, string>;
+		body?: Uint8Array | HttpBodySource;
+	},
 ): Promise<BackupHttpResponse> {
-	// Bytes ride as number arrays, as vault blobs already do over this IPC (see adapters/storage):
-	// Tauri's channel is JSON, and a snapshot is small enough that the overhead is not what makes
-	// a backup slow.
-	const res = await invoke<{ status: number; body: number[] }>("backup_send", {
-		vaultId,
-		targetId,
-		auth,
-		method,
-		url,
-		headers: headers ?? {},
-		body: body ? Array.from(body) : null,
-	});
+	// A body goes as raw IPC bytes, with the rest of the request base64'd into one header (a raw
+	// body leaves no JSON arguments). As a number array, a backup archive of up to
+	// MAX_BACKUP_BYTES would be several hundred megabytes of JSON in this webview. Bodiless
+	// requests (list, delete) keep the plain JSON path.
+	const params = { vaultId, targetId, auth, method, url, headers: headers ?? {} };
+	// Too large for one IPC call, and to a provider that cannot take it in parts (WebDAV): the
+	// shell opens the request with the secret applied, and the body follows in chunks.
+	if (body && !(body instanceof Uint8Array)) {
+		const id = await invoke<number>("backup_stream_open", { ...params, size: body.size });
+		const res = await streamInto<{ status: number; body: number[] }>(id, body);
+		return {
+			status: res.status,
+			ok: res.status >= 200 && res.status < 300,
+			body: Uint8Array.from(res.body),
+		};
+	}
+	const res = body
+		? await invoke<{ status: number; body: number[] }>("backup_send_raw", body, {
+				headers: { "x-bramble-request": base64Json(params) },
+			})
+		: await invoke<{ status: number; body: number[] }>("backup_send", { ...params, body: null });
 	return {
 		status: res.status,
 		ok: res.status >= 200 && res.status < 300,

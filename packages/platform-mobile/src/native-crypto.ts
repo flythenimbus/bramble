@@ -5,6 +5,7 @@
 // Byte-array args (magicVersion, KDBX files) cross the bridge as base64.
 
 import { registerPlugin } from "@capacitor/core";
+import { Directory, Filesystem } from "@capacitor/filesystem";
 import type {
 	EncryptedPayload,
 	PasskeyAssertion,
@@ -15,10 +16,72 @@ import type {
 } from "@core/adapters/crypto";
 import { bytesToBase64 } from "@core/util/bytes";
 import type { PortableVaultBlob, VaultCrypto } from "@core/wasm";
+import { pathFromUri } from "./adapters/paths";
 
-type KdbxEntry = { strings: { key: string; value: string; protected: boolean }[] };
+type KdbxEntry = {
+	strings: { key: string; value: string; protected: boolean }[];
+	binaries: { name: string; index: number }[];
+};
+
+/**
+ * A fresh cache folder for one KeePass import's attachments or one export: among the decrypted
+ * copies, which the lock sweeps (see file-presenter.ts), so nothing outlives a session that ends
+ * partway. Gives its absolute path, and the call that deletes it.
+ */
+export async function newKdbxFolder(): Promise<{ path: string; release: () => Promise<void> }> {
+	const folder = `open/kdbx-${globalThis.crypto.randomUUID()}`;
+	await Filesystem.mkdir({ path: folder, directory: Directory.Cache, recursive: true });
+	const { uri } = await Filesystem.getUri({ path: folder, directory: Directory.Cache });
+	return {
+		path: pathFromUri(uri),
+		release: () =>
+			Filesystem.rmdir({ path: folder, directory: Directory.Cache, recursive: true }).then(
+				() => {},
+				() => {},
+			),
+	};
+}
+
+interface SealedFileBlobJs {
+	hash: string;
+	size: number;
+	noncePrefix: string;
+	wrappedFek: string;
+	fekIv: string;
+	metaBlob: string;
+	metaIv: string;
+}
 
 interface NativeCryptoPlugin {
+	// File attachments: PATHS cross this bridge, never file bytes. See docs/file-attachments.md.
+	sealFile(o: { srcPath: string; dstPath: string; metaJson: string }): Promise<SealedFileBlobJs>;
+	resealFileMeta(o: {
+		wrappedFekB64: string;
+		fekIvB64: string;
+		metaJson: string;
+	}): Promise<{ iv: string; ciphertext: string }>;
+	openFileMeta(o: {
+		wrappedFekB64: string;
+		fekIvB64: string;
+		metaBlobB64: string;
+		metaIvB64: string;
+	}): Promise<{ value: string }>;
+	openFileToPath(o: {
+		wrappedFekB64: string;
+		fekIvB64: string;
+		noncePrefixB64: string;
+		srcPath: string;
+		dstPath: string;
+	}): Promise<{ value: number }>;
+	openFileChunk(o: {
+		wrappedFekB64: string;
+		fekIvB64: string;
+		noncePrefixB64: string;
+		srcPath: string;
+		index: number;
+	}): Promise<{ value: string }>;
+	/** A byte range of a file, base64: Capacitor's Filesystem only reads whole files. */
+	readFileRange(o: { path: string; offset: number; length: number }): Promise<{ value: string }>;
 	isLocked(): Promise<{ value: boolean }>;
 	lock(): Promise<void>;
 	generateVek(): Promise<{ value: string }>;
@@ -104,7 +167,16 @@ interface NativeCryptoPlugin {
 		fileB64: string;
 		password: string;
 		keyfileB64?: string;
-	}): Promise<{ entries: KdbxEntry[] }>;
+		/** Absolute folder the attachments are written into, one file each. */
+		dir: string;
+	}): Promise<{ entries: KdbxEntry[]; attachments: { path: string; size: number }[] }>;
+	/** Writes the database to `outPath`, each attachment opened natively from its blob path. */
+	saveKdbx4(o: {
+		entriesJson: string;
+		password: string;
+		filesJson: string;
+		outPath: string;
+	}): Promise<{ value: number }>;
 
 	// --- sync transport: Noise handshake (KK + XXpsk3) + Nostr (BIP340) ---
 	handshakeGenerateKeypair(): Promise<{ privateKey: string; publicKey: string }>;
@@ -270,15 +342,53 @@ const nativeModule: VaultCrypto = {
 		Native.passkeyGetAssertion({ rpId, privateKeyB64, alg, clientDataHashB64, userVerified }),
 	passkey_import_pkcs8: (pkcs8B64) => Native.passkeyImportPkcs8({ pkcs8B64 }),
 
-	open_kdbx4: async (file, password, keyfile) =>
-		(
-			await Native.openKdbx4({
+	open_kdbx4: async (file, password, keyfile) => {
+		const folder = await newKdbxFolder();
+		try {
+			const opened = await Native.openKdbx4({
 				fileB64: bytesToBase64(file),
 				password,
 				keyfileB64: keyfile ? bytesToBase64(keyfile) : undefined,
-			})
-		).entries,
+				dir: folder.path,
+			});
+			return { ...opened, release: folder.release };
+		} catch (e) {
+			await folder.release();
+			throw e;
+		}
+	},
 };
+
+/** The file-attachment subset of the plugin, for the FileSealer. Paths cross here, not bytes. */
+export const nativeFileCrypto = {
+	sealFile: (o: { srcPath: string; dstPath: string; metaJson: string }) => Native.sealFile(o),
+	resealFileMeta: (o: { wrappedFekB64: string; fekIvB64: string; metaJson: string }) =>
+		Native.resealFileMeta(o),
+	openFileMeta: (o: {
+		wrappedFekB64: string;
+		fekIvB64: string;
+		metaBlobB64: string;
+		metaIvB64: string;
+	}) => Native.openFileMeta(o),
+	openFileToPath: (o: {
+		wrappedFekB64: string;
+		fekIvB64: string;
+		noncePrefixB64: string;
+		srcPath: string;
+		dstPath: string;
+	}) => Native.openFileToPath(o),
+	openFileChunk: (o: {
+		wrappedFekB64: string;
+		fekIvB64: string;
+		noncePrefixB64: string;
+		srcPath: string;
+		index: number;
+	}) => Native.openFileChunk(o),
+	readFileRange: (o: { path: string; offset: number; length: number }) => Native.readFileRange(o),
+	saveKdbx4: (o: { entriesJson: string; password: string; filesJson: string; outPath: string }) =>
+		Native.saveKdbx4(o),
+};
+export type NativeFileCrypto = typeof nativeFileCrypto;
 
 export function loadNativeCrypto(): Promise<VaultCrypto> {
 	return Promise.resolve(nativeModule);

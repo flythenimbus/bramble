@@ -8,7 +8,7 @@ export function deriveIceUrl(relayUrl: string): string {
 		if (u.protocol === "ws:") u.protocol = "http:";
 		else if (u.protocol === "wss:") u.protocol = "https:";
 		u.pathname = "/ice-servers";
-		u.search = "";
+		// The query stays: a private relay's token rides in it (nostr-relay/README.md).
 		u.hash = "";
 		return u.toString();
 	} catch {
@@ -16,11 +16,36 @@ export function deriveIceUrl(relayUrl: string): string {
 	}
 }
 
-/** Fetch ICE servers from the minting endpoint; [] on any failure (→ host-only). */
-export async function fetchIceServers(iceUrl: string): Promise<RTCIceServer[]> {
+/** Whether `iceUrl` is served by the relay at `relayUrl`, so it can check that relay's tickets. */
+export function sameHost(iceUrl: string, relayUrl: string): boolean {
+	try {
+		return new URL(iceUrl).origin === new URL(deriveIceUrl(relayUrl)).origin;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Fetch ICE servers from the minting endpoint; [] on any failure (→ host-only). A relay ticket goes
+ * in a text/plain body, which keeps the request simple: a preflight is one more thing an older relay
+ * would fail.
+ */
+export async function fetchIceServers(
+	iceUrl: string,
+	ticket?: string | null,
+): Promise<RTCIceServer[]> {
 	if (!iceUrl) return [];
 	try {
-		const res = await fetch(iceUrl, { method: "POST" });
+		const res = await fetch(
+			iceUrl,
+			ticket
+				? {
+						method: "POST",
+						headers: { "Content-Type": "text/plain" },
+						body: JSON.stringify({ ticket }),
+					}
+				: { method: "POST" },
+		);
 		if (!res.ok) return [];
 		return normalizeIceServers(await res.json());
 	} catch {

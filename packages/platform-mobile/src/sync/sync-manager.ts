@@ -23,12 +23,20 @@ import {
 	type SyncEvent,
 	type WireRecoverySlot,
 } from "@core/index";
+import { blobArrived } from "@core/sync/blob-arrivals";
+import { answerBlobStatus } from "@core/sync/blob-status";
 import { syncKeyFor } from "@core/sync/sync-keys";
+import {
+	type BlobSyncSession,
+	startBlobSync,
+	wantedFromPayload,
+} from "@core/sync/transport/blob-sync";
 import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
 import { startRosterSync } from "@core/sync/transport/roster-sync";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { mobileCrypto } from "../adapters/crypto";
+import { mobileFiles } from "../adapters/files";
 import { mobileStorage } from "../adapters/storage";
 import { notifyExternalChange, onVaultStateChange } from "../adapters/vault-session";
 import { nativeSyncCrypto, type SyncCrypto } from "../native-crypto";
@@ -366,8 +374,16 @@ function makeBlobStore(vaultId: string) {
 }
 
 let rosterSession: MeshSession | null = null;
+/** Attachment bytes beside entry sync, over WebRTC only (direct or TURN), never the signalling
+ * relay (see @core/sync/transport/blob-sync). Bound to the same vault as the session. */
+let blobSession: BlobSyncSession | null = null;
 /** The vault the live session syncs. Null when no session is running. */
 let sessionVaultId: string | null = null;
+
+// The attachment rows ask why a file hasn't arrived; only this vault's session can say.
+answerBlobStatus(async (vaultId, hashes) =>
+	blobSession && sessionVaultId === vaultId ? blobSession.status(hashes) : {},
+);
 /**
  * Bumped whenever the session is torn down or retargeted. A merge captures it on entry and refuses
  * to write if it has moved: without that, an apply that started before a vault switch could still
@@ -390,6 +406,8 @@ async function startRoster(): Promise<void> {
 	const iceUrl = (await mobileStorage.getMeta<string>(ICE_KEY)) ?? "";
 	const wasm = await loadSyncCrypto();
 	rosterSession?.stop();
+	blobSession?.stop();
+	blobSession = null;
 	// Everything below is pinned to THIS vaultId for the life of the session; a retarget stops the
 	// session and bumps the gen rather than letting the running one follow the active vault.
 	const blobStore = makeBlobStore(vaultId);
@@ -397,6 +415,10 @@ async function startRoster(): Promise<void> {
 	// Entry versions this session refused at merge; per session, so a transient state can't outlive it.
 	const rejected = new Set<string>();
 	sessionVaultId = vaultId;
+	const fetchLocalRoster = async () => {
+		const g = await mobileStorage.getMeta<GroupConfig>(groupMetaKey);
+		return g ? encodeRoster(g.roster) : "";
+	};
 	rosterSession = await startRosterSync({
 		relayUrl: relay,
 		iceUrl,
@@ -406,10 +428,7 @@ async function startRoster(): Promise<void> {
 		roster: group.roster,
 		wasm,
 		report,
-		fetchLocalRoster: async () => {
-			const g = await mobileStorage.getMeta<GroupConfig>(groupMetaKey);
-			return g ? encodeRoster(g.roster) : "";
-		},
+		fetchLocalRoster,
 		pushRemoteRoster: async (rosterJson) => {
 			const g = await mobileStorage.getMeta<GroupConfig>(groupMetaKey);
 			if (!g) return;
@@ -442,6 +461,8 @@ async function startRoster(): Promise<void> {
 					onChanged: notifyExternalChange, // refresh the in-app list with the peer's edits
 				});
 				await applyRemotePayload(port, decodeEntriesPayload(json), { rejected });
+				// The merge may name attachments this device lacks.
+				blobSession?.poke();
 				// Every reconcile (changed or no-op) means "we're up to date with a peer". Throttle to
 				// ~30s (peers rebroadcast every few seconds); persist + emit the live tick for the in-process
 				// Sync UI (onSyncEvent "synced").
@@ -457,6 +478,26 @@ async function startRoster(): Promise<void> {
 			await run;
 		},
 	});
+	if (gen !== sessionGen) return; // torn down while the session started
+	// Its own failure, reported: entry sync carries on without it.
+	try {
+		blobSession = await startBlobSync({
+			relayUrl: relay,
+			iceUrl,
+			groupKeyB64: group.groupKey,
+			devicePrivB64: privateKey,
+			devicePubB64: publicKey,
+			roster: group.roster,
+			wasm,
+			report,
+			fetchLocalRoster,
+			blobs: mobileFiles.forVault(vaultId).blobs,
+			wanted: async () => wantedFromPayload(await blobStore.readEntriesPayload()),
+			onReceived: blobArrived,
+		});
+	} catch (e) {
+		report(`file sync error: ${(e as Error).message}`);
+	}
 }
 
 async function maybeStartRosterSync(): Promise<void> {
@@ -471,6 +512,8 @@ async function maybeStartRosterSync(): Promise<void> {
 function stopRosterSync(): void {
 	rosterSession?.stop();
 	rosterSession = null;
+	blobSession?.stop();
+	blobSession = null;
 	sessionVaultId = null;
 	// Invalidate any merge still queued: it captured the old gen and must not write.
 	sessionGen++;

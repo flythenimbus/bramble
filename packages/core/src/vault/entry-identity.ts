@@ -112,53 +112,74 @@ export interface ImportSplit {
 	likelyDuplicates: EntryData[];
 	/** In `fresh` but sharing a site and username with a vault login under another password. */
 	passwordDiffers: number;
+	/** Each dropped duplicate's match: the vault entry's id, or the incoming entry kept in its place. */
+	sameAs: Map<EntryData, string | EntryData>;
+	/** Each held-back entry's look-alike in the vault, by id. */
+	resembles: Map<EntryData, string>;
 }
 
 /**
  * Split incoming entries against the vault. Exact copies, including repeats within the batch,
  * are dropped; the same credential in another manager's shape is held back for the caller to
- * offer; everything else is fresh.
+ * offer; everything else is fresh. `sameAs` and `resembles` say where anything riding on a
+ * dropped or held-back entry (a KeePass entry's attachments) should go instead.
  */
 export function splitAlreadyImported(
-	existing: readonly EntryData[],
+	existing: readonly (EntryData & { id?: string })[],
 	incoming: readonly EntryData[],
 ): ImportSplit {
-	const seen = new Set(existing.map(entryContentKey));
-	const byUser = new Map<string, Credential[]>();
-	const cards = new Set<string>();
+	const seen = new Map<string, string | EntryData>();
+	const byUser = new Map<string, { cred: Credential; id?: string }[]>();
+	const cards = new Map<string, string | undefined>();
 	for (const entry of existing) {
+		const key = entryContentKey(entry);
+		if (!seen.has(key)) seen.set(key, entry.id ?? entry);
 		const cred = credentialOf(entry);
 		if (cred && entry.type === "login") {
 			const user = fold(entry.username);
-			byUser.set(user, [...(byUser.get(user) ?? []), cred]);
+			byUser.set(user, [...(byUser.get(user) ?? []), { cred, id: entry.id }]);
 		}
 		const number = cardNumber(entry);
-		if (number.length >= 12) cards.add(number);
+		if (number.length >= 12 && !cards.has(number)) cards.set(number, entry.id);
 	}
 
-	const split: ImportSplit = { fresh: [], duplicates: 0, likelyDuplicates: [], passwordDiffers: 0 };
+	const split: ImportSplit = {
+		fresh: [],
+		duplicates: 0,
+		likelyDuplicates: [],
+		passwordDiffers: 0,
+		sameAs: new Map(),
+		resembles: new Map(),
+	};
+	const holdBack = (entry: EntryData, id: string | undefined) => {
+		split.likelyDuplicates.push(entry);
+		if (id !== undefined) split.resembles.set(entry, id);
+	};
 	for (const entry of incoming) {
 		const key = entryContentKey(entry);
-		if (seen.has(key)) {
+		const match = seen.get(key);
+		if (match !== undefined) {
 			split.duplicates++;
+			split.sameAs.set(entry, match);
 			continue;
 		}
-		seen.add(key);
+		seen.set(key, entry);
 
 		const cred = credentialOf(entry);
 		if (cred && entry.type === "login" && cred.password !== "") {
 			const sameSiteAndUser = (byUser.get(fold(entry.username)) ?? []).filter((o) =>
-				sameSite(o, cred),
+				sameSite(o.cred, cred),
 			);
-			if (sameSiteAndUser.some((o) => o.password === cred.password)) {
-				split.likelyDuplicates.push(entry);
+			const twin = sameSiteAndUser.find((o) => o.cred.password === cred.password);
+			if (twin) {
+				holdBack(entry, twin.id);
 				continue;
 			}
 			if (fold(entry.username) !== "" && sameSiteAndUser.length > 0) split.passwordDiffers++;
 		}
 		const number = cardNumber(entry);
 		if (number.length >= 12 && cards.has(number)) {
-			split.likelyDuplicates.push(entry);
+			holdBack(entry, cards.get(number));
 			continue;
 		}
 		split.fresh.push(entry);

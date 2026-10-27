@@ -1,5 +1,5 @@
-// Shared mounting for the useVault action tests. Only the provider nesting lives here: each
-// suite still builds its own platform stub, because what those stub out IS the test.
+// Shared mounting for the useVault and useBackup hook tests. Only the provider nesting lives here:
+// each suite still builds its own platform stub, because what those stub out IS the test.
 //
 // Not a `.test.` file, so vitest won't collect it.
 
@@ -7,6 +7,7 @@ import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { render } from "@testing-library/react";
 import { type Platform, PlatformProvider } from "../context/PlatformContext";
+import { useBackup } from "../hooks/useBackup";
 import { useVault, useVaultActions, VaultProvider } from "../hooks/useVault";
 import { useVaultRegistry, VaultRegistryProvider } from "../hooks/useVaultRegistry";
 
@@ -69,4 +70,22 @@ export function mountVault(platform: Platform): {
 			return state;
 		},
 	};
+}
+
+/** Render useBackup against `platform`. The ref holds its latest value, so a test reads what the
+ * hook returns after an `act()` rather than a stale first render. */
+export function mountBackup(platform: Platform): { current: ReturnType<typeof useBackup> | null } {
+	const seen: { current: ReturnType<typeof useBackup> | null } = { current: null };
+	function Probe() {
+		seen.current = useBackup();
+		return null;
+	}
+	render(
+		<PlatformProvider platform={platform}>
+			<VaultRegistryProvider>
+				<Probe />
+			</VaultRegistryProvider>
+		</PlatformProvider>,
+	);
+	return seen;
 }

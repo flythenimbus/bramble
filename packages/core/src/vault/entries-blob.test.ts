@@ -1,18 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { emptyEntriesPayload } from "../sync/entries-payload";
+import { fill, passwordSlot, testVaultBlob } from "../test/vault-fixtures";
 import { bytesToBase64 } from "../util/bytes";
-import {
-	encodeVaultBlob,
-	LEN_IV,
-	LEN_SALT,
-	LEN_SLOT_ID,
-	LEN_VERIFIER,
-	LEN_WRAP_IV,
-	LEN_WRAPPED_VEK,
-	type PasswordSlot,
-	SLOT_KIND_PASSWORD,
-	type VaultBlob,
-} from "../vault-format";
+import { encodeVaultBlob, LEN_IV } from "../vault-format";
 import { createEntriesBlobStore } from "./entries-blob";
 
 // Issue #27: this writer married a ciphertext sealed under the loaded VEK to a slot list read
@@ -20,25 +10,9 @@ import { createEntriesBlobStore } from "./entries-blob";
 // VEK serves every vault, that could leave a file whose slots wrap key A holding entries sealed
 // under key B — unopenable by the master password AND the recovery code, since both wrap A.
 
-const fill = (n: number, b: number) => Uint8Array.from({ length: n }, (_, i) => (b + i) & 0xff);
-const slot = (): PasswordSlot => ({
-	kind: SLOT_KIND_PASSWORD,
-	slotId: fill(LEN_SLOT_ID, 0x10),
-	salt: fill(LEN_SALT, 0x20),
-	verifier: fill(LEN_VERIFIER, 0x30),
-	wrapIv: fill(LEN_WRAP_IV, 0x40),
-	wrappedVek: fill(LEN_WRAPPED_VEK, 0x50),
-});
-
-const blobWith = (entriesCiphertext: Uint8Array): VaultBlob => ({
-	slots: [slot()],
-	entriesIv: fill(LEN_IV, 0x70),
-	entriesCiphertext,
-});
-
 function harness(opts: { existing: Uint8Array; verify?: boolean; canDecrypt?: boolean }) {
 	const calls: string[] = [];
-	const blob = blobWith(opts.existing);
+	const blob = testVaultBlob(opts.existing);
 	const crypto = {
 		encryptWithVek: vi.fn(async () => {
 			calls.push("encrypt");
@@ -134,7 +108,7 @@ describe("writeEntriesBlob output", () => {
 		// Round-trips through the real encoder, so the slots must have survived intact.
 		expect(written).toEqual(
 			encodeVaultBlob({
-				slots: [slot()],
+				slots: [passwordSlot()],
 				entriesIv: fill(LEN_IV, 0x80),
 				entriesCiphertext: fill(8, 0x90),
 			}),

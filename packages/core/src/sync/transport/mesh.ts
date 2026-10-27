@@ -41,8 +41,9 @@ export interface MeshOptions {
 	roomLabel: string;
 	signer: SignerPair;
 	iceServers?: RTCIceServer[];
-	/** Mint fresh ICE credentials before each new WebRTC connection, overriding iceServers. */
-	getIceServers?: () => Promise<RTCIceServer[]>;
+	/** Mint fresh ICE credentials before each new WebRTC connection, overriding iceServers. Gets
+	 * the relay socket's ticket, which its ICE endpoint asks for before handing out TURN. */
+	getIceServers?: (ticket: string | null) => Promise<RTCIceServer[]>;
 	onStatus: (status: string) => void;
 	onPeer: (session: PeerSession) => void;
 	/** Rotate the room id per epoch (subscribe current+previous) so no single permanent room id
@@ -51,6 +52,15 @@ export interface MeshOptions {
 	 *  stable per-session author pubkey on every event (see A2 in docs/sec-audit-7726.md). Off
 	 *  (stable room) for the brief enrollment room. */
 	epochRooms?: boolean;
+	/**
+	 * WebRTC data channels only, direct or relayed by TURN: a peer without WebRTC is reported and
+	 * left, never relay-forwarded through the signalling relay. For file bytes, which the relay's
+	 * small messages were never meant to carry. See docs/file-attachments.md (Transfer).
+	 */
+	webrtcOnly?: boolean;
+	/** A device's hello arrived ("found"), or its WebRTC connection opened or closed. Lets a
+	 * session tell "nobody is online" from "someone is, but can't be reached". */
+	onPeerState?: (remote: string, state: "found" | "open" | "closed") => void;
 }
 
 /** First retry delay after a dropped relay socket; doubles up to the cap. */
@@ -335,7 +345,11 @@ class Mesh {
 		}
 		if (payload.kind === "hello") return this.discover(ev.pubkey, payload.rtc === true);
 		if (payload.to && payload.to !== this.opts.signer.pubkeyHex) return;
-		if (payload.kind === "data") return this.routeData(ev.pubkey, payload as DataFrame);
+		if (payload.kind === "data") {
+			// Never accepted on a WebRTC-only mesh, so nothing can arrive through the relay either.
+			if (this.opts.webrtcOnly) return;
+			return this.routeData(ev.pubkey, payload as DataFrame);
+		}
 		await this.routeSignal(ev.pubkey, payload as PeerSignal);
 	}
 
@@ -344,6 +358,7 @@ class Mesh {
 	private async discover(remote: string, remoteRtc: boolean): Promise<void> {
 		if (this.known.has(remote)) return;
 		this.known.add(remote);
+		this.opts.onPeerState?.(remote, "found");
 		this.sendHello();
 		const initiator = this.opts.signer.pubkeyHex < remote;
 		// WebRTC only when both sides have it; otherwise relay-forward (Firefox, WebRTC
@@ -361,6 +376,8 @@ class Mesh {
 			} else {
 				this.opts.onStatus(`peer ${short(remote)} found — awaiting offer (webrtc)`);
 			}
+		} else if (this.opts.webrtcOnly) {
+			this.opts.onStatus(`peer ${short(remote)} found, but it needs a WebRTC connection`);
 		} else {
 			// No offer/answer: both sides open a relay channel now; role picks the Noise seat.
 			this.opts.onStatus(`peer ${short(remote)} found — relay transport`);
@@ -393,7 +410,7 @@ class Mesh {
 		const setup = (async () => {
 			if (this.stopped) return;
 			const iceServers = this.opts.getIceServers
-				? await this.opts.getIceServers()
+				? await this.opts.getIceServers((await this.client?.ticket()) ?? null)
 				: this.opts.iceServers;
 			if (this.stopped) return;
 			return this.openPeer(remote, initiator, iceServers);
@@ -410,9 +427,12 @@ class Mesh {
 			iceServers,
 			onSignal: (signal) => void this.publish({ to: remote, ...signal }),
 			onMessage: push,
-			onOpen: () =>
-				this.opts.onPeer({ remotePubkey: remote, initiator, channel, close: () => peer.close() }),
+			onOpen: () => {
+				this.opts.onPeerState?.(remote, "open");
+				this.opts.onPeer({ remotePubkey: remote, initiator, channel, close: () => peer.close() });
+			},
 			onClose: () => {
+				this.opts.onPeerState?.(remote, "closed");
 				this.peers.delete(remote);
 				// Evict from `known` so a peer that drops (suspend, network blip, reap) is re-discovered
 				// on its next hello instead of being ignored until the whole mesh restarts.

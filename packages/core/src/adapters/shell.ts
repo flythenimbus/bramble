@@ -1,6 +1,7 @@
 import type { PasskeyCredential } from "../hooks/useVault";
 import type { EntriesPayload, RosterEntry, RosterPayload, WireRecoverySlot } from "../sync";
 import type { SubdomainMatchMode } from "./autofill";
+import type { HttpBodySource } from "./http";
 
 /** Minimal login shape for current-tab matching: id + the fields the hostname policy reads. */
 interface CurrentTabLogin {
@@ -65,9 +66,14 @@ export interface ShellAdapter {
 	 * Save bytes to a file the user keeps, for the vault export / backup flow. Extension: a
 	 * download. Absent where there is no save mechanism, which hides the export affordance.
 	 * The bytes are the encrypted vault, so the file is safe at rest (still needs the master
-	 * password to open).
+	 * password to open). A backup arrives as a body source, read on demand, since a vault with
+	 * attachments has no size limit: written a chunk at a time, never held whole.
 	 */
-	exportBytes?(suggestedName: string, bytes: Uint8Array, mimeType: string): Promise<void>;
+	exportBytes?(
+		suggestedName: string,
+		bytes: Uint8Array | HttpBodySource,
+		mimeType: string,
+	): Promise<void>;
 	/**
 	 * Origin (protocol + hostname[:port]) of the active tab, to pre-populate "Website URL".
 	 * Null for chrome://, about:, non-http(s) pages, or when the tab can't be read.

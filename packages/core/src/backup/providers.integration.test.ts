@@ -13,10 +13,24 @@
 // green rather than failing for a reason that is not about the code.
 
 import { describe, expect, it } from "vitest";
-import { runBackup, selectForPruning } from "./orchestrator";
+import { runBackup as runBackupWith, selectForPruning } from "./orchestrator";
 import { createS3Target } from "./s3";
-import type { BackupTarget } from "./types";
+import { sha256Hex } from "./sigv4";
+import { type BackupTarget, PART_SIZE } from "./types";
 import { createWebdavTarget } from "./webdav";
+import { bytesSource } from "./zip";
+
+/** One backup of these bytes, fingerprinted the way a plain vault is. */
+async function runBackup(
+	target: BackupTarget,
+	bytes: Uint8Array,
+	opts: Omit<Parameters<typeof runBackupWith>[2], "fingerprint">,
+) {
+	return runBackupWith(target, bytesSource(bytes), {
+		fingerprint: await sha256Hex(bytes),
+		...opts,
+	});
+}
 
 // Read through globalThis rather than the `process` global: this file is typechecked by the
 // extension and mobile projects too, and neither has node types.
@@ -78,6 +92,24 @@ function contract(name: string, make: () => BackupTarget) {
 				await cleanup(target, prefix);
 			}
 		}, 60_000);
+
+		// Past one request's size, which is where every provider changes how it uploads: S3 in
+		// parts, WebDAV as one streamed body. What comes back has to be the same bytes either way.
+		it("uploads a backup bigger than one part and reads it back byte for byte", async () => {
+			const target = make();
+			const prefix = folder();
+			try {
+				const bytes = Uint8Array.from({ length: 2 * PART_SIZE + 12345 }, (_, i) => (i * 31) % 251);
+				const result = await runBackup(target, bytes, { prefix, keep: 30 });
+				const listed = await target.list(`${prefix}/`);
+				expect(listed.find((o) => o.key === result.key)?.size).toBe(bytes.byteLength);
+				const back = await target.get(result.key);
+				expect(back.length).toBe(bytes.length);
+				expect(await sha256Hex(back)).toBe(await sha256Hex(bytes));
+			} finally {
+				await cleanup(target, prefix);
+			}
+		}, 300_000);
 
 		it("prunes to keep-N against the server's own listing", async () => {
 			const target = make();

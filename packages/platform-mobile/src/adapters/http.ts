@@ -6,6 +6,7 @@ import {
 	TRANSFER_INTERRUPTED,
 } from "@core/adapters/http";
 import { base64ToBytes, bytesToBase64 } from "@core/util/bytes";
+import { dropSpooled, spoolToCache } from "./spool";
 
 // Outbound HTTP for hosts the WebView cannot reach. Its origin is `capacitor://localhost` on iOS
 // and `https://localhost` on Android, which an API that sends no CORS headers grants nothing, so
@@ -22,6 +23,13 @@ interface NativeHttpPlugin {
 		headers: Record<string, string>;
 		body?: string;
 	}): Promise<{ status: number; body: string }>;
+	/** `send` with the body streamed from a file, for one too large to cross the bridge. */
+	sendFile(options: {
+		method: string;
+		url: string;
+		headers: Record<string, string>;
+		path: string;
+	}): Promise<{ status: number; body: string }>;
 }
 
 const Native = registerPlugin<NativeHttpPlugin>("NativeHttp");
@@ -29,15 +37,24 @@ const Native = registerPlugin<NativeHttpPlugin>("NativeHttp");
 const nativeTransport: HttpTransport = {
 	async send({ method, url, headers, body }): Promise<HttpResponse> {
 		let res: { status: number; body: string };
+		// A body too large for one bridge call (a large WebDAV backup) is spooled to a file a chunk
+		// at a time and sent from there; the native side declares its full length.
+		const spooled =
+			body && !(body instanceof Uint8Array) ? `.upload-${globalThis.crypto.randomUUID()}` : null;
 		try {
-			res = await Native.send({
-				method,
-				url,
-				headers: headers ?? {},
-				// Omitted rather than sent empty, so the native side can tell "no body" from "a body
-				// that happens to be zero bytes" and pick the right thing for the method.
-				...(body ? { body: bytesToBase64(body) } : {}),
-			});
+			if (spooled && body && !(body instanceof Uint8Array)) {
+				const { path } = await spoolToCache(spooled, body);
+				res = await Native.sendFile({ method, url, headers: headers ?? {}, path });
+			} else {
+				res = await Native.send({
+					method,
+					url,
+					headers: headers ?? {},
+					// Omitted rather than sent empty, so the native side can tell "no body" from "a body
+					// that happens to be zero bytes" and pick the right thing for the method.
+					...(body instanceof Uint8Array ? { body: bytesToBase64(body) } : {}),
+				});
+			}
 		} catch (e) {
 			// Bramble was left and the OS stopped it: iOS's background time ran out, or Android's
 			// foreground service could not hold. Named as such, so a backup is retried rather than
@@ -46,6 +63,8 @@ const nativeTransport: HttpTransport = {
 				throw new Error(TRANSFER_INTERRUPTED);
 			}
 			throw e;
+		} finally {
+			if (spooled) await dropSpooled(spooled);
 		}
 		return {
 			status: res.status,

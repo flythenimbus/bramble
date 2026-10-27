@@ -53,7 +53,7 @@ describe("entryContentKey", () => {
 	it("treats a re-import carrying new tags/archived state as an entire duplicate", () => {
 		const already = [stored(login())];
 		const incoming = [login({ tags: ["work"] })];
-		expect(splitAlreadyImported(already, incoming)).toEqual({
+		expect(splitAlreadyImported(already, incoming)).toMatchObject({
 			fresh: [],
 			duplicates: 1,
 			likelyDuplicates: [],
@@ -145,6 +145,19 @@ describe("splitAlreadyImported", () => {
 		const { fresh, duplicates } = splitAlreadyImported(existing, [login({ password: "rotated" })]);
 		expect(duplicates).toBe(0);
 		expect(fresh).toHaveLength(1);
+	});
+
+	// What rides on a duplicate (a KeePass entry's attachments) has to follow it somewhere.
+	it("says what each duplicate matched: the vault's entry by id, or the copy kept", () => {
+		const existing = { ...login(), id: "e1" };
+		const twin = login({ name: "Twin", password: "other" });
+		const again = login({ name: "Twin", password: "other" });
+		const known = login();
+		const { fresh, sameAs } = splitAlreadyImported([existing], [twin, known, again]);
+		expect(fresh).toEqual([twin]);
+		expect(sameAs.get(known)).toBe("e1");
+		expect(sameAs.get(again)).toBe(twin);
+		expect(sameAs.has(twin)).toBe(false);
 	});
 });
 
@@ -264,5 +277,20 @@ describe("splitAlreadyImported: the same login from another manager", () => {
 		const result = splitAlreadyImported(existing, [login()]);
 		expect(result.duplicates).toBe(1);
 		expect(result.likelyDuplicates).toEqual([]);
+	});
+
+	// A held-back entry's attachments join its look-alike unless it is imported after all.
+	it("says which vault entry each held-back entry resembles", () => {
+		const github = { ...stored(login()), id: "l1" };
+		const visa = { ...stored(card("4111 1111 1111 1111")), id: "c1" };
+		const sameLogin = login({ notes: "other" });
+		const sameCard = { ...card("4111111111111111"), name: "Personal Visa" };
+		const { likelyDuplicates, resembles } = splitAlreadyImported(
+			[github, visa],
+			[sameLogin, sameCard],
+		);
+		expect(likelyDuplicates).toEqual([sameLogin, sameCard]);
+		expect(resembles.get(sameLogin)).toBe("l1");
+		expect(resembles.get(sameCard)).toBe("c1");
 	});
 });

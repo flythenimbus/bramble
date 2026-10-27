@@ -23,6 +23,7 @@ use std::collections::HashMap;
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
+use tauri::ipc::{InvokeBody, Request};
 use vault_crypto::sigv4::{sign_s3, S3Credentials, SignRequest};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
@@ -346,6 +347,7 @@ pub fn backup_creds_remove(vault_id: String, target_id: String) -> Res<()> {
 /// Main window only. A crate command is not gated by `capabilities/*.json` (those cover plugin
 /// permissions), so without this check the always-on-top spotlight panel could drive it too, and
 /// that window is deliberately the narrowest surface in the app.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn backup_send(
     window: tauri::Window,
@@ -357,8 +359,61 @@ pub async fn backup_send(
     headers: HashMap<String, String>,
     body: Option<Vec<u8>>,
 ) -> Res<HttpReply> {
+    let params = SendParams {
+        vault_id,
+        target_id,
+        auth,
+        method,
+        url,
+        headers,
+    };
+    send(&window, params, body.unwrap_or_default()).await
+}
+
+/// `backup_send`, with the body as raw IPC bytes instead of a JSON number array. A backup of a
+/// vault with attachments is one archive of up to MAX_BACKUP_BYTES, which as a number array is
+/// several hundred megabytes of JSON in the webview. A raw body leaves no JSON arguments, so the
+/// rest of the request rides in one header, base64 because a URL or header value may not be
+/// ASCII and a header must be.
+#[tauri::command]
+pub async fn backup_send_raw(window: tauri::Window, request: Request<'_>) -> Res<HttpReply> {
+    let InvokeBody::Raw(body) = request.body() else {
+        return Err("expected a raw request body".into());
+    };
+    let encoded = request
+        .headers()
+        .get("x-bramble-request")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("missing request parameters")?;
+    let json = B64
+        .decode(encoded)
+        .map_err(|e| format!("request parameters: {e}"))?;
+    let params: SendParams =
+        serde_json::from_slice(&json).map_err(|e| format!("request parameters: {e}"))?;
+    send(&window, params, body.clone()).await
+}
+
+/// Open an upload whose body the webview then writes in chunks (see `stream.rs`): a backup too
+/// large for one IPC message, to a provider with no way to upload in parts, which is WebDAV. The
+/// secret is applied exactly as for `backup_send`, origin pin included. S3 is refused: its body
+/// is signed, so it goes up in parts that each fit `backup_send_raw`.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn backup_stream_open(
+    window: tauri::Window,
+    vault_id: String,
+    target_id: String,
+    auth: AuthSpec,
+    method: String,
+    url: String,
+    headers: HashMap<String, String>,
+    size: u64,
+) -> Res<u32> {
     if window.label() != crate::lifetime::MAIN {
         return Err("backups run from the main window only".into());
+    }
+    if matches!(auth, AuthSpec::S3 { .. } | AuthSpec::S3Inline { .. }) {
+        return Err("S3 uploads go up in parts".into());
     }
     let stored = if auth.uses_stored_secret() {
         Some(
@@ -368,20 +423,55 @@ pub async fn backup_send(
     } else {
         None
     };
-    let body = body.unwrap_or_default();
     let (url, headers) = prepare(
         &auth,
         stored.as_deref(),
         &method,
         &url,
         headers.into_iter().collect(),
+        &[],
+        &amz_date(),
+    )?;
+    Ok(crate::stream::open_http(method, url, headers, size))
+}
+
+/// Everything about a backup request except its body.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SendParams {
+    vault_id: String,
+    target_id: String,
+    auth: AuthSpec,
+    method: String,
+    url: String,
+    headers: HashMap<String, String>,
+}
+
+async fn send(window: &tauri::Window, p: SendParams, body: Vec<u8>) -> Res<HttpReply> {
+    if window.label() != crate::lifetime::MAIN {
+        return Err("backups run from the main window only".into());
+    }
+    let stored = if p.auth.uses_stored_secret() {
+        Some(
+            secure_store::read(&account(&p.vault_id, &p.target_id))?
+                .ok_or("no stored credentials for this backup target")?,
+        )
+    } else {
+        None
+    };
+    let (url, headers) = prepare(
+        &p.auth,
+        stored.as_deref(),
+        &p.method,
+        &p.url,
+        p.headers.into_iter().collect(),
         &body,
         &amz_date(),
     )?;
 
-    // The upload timeout rather than the API one: this is a vault blob over someone's home
+    // The upload timeout rather than the API one: this is a vault backup over someone's home
     // connection, and it runs with nobody watching.
-    crate::net::send(&method, url, headers, body, crate::net::UPLOAD_TIMEOUT).await
+    crate::net::send(&p.method, url, headers, body, crate::net::UPLOAD_TIMEOUT).await
 }
 
 #[cfg(test)]

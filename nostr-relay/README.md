@@ -59,10 +59,12 @@ TURN_SECRET='replace-with-the-same-secret-configured-on-the-turn-server' \
   node nostr-relay/node/relay.mjs
 ```
 
-Each request gets a username of `<expiry>:bramble` and a credential computed
+Each request gets a username of `<expiry>:<tag>` and a credential computed
 as `base64(HMAC-SHA1(TURN_SECRET, username))`. The TURN server verifies the credential
-and expiry; the shared secret stays on the servers. `TURN_TTL_SECONDS`
-defaults to 86400 (24 hours), matching the hosted Worker, and accepts an integer
+and expiry; the shared secret stays on the servers. The tag is an HMAC of the
+requester's address under a salt the relay picks at startup, so your TURN
+server's logs can tell requesters apart without naming them. `TURN_TTL_SECONDS`
+defaults to 7200 (2 hours), matching the hosted Worker, and accepts an integer
 from 1 to 86400. `turns:` additionally requires TLS configured on the TURN server.
 Clients fetch credentials before each new WebRTC connection, including late
 pairing attempts and reconnects, so a running sync session can outlive this TTL.
@@ -71,9 +73,71 @@ For Docker, put `ICE_SERVERS`, `TURN_SECRET` and optional `TURN_TTL_SECONDS`
 in an environment file and pass `--env-file /path/to/relay.env`. Docker env
 files use literal values: do not surround the JSON value with shell quotes.
 Remove any static `username`, `credential` or provider-specific `password`
-fields from existing `ICE_SERVERS` entries; they are rejected. The ICE
-endpoint remains publicly accessible, so requests receive temporary TURN
-credentials; restrict access at your proxy if your relay should be private.
+fields from existing `ICE_SERVERS` entries; they are rejected.
+
+### Limits and private mode
+
+The ICE endpoint is public unless you make the relay private, so it rations
+TURN credentials per requester, where a requester is an IPv4 address or an IPv6
+/64. Past its allowance, a request gets only the STUN entries of `ICE_SERVERS`,
+so devices can still connect directly.
+
+Each socket is given a ticket, which the app sends with its ICE requests. A
+request whose ticket names an open socket that has published in the last five
+minutes (a device syncing through this relay) gets `ICE_REQUESTS_PER_MINUTE`
+(default 20); one without gets `ICE_TICKETLESS_PER_MINUTE` (default 4), which
+covers apps from before tickets and devices signalling on another relay. With
+`ICE_REQUIRE_TICKET=1`, those get STUN only.
+
+Behind a reverse proxy every request arrives from the proxy. Set `TRUST_PROXY`
+to the proxy's address (comma-separated, for example `127.0.0.1,::1`) and the
+relay takes the requester from the last `X-Forwarded-For` entry, but only on
+connections from those addresses; elsewhere the header is ignored.
+
+A relay that serves only your own devices can require a token: set
+`RELAY_TOKEN` (at least 16 URL-safe characters) and the relay refuses sockets
+and ICE requests without `?token=` matching it. The health probe (`GET /`)
+stays open. Configure the app's relay URL as `wss://relay.example.com/?token=…`;
+pairing codes carry it, so a joining device needs nothing else. Clear the app's
+ICE field so it derives from the relay URL, which keeps the token, or add
+`?token=` to it yourself. Anyone who sees a pairing code learns the token:
+change it if one leaks, and keep query strings out of your proxy's logs.
+
+### Recommended coturn settings
+
+A shared-secret credential cannot be revoked on its own, so the TURN server
+enforces the limits that matter in the data path. A starting point for
+`turnserver.conf`, to tune to your bandwidth:
+
+```
+use-auth-secret
+static-auth-secret=<the same value as TURN_SECRET>
+realm=turn.example.com
+
+# Relay between peers on the internet only, never into the server's own network.
+no-tcp-relay
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+
+# Allocations per credential (each username starts with its expiry, so this is
+# per credential), and for the whole server.
+user-quota=12
+total-quota=1200
+# Bytes per second: per session (about 100 Mbit/s) and for the whole server.
+max-bps=12500000
+bps-capacity=62500000
+```
+
+Changing `TURN_SECRET` on both sides invalidates every outstanding credential
+at once.
 
 ### Configure the app
 
@@ -145,6 +209,15 @@ pnpm run dev               # local miniflare at ws://localhost:8787
 
 Then configure the app with the printed `wss://` URL and its ICE endpoint as
 described above. The Worker and Node relay speak the same wire contract.
+
+TURN on the Worker needs four secrets (`pnpm exec wrangler secret put <NAME>`):
+`TURN_KEY_TOKEN_ID` and `TURN_KEY_API_TOKEN` for the Cloudflare TURN key it mints
+from, and `TURN_ANALYTICS_TOKEN` (Account Analytics: Read) and `CF_ACCOUNT_ID`
+for the monthly ceiling and the per-credential cap. Without the first two the
+ICE endpoint returns an empty list. The limits themselves are `vars` in
+`wrangler.jsonc`; see [../docs/turn-credentials.md](../docs/turn-credentials.md).
+A `RELAY_TOKEN` secret makes a Worker private, exactly as on the Node relay
+(see "Limits and private mode").
 
 All connections land on one global Durable Object; the room is addressed in-band
 by the event's `#d` tag, so no per-room routing or URL is needed. Per-room

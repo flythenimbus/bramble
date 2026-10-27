@@ -10,11 +10,30 @@ export interface BackupObject {
 	lastModified?: string;
 }
 
+/** A backup's bytes, read on demand: providers upload it in parts, never whole in memory. */
+export interface BackupUpload {
+	size: number;
+	read(offset: number, length: number): Promise<Uint8Array>;
+}
+
 export interface BackupTarget {
-	put(key: string, body: Uint8Array, contentType?: string): Promise<void>;
+	/** Write a snapshot, so that it appears under `key` whole or not at all. */
+	put(key: string, body: BackupUpload, contentType?: string): Promise<void>;
 	get(key: string): Promise<Uint8Array>;
 	list(prefix: string): Promise<BackupObject[]>;
 	remove(key: string): Promise<void>;
+	/** Abandon uploads in parts that a run started and never finished, older than the stale
+	 * window and scoped by `own`. Absent where an unfinished upload holds nothing. */
+	sweepIncomplete?(prefix: string, now: Date, own: (key: string) => boolean): Promise<void>;
+}
+
+/** Parts of this size or above go up in pieces; anything smaller goes up in one request. Under
+ * every provider's single-request limit, and small enough that a part is never a memory risk. */
+export const PART_SIZE = 16 * 1024 * 1024;
+
+/** Read a whole upload, for one that fits in a single request. */
+export async function readAll(body: BackupUpload): Promise<Uint8Array> {
+	return body.read(0, body.size);
 }
 
 export type BackupHttpRequest = HttpRequest;

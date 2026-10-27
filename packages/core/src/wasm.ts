@@ -97,20 +97,24 @@ export interface VaultCrypto {
 		userVerified: boolean,
 	): Awaitable<PasskeyAssertion>;
 
+	/**
+	 * Open a KeePass database: its entries, and its attachments, which the entries name by
+	 * index. WASM returns each as bytes; a native core writes each to a file and returns where,
+	 * with a `release` that deletes them.
+	 */
 	open_kdbx4(
 		file: Uint8Array,
 		password: string,
 		keyfile?: Uint8Array,
-	): Awaitable<{ strings: { key: string; value: string; protected: boolean }[] }[]>;
+	): Awaitable<{
+		entries: {
+			strings: { key: string; value: string; protected: boolean }[];
+			binaries: { name: string; index: number }[];
+		}[];
+		attachments: (Uint8Array | { path: string; size: number })[];
+		release?: () => Promise<void>;
+	}>;
 
-	/** KDBX4 export. Optional: only the WASM module implements it. The mobile native module
-	 * deliberately omits it rather than carrying a stub that can't work, so KDBX export is
-	 * offered on the extension only. (Mobile does have shell.exportBytes, via Filesystem +
-	 * Share; it is the KDBX writer it lacks, not a way to save a file.) */
-	save_kdbx4?(
-		entries: { strings: { key: string; value: string; protected: boolean }[] }[],
-		password: string,
-	): Uint8Array;
 	/**
 	 * The sealed pieces of a portable vault, all base64. Returned rather than a finished
 	 * file so the VLT1 container keeps a single implementation, in `vault-format.ts`.

@@ -5,10 +5,12 @@ import {
 	containsHistory,
 	decodeEntriesPayload,
 	type EntriesPayload,
+	type FileManifest,
 	type Hlc,
 	isAncestor,
 	mergeEntriesPayload,
 } from "../sync";
+import { fileRecord } from "../test/vault-fixtures";
 import type { EncryptedEntry } from "../vault-format";
 import {
 	conflictsOf,
@@ -46,6 +48,68 @@ const loginWith = (name: string, over: Partial<LoginEntryData> = {}): LoginEntry
 	password: "p",
 	...over,
 });
+
+type Mutation = [string, (h: ReturnType<typeof harness>, s: VaultEntries) => Promise<VaultEntries>];
+
+/** Every entry mutation. Each rebuilds the state it persists, so each is its own chance to drop
+ * whatever rides beside the entries: synced settings, the file manifest. */
+const ENTRY_MUTATIONS: Mutation[] = [
+	["add", async (h: ReturnType<typeof harness>, s: VaultEntries) => h.mutations.add(s, login("x"))],
+	[
+		"importMany",
+		async (h: ReturnType<typeof harness>, s: VaultEntries) =>
+			h.mutations.importMany(s, [login("x")]),
+	],
+	[
+		"update",
+		async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+			const a = await h.mutations.add(s, login("x"));
+			return h.mutations.update(a, a.entries[0]!.id, login("y"));
+		},
+	],
+	[
+		"remove",
+		async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+			const a = await h.mutations.add(s, login("x"));
+			return h.mutations.remove(a, a.entries[0]!.id);
+		},
+	],
+	[
+		"removeMany",
+		async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+			const a = await h.mutations.add(s, login("x"));
+			return h.mutations.removeMany(a, [a.entries[0]!.id]);
+		},
+	],
+	[
+		"setArchived",
+		async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+			const a = await h.mutations.add(s, login("x"));
+			return h.mutations.setArchived(a, [a.entries[0]!.id], true);
+		},
+	],
+	[
+		"setTags",
+		async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+			const a = await h.mutations.add(s, login("x"));
+			return h.mutations.setTags(a, [a.entries[0]!.id], { add: ["work"] });
+		},
+	],
+	[
+		"touch",
+		async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+			const a = await h.mutations.add(s, login("x"));
+			return h.mutations.touch(a, a.entries[0]!.id);
+		},
+	],
+	[
+		"setBreach",
+		async (h: ReturnType<typeof harness>, s: VaultEntries) => {
+			const a = await h.mutations.add(s, login("x"));
+			return h.mutations.setBreach(a, a.entries[0]!.id, { leaked: false, checkedAt: 1 });
+		},
+	],
+];
 
 describe("createEntryMutations", () => {
 	it("add stamps the new entry and writes once", async () => {
@@ -559,66 +623,7 @@ describe("createEntryMutations: synced settings survive entry writes", () => {
 	// Every mutation, not a hand-picked few: each one rebuilds the state it hands to persist, so
 	// each is its own chance to drop the map. `touch` is the sharpest of them, since it fires on
 	// every copy and every fill.
-	it.each([
-		[
-			"add",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) => h.mutations.add(s, login("x")),
-		],
-		[
-			"importMany",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) =>
-				h.mutations.importMany(s, [login("x")]),
-		],
-		[
-			"update",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
-				const a = await h.mutations.add(s, login("x"));
-				return h.mutations.update(a, a.entries[0]!.id, login("y"));
-			},
-		],
-		[
-			"remove",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
-				const a = await h.mutations.add(s, login("x"));
-				return h.mutations.remove(a, a.entries[0]!.id);
-			},
-		],
-		[
-			"removeMany",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
-				const a = await h.mutations.add(s, login("x"));
-				return h.mutations.removeMany(a, [a.entries[0]!.id]);
-			},
-		],
-		[
-			"setArchived",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
-				const a = await h.mutations.add(s, login("x"));
-				return h.mutations.setArchived(a, [a.entries[0]!.id], true);
-			},
-		],
-		[
-			"setTags",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
-				const a = await h.mutations.add(s, login("x"));
-				return h.mutations.setTags(a, [a.entries[0]!.id], { add: ["work"] });
-			},
-		],
-		[
-			"touch",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
-				const a = await h.mutations.add(s, login("x"));
-				return h.mutations.touch(a, a.entries[0]!.id);
-			},
-		],
-		[
-			"setBreach",
-			async (h: ReturnType<typeof harness>, s: VaultEntries) => {
-				const a = await h.mutations.add(s, login("x"));
-				return h.mutations.setBreach(a, a.entries[0]!.id, { leaked: false, checkedAt: 1 });
-			},
-		],
-	])("%s preserves the map, in memory and on disk", async (_name, run) => {
+	it.each(ENTRY_MUTATIONS)("%s preserves the map, in memory and on disk", async (_name, run) => {
 		const h = harness();
 		const next = await run(h, withSetting());
 		expect(next.settings).toEqual(withSetting().settings);
@@ -692,6 +697,73 @@ describe("createEntryMutations: synced settings survive entry writes", () => {
 		const next = await h.mutations.setSetting(added, "pref.aliasProvider", { provider: "addy" });
 		expect(next.entries).toEqual(added.entries);
 		expect(next.stamps).toEqual(added.stamps);
+	});
+});
+
+// The same seam as the synced-settings suite above, for the file manifest. buildPayload rebuilds
+// the payload from VaultEntries on every write, so a manifest not threaded through is erased by
+// ANY entry edit: attach a passport scan, rename an unrelated login, and the attachment is gone
+// from disk while still on screen from memory. See docs/file-attachments.md.
+describe("createEntryMutations: the file manifest survives entry writes", () => {
+	const manifest = (): FileManifest => ({
+		files: [
+			fileRecord({
+				hlc: { wall: 500, counter: 0, node: "other" },
+				entryId: "some-entry",
+				hash: "c".repeat(64),
+				size: 262160,
+			}),
+		],
+		fileTombstones: [{ id: "f2", hlc: { wall: 400, counter: 0, node: "other" } }],
+		fileCascades: [{ id: "f3", hlc: { wall: 450, counter: 0, node: "other" } }],
+	});
+	const withManifest = (): VaultEntries => ({ ...empty(), manifest: manifest() });
+
+	/** What actually reached the disk, so this cannot pass on in-memory state alone. */
+	async function onDisk(h: ReturnType<typeof harness>): Promise<FileManifest> {
+		const payload = await h.mutations.readEntriesPayload();
+		return {
+			files: payload.files,
+			fileTombstones: payload.fileTombstones,
+			fileCascades: payload.fileCascades,
+		};
+	}
+
+	it.each([
+		...ENTRY_MUTATIONS,
+		[
+			"setSetting",
+			async (h: ReturnType<typeof harness>, s: VaultEntries) =>
+				h.mutations.setSetting(s, "pref.theme", "dark"),
+		],
+	])("%s preserves the manifest, in memory and on disk", async (_name, run) => {
+		const h = harness();
+		const next = await run(h, withManifest());
+		expect(next.manifest).toEqual(manifest());
+		expect(await onDisk(h)).toEqual(manifest());
+	});
+
+	// A vault with no files must not grow two empty arrays, or every payload written by every
+	// existing install gains keys it has no use for.
+	it("a vault with no files keeps the payload shape it already has", async () => {
+		const h = harness();
+		await h.mutations.add(empty(), login("x"));
+		const payload = await h.mutations.readEntriesPayload();
+		expect(payload).not.toHaveProperty("files");
+		expect(payload).not.toHaveProperty("fileTombstones");
+	});
+
+	it("the manifest and synced settings survive the same write", async () => {
+		const h = harness();
+		const start: VaultEntries = {
+			...empty(),
+			manifest: manifest(),
+			settings: { "pref.x": { hlc: { wall: 1, counter: 0, node: "n" }, value: 1 } },
+		};
+		await h.mutations.add(start, login("x"));
+		const payload = await h.mutations.readEntriesPayload();
+		expect(payload.files).toEqual(manifest().files);
+		expect(payload.settings).toEqual(start.settings);
 	});
 });
 

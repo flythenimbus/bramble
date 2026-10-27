@@ -4,13 +4,18 @@ import { Plural, Trans } from "@lingui/react/macro";
 import { FileDown } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
 import { sealPortableVaultFile } from "../../export/portable-vault";
-import { useVault } from "../../hooks/useVault";
+import { useVaultState } from "../../hooks/useVault";
 import { FilePasswordDialog } from "../components/ui/file-password-dialog";
 import type { BulkAction, BulkActionDialogProps } from "./types";
 
-function ExportDialog({ open, onClose, onDone, entries, hiddenCount }: BulkActionDialogProps) {
+function ExportDialog({ open, onClose, onDone, ids, entries, hiddenCount }: BulkActionDialogProps) {
 	const { crypto, shell } = usePlatform();
-	const { conflicts } = useVault();
+	const { files, conflicts } = useVaultState();
+	// A selection carries entries only, so say so rather than leave the files out unannounced.
+	const selected = new Set(ids);
+	const attachments = files.filter(
+		(f) => f.entryId !== undefined && selected.has(f.entryId),
+	).length;
 	// Only the shown version goes into the file, so say when there are others it leaves out.
 	const conflicted = entries.filter((e) => (conflicts.get(e.id)?.versions ?? 0) > 0).length;
 
@@ -51,6 +56,16 @@ function ExportDialog({ open, onClose, onDone, entries, hiddenCount }: BulkActio
 								value={hiddenCount}
 								one="# of them is hidden by the current filter."
 								other="# of them are hidden by the current filter."
+							/>
+						</>
+					)}
+					{attachments > 0 && (
+						<>
+							{" "}
+							<Plural
+								value={attachments}
+								one="Attachments aren't transferred: # file on these entries won't be in the export."
+								other="Attachments aren't transferred: # files on these entries won't be in the export."
 							/>
 						</>
 					)}

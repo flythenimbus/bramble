@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { EncryptedEntry } from "../vault-format";
 import { nextCausal, nextVersion, type VersionVector } from "./causal";
-import type { EntriesPayload, Tombstone } from "./entries-payload";
+import type { EntriesPayload, FileRecord, Tombstone } from "./entries-payload";
 import type { Hlc } from "./hlc";
-import { entryConflicts, heldVersions, mergeEntriesPayload } from "./vault-merge";
+import { entryConflicts, heldVersions, liveFiles, mergeEntriesPayload } from "./vault-merge";
 
 const hlc = (wall: number, node: string, counter = 0): Hlc => ({ wall, counter, node });
 
@@ -79,6 +79,115 @@ describe("mergeEntriesPayload", () => {
 		// id 1 -> b (200>100); id 2 deleted at 500 > 400; id 3 -> b3 (300>50).
 		expect(live(ab)).toEqual({ "1": "b1", "3": "b3" });
 		expect(live(mergeEntriesPayload(ab, ab))).toEqual(live(ab));
+	});
+});
+
+const HASH_A = "a".repeat(64);
+const HASH_B = "b".repeat(64);
+
+/** A file manifest record whose hash is tagged so we can tell which side won. */
+const file = (id: string, hash: string, stamp: Hlc, entryId?: string): FileRecord => ({
+	id,
+	hlc: stamp,
+	hash,
+	size: 1024,
+	wrappedFek: `wf-${hash.slice(0, 4)}`,
+	fekIv: `fi-${hash.slice(0, 4)}`,
+	noncePrefix: "np",
+	metaBlob: `mb-${hash.slice(0, 4)}`,
+	metaIv: `mi-${hash.slice(0, 4)}`,
+	...(entryId ? { entryId } : {}),
+});
+
+describe("mergeEntriesPayload: the file manifest", () => {
+	it("carries the winning side's record verbatim, and unions distinct ids", () => {
+		const a: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [file("f1", HASH_A, hlc(100, "a"))],
+		};
+		const b: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [file("f1", HASH_B, hlc(200, "b")), file("f2", HASH_A, hlc(150, "b"))],
+		};
+		const merged = mergeEntriesPayload(a, b);
+		expect(merged.files).toHaveLength(2);
+		expect(merged.files?.find((f) => f.id === "f1")).toEqual(file("f1", HASH_B, hlc(200, "b")));
+	});
+
+	it("a file tombstone removes a record a stale peer still holds", () => {
+		const a: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [file("f1", HASH_A, hlc(100, "a"))],
+		};
+		const b: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			fileTombstones: [{ id: "f1", hlc: hlc(300, "b") }],
+		};
+		expect(liveFiles(mergeEntriesPayload(a, b))).toEqual([]);
+		// The graveyard is kept, or the next gossip round would resurrect it.
+		expect(mergeEntriesPayload(a, b).fileTombstones).toEqual([{ id: "f1", hlc: hlc(300, "b") }]);
+	});
+
+	// The reason fileTombstones is a separate list: a file delete must not shadow an entry that
+	// happens to share its id, and entry deletions must not shadow a file.
+	it("keeps entry and file graveyards in separate namespaces", () => {
+		const a: EntriesPayload = {
+			entries: [env("shared", "ct", hlc(100, "a"))],
+			tombstones: [],
+			files: [file("shared", HASH_A, hlc(100, "a"))],
+		};
+		const b: EntriesPayload = {
+			entries: [],
+			tombstones: [{ id: "shared", hlc: hlc(300, "b") }],
+		};
+		const merged = mergeEntriesPayload(a, b);
+		expect(live(merged)).toEqual({}); // the entry is deleted
+		expect(liveFiles(merged).map((f) => f.id)).toEqual(["shared"]); // the file is not
+	});
+
+	// A client predating the manifest strips the keys and writes the payload back without them.
+	// Absence must mean "no opinion", never "delete everything", exactly as for settings.
+	it("treats an absent manifest as no opinion, not as a deletion", () => {
+		const withFiles: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [file("f1", HASH_A, hlc(100, "a"))],
+		};
+		const stripped: EntriesPayload = { entries: [], tombstones: [] };
+		expect(liveFiles(mergeEntriesPayload(withFiles, stripped)).map((f) => f.id)).toEqual(["f1"]);
+		expect(liveFiles(mergeEntriesPayload(stripped, withFiles)).map((f) => f.id)).toEqual(["f1"]);
+	});
+
+	it("omits both keys entirely for a vault that has never held a file", () => {
+		const merged = mergeEntriesPayload(payload([env("1", "a", hlc(1, "a"))]), payload([]));
+		expect(merged).not.toHaveProperty("files");
+		expect(merged).not.toHaveProperty("fileTombstones");
+	});
+
+	it("is commutative and idempotent over the live file set", () => {
+		const a: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [file("f1", HASH_A, hlc(100, "a")), file("f2", HASH_A, hlc(400, "a"))],
+			fileTombstones: [{ id: "f3", hlc: hlc(50, "a") }],
+		};
+		const b: EntriesPayload = {
+			entries: [],
+			tombstones: [],
+			files: [file("f1", HASH_B, hlc(200, "b")), file("f3", HASH_B, hlc(500, "b"))],
+			fileTombstones: [{ id: "f2", hlc: hlc(500, "b") }],
+		};
+		const ab = liveFiles(mergeEntriesPayload(a, b));
+		const ba = liveFiles(mergeEntriesPayload(b, a));
+		const sort = (fs: FileRecord[]) => [...fs].sort((x, y) => x.id.localeCompare(y.id));
+		expect(sort(ab)).toEqual(sort(ba));
+		// f1 -> b's copy, f2 -> deleted (tombstone is later), f3 -> resurrected (edit is later).
+		expect(sort(ab).map((f) => f.id)).toEqual(["f1", "f3"]);
+		expect(liveFiles(mergeEntriesPayload(mergeEntriesPayload(a, b), b))).toEqual(ab);
 	});
 });
 
@@ -329,5 +438,66 @@ describe("mergeEntriesPayload siblings", () => {
 				expect(entryConflicts(merged).size).toBe(0);
 			}
 		});
+	});
+});
+
+// An entry delete marks the files it saw rather than tombstoning them, so the record outlives a
+// delete that can still be contested (docs/file-attachments.md, "Deleting an entry hides its
+// attachments").
+describe("mergeEntriesPayload: a delete and the entry's files", () => {
+	const base = ver("e", "base", hlc(1, "a"), { a: hlc(1, "a") });
+	const d = nextVersion({ hlc: hlc(5, "a"), bases: [base], held: [base] });
+	const scan = file("f1", HASH_A, hlc(1, "a"), "e");
+	const visa = file("f2", HASH_B, hlc(3, "b"), "e");
+	const deleted: EntriesPayload = {
+		entries: [],
+		tombstones: [tomb("e", d.hlc, d.causal.vv, d.causal.floor)],
+		files: [scan],
+		fileCascades: [{ id: "f1", hlc: d.hlc }],
+	};
+	const ids = (p: EntriesPayload) => liveFiles(p).map((f) => f.id);
+
+	it("hides the files of an entry the delete took, and keeps their records", () => {
+		const merged = mergeEntriesPayload(deleted, { entries: [base], tombstones: [], files: [scan] });
+		expect(merged.entries).toEqual([]);
+		expect(ids(merged)).toEqual([]);
+		expect(merged.files).toEqual([scan]);
+		expect(merged.fileCascades).toEqual([{ id: "f1", hlc: d.hlc }]);
+	});
+
+	it("a file the delete never saw keeps the entry shown, in either order and on a re-merge", () => {
+		const attached: EntriesPayload = { entries: [base], tombstones: [], files: [scan, visa] };
+		const ab = mergeEntriesPayload(deleted, attached);
+		const ba = mergeEntriesPayload(attached, deleted);
+		for (const m of [ab, ba]) {
+			expect(cts(m.entries)).toEqual(["base"]);
+			expect(entryConflicts(m).get("e")).toEqual({ versions: 0, deleted: true });
+			expect(ids(m).sort()).toEqual(["f1", "f2"]);
+		}
+		expect(mergeEntriesPayload(ab, ab)).toEqual(ab);
+		expect(mergeEntriesPayload(ab, deleted)).toEqual(ab);
+		expect(mergeEntriesPayload(deleted, ab).entries).toEqual(ab.entries);
+	});
+
+	it("a file detached since contests nothing", () => {
+		const detached: EntriesPayload = {
+			entries: [base],
+			tombstones: [],
+			files: [scan, visa],
+			fileTombstones: [{ id: "f2", hlc: hlc(4, "b") }],
+		};
+		const merged = mergeEntriesPayload(deleted, detached);
+		expect(merged.entries).toEqual([]);
+		expect(ids(merged)).toEqual([]);
+	});
+
+	it("keeps one mark per file, at the latest delete's stamp", () => {
+		const later = { ...deleted, fileCascades: [{ id: "f1", hlc: hlc(9, "b") }] };
+		expect(mergeEntriesPayload(deleted, later).fileCascades).toEqual([
+			{ id: "f1", hlc: hlc(9, "b") },
+		]);
+		expect(mergeEntriesPayload(later, deleted).fileCascades).toEqual([
+			{ id: "f1", hlc: hlc(9, "b") },
+		]);
 	});
 });

@@ -156,8 +156,11 @@ import { SITE } from "@/consts";
 			other directly. Then the connection runs through a TURN relay server, Cloudflare's by default,
 			which the signaling relay arranges. The relayed traffic is the same end-to-end encrypted
 			connection, which the TURN server cannot read; it sees your network addresses and how much data
-			passes. You can point Bramble at your own TURN service in the same Advanced settings as the
-			relay.
+			passes. File attachments can travel this way too, still encrypted, so for those it learns about
+			how large each one is, never its name or contents. You can point Bramble at your own TURN service in the same Advanced settings as the
+			relay. To keep that free service from being abused, the signaling relay limits how often an
+			address may ask for TURN access, and for that keeps a salted hash of the address that asked
+			(never the address itself) for at most a day.
 		</li>
 	</ul>
 

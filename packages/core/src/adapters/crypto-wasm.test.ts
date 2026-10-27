@@ -36,9 +36,10 @@ function fakeWasm() {
 		})),
 		passkey_import_pkcs8: vi.fn(() => ({ privateKey: "sk", publicKeyCose: "pk" })),
 		passkey_get_assertion: vi.fn(() => ({ authenticatorData: "ad", signature: "sig" })),
-		open_kdbx4: vi.fn((_file: Uint8Array, _password: string, _keyfile?: Uint8Array) => [
-			{ strings: [] },
-		]),
+		open_kdbx4: vi.fn((_file: Uint8Array, _password: string, _keyfile?: Uint8Array) => ({
+			entries: [{ strings: [], binaries: [{ name: "scan.pdf", index: 0 }] }],
+			attachments: [new Uint8Array([7, 8, 9])],
+		})),
 	};
 }
 
@@ -118,10 +119,19 @@ describe("buildCryptoAdapter", () => {
 		expect(wasm.decrypt_entry).not.toHaveBeenCalled();
 	});
 
-	it("decodes base64 inputs for openKdbx", async () => {
+	it("hands openKdbx's bytes to the core and its attachments on as Blobs", async () => {
 		const wasm = fakeWasm();
 		const a = buildCryptoAdapter(asWasm(wasm));
-		await a.openKdbx({ fileB64: "AAAA", password: "pw", keyfileB64: "AQID" });
+		const opened = await a.openKdbx({
+			file: new Uint8Array([0, 0, 0]),
+			password: "pw",
+			keyfile: new Uint8Array([1, 2, 3]),
+		});
+		expect(opened.attachments).toHaveLength(1);
+		expect(opened.attachments[0]?.size).toBe(3);
+		const source = opened.attachments[0]?.source;
+		if (source?.kind !== "blob") throw new Error("expected a Blob source");
+		expect(new Uint8Array(await source.blob.arrayBuffer())).toEqual(new Uint8Array([7, 8, 9]));
 		const call = wasm.open_kdbx4.mock.calls[0];
 		if (!call) throw new Error("open_kdbx4 was not called");
 		const [file, password, keyfile] = call;

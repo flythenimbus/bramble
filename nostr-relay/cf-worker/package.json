@@ -7,7 +7,8 @@
 	"scripts": {
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"test": "node --test src/*.test.ts"
 	},
 	"devDependencies": {
 		"typescript": "^5.9.3",

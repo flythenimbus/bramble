@@ -22,6 +22,11 @@ vi.mock("./desktop-link", () => ({
 	openDesktopLink: async () => false,
 	openSyncLink: async () => false,
 	closeSyncLink: async () => {},
+	openBlobLink: () => {},
+	closeBlobLink: () => {},
+	sendSyncFrame: async () => false,
+	sendBlobFrame: async () => false,
+	blobLinkUp: () => false,
 }));
 
 /** RFC 6238's SHA1 secret, whose 6-digit code at T=59s is a published vector. */

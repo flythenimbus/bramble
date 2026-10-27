@@ -7,6 +7,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import java.io.RandomAccessFile
 import org.json.JSONObject
 import uniffi.vault_crypto.CryptoException
 import uniffi.vault_crypto.PasswordSlotBlob
@@ -343,24 +344,51 @@ class NativeCryptoPlugin : Plugin() {
 
     // --- KDBX4 import ---
 
+    // Attachments are written into `dir`, one file each, and only their paths come back: a
+    // database's files can be far larger than is sensible to send over the bridge.
     @PluginMethod
     fun openKdbx4(call: PluginCall) {
         val file = bytes(call, "fileB64") ?: return
         val pw = str(call, "password") ?: return
+        val dir = str(call, "dir") ?: return
         val keyfile = call.getString("keyfileB64")?.let { Base64.decode(it, Base64.NO_WRAP) }
         call.runCrypto {
-            val entries = uniffi.vault_crypto.openKdbx4(file, pw, keyfile)
+            val opened = uniffi.vault_crypto.openKdbx4(file, pw, keyfile, dir)
             val arr = JSArray()
-            for (e in entries) {
+            for (e in opened.entries) {
                 val strings = JSArray()
                 for (s in e.strings) {
                     strings.put(
                         JSObject().put("key", s.key).put("value", s.value).put("protected", s.`protected`)
                     )
                 }
-                arr.put(JSObject().put("strings", strings))
+                val binaries = JSArray()
+                for (b in e.binaries) {
+                    binaries.put(JSObject().put("name", b.name).put("index", b.index.toLong()))
+                }
+                arr.put(JSObject().put("strings", strings).put("binaries", binaries))
             }
-            call.resolve(JSObject().put("entries", arr))
+            val attachments = JSArray()
+            for (a in opened.attachments) {
+                attachments.put(JSObject().put("path", a.path).put("size", a.size.toLong()))
+            }
+            call.resolve(JSObject().put("entries", arr).put("attachments", attachments))
+        }
+    }
+
+    // --- KDBX4 export ---
+
+    // Each attachment is opened here from its blob path and the database written to `outPath`;
+    // only its size comes back.
+    @PluginMethod
+    fun saveKdbx4(call: PluginCall) {
+        val entries = str(call, "entriesJson") ?: return
+        val pw = str(call, "password") ?: return
+        val files = str(call, "filesJson") ?: return
+        val out = str(call, "outPath") ?: return
+        call.runCrypto {
+            val size = uniffi.vault_crypto.saveKdbx4(entries, pw, files, out)
+            call.resolve(JSObject().put("value", size.toLong()))
         }
     }
 
@@ -548,6 +576,124 @@ class NativeCryptoPlugin : Plugin() {
                 JSObject().put(
                     "value",
                     uniffi.vault_crypto.rosterAdmissionSign(password, salt, message)
+                )
+            )
+        }
+    }
+
+    // --- file attachments (see docs/file-attachments.md) ---
+    //
+    // Path-based on purpose: a 100 MB attachment must never cross this bridge. The webview
+    // hands over source and destination PATHS and gets back a few hundred bytes of manifest,
+    // so the plaintext is read, sealed and written entirely on this side.
+
+    @PluginMethod
+    fun sealFile(call: PluginCall) {
+        val src = str(call, "srcPath") ?: return
+        val dst = str(call, "dstPath") ?: return
+        val metaJson = str(call, "metaJson") ?: return
+        call.runCrypto {
+            val b = uniffi.vault_crypto.sealFile(src, dst, metaJson)
+            call.resolve(
+                JSObject()
+                    .put("hash", b.hash)
+                    // ULong -> JS number: a blob is bounded by the chunk counter (1 PiB) and by
+                    // any device that could hold one, so this stays inside 2^53 comfortably.
+                    .put("size", b.size.toLong())
+                    .put("noncePrefix", b.noncePrefix)
+                    .put("wrappedFek", b.wrappedFek)
+                    .put("fekIv", b.fekIv)
+                    .put("metaBlob", b.metaBlob)
+                    .put("metaIv", b.metaIv)
+            )
+        }
+    }
+
+    @PluginMethod
+    fun openFileMeta(call: PluginCall) {
+        val wrappedFek = str(call, "wrappedFekB64") ?: return
+        val fekIv = str(call, "fekIvB64") ?: return
+        val metaBlob = str(call, "metaBlobB64") ?: return
+        val metaIv = str(call, "metaIvB64") ?: return
+        call.runCrypto {
+            call.resolve(
+                JSObject().put(
+                    "value",
+                    uniffi.vault_crypto.openFileMeta(wrappedFek, fekIv, metaBlob, metaIv)
+                )
+            )
+        }
+    }
+
+    @PluginMethod
+    fun resealFileMeta(call: PluginCall) {
+        val wrappedFek = str(call, "wrappedFekB64") ?: return
+        val fekIv = str(call, "fekIvB64") ?: return
+        val metaJson = str(call, "metaJson") ?: return
+        call.runCrypto {
+            val m = uniffi.vault_crypto.resealFileMeta(wrappedFek, fekIv, metaJson)
+            call.resolve(JSObject().put("iv", m.iv).put("ciphertext", m.ciphertext))
+        }
+    }
+
+    /**
+     * A byte range of a file, base64. Capacitor's Filesystem only reads whole files, which is
+     * quadratic for anything read in pieces: a backup laid out from an attachment's parts, or a
+     * peer being sent one. The caller bounds the length to one part.
+     */
+    @PluginMethod
+    fun readFileRange(call: PluginCall) {
+        val path = str(call, "path") ?: return
+        // A long, not an int: an offset into a large file can pass 2 GiB.
+        val offset = call.data.optLong("offset", -1L)
+        val length = call.getInt("length") ?: -1
+        if (offset < 0 || length < 0) {
+            call.reject("Missing or invalid range")
+            return
+        }
+        call.runCrypto {
+            RandomAccessFile(path, "r").use { file ->
+                val available = (file.length() - offset).coerceAtLeast(0L)
+                val bytes = ByteArray(minOf(length.toLong(), available).toInt())
+                file.seek(offset)
+                file.readFully(bytes)
+                call.resolve(JSObject().put("value", Base64.encodeToString(bytes, Base64.NO_WRAP)))
+            }
+        }
+    }
+
+    @PluginMethod
+    fun openFileToPath(call: PluginCall) {
+        val wrappedFek = str(call, "wrappedFekB64") ?: return
+        val fekIv = str(call, "fekIvB64") ?: return
+        val noncePrefix = str(call, "noncePrefixB64") ?: return
+        val src = str(call, "srcPath") ?: return
+        val dst = str(call, "dstPath") ?: return
+        call.runCrypto {
+            val written =
+                uniffi.vault_crypto.openFileToPath(wrappedFek, fekIv, noncePrefix, src, dst)
+            call.resolve(JSObject().put("value", written.toLong()))
+        }
+    }
+
+    @PluginMethod
+    fun openFileChunk(call: PluginCall) {
+        val wrappedFek = str(call, "wrappedFekB64") ?: return
+        val fekIv = str(call, "fekIvB64") ?: return
+        val noncePrefix = str(call, "noncePrefixB64") ?: return
+        val src = str(call, "srcPath") ?: return
+        val index = call.getInt("index")
+        if (index == null || index < 0) {
+            call.reject("Missing or invalid index")
+            return
+        }
+        call.runCrypto {
+            call.resolve(
+                JSObject().put(
+                    "value",
+                    uniffi.vault_crypto.openFileChunk(
+                        wrappedFek, fekIv, noncePrefix, src, index.toULong()
+                    )
                 )
             )
         }

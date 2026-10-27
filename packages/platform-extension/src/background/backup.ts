@@ -6,21 +6,25 @@
 // @core. Crypto is driven by messaging the offscreen host (sendToOffscreen),
 // mirroring how sync works headlessly. See docs/cloud-storage-backups.md.
 
-import { createTarget, runBackup, sha256Hex } from "@core/backup";
+import { createTarget, runBackup, signingTransport } from "@core/backup";
+import { planBackup } from "@core/backup/archive";
 import {
 	type BackupSecrets,
 	type BackupTargetConfig,
 	backupTargetsKeyFor,
 	keyVaultIdFor,
+	metaListCache,
 	migrateBackupTargetsToVaults,
 	targetPrefixFor,
 	toProviderConfig,
 	type WrappedCreds,
 } from "@core/backup/config";
-import { runScheduledBackups, type VaultBackup } from "@core/backup/run";
+import { backupPlanner, runScheduledBackups, type VaultBackup } from "@core/backup/run";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
+import { idbBlobStore } from "../files/idb";
 import { api } from "../platform-api";
 import { extensionStorage } from "../storage";
+import { hostHttp } from "./host-http";
 import { sendToOffscreen } from "./offscreen-client";
 import { unlockedVaultIds, vaultLocked } from "./session";
 
@@ -118,6 +122,28 @@ export async function runDueBackups(
 ): Promise<void> {
 	if (running || !sessionCurrent()) return;
 	running = true;
+	// A large upload outlasts the background's idle window, and nothing else may be calling an
+	// extension API meanwhile. Each call resets the timer (Chrome's worker, Firefox's event page).
+	const keepAlive = setInterval(() => void api.runtime.getPlatformInfo().catch(() => {}), 20_000);
+	const planner = backupPlanner((vault) =>
+		planBackup({
+			vault: vault.blob,
+			blobs: idbBlobStore(vault.id),
+			// That vault's own key. A locked vault's list is the one cached at its last unlock, valid
+			// only while its bytes are unchanged; without it the vault waits rather than going up
+			// without attachments its sealed list may name.
+			decryptWithVek: async (iv, ciphertext) => {
+				const dec = await sendToOffscreen({
+					type: "CRYPTO_DECRYPT_OUTER",
+					vaultId: vault.id,
+					payload: { iv, ciphertext },
+				});
+				if (!dec.ok || typeof dec.data !== "string") throw new Error(dec.error ?? "locked");
+				return dec.data;
+			},
+			listCache: metaListCache(extensionStorage, vault.id),
+		}),
+	);
 	try {
 		const result = await runScheduledBackups(
 			{
@@ -129,7 +155,8 @@ export async function runDueBackups(
 					}
 				},
 				// One vault's own fingerprint, so editing one vault no longer re-uploads the others.
-				hashVault: async (vault) => (sessionCurrent() ? sha256Hex(vault.blob) : ""),
+				hashVault: async (vault) => (sessionCurrent() ? planner.fingerprint(vault) : ""),
+				blocked: planner.blocked,
 				decryptSecrets: async (vaultId, creds) => {
 					if (!sessionCurrent()) throw new Error("vault session changed");
 					return decryptSecrets(vaultId, creds);
@@ -139,8 +166,12 @@ export async function runDueBackups(
 					// Null means the platform holds the credentials outside the vault, which only
 					// the desktop does; every target here is VEK-wrapped, so this cannot be null.
 					if (secrets === null) throw new Error("no credentials for this target");
-					const target = createTarget(toProviderConfig(t, secrets));
-					await runBackup(target, vault.blob, {
+					const cfg = toProviderConfig(t, secrets);
+					// Sent from the crypto host, never from this worker (see host-http.ts). Dropbox
+					// authenticates itself, so it takes the sender as it is.
+					const target = createTarget(cfg, signingTransport(cfg, hostHttp) ?? hostHttp);
+					await runBackup(target, await planner.body(vault), {
+						fingerprint: await planner.fingerprint(vault),
 						prefix: targetPrefixFor(t, vault.id, vault.isDefault),
 						keep: t.keep,
 						vaultId: keyVaultIdFor(t, vault.id),
@@ -158,6 +189,7 @@ export async function runDueBackups(
 			console.warn(`[bramble:bg] backup failed for ${f.id} (vault ${f.vaultId}):`, f.error);
 		}
 	} finally {
+		clearInterval(keepAlive);
 		running = false;
 	}
 }

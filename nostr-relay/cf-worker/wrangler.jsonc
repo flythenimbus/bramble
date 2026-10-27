@@ -7,6 +7,10 @@
 		{
 			"tag": "v1",
 			"new_sqlite_classes": ["Relay"]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": ["IceGuard"]
 		}
 	],
 	"durable_objects": {
@@ -14,8 +18,27 @@
 			{
 				"class_name": "Relay",
 				"name": "RELAY"
+			},
+			{
+				"class_name": "IceGuard",
+				"name": "ICE_GUARD"
 			}
 		]
+	},
+	// The TURN ceiling and per-credential cap are checked this often. See docs/turn-credentials.md.
+	"triggers": {
+		"crons": ["*/10 * * * *"]
+	},
+	"vars": {
+		"TURN_TTL_SECONDS": "7200",
+		"ICE_REQUESTS_PER_MINUTE": "20",
+		// Requests without a live relay ticket: released apps send none. Set ICE_REQUIRE_TICKET to "1"
+		// once ticket-sending releases have spread, and those get STUN only.
+		"ICE_TICKETLESS_PER_MINUTE": "4",
+		"ICE_REQUIRE_TICKET": "0",
+		// Under the 1,000 GB free tier, leaving room for credentials already handed out.
+		"TURN_MONTHLY_CEILING_GB": "900",
+		"TURN_CREDENTIAL_CAP_GB_PER_HOUR": "10"
 	},
 	"observability": {
 		"enabled": true,

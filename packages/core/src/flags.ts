@@ -140,6 +140,10 @@ export const CAPABILITIES = {
 	// selectable at all. See github issue #36.
 	// Desktop's native dialogs filter by extension properly, unlike the mobile pickers.
 	filePickerAcceptFilter: { extension: true, mobile: false, desktop: true },
+	// The attached popup dismisses on focus loss, which takes an <input type=file> down with it
+	// before a file is chosen (docs/routing.md, "Pop-out handoff"). So attaching from there hands
+	// over to the detached window first. Mobile and desktop are already windows.
+	filePickerNeedsWindow: { extension: true, mobile: false, desktop: false },
 	// Separate "let the device passcode open the biometric gate" toggle. iOS only: the gate is
 	// a Keychain access control picked at write time, so both options exist there (.userPresence
 	// vs .biometryCurrentSet). Android's Keystore key is biometry-only already - allowing

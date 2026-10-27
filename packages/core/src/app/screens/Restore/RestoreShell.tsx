@@ -1,23 +1,23 @@
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { ArchiveRestore, ArrowLeft, Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+	commitRestore,
+	fileSource,
+	type PickedBackup,
+	type PickFailure,
+	type RestoreOutcome,
+	readPickedBackup,
+} from "../../../backup/restore";
 import { usePlatform } from "../../../context/PlatformContext";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { bytesToBase64 } from "../../../util/bytes";
-import {
-	decodeVaultBlob,
-	findPasswordSlot,
-	type PasswordSlot,
-	verifierPrefix,
-} from "../../../vault-format";
+import { verifierPrefix } from "../../../vault-format";
 import { CryptoErrorText } from "../../components/CryptoErrorText";
 import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
-
-// Above any realistic vault; guards against OOM from a hostile/corrupt file.
-const MAX_RESTORE_MB = 100;
 
 function Wrapper({
 	children,
@@ -72,7 +72,7 @@ export function RestoreShell({
 }) {
 	const { unlock } = useVault();
 	const { createRecord } = useVaultRegistry();
-	const { shell, crypto, storage } = usePlatform();
+	const { shell, crypto, storage, files } = usePlatform();
 	const { t } = useLingui();
 	// Whether a vault already exists here: gates the "this replaces your vault" warning, which is
 	// wrong on a fresh install (nothing to replace, e.g. onboarding restore on mobile).
@@ -89,11 +89,7 @@ export function RestoreShell({
 			alive = false;
 		};
 	}, [storage]);
-	const [picked, setPicked] = useState<{
-		bytes: Uint8Array;
-		slot: PasswordSlot;
-		name: string;
-	} | null>(null);
+	const [picked, setPicked] = useState<(PickedBackup & { name: string }) | null>(null);
 	const [password, setPassword] = useState("");
 	// Optional name for the restored vault when it's added as a new one (vaults already exist).
 	const [label, setLabel] = useState("");
@@ -103,29 +99,33 @@ export function RestoreShell({
 	// filling the first/only vault (which is unlocked in place). Changes the terminal message.
 	const [addedNew, setAddedNew] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	// What happened to the backup's attachments, for the finish screen.
+	const [outcome, setOutcome] = useState<RestoreOutcome | null>(null);
+
+	const pickError = (reason: PickFailure): string => {
+		switch (reason) {
+			case "damaged":
+				return t`This backup can't be read. It may be damaged, or not a Bramble backup.`;
+			case "no-password":
+				return t`This backup has no master password, so it can't be restored here.`;
+			default:
+				return t`That doesn't look like a Bramble backup (.bramble) file.`;
+		}
+	};
 
 	const onFile = async (file: File | undefined) => {
 		if (!file) return;
 		setError(null);
 		setBusy(true);
 		try {
-			if (file.size > MAX_RESTORE_MB * 1024 * 1024) {
-				setError(t`This file is too large to be a Bramble backup.`);
+			// A plain vault, or one archive of a vault and its attachments, read through the file
+			// itself: only the vault and the archive's directory now, the attachments at restore.
+			const read = await readPickedBackup(fileSource(file));
+			if (!read.ok) {
+				setError(pickError(read.reason));
 				return;
 			}
-			const bytes = new Uint8Array(await file.arrayBuffer());
-			let slot: PasswordSlot | null;
-			try {
-				slot = findPasswordSlot(decodeVaultBlob(bytes));
-			} catch {
-				setError(t`That doesn't look like a Bramble backup (.bramble) file.`);
-				return;
-			}
-			if (!slot) {
-				setError(t`This backup has no master password, so it can't be restored here.`);
-				return;
-			}
-			setPicked({ bytes, slot, name: file.name });
+			setPicked({ ...read.picked, name: file.name });
 			setPassword("");
 		} catch (e) {
 			setError(e instanceof Error ? e.message : t`Couldn't read this file.`);
@@ -152,32 +152,40 @@ export function RestoreShell({
 				setError(t`Incorrect master password for this backup.`);
 				return;
 			}
-			if (hasVault) {
-				// A vault already exists: NEVER overwrite it. Restore into a brand-new vault so the
-				// user can't lose the vault currently on this device to a stray restore. Its sync
-				// identity is empty (namespaced keys don't exist yet), so no reset is needed and other
-				// vaults' sync state is untouched. It's created locked; the user unlocks it from the
-				// picker with the backup's password. See docs/multiple-vaults.md (Restore destination).
-				const newId = await createRecord(label.trim());
-				await storage.writeVaultBlob(picked.bytes, newId);
-				if (onRestored) onRestored({ addedNew: true });
-				else {
-					setAddedNew(true);
-					setDone(true);
-				}
-			} else {
-				// First vault on this device: mint its registry record, fill it, and unlock in place.
-				// The write must NAME that id. An id-less write used to mint the record itself, and
-				// closing that hole (issue #27, ghost records) left this branch with nothing to write
-				// into on an empty registry, which is issue #41. The label field isn't shown here.
-				const newId = await createRecord();
-				await storage.writeVaultBlob(picked.bytes, newId);
-				await shell.resetSyncState?.(); // fresh sync identity; the restored vault isn't enrolled
-				// Name the vault: createRecord only just selected it via React state, so the `unlock`
-				// in hand still closes over no active id and would record null for the crypto layer.
-				await unlock(password, newId); // reads the freshly-written blob and loads its VEK
-				if (onRestored) onRestored({ addedNew: false });
-				else setDone(true);
+			// A vault already exists: NEVER overwrite it. The backup becomes a brand-new vault, so a
+			// stray restore can't cost the user the vault on this device; it has no sync identity
+			// yet, so nothing needs resetting, and it is left locked to open from the picker with
+			// the backup's password. With no vault here it fills the first one and is unlocked in
+			// place. See docs/multiple-vaults.md (Restore destination).
+			//
+			// Every write NAMES the new id. An id-less write used to mint the record itself, and
+			// closing that hole (issue #27, ghost records) is why the id is minted first (issue #41).
+			const result = await commitRestore(
+				{
+					hasVault,
+					createRecord,
+					writeVaultBlob: (bytes, id) => storage.writeVaultBlob(bytes, id),
+					files,
+					resetSyncState: async () => {
+						await shell.resetSyncState?.();
+					},
+					// Named: createRecord only just selected it via React state, so the `unlock` in hand
+					// still closes over no active id and would record null for the crypto layer.
+					unlock: (pw, id) => unlock(pw, id),
+				},
+				picked,
+				password,
+				label,
+			);
+			setOutcome(result);
+			// Anything to say about the attachments is shown here even when embedded, because the
+			// embedding flow's own finish screen would drop it, and "keep the backup file" is not a
+			// message to lose. A clean restore hands straight back as before.
+			const needsNote = result.rejected > 0 || result.unstorable > 0;
+			if (onRestored && !needsNote) onRestored({ addedNew: result.addedNew });
+			else {
+				setAddedNew(result.addedNew);
+				setDone(true);
 			}
 		} catch (e) {
 			// Kept raw: CryptoErrorText renders it, so an internal code or raw crypto text never shows.
@@ -188,8 +196,11 @@ export function RestoreShell({
 	};
 
 	if (done) {
+		// Reached while embedded only when there is something to say about the attachments, so
+		// Done then hands back to the embedding flow instead of closing.
+		const finish = onClose ?? (onRestored ? () => onRestored({ addedNew }) : undefined);
 		return (
-			<Wrapper onClose={onClose}>
+			<Wrapper onClose={onClose} embedded={embedded}>
 				<div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-8 text-center space-y-3">
 					<div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80">
 						<Check className="w-7 h-7 text-primary-foreground" />
@@ -212,8 +223,37 @@ export function RestoreShell({
 							</Trans>
 						)}
 					</p>
-					{onClose && (
-						<Button variant="primary" size="none" onClick={onClose} className="px-5 py-2.5 text-sm">
+					{outcome && outcome.restored > 0 && (
+						<p className="text-sm text-muted-foreground">
+							<Plural
+								value={outcome.restored}
+								one="# attachment restored with it."
+								other="# attachments restored with it."
+							/>
+						</p>
+					)}
+					{outcome && outcome.rejected > 0 && (
+						<p className="text-sm text-amber-500">
+							<Plural
+								value={outcome.rejected}
+								one="# attachment in the backup file was damaged and wasn't restored. The vault still lists it."
+								other="# attachments in the backup file were damaged and weren't restored. The vault still lists them."
+							/>
+						</p>
+					)}
+					{outcome && outcome.unstorable > 0 && (
+						// The vault still lists them, but their files went nowhere: the backup file is where
+						// they are now, and deleting it would lose them.
+						<p className="text-sm text-amber-500">
+							<Plural
+								value={outcome.unstorable}
+								one="This backup has # attachment, which Bramble can't store on this device yet. Keep the backup file, which still has it."
+								other="This backup has # attachments, which Bramble can't store on this device yet. Keep the backup file, which still has them."
+							/>
+						</p>
+					)}
+					{finish && (
+						<Button variant="primary" size="none" onClick={finish} className="px-5 py-2.5 text-sm">
 							<Trans>Done</Trans>
 						</Button>
 					)}

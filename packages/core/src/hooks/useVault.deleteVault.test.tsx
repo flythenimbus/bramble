@@ -4,19 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { backupTargetsKeyFor } from "../backup/config";
 import type { Platform } from "../context/PlatformContext";
 import { PER_VAULT_SYNC_KEYS } from "../sync/sync-keys";
+import { testVaultBytes } from "../test/vault-fixtures";
 import { mountVaultActions } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
-import {
-	encodeVaultBlob,
-	LEN_IV,
-	LEN_SALT,
-	LEN_SLOT_ID,
-	LEN_VERIFIER,
-	LEN_WRAP_IV,
-	LEN_WRAPPED_VEK,
-	type PasswordSlot,
-	SLOT_KIND_PASSWORD,
-} from "../vault-format";
 
 afterEach(cleanup);
 
@@ -29,21 +19,6 @@ const VAULT_ID = "v0";
 
 // A syntactically valid single-slot vault: deleteVault re-auths, which decodes the blob and looks
 // for a password slot. Contents don't matter — crypto.verifyPasswordSlot is stubbed.
-const fill = (n: number, b: number) => Uint8Array.from({ length: n }, (_, i) => (b + i) & 0xff);
-const passwordSlot = (): PasswordSlot => ({
-	kind: SLOT_KIND_PASSWORD,
-	slotId: fill(LEN_SLOT_ID, 0x10),
-	salt: fill(LEN_SALT, 0x20),
-	verifier: fill(LEN_VERIFIER, 0x30),
-	wrapIv: fill(LEN_WRAP_IV, 0x40),
-	wrappedVek: fill(LEN_WRAPPED_VEK, 0x50),
-});
-const vaultBytes = () =>
-	encodeVaultBlob({
-		slots: [passwordSlot()],
-		entriesIv: fill(LEN_IV, 0x70),
-		entriesCiphertext: new Uint8Array(0),
-	});
 
 function makePlatform() {
 	const registry = { vaults: [{ id: VAULT_ID, label: "", createdAt: 1 }] };
@@ -58,7 +33,7 @@ function makePlatform() {
 		getMeta: vi.fn(async (k: string) => (k === VAULT_REGISTRY_KEY ? registry : undefined)),
 		setMeta: vi.fn(async () => {}),
 		removeMeta: vi.fn(async () => {}),
-		readVaultBlob: vi.fn(async () => vaultBytes()),
+		readVaultBlob: vi.fn(async () => testVaultBytes()),
 		restoreVaultFromBackup: vi.fn(async () => false),
 		writeVaultBlob: vi.fn(async () => {}),
 		deleteVaultBlob: vi.fn(async (_id: string) => {}),
@@ -95,16 +70,21 @@ function makePlatform() {
 	return { platform, shell, storage, crypto, autofill, biometric };
 }
 
+/** Mount, let the registry load, and delete the vault as the user would. */
+async function deleteWith(platform: Platform, password = "pw"): Promise<boolean | undefined> {
+	const getActions = mountVaultActions(platform);
+	await act(async () => {}); // flush the registry load
+	let ok: boolean | undefined;
+	await act(async () => {
+		ok = await getActions().deleteVault({ password });
+	});
+	return ok;
+}
+
 describe("deleteVault clears the recorded active vault", () => {
 	it("erases the blob and then clears the active id", async () => {
 		const { platform, shell, storage } = makePlatform();
-		const getActions = mountVaultActions(platform);
-		await act(async () => {}); // flush the registry load
-
-		let ok: boolean | undefined;
-		await act(async () => {
-			ok = await getActions().deleteVault({ password: "pw" });
-		});
+		const ok = await deleteWith(platform);
 
 		expect(ok).toBe(true);
 		expect(storage.deleteVaultBlob).toHaveBeenCalledWith(VAULT_ID);
@@ -114,13 +94,7 @@ describe("deleteVault clears the recorded active vault", () => {
 	it("leaves the active id alone when re-auth fails (nothing was deleted)", async () => {
 		const { platform, shell, storage, crypto } = makePlatform();
 		crypto.verifyPasswordSlot.mockResolvedValue(false);
-		const getActions = mountVaultActions(platform);
-		await act(async () => {});
-
-		let ok: boolean | undefined;
-		await act(async () => {
-			ok = await getActions().deleteVault({ password: "wrong" });
-		});
+		const ok = await deleteWith(platform, "wrong");
 
 		expect(ok).toBe(false);
 		expect(storage.deleteVaultBlob).not.toHaveBeenCalled();
@@ -170,13 +144,53 @@ describe("deleteVault erases everything else keyed to the vault", () => {
 		const { platform, shell, autofill, biometric } = makePlatform();
 		autofill.clearProviderData.mockRejectedValue(new Error("no plugin"));
 		biometric.disable.mockRejectedValue(new Error("keychain -34018"));
+		const ok = await deleteWith(platform);
+
+		expect(ok).toBe(true);
+		expect(shell.setActiveVault).toHaveBeenLastCalledWith(null);
+	});
+});
+
+// A vault's attachments are its contents too. They are sealed, but a delete that leaves them
+// behind leaves copies of the vault's data on the device, keyed to nothing that would ever
+// reclaim them.
+describe("deleteVault erases the vault's attachments", () => {
+	const withFiles = () => {
+		const made = makePlatform();
+		const files = { forVault: vi.fn(), deleteVault: vi.fn(async (_id: string) => {}) };
+		(made.platform as unknown as { files: typeof files }).files = files;
+		return { ...made, files };
+	};
+
+	it("deletes this vault's attachment store, by its id", async () => {
+		const { platform, files } = withFiles();
 		const getActions = mountVaultActions(platform);
 		await act(async () => {});
 
-		let ok: boolean | undefined;
 		await act(async () => {
-			ok = await getActions().deleteVault({ password: "pw" });
+			await getActions().deleteVault({ password: "pw" });
 		});
+
+		expect(files.deleteVault).toHaveBeenCalledWith(VAULT_ID);
+	});
+
+	it("does not touch attachments when re-auth fails", async () => {
+		const { platform, crypto, files } = withFiles();
+		crypto.verifyPasswordSlot.mockResolvedValue(false);
+		const getActions = mountVaultActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			await getActions().deleteVault({ password: "wrong" });
+		});
+
+		expect(files.deleteVault).not.toHaveBeenCalled();
+	});
+
+	it("still finishes the delete when erasing attachments throws", async () => {
+		const { platform, shell, files } = withFiles();
+		files.deleteVault.mockRejectedValue(new Error("rmdir failed"));
+		const ok = await deleteWith(platform);
 
 		expect(ok).toBe(true);
 		expect(shell.setActiveVault).toHaveBeenLastCalledWith(null);

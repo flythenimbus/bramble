@@ -28,6 +28,7 @@ import {
 	stopSync,
 } from "../sync/transport";
 import { desktopStorage } from "./storage";
+import { streamInto } from "./stream";
 import { canSelfUpdate, desktopUpdates, resolveUpdatability } from "./updates";
 
 /** Filled once at boot; the Settings "About" row reads it synchronously. */
@@ -71,7 +72,18 @@ export const desktopShell: ShellAdapter = {
 	exportBytes: async (suggestedName, bytes, _mimeType) => {
 		const path = await save({ defaultPath: suggestedName });
 		if (!path) return;
-		await invoke<void>("shell_export_bytes", { path, bytes: Array.from(bytes) });
+		if (bytes instanceof Uint8Array) {
+			await invoke<void>("shell_export_bytes", { path, bytes: Array.from(bytes) });
+			return;
+		}
+		// A KeePass export the shell already wrote: copied there, not read back through here.
+		if (bytes.path) {
+			await invoke<void>("files_export_kdbx", { src: bytes.path, path });
+			return;
+		}
+		// A backup of any size, written a chunk at a time to a file beside the chosen one and
+		// renamed into place only once whole: a cut-off export never takes the chosen name.
+		await streamInto(await invoke<number>("shell_export_open", { path, size: bytes.size }), bytes);
 	},
 
 	// No browser tab to read. Same as mobile.

@@ -9,10 +9,11 @@ import { describe, expect, it, vi } from "vitest";
 // The phone would log "synced with <browser>" and then "peer idle — dropping" forever.
 // See offscreen-core `syncConfigKey` and docs/p2p-sync.md.
 
-const { started, stub, enrolls } = vi.hoisted(() => {
+const { started, stub, enrolls, blobs } = vi.hoisted(() => {
 	const started: { peerSource: boolean; stopped: boolean }[] = [];
 	const enrolls: { stopped: boolean }[] = [];
-	return { started, stub: {}, enrolls };
+	const blobs: { stopped: boolean }[] = [];
+	return { started, stub: {}, enrolls, blobs };
 });
 
 vi.mock("./wasm-loader", () => ({ loadWasm: async () => stub }));
@@ -26,6 +27,22 @@ vi.mock("@core/sync/transport/roster-sync", () => ({
 				session.stopped = true;
 			},
 			broadcastNow: async () => {},
+		};
+	},
+}));
+
+vi.mock("@core/sync/transport/blob-sync", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@core/sync/transport/blob-sync")>()),
+	startBlobSync: async () => {
+		const session = { stopped: false };
+		blobs.push(session);
+		return {
+			stop: () => {
+				session.stopped = true;
+			},
+			poke: () => {},
+			status: async (hashes: string[]) =>
+				Object.fromEntries(hashes.map((h) => [h, { state: "waiting" }])),
 		};
 	},
 }));
@@ -73,6 +90,7 @@ const live = () => started.filter((s) => !s.stopped);
 async function reset() {
 	await handleHostMessage("SYNC_DISCONNECT", null);
 	started.length = 0;
+	blobs.length = 0;
 }
 
 describe("SYNC_ROSTER_SYNC (a service-worker restart must not restart sync)", () => {
@@ -88,6 +106,7 @@ describe("SYNC_ROSTER_SYNC (a service-worker restart must not restart sync)", ()
 
 		expect(started).toHaveLength(2);
 		expect(first.some((s) => s.stopped)).toBe(false);
+		expect(blobs.filter((s) => !s.stopped)).toHaveLength(1);
 	});
 
 	it("ignores a roster that has changed, since it is read fresh per use", async () => {
@@ -211,5 +230,30 @@ describe("sync sessions are pinned to a vault", () => {
 		await handleHostMessage("SYNC_ROSTER_STOP", { keepVaultId: "B" });
 		expect(enrolls).toHaveLength(1);
 		expect(enrolls[0]?.stopped).toBe(false);
+	});
+});
+
+describe("BLOB_STATUS", () => {
+	const hash = "c".repeat(64);
+
+	it("answers from the file session for the vault it serves, and null for another", async () => {
+		await reset();
+		await handleHostMessage("SYNC_ROSTER_SYNC", config({ vaultId: "A" }));
+		expect(await handleHostMessage("BLOB_STATUS", { vaultId: "A", hashes: [hash] })).toEqual({
+			ok: true,
+			data: { [hash]: { state: "waiting" } },
+		});
+		expect(await handleHostMessage("BLOB_STATUS", { vaultId: "B", hashes: [hash] })).toEqual({
+			ok: true,
+			data: null,
+		});
+	});
+
+	it("is null with no session running", async () => {
+		await reset();
+		expect(await handleHostMessage("BLOB_STATUS", { vaultId: "A", hashes: [hash] })).toEqual({
+			ok: true,
+			data: null,
+		});
 	});
 });

@@ -10,6 +10,7 @@ import { syncKeyFor } from "../../../../sync/sync-keys";
 import { formatDate } from "../../../../util/format-date";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
+import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
@@ -315,30 +316,18 @@ export function DesktopLinkSection() {
 					    browser from the vault is a roster change every device sees, and it lives
 					    with the devices under Device sync. Saying which this is, and what it does
 					    not do, is the whole point of the confirmation. */}
-						{confirmUnlink ? (
-							<span className="inline-flex items-center gap-2">
-								<Button
-									variant="destructiveOutline"
-									size="sm"
-									disabled={busy}
-									onClick={() => void unlink()}
-								>
-									<Trans>Stop using the app</Trans>
+						<InlineConfirm
+							variant="destructiveOutline"
+							armed={confirmUnlink}
+							onArmedChange={setConfirmUnlink}
+							confirmLabel={<Trans>Stop using the app</Trans>}
+							onConfirm={unlink}
+							trigger={(arm) => (
+								<Button variant="ghost" size="sm" disabled={busy} onClick={arm}>
+									<Trans>Disconnect</Trans>
 								</Button>
-								<Button variant="secondary" size="sm" onClick={() => setConfirmUnlink(false)}>
-									<Trans>Cancel</Trans>
-								</Button>
-							</span>
-						) : (
-							<Button
-								variant="ghost"
-								size="sm"
-								disabled={busy}
-								onClick={() => setConfirmUnlink(true)}
-							>
-								<Trans>Disconnect</Trans>
-							</Button>
-						)}
+							)}
+						/>
 					</Row>
 					{confirmUnlink && (
 						<p className="text-xs text-muted-foreground">
