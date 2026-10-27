@@ -4,9 +4,9 @@
 		"noEmit": true,
 		"baseUrl": ".",
 		"paths": {
-			"@core/*": ["../core/src/*"]
+			"@core/*": ["../../packages/core/src/*"]
 		},
 		"types": ["vite/client"]
 	},
-	"include": ["src/**/*", "vite.config.ts", "../core/src/**/*"]
+	"include": ["src/**/*", "vite.config.ts", "../../packages/core/src/**/*"]
 }

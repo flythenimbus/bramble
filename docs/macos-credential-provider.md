@@ -22,7 +22,7 @@ one place (packaging and the shared container) and that is exactly where a spike
   extension. Combined with the existing Chromium and Firefox extension, browser coverage becomes
   complete except for Electron apps, which participate in neither.
 - **Most of the extension is already written, for iOS.**
-  `packages/platform-mobile/ios/App/AutoFillProbe/CredentialProviderViewController.swift` is the
+  `clients/mobile/ios/App/AutoFillProbe/CredentialProviderViewController.swift` is the
   same framework, the same auth-first design, and the same `VaultCryptoFFI` core. It handles
   passwords, TOTP, and passkey get *and* create.
 - **Developer ID distribution is fine**, which was the risk worth checking first. See

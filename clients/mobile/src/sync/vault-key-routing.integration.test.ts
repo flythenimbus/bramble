@@ -22,7 +22,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 // What is real: the crypto, the vault format, slot wrap/unwrap (Argon2id), the entries-blob
 // store, and the recovery path. What is faked: the filesystem (in-memory) and the network.
 
-const WASM_DIR = `${process.cwd()}/../platform-extension/public/wasm`;
+const WASM_DIR = `${process.cwd()}/../extension/public/wasm`;
 
 let wasm: VaultCrypto;
 let crypto: CryptoAdapter;

@@ -21,7 +21,7 @@ changes. Plain JS/TS/CSS changes are picked up by the live-reload flow below.
 
 ## Run
 
-From `packages/platform-mobile`:
+From `clients/mobile`:
 
 ```bash
 pnpm dev              # browser only (plugins no-op) — quickest boot check
@@ -55,7 +55,7 @@ pnpm core:build            # WASM + Vite web bundle (public/wasm, dist/)
 pnpm ffi:build:android     # Rust jniLibs + uniffi Kotlin glue (needs the NDK + cargo-ndk)
 ```
 
-Then from `packages/platform-mobile`, either build + deploy + launch in one step (JDK handled):
+Then from `clients/mobile`, either build + deploy + launch in one step (JDK handled):
 
 ```bash
 pnpm run:android           # cap run; JDK 21 auto-resolved via scripts/run-android.mjs

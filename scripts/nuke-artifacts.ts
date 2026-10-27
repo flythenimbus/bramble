@@ -30,9 +30,9 @@ export function nukeArtifacts(root: string): string[] {
 	};
 
 	remove(join(root, "packages/core-rust/target"));
-	remove(join(root, "packages/platform-mobile/ios/DerivedData"));
+	remove(join(root, "clients/mobile/ios/DerivedData"));
 
-	const target = join(root, "packages/platform-desktop/src-tauri/target");
+	const target = join(root, "clients/desktop/src-tauri/target");
 	if (existsSync(target)) {
 		for (const entry of readdirSync(target)) {
 			if (entry !== "release") remove(join(target, entry));

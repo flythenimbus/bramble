@@ -25,9 +25,9 @@ No action needed. Listed so the next recheck has a baseline.
 | Every wait a peer can stall is bounded | `enroll-host.ts:38-49` |
 | The joiner's introduction is bound to the key it proved before anything is sent | `enroll-host.ts:423` |
 | The vault leaves only after the user approves the SAS. No fallback to the old send-first order | `enroll-host.ts:348-358`, `:391-413` |
-| Extension, mobile and desktop all go through the shared `startEnroll`, and treat expiry or a dismissed dialog as a rejection | `platform-extension/src/offscreen-core.ts:831`, `platform-mobile/src/sync/sync-manager.ts:248`, `platform-desktop/src/sync/transport.ts` (`onInviteExpired`) |
-| A web page cannot answer the approval: the background router and the offscreen both reject non-extension senders | `platform-extension/src/background/router.ts:43`, `platform-extension/src/offscreen.ts:60-74` |
-| Admission signing runs only after approval | `platform-desktop/src/sync/transport.ts` (`onEnrolled`) |
+| Extension, mobile and desktop all go through the shared `startEnroll`, and treat expiry or a dismissed dialog as a rejection | `clients/extension/src/offscreen-core.ts:831`, `clients/mobile/src/sync/sync-manager.ts:248`, `clients/desktop/src/sync/transport.ts` (`onInviteExpired`) |
+| A web page cannot answer the approval: the background router and the offscreen both reject non-extension senders | `clients/extension/src/background/router.ts:43`, `clients/extension/src/offscreen.ts:60-74` |
+| Admission signing runs only after approval | `clients/desktop/src/sync/transport.ts` (`onEnrolled`) |
 | The advisory's version ranges match the tags: `e32330c8` is in 1.11.0-chromium, 1.8.0-firefox and 0.9.8-android, and in none of the releases before them | `git merge-base --is-ancestor` |
 
 ## Update order
@@ -71,8 +71,8 @@ locations is what missed it last time.
 ## 2. Browser link: confirm the desktop's key before pinning it
 
 `pairWithDesktop` stores the desktop's static key as `appPublicKey` as soon as the socket replies
-`done: true` (`packages/platform-extension/src/background/desktop-link.ts:289-301`). That reply is a
-plain JSON frame (`Reply::step` in `packages/platform-desktop/src-tauri/src/socket.rs:672-673`), not
+`done: true` (`clients/extension/src/background/desktop-link.ts:289-301`). That reply is a
+plain JSON frame (`Reply::step` in `clients/desktop/src-tauri/src/socket.rs:672-673`), not
 a message sealed under the new session. In XXpsk3 the initiator finishes by *writing* message 3, so
 at that point it has no proof the responder held the PSK. That proof only arrives with the first
 message the responder seals under the session.
@@ -120,14 +120,14 @@ Change:
   snow 0.9 exposes the remote static as soon as message 2's `s` has been read. It is authenticated
   at that point, because message 2's payload is sealed under `es`.
 - Keep the unpinned `handshake_enroll_initiator`. The browser link uses it (`LINK_ENROLL_INITIATOR`
-  in `platform-extension/src/offscreen-core.ts:726-732`, the `socket.rs` tests,
+  in `clients/extension/src/offscreen-core.ts:726-732`, the `socket.rs` tests,
   `examples/fake-extension.rs`) and has no key to pin.
 - Thread the new export through every binding:
   - the wasm and ffi exports in `handshake.rs`, next to the existing pair at ~405-420;
   - the regenerated uniffi bindings;
   - `NativeCrypto.swift` (~356) and `NativeCryptoPlugin.kt` (~396);
-  - `platform-mobile/src/native-crypto.ts:119` and `:300`;
-  - `sync_crypto.rs:54`, its registration at `lib.rs:306`, and `platform-desktop/src/sync-crypto.ts:84`;
+  - `clients/mobile/src/native-crypto.ts:119` and `:300`;
+  - `sync_crypto.rs:54`, its registration at `lib.rs:306`, and `clients/desktop/src/sync-crypto.ts:84`;
   - `EnrollHandshakeWasm` (`enroll-host.ts:59-67`) and the joiner call at `:266`, passing
     `opts.inviterPub`.
 - Keep the TypeScript check at `enroll-host.ts:289` as a second line.
@@ -141,7 +141,7 @@ a third frame.
 ## 4. Browser link: make the code impossible to guess offline
 
 The link code is 8 characters from a 30-symbol alphabet, about 39 bits
-(`packages/platform-desktop/src-tauri/src/pairing.rs:36-40`), and the PSK is a plain SHA-256 of it
+(`clients/desktop/src-tauri/src/pairing.rs:36-40`), and the PSK is a plain SHA-256 of it
 (`pairing.rs:361`). XXpsk3 mixes the PSK into message 3, so whoever plays the desktop receives a
 message whose tag checks a guessed code offline. `MAX_ATTEMPTS` and the 3-minute TTL only limit
 online guessing.

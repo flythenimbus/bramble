@@ -15,5 +15,5 @@
  * `@source` below participates in it.
  */
 
-@import "../../../core/src/styles/index.css";
+@import "../../../../packages/core/src/styles/index.css";
 @source '../**/*.{js,ts,jsx,tsx}';

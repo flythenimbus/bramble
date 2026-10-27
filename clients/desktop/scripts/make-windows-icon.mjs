@@ -16,7 +16,7 @@
  * squircle-shaped by the other script; the Square*Logo.png files are MSIX art that the NSIS
  * installer never reads. Generating the whole set here would quietly undo macOS.
  *
- * Run: pnpm icons:windows   (from packages/platform-desktop)
+ * Run: pnpm icons:windows   (from clients/desktop)
  */
 
 import { execFileSync } from "node:child_process";

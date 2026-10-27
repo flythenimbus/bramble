@@ -173,7 +173,7 @@ plaintext path, for CI) else `~/.config/bramble/cws-service-account.age` (overri
 ### Test / build without publishing
 
 ```sh
-pnpm run bundle              # build packages/platform-extension/bramble.zip
+pnpm run bundle              # build clients/extension/bramble.zip
 pnpm run sign:cws --upload-only   # auth + upload only, no publish (safe dry run)
 ```
 
@@ -218,7 +218,7 @@ rm -P /tmp/amo.json
 
 The add-on id is already set in `packages/manifests/firefox/manifest.json`
 (`browser_specific_settings.gecko.id`). Listing copy is localized under
-`packages/platform-extension/store/firefox/` and pushed with `pnpm run metadata:firefox`;
+`clients/extension/store/firefox/` and pushed with `pnpm run metadata:firefox`;
 screenshots + category are set once in the AMO Developer Hub.
 
 ### Each release
@@ -331,7 +331,7 @@ age -p -o android-release-keystore.backup.age /tmp/bramble-release.jks
 printf %s "$KS_PW" | age -r age1yubikey1XXXX -o ~/.config/bramble/android-keystore-password.age
 
 # 5. Record the cert SHA-256 (what users verify); paste it into the "Verifying a release APK"
-#    section of packages/platform-mobile/README.md (the single published source of truth).
+#    section of clients/mobile/README.md (the single published source of truth).
 keytool -list -v -keystore /tmp/bramble-release.jks -alias bramble -storepass "$KS_PW" | grep "SHA256:"
 
 # 6. Destroy the plaintext keystore.
@@ -356,7 +356,7 @@ GitHub's API (so the commit is verified with no key on the runner, and lands onl
 that was built), tags, and publishes. Approve a finished build from a phone and it goes out.
 
 Before anything is public, the signed APK is held to the certificate fingerprint published in
-`packages/platform-mobile/README.md`, the same one users are told to check, and a mismatch stops the
+`clients/mobile/README.md`, the same one users are told to check, and a mismatch stops the
 release. The draft is then downloaded and checked again before it goes live. `-f dry_run=true` on a
 dispatch runs all of that and stops before the commit: the way to test the pipeline or a rotated
 secret without spending a version.
@@ -390,7 +390,7 @@ draft itself, more strictly, before publishing.
 ### Verifying (what users run)
 
 The user-facing verification steps and the published certificate fingerprint live in
-[`packages/platform-mobile/README.md`](../packages/platform-mobile/README.md) under "Verifying a
+[`clients/mobile/README.md`](../clients/mobile/README.md) under "Verifying a
 release APK", the single published source of truth for the fingerprint.
 
 ### If the YubiKey is lost
@@ -647,7 +647,7 @@ rm -P /tmp/updater.key /tmp/updater.key.pub
 ```
 
 Put the public half (`/tmp/updater.key.pub`'s contents, printed by step 1) in
-`plugins.updater.pubkey` in `packages/platform-desktop/src-tauri/tauri.conf.json`. It is public and
+`plugins.updater.pubkey` in `clients/desktop/src-tauri/tauri.conf.json`. It is public and
 belongs in the repo. Then remove any plaintext `TAURI_SIGNING_PRIVATE_KEY` from `.env.local`, or the
 build will keep using it and never ask for the YubiKey.
 
@@ -871,7 +871,7 @@ takes the packages on its word, where a desktop update carries minisign under Au
 Developer ID, so whoever holds this key needs no other.
 
 **Replacing it is a delivery problem, not a key problem.** The public keyring is committed at
-`packages/platform-desktop/apt/bramble-keyring.asc`, served as `keys.asc`, and shipped inside the
+`clients/desktop/apt/bramble-keyring.asc`, served as `keys.asc`, and shipped inside the
 `.deb`, which is how a new key reaches installed machines *before* it signs anything. Without
 that, any rotation breaks every installation at once. The ordered procedure is in
 [apt-releases.md](apt-releases.md#the-keyring-and-how-a-key-is-rotated); the short version is add
@@ -904,7 +904,7 @@ ykman openpgp keys set-touch sig on
 gpg --list-secret-keys --keyid-format=long
 ```
 
-`publish-apt.ts` serves `packages/platform-desktop/apt/bramble-keyring.asc` as `keys.asc` and
+`publish-apt.ts` serves `clients/desktop/apt/bramble-keyring.asc` as `keys.asc` and
 refuses to upload unless the key that signed the index is in it, so the two cannot drift.
 
 Two things to check once, because both fail in ways that read as something else:
@@ -948,7 +948,7 @@ FPR=$(gpg --list-keys --with-colons "Bramble APT (standby)" | awk -F: '/^fpr/{pr
 
 # 2. The public half into the keyring the package ships. THIS is the step that has to happen a
 #    release or two before the key ever signs.
-gpg --armor --export "$FPR" >> packages/platform-desktop/apt/bramble-keyring.asc
+gpg --armor --export "$FPR" >> clients/desktop/apt/bramble-keyring.asc
 
 # 3. Day-to-day copy, encrypted to the YubiKey age recipient like every other key here.
 gpg --armor --export-secret-keys "$FPR" | age -r age1yubikey1... -o ~/.config/bramble/apt-signing-key.age

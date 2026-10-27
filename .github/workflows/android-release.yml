@@ -15,7 +15,7 @@ name: Android release
 #
 # The release commit goes through GitHub's API, so it is verified without a signing key on the
 # runner, and it lands only if main still points where the build started. The signed apk is held to
-# the certificate fingerprint published in packages/platform-mobile/README.md before anything is
+# the certificate fingerprint published in clients/mobile/README.md before anything is
 # public, and the draft release is downloaded and checked again before it is published. That last
 # check lives here rather than in release.yml because a release created with this workflow's own
 # token does not fire other workflows.

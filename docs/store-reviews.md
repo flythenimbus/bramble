@@ -12,7 +12,7 @@ and what to check before shipping a change to it.
 | The hook that counts usage and decides | `packages/core/src/app/hooks/useReviewNudge.ts` |
 | The card (extension only) | `packages/core/src/app/components/ReviewNudgeCard.tsx` |
 | The permanent link | Settings -> About -> "Rate Bramble" |
-| iOS native prompt | `packages/platform-mobile/ios/App/App/AppReview.swift` |
+| iOS native prompt | `clients/mobile/ios/App/App/AppReview.swift` |
 | Persisted counters | `pref.reviewNudge`, device-scoped |
 
 ## Tuning it

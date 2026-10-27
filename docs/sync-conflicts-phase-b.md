@@ -74,8 +74,8 @@ Parts per the spec's table: `credential` = username, password, totp (login); `ca
 
 **Files:**
 - Modify: `packages/core/src/vault/entry-mutations.ts` (add, importMany, update, setArchived, setTags, resolve)
-- Modify: `packages/platform-extension/src/background/corner-prompt.ts` (save, update), `packages/platform-extension/src/background/passkey-store.ts` (create, attach)
-- Test: `packages/core/src/vault/entry-mutations.test.ts`, `packages/platform-extension/src/background/corner-prompt-commit.test.ts`, `packages/platform-extension/src/background/passkey-store.test.ts`
+- Modify: `clients/extension/src/background/corner-prompt.ts` (save, update), `clients/extension/src/background/passkey-store.ts` (create, attach)
+- Test: `packages/core/src/vault/entry-mutations.test.ts`, `clients/extension/src/background/corner-prompt-commit.test.ts`, `clients/extension/src/background/passkey-store.test.ts`
 
 **Interfaces:**
 - Consumes: `withPartStamps` (Task 1).
@@ -156,8 +156,8 @@ The `hlc` follows the Global Constraints. `causal.vv` is `joinCausal(inputs).vv`
 ### Task 4: Combine during sync and on load, behind the flag
 
 **Files:**
-- Modify: `packages/core/src/sync/combine.ts` (add `combinePayload`), `packages/core/src/sync/apply-remote.ts`, `packages/core/src/hooks/useVault.tsx` (`loadEntries`), `packages/platform-extension/src/background/sync.ts` (`makeVaultSyncPort`)
-- Test: `packages/core/src/sync/combine.test.ts`, `packages/core/src/sync/two-device.test.ts`, `packages/core/src/hooks/useVault.conflicts.test.tsx`, `packages/platform-extension/src/background/sync.test.ts`
+- Modify: `packages/core/src/sync/combine.ts` (add `combinePayload`), `packages/core/src/sync/apply-remote.ts`, `packages/core/src/hooks/useVault.tsx` (`loadEntries`), `clients/extension/src/background/sync.ts` (`makeVaultSyncPort`)
+- Test: `packages/core/src/sync/combine.test.ts`, `packages/core/src/sync/two-device.test.ts`, `packages/core/src/hooks/useVault.conflicts.test.tsx`, `clients/extension/src/background/sync.test.ts`
 
 **Interfaces:**
 - Consumes: `combineSiblings` (Task 3), `normalizeEntryData`.

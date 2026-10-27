@@ -4,9 +4,9 @@
 		"noEmit": true,
 		"baseUrl": ".",
 		"paths": {
-			"@core/*": ["../core/src/*"]
+			"@core/*": ["../../packages/core/src/*"]
 		},
 		"types": ["chrome", "vite/client"]
 	},
-	"include": ["src/**/*", "../core/src/**/*"]
+	"include": ["src/**/*", "../../packages/core/src/**/*"]
 }

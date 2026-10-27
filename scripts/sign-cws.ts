@@ -1,5 +1,5 @@
 // Publish the built Chromium extension to the Chrome Web Store via the Publish API V2
-// (service-account auth). Uploads the signed packages/platform-extension/bramble.crx to the item,
+// (service-account auth). Uploads the signed clients/extension/bramble.crx to the item,
 // then publishes it (it goes to CWS review, then live). The Chrome analog of sign-firefox.ts (AMO).
 //   node scripts/sign-cws.ts [path/to/bramble.crx] [--upload-only | --check]
 //   --upload-only  upload the new package but don't publish (dry run for the auth + upload)
@@ -32,9 +32,7 @@ const argv = process.argv.slice(2);
 const uploadOnly = argv.includes("--upload-only");
 // A release's preflight: the credentials and the item, before anything is packed or committed.
 const checkOnly = argv.includes("--check");
-const CRX = resolve(
-	argv.find((a) => !a.startsWith("--")) ?? "packages/platform-extension/bramble.crx",
-);
+const CRX = resolve(argv.find((a) => !a.startsWith("--")) ?? "clients/extension/bramble.crx");
 const ITEM_ID = CWS_ITEM_ID;
 // The v2 API is publisher-scoped: publishers/{PUBLISHER_ID}/items/{ITEM_ID}. The publisher id is
 // your developer-account id (Chrome Web Store Developer Dashboard -> Account, or in the dashboard URL).

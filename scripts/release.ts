@@ -82,7 +82,7 @@ const REPO = process.env.GITHUB_REPOSITORY ?? "flythenimbus/bramble";
 // Up here rather than in the android section below, which is where they belong but not where they
 // can live: the dispatch near the top of this file calls releaseAndroid while the module is still
 // evaluating, and a `const` declared after that line does not exist yet when it runs.
-const ANDROID = "packages/platform-mobile/android";
+const ANDROID = "clients/mobile/android";
 const ANDROID_GRADLE = `${ANDROID}/app/build.gradle`;
 // gradle has no release signingConfig, so assembleRelease lands here UNSIGNED; apksigner signs it
 // afterwards, once, from a keystore that only exists on disk for those few seconds.
@@ -92,24 +92,24 @@ const HANDOFF = "release-out";
 
 const FIREFOX_MANIFEST = "packages/manifests/firefox/manifest.json";
 /** What web-ext uploads to AMO, which signs it. */
-const FIREFOX_DIST = "packages/platform-extension/dist-firefox";
+const FIREFOX_DIST = "clients/extension/dist-firefox";
 /** The same build zipped, which the GitHub release carries beside its checksum. */
-const FIREFOX_ZIP = "packages/platform-extension/bramble-firefox.zip";
+const FIREFOX_ZIP = "clients/extension/bramble-firefox.zip";
 
 const CHROME_MANIFEST = "packages/manifests/chromium/manifest.json";
 /** What crx3 packs, with the dev `key` already stripped from its manifest. */
-const CHROME_DIST = "packages/platform-extension/dist-chromium";
-const CHROME_ZIP = "packages/platform-extension/bramble.zip";
-const CHROME_CRX = "packages/platform-extension/bramble.crx";
+const CHROME_DIST = "clients/extension/dist-chromium";
+const CHROME_ZIP = "clients/extension/bramble.zip";
+const CHROME_CRX = "clients/extension/bramble.crx";
 
 /** Desktop version lives in the Tauri config; the updater manifest is served off the website. */
-const DESKTOP_CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
+const DESKTOP_CONF = "clients/desktop/src-tauri/tauri.conf.json";
 const DESKTOP_MANIFEST = "website/public/desktop/latest.json";
 /** Canonical copy of the Homebrew cask; the published one lives in homebrew/homebrew-cask. */
-const DESKTOP_CASK = "packages/platform-desktop/homebrew/bramble.rb";
+const DESKTOP_CASK = "clients/desktop/homebrew/bramble.rb";
 /** Branch deploy-website.yml builds from; the manifest is only live once that runs. */
 const WEBSITE_BRANCH = "main";
-const IOS_PBXPROJ = "packages/platform-mobile/ios/App/App.xcodeproj/project.pbxproj";
+const IOS_PBXPROJ = "clients/mobile/ios/App/App.xcodeproj/project.pbxproj";
 
 /**
  * What release commits write: each target's version and the metadata a release publishes. One
@@ -140,13 +140,13 @@ const isReleaseFile = (path: string): boolean =>
 // mistake. Scope only ever subtracts, in PLATFORM_SCOPES below.
 const SHARED_PATHS = ["packages/core", "packages/core-rust", "packages/theme"];
 const PLATFORM_PATHS: Record<string, string[]> = {
-	chromium: ["packages/platform-extension", "packages/manifests/chromium"],
-	firefox: ["packages/platform-extension", "packages/manifests/firefox"],
-	desktop: ["packages/platform-desktop"],
+	chromium: ["clients/extension", "packages/manifests/chromium"],
+	firefox: ["clients/extension", "packages/manifests/firefox"],
+	desktop: ["clients/desktop"],
 	// One mobile package builds both, so each excludes the other's native half and keeps the
 	// shared src/. Order matters to git: the exclude has to follow what it subtracts from.
-	ios: ["packages/platform-mobile", ":(exclude)packages/platform-mobile/android"],
-	android: ["packages/platform-mobile", ":(exclude)packages/platform-mobile/ios"],
+	ios: ["clients/mobile", ":(exclude)clients/mobile/android"],
+	android: ["clients/mobile", ":(exclude)clients/mobile/ios"],
 };
 
 // A commit whose scope names a DIFFERENT platform is not this release's news, even when its paths
@@ -372,7 +372,7 @@ async function releaseExtension(target: string, version: string) {
 	const MANIFESTS: Record<string, string> = {
 		chromium: "packages/manifests/chromium/manifest.json",
 	};
-	const DIST = "packages/platform-extension";
+	const DIST = "clients/extension";
 	const manifest = MANIFESTS[target];
 	if (!manifest)
 		fail(
@@ -596,8 +596,7 @@ async function releaseAndroid(version: string, resume: boolean) {
 	// Native build toolchain, checked before the gate: core:build shells out to wasm-pack and
 	// ffi:build:android to cargo-ndk, and finding either missing after the release commit means a
 	// rewind for something `cargo install` fixes in a minute.
-	if (!resume)
-		requireBins(["wasm-pack", "cargo-ndk"], "packages/platform-mobile/docs/development.md");
+	if (!resume) requireBins(["wasm-pack", "cargo-ndk"], "clients/mobile/docs/development.md");
 	const apksigner =
 		findBuildTool("apksigner") ??
 		fail("apksigner not found (Android SDK build-tools); see docs/release-signing.md");
@@ -825,7 +824,7 @@ function signApk(o: {
 
 /**
  * The signing cert's SHA-256, asserted equal to the fingerprint users are told to check. That lives
- * in packages/platform-mobile/README.md as the single published source of truth, so it is read from
+ * in clients/mobile/README.md as the single published source of truth, so it is read from
  * there rather than copied: a wrong keystore can never publish, whether or not anyone is watching.
  */
 function assertReleaseCert(apksigner: string, java21: string, apk: string): string {
@@ -834,12 +833,12 @@ function assertReleaseCert(apksigner: string, java21: string, apk: string): stri
 		env: { ...process.env, JAVA_HOME: java21 },
 	});
 	const cert = out.match(/SHA-256 digest:\s*([0-9a-f]{64})/i)?.[1]?.toLowerCase();
-	const readme = readFileSync("packages/platform-mobile/README.md", "utf8");
+	const readme = readFileSync("clients/mobile/README.md", "utf8");
 	const published = readme
 		.match(/\b([0-9A-F]{2}(?::[0-9A-F]{2}){31})\b/i)?.[1]
 		?.replace(/:/g, "")
 		.toLowerCase();
-	if (!published) fail("no certificate fingerprint in packages/platform-mobile/README.md");
+	if (!published) fail("no certificate fingerprint in clients/mobile/README.md");
 	if (cert !== published)
 		fail(
 			`${basename(apk)} is signed by ${cert ?? "an unreadable certificate"}, not the published ` +
@@ -1469,7 +1468,7 @@ async function runnerPublishChrome(version: string, tag: string): Promise<void> 
 
 /** Where build-windows.ts hands the dispatched run to the step that collects it. */
 function windowsRunFile(): string {
-	return "packages/platform-desktop/src-tauri/target/.windows-signing-run";
+	return "clients/desktop/src-tauri/target/.windows-signing-run";
 }
 
 /**
@@ -1612,7 +1611,7 @@ function runnerPrepareDesktop(version: string): void {
  */
 function macosHandoff(): { root: string; tarball: string; files: string[] } {
 	return {
-		root: "packages/platform-desktop/src-tauri",
+		root: "clients/desktop/src-tauri",
 		tarball: join(HANDOFF, "macos-universal.tar"),
 		files: [
 			"target/universal-apple-darwin/release/bramble-desktop",
@@ -1670,7 +1669,7 @@ function receiveMacosBuild(): void {
 async function runnerPublishDesktop(version: string, tag: string): Promise<void> {
 	if (!process.env.GITHUB_ACTIONS) fail("--runner-publish runs in desktop-release.yml");
 	const dryRun = flags.has("--dry-run");
-	const bundle = "packages/platform-desktop/src-tauri/target/universal-apple-darwin/release/bundle";
+	const bundle = "clients/desktop/src-tauri/target/universal-apple-darwin/release/bundle";
 	runnerPrepareDesktop(version);
 	const sha = capture("git rev-parse HEAD");
 	// The updater key signs whatever this release carries; the Apple ones are only wanted when
@@ -1725,8 +1724,7 @@ async function runnerPublishDesktop(version: string, tag: string): Promise<void>
 		mkdirSync(dirname(windowsRunFile()), { recursive: true });
 		writeFileSync(windowsRunFile(), `${runId}\n`);
 		run("node scripts/build-windows.ts --ci-collect");
-		const nsis =
-			"packages/platform-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis";
+		const nsis = "clients/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis";
 		for (const f of readdirSync(nsis))
 			if (f.endsWith("-setup.exe") && f.includes(`_${version}_`)) windows.push(join(nsis, f));
 	}
@@ -1884,7 +1882,7 @@ function collectDesktopAssets(
 	// other two platforms there is one file and its signature rather than a pair to keep in step.
 	// Same rule about the .sig: unsigned means every installed app refuses the update.
 	for (const triple of ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"] as const) {
-		const dir = `packages/platform-desktop/src-tauri/target/${triple}/release/bundle/nsis`;
+		const dir = `clients/desktop/src-tauri/target/${triple}/release/bundle/nsis`;
 		if (skipped.has("windows") || !existsSync(dir)) continue;
 		const built = readdirSync(dir).filter((f) => f.endsWith("-setup.exe") && ofThisVersion(f));
 		for (const f of built) {
@@ -2082,8 +2080,8 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 	// cargo puts a --target build under target/<triple>/, so a universal build does not land in
 	// target/release. Reading the wrong one would publish the previous aarch64 build instead.
 	const BUNDLE = universal
-		? "packages/platform-desktop/src-tauri/target/universal-apple-darwin/release/bundle"
-		: "packages/platform-desktop/src-tauri/target/release/bundle";
+		? "clients/desktop/src-tauri/target/universal-apple-darwin/release/bundle"
+		: "clients/desktop/src-tauri/target/release/bundle";
 
 	// Tauri requires a strict major.minor.patch; it refuses to build otherwise, and finding that
 	// out after the gate and a full build wastes ten minutes.
@@ -2325,13 +2323,13 @@ function currentVersion(
 ): string {
 	if (platform === "android")
 		return matchVersion(
-			read("packages/platform-mobile/android/app/build.gradle"),
+			read("clients/mobile/android/app/build.gradle"),
 			/versionName "([^"]+)"/,
 			"versionName in build.gradle",
 		);
 	if (platform === "ios")
 		return matchVersion(
-			read("packages/platform-mobile/ios/App/App.xcodeproj/project.pbxproj"),
+			read("clients/mobile/ios/App/App.xcodeproj/project.pbxproj"),
 			/MARKETING_VERSION = ([^;]+);/,
 			"MARKETING_VERSION in project.pbxproj",
 		);

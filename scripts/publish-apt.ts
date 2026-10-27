@@ -45,9 +45,9 @@ const DEBS = join(ROOT, "dist-linux/deb");
 const BUCKET = "bramble-apt";
 const LIVE = "https://apt.bramble.sh";
 /** The keyring users verify against; see the check before the upload. */
-const keyring = join(ROOT, "packages/platform-desktop/apt/bramble-keyring.asc");
+const keyring = join(ROOT, "clients/desktop/apt/bramble-keyring.asc");
 /** The sources snippet users install; its Architectures are what the index must serve. */
-const sources = join(ROOT, "packages/platform-desktop/apt/bramble.sources");
+const sources = join(ROOT, "clients/desktop/apt/bramble.sources");
 
 const argv = process.argv.slice(2);
 const dryRun = argv.includes("--dry-run");
@@ -309,7 +309,7 @@ if (!fingerprints.some((fpr) => fpr.endsWith(signer)))
 	fail(
 		`${basename(keyring)} does not contain the key that signed the index (${gpgKey}).\n` +
 			"Nothing was uploaded. Add it:\n" +
-			`  gpg --armor --export ${gpgKey} >> packages/platform-desktop/apt/bramble-keyring.asc`,
+			`  gpg --armor --export ${gpgKey} >> clients/desktop/apt/bramble-keyring.asc`,
 	);
 copyFileSync(keyring, join(publishedDir, "keys.asc"));
 // The snippet users install, and the one thing here that is not derived from the repository, so
@@ -321,7 +321,7 @@ const actual = arches(readFileSync(publishedRelease, "utf8"), publishedRelease);
 if (claimed.join(" ") !== actual.join(" "))
 	fail(
 		`bramble.sources claims "${claimed.join(" ")}" but the index publishes "${actual.join(" ")}".\n` +
-			"Nothing was uploaded. Fix Architectures in packages/platform-desktop/apt/bramble.sources.",
+			"Nothing was uploaded. Fix Architectures in clients/desktop/apt/bramble.sources.",
 	);
 copyFileSync(sources, join(publishedDir, "bramble.sources"));
 

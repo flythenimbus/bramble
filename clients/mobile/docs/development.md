@@ -6,7 +6,7 @@ hit standing it up, and how to get past each one. For the high-level port plan s
 
 ## Architecture in one paragraph
 
-`packages/platform-mobile` is a Vite single-page app that mounts `@core`'s `App`
+`clients/mobile` is a Vite single-page app that mounts `@core`'s `App`
 (`src/main.tsx`) with five mobile adapters (`src/adapters/`) implementing the
 `PlatformContext` interface: `storage` (`@capacitor/filesystem` + `@capacitor/preferences`),
 `crypto` (in-webview Rust WASM, no offscreen hop), `clipboard` (`@capacitor/clipboard`
@@ -28,7 +28,7 @@ dist/               --cap sync-->   ios/, android/     (native web assets)
 - Plain JS/TS/CSS changes do **not** need `core:build` during a live-reload session
   (see below) — Vite HMR handles them.
 
-## Day-to-day commands (run from `packages/platform-mobile`)
+## Day-to-day commands (run from `clients/mobile`)
 
 | Command | Mode | Notes |
 |---|---|---|
@@ -308,7 +308,7 @@ root. The App Store Connect key is age-encrypted at
 `~/.config/bramble/asc-api-key.age` and unwrapped per run with a YubiKey PIN + touch (see
 `docs/release-signing.md`); `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_KEY_CONTENT` in the environment
 override it, which is the seam CI would use. **Gotcha:** the Fastfile pins `derived_data_path` to internal disk
-(`packages/platform-mobile/ios/DerivedData`, gitignored) because Xcode's default DerivedData here is the
+(`clients/mobile/ios/DerivedData`, gitignored) because Xcode's default DerivedData here is the
 external Transcend volume, which EPERMs the SPM checkout cache and fails `build_app` with "Could not
 resolve package dependencies" (quirks 3-6). That pin used to be `/tmp`, but macOS prunes `/tmp` after
 ~3 days and left the SPM checkout corrupt, so it's repo-local now. Both lanes also pass

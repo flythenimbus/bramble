@@ -25,7 +25,7 @@ const SOURCE = "en-US";
 const VERBATIM = new Set(["title.txt"]); // brand name — copied as-is
 const TXT = ["title.txt", "short_description.txt", "full_description.txt"];
 const ICON_SRC = repo(
-	"packages/platform-mobile/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon~ios-marketing.png",
+	"clients/mobile/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon~ios-marketing.png",
 );
 
 export async function run() {

@@ -21,10 +21,10 @@ import init, {
 	unwrap_vek_password,
 	verify_password_slot,
 	wrap_vek_password,
-} from "../platform-extension/public/wasm/vault_crypto.js";
+} from "../../clients/extension/public/wasm/vault_crypto.js";
 
 const wasmBytes = readFileSync(
-	new URL("../platform-extension/public/wasm/vault_crypto_bg.wasm", import.meta.url),
+	new URL("../../clients/extension/public/wasm/vault_crypto_bg.wasm", import.meta.url),
 );
 await init({ module_or_path: wasmBytes });
 

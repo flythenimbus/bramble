@@ -2,7 +2,7 @@
 // public store): AMO reviews it, then signs + publishes, so nothing is downloaded here. Pass
 // --channel unlisted to sign immediately for self-distribution and write bramble-firefox.xpi. Usage:
 //   node scripts/sign-firefox.ts [path/to/dist] [--channel listed|unlisted]
-//   (defaults to packages/platform-extension/dist-firefox, channel listed)
+//   (defaults to clients/extension/dist-firefox, channel listed)
 //
 // Firefox differs from Chrome: Mozilla holds the signing key, so there is no local key to pack a
 // .crx with. What we hold are AMO API credentials (a JWT issuer + secret from addons.mozilla.org).
@@ -38,8 +38,8 @@ const channelIdx = argv.indexOf("--channel");
 const channel = channelIdx >= 0 ? argv[channelIdx + 1] : "listed";
 // The lone positional is the dist dir (skip the value following --channel).
 const distArg = argv.find((a, i) => !a.startsWith("--") && argv[i - 1] !== "--channel");
-const DIST = resolve(distArg ?? "packages/platform-extension/dist-firefox");
-const OUT = resolve("packages/platform-extension/bramble-firefox.xpi");
+const DIST = resolve(distArg ?? "clients/extension/dist-firefox");
+const OUT = resolve("clients/extension/bramble-firefox.xpi");
 const HOME = process.env.HOME ?? "";
 const CREDS_AGE =
 	process.env.AMO_CREDENTIALS_AGE ?? join(HOME, ".config/bramble/amo-api-credentials.age");

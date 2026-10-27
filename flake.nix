@@ -32,7 +32,7 @@
     in
     {
       packages = forEachSystem (pkgs: rec {
-        bramble = pkgs.callPackage ./packages/platform-desktop/nix/package.nix {
+        bramble = pkgs.callPackage ./clients/desktop/nix/package.nix {
           # `self` rather than a relative path, so the build sees the flake's own source and a
           # dirty tree is caught rather than silently built from the checkout.
           src = self;
@@ -41,7 +41,7 @@
       });
 
       overlays.default = final: _prev: {
-        bramble = final.callPackage ./packages/platform-desktop/nix/package.nix { src = self; };
+        bramble = final.callPackage ./clients/desktop/nix/package.nix { src = self; };
       };
 
       # `nix flake check` builds the package, which is the only check worth having here: the

@@ -10,7 +10,7 @@ import { type Peer, pairWithPhone, test, timeEdit } from "./fixtures";
 //
 //   BRAMBLE_OLD_EXTENSION   an older extension's dist-chromium (see e2e/README.md)
 //   BRAMBLE_OLD_MOBILE_URL  the mobile app from an older checkout, served by its own vite, e.g.
-//                           `npx vite --port 5299` in that checkout's packages/platform-mobile
+//                           `npx vite --port 5299` in that checkout's clients/mobile
 
 async function bothWays(browser: Parameters<typeof pairWithPhone>[0], phone: Peer) {
 	const popup = await pairWithPhone(browser, phone);

@@ -42,7 +42,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
   inherit src;
 
   # The workspace root is the pnpm root; the crate is four levels in.
-  cargoRoot = "packages/platform-desktop/src-tauri";
+  cargoRoot = "clients/desktop/src-tauri";
   buildAndTestSubdir = finalAttrs.cargoRoot;
 
   # By lockfile rather than by cargoHash: every dependency is a registry crate (no git sources),
@@ -64,7 +64,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     # Updater artifacts are signed at bundle time and there is no key here, which would fail the
     # build. Nothing is lost: this install cannot self-update anyway, and an unsigned updater
     # archive is worse than none.
-    substituteInPlace packages/platform-desktop/src-tauri/tauri.conf.json \
+    substituteInPlace clients/desktop/src-tauri/tauri.conf.json \
       --replace-fail '"createUpdaterArtifacts": true' '"createUpdaterArtifacts": false'
   '';
 

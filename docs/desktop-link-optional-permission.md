@@ -31,7 +31,7 @@ anywhere.
   in the same per-extension-id profile pref either way, but the store path itself is unexercised.
   The ungranted case is detected regardless, so a surprise there degrades to the "Permission needed"
   row rather than to a dead link.
-- **The desktop app needs no change.** `packages/platform-desktop/src-tauri/src/manifest.rs` keys the
+- **The desktop app needs no change.** `clients/desktop/src-tauri/src/manifest.rs` keys the
   host manifest on the extension id, which is fixed by the `key` in the Chromium manifest and is
   unaffected.
 - **This is not a manifest edit.** A granted permission never reaches a context that already exists,
@@ -115,12 +115,12 @@ automated backstop and must be re-checked by hand if it is ever doubted.
 The natural design is to request the permission in Settings and have the background pick it up from
 `chrome.permissions.onAdded`. Finding 1 kills it: that handler runs in the worker that already
 exists, so `NativeSession`'s constructor
-(`packages/platform-extension/src/background/desktop-link.ts:66`) calls a `connectNative` that is
+(`clients/extension/src/background/desktop-link.ts:66`) calls a `connectNative` that is
 `undefined` and throws a `TypeError` straight into `openDesktopLink`'s catch. A silently dead link,
 with the permission granted and nothing saying why.
 
 Waiting for the worker to recycle does not rescue it either. Every open view holds a runtime port for
-its lifetime (`packages/platform-extension/src/view-port.ts`), which is what "Immediate" auto-lock is
+its lifetime (`clients/extension/src/view-port.ts`), which is what "Immediate" auto-lock is
 built on, and that port keeps the worker alive. Its own comment acknowledges recycles happen under a
 still-open view, but not on a timescale an interactive pairing flow can wait for. The pairing window
 being open is precisely what stops the worker restarting.
@@ -180,7 +180,7 @@ background-owned and none of them is on a path where a sub-minute delay is visib
 
 **Phase 1: manifest and gate (done).** Moved `"nativeMessaging"` from `permissions` to
 `"optional_permissions"` in `packages/manifests/chromium/manifest.json`. Change `canNativeMessage()`
-in `packages/platform-extension/src/desktop-link.ts:30` to read both arrays, so Firefox stays gated
+in `clients/extension/src/desktop-link.ts:30` to read both arrays, so Firefox stays gated
 off and the "turns itself on the day Firefox lands" property survives.
 
 **Phase 2: adapter surface (done).** Added to `DesktopLinkAdapter` in
@@ -198,15 +198,15 @@ Optional, so a host that grants at install omits it and the UI reads absent as a
 Implement it in the page against `api.permissions`, never dispatched to the background.
 
 **Phase 3: lend the transport (done).** `LinkTransport` in
-`packages/platform-extension/src/background/desktop-link.ts` splits the pipe from the handshake, and
+`clients/extension/src/background/desktop-link.ts` splits the pipe from the handshake, and
 `ProxiedSession` implements it over a runtime port from the page. `openNativeProxy()` in
-`packages/platform-extension/src/desktop-link.ts` is the page half: native port in, runtime port
+`clients/extension/src/desktop-link.ts` is the page half: native port in, runtime port
 out, no frame ever read. `pairWithDesktop` picks the lent transport when one is registered and a
 direct `NativeSession` otherwise, so a worker that restarted after the grant needs no page at all.
 One state machine, one wire format, nothing to keep in sync.
 
 **Phase 4: background hardening (done).** Two predicates in
-`packages/platform-extension/src/background/desktop-link.ts`, and keeping them apart is the point.
+`clients/extension/src/background/desktop-link.ts`, and keeping them apart is the point.
 `permitted()` reads `permissions.contains` and answers "has the user allowed this", which is what
 `desktopLinkStatus().permitted` reports. `canOpenNativePipe()` adds a binding check and answers "can
 THIS worker do it", which is a capability question rather than a permission one and is the only

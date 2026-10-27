@@ -56,7 +56,7 @@ if (target === "macos") {
 	needsPlatform("darwin", "run:macos");
 	// A universal build lands under its triple, not in release/, so check there first: reading the
 	// wrong one launches the previous aarch64 build without saying so.
-	const bundles = "packages/platform-desktop/src-tauri/target";
+	const bundles = "clients/desktop/src-tauri/target";
 	const app =
 		[
 			`${bundles}/universal-apple-darwin/release/bundle/macos/Bramble.app`,

@@ -14,7 +14,7 @@ import { commitOverReleases, overReleasesRefusal } from "./github-commit.ts";
 const RELEASE = new Set([
 	"packages/manifests/chromium/manifest.json",
 	"packages/manifests/firefox/manifest.json",
-	"packages/platform-desktop/src-tauri/tauri.conf.json",
+	"clients/desktop/src-tauri/tauri.conf.json",
 ]);
 const isReleaseFile = (p: string) => RELEASE.has(p);
 
@@ -232,7 +232,7 @@ if (args[1] === "graphql") {
 					],
 					files: [
 						{ filename: "packages/manifests/chromium/manifest.json" },
-						{ filename: "packages/platform-desktop/src-tauri/tauri.conf.json" },
+						{ filename: "clients/desktop/src-tauri/tauri.conf.json" },
 					],
 				},
 			},

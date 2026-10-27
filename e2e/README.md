@@ -152,7 +152,7 @@ needs that old build, and skips without it:
 ```sh
 git worktree add --detach /tmp/bramble-old 1.32.0-chromium
 (cd /tmp/bramble-old && pnpm install --frozen-lockfile && pnpm wasm:build && pnpm build)
-BRAMBLE_OLD_EXTENSION=/tmp/bramble-old/packages/platform-extension/dist-chromium pnpm test:e2e:sync
+BRAMBLE_OLD_EXTENSION=/tmp/bramble-old/clients/extension/dist-chromium pnpm test:e2e:sync
 ```
 
 Relaunching a profile on another build's `dist-chromium` keeps the **old** background: Chrome

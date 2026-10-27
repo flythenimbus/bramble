@@ -20,7 +20,7 @@
  * mask either, but its convention is full-bleed, and the 100px margin would just make the
  * icon look shrunken in the taskbar.
  *
- * Run: pnpm icons:macos   (from packages/platform-desktop)
+ * Run: pnpm icons:macos   (from clients/desktop)
  */
 
 import { execFileSync } from "node:child_process";

@@ -40,7 +40,7 @@ import { dockerProblem } from "./docker-available.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IMAGE = "bramble-linux-build";
-const DOCKERFILE = "packages/platform-desktop/docker/linux-build.Dockerfile";
+const DOCKERFILE = "clients/desktop/docker/linux-build.Dockerfile";
 const OUT = join(ROOT, "dist-linux");
 
 /**
@@ -150,7 +150,7 @@ const script = [
 	// any change to the image invalidates it and nothing else does.
 	'if [ "$(cat /work/.base-image 2>/dev/null)" != "$BRAMBLE_BASE_IMAGE" ]; then' +
 		" echo 'base image changed: rebuilding from scratch';" +
-		" rm -rf /work/repo/packages/platform-desktop/src-tauri/target;" +
+		" rm -rf /work/repo/clients/desktop/src-tauri/target;" +
 		" fi",
 	'printf %s "$BRAMBLE_BASE_IMAGE" > /work/.base-image',
 	// --delete so a file removed on the host does not linger in the volume and get built anyway.
@@ -167,7 +167,7 @@ const script = [
 	// first is safe now that it is this architecture's staging directory rather than dist-linux
 	// itself, which used to mean a second architecture deleted the first one's packages.
 	"rm -rf /out/*",
-	"cp -a packages/platform-desktop/src-tauri/target/release/bundle/. /out/",
+	"cp -a clients/desktop/src-tauri/target/release/bundle/. /out/",
 ].join("\n");
 
 mkdirSync(OUT, { recursive: true });
@@ -200,7 +200,7 @@ for (const arch of arches) {
 		DOCKERFILE,
 		"-t",
 		`${IMAGE}:${arch}`,
-		"packages/platform-desktop/docker",
+		"clients/desktop/docker",
 	]);
 
 	// The image's layers, not its id: `docker build` stamps a fresh id on every run even when every

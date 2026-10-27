@@ -89,7 +89,7 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
-      # Populates packages/platform-mobile/dist (Capacitor webDir).
+      # Populates clients/mobile/dist (Capacitor webDir).
       - name: Build web bundle
         run: pnpm --filter @vault/platform-mobile run build
 
@@ -112,7 +112,7 @@ jobs:
       - name: Build iOS app for extraction
         run: |
           xcodebuild build \
-            -project packages/platform-mobile/ios/App/App.xcodeproj \
+            -project clients/mobile/ios/App/App.xcodeproj \
             -scheme App \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \

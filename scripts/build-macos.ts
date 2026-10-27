@@ -122,7 +122,7 @@ function loadNotarization(): { expected: boolean; cleanup?: () => void } {
 function assertNotarized(): void {
 	const bundle = join(
 		resolve(dirname(fileURLToPath(import.meta.url)), ".."),
-		"packages/platform-desktop/src-tauri/target",
+		"clients/desktop/src-tauri/target",
 		universal ? "universal-apple-darwin/release/bundle" : "release/bundle",
 		"macos",
 	);
@@ -227,10 +227,7 @@ if (!compileOnly) {
 
 		if (process.platform === "linux") {
 			const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-			makeAppImagePortable(
-				join(root, "packages/platform-desktop/src-tauri/target/release/bundle"),
-				env,
-			);
+			makeAppImagePortable(join(root, "clients/desktop/src-tauri/target/release/bundle"), env);
 		}
 	} finally {
 		// Whatever the bundler did, the decrypted key must not outlive it.

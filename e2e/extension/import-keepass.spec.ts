@@ -14,7 +14,7 @@ import {
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string) =>
-	path.join(dir, "../../packages/platform-extension/src/fixtures/imports", name);
+	path.join(dir, "../../clients/extension/src/fixtures/imports", name);
 
 // Both KeePass paths, end to end through the real UI. Neither had an e2e despite the fixtures
 // existing, which is how issues #78 and #79 both reached users: the parsers are unit-tested, but

@@ -7,7 +7,7 @@
 > historical. The conclusion is unchanged and stronger: WebRTC P2P is the sync path
 > everywhere.
 
-Research notes on shipping `packages/platform-extension` (MV3, currently Chrome-only) as a
+Research notes on shipping `clients/extension` (MV3, currently Chrome-only) as a
 Firefox add-on from one codebase. Captures what was verified about Firefox's platform, what in
 the codebase is already portable, and the sync constraint (no FSA on Firefox, so the WebRTC P2P
 channel is the mandatory v1 sync path).
@@ -106,7 +106,7 @@ below for what it needs.
 
 ## Chrome API surface in use
 
-Swept from `packages/platform-extension/src` (excluding tests/fixtures). All of the following
+Swept from `clients/extension/src` (excluding tests/fixtures). All of the following
 work on Firefox MV3 as-is **except** `chrome.offscreen` and `chrome.webAuthenticationProxy`:
 
 | API | Where | Firefox status |
@@ -456,7 +456,7 @@ submits the listed version and attaches the source archive; AMO reviews, signs, 
 - `gecko.id` (`firefox@bramble.app`) and `strict_min_version` are set in the manifest.
 - **Source submission is wired:** `sign-firefox.ts` attaches a `git archive` of the source for
   review; `docs/amo-source-build.md` is the reviewer build recipe (`rust-toolchain.toml` pins Rust).
-- Listing copy is localized under `packages/platform-extension/store/firefox/` and pushed via
+- Listing copy is localized under `clients/extension/store/firefox/` and pushed via
   `pnpm run metadata:firefox`; the name + short description come from the package `_locales`.
 - Still dashboard-only (one-time): screenshots, a category, a privacy-policy URL (required for a
   password manager; reuse the Chrome listing's HIBP disclosure), and `data_collection_permissions`.

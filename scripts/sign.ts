@@ -1,5 +1,5 @@
 // Sign the built extension into a .crx for Chrome Web Store verified upload.
-// Usage: pnpm run sign [path/to/dist] [--optional]   (defaults to platform-extension/dist-chromium)
+// Usage: pnpm run sign [path/to/dist] [--optional]   (defaults to clients/extension/dist-chromium)
 //
 // Decrypts the RSA signing key (age, unlocked by your YubiKey: PIN + touch),
 // packs the unpacked extension into a signed .crx, then wipes the plaintext key.
@@ -20,8 +20,8 @@ import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 const argv = process.argv.slice(2);
 const optional = argv.includes("--optional");
 const distArg = argv.find((a) => !a.startsWith("--"));
-const DIST = resolve(distArg ?? "packages/platform-extension/dist-chromium");
-const OUT = resolve("packages/platform-extension/bramble.crx");
+const DIST = resolve(distArg ?? "clients/extension/dist-chromium");
+const OUT = resolve("clients/extension/bramble.crx");
 const KEY_AGE =
 	process.env.CWS_KEY_AGE ?? join(process.env.HOME ?? "", ".config/bramble/cws-signing-key.age");
 // A pre-decrypted plaintext key (release.ts decrypts both CWS secrets in one YubiKey touch; CI can

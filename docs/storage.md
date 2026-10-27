@@ -1,7 +1,7 @@
 # Storage and persistence
 
 Where the vault bytes live, how writes survive a crash, and how a legacy
-file-backed vault is migrated. Code: `packages/platform-extension/src/storage.ts`.
+file-backed vault is migrated. Code: `clients/extension/src/storage.ts`.
 
 ## One backend: chrome.storage.local
 

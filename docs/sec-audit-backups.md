@@ -19,7 +19,7 @@
 
 ### 1. `backup_send` was a confused deputy (CRITICAL)
 
-`platform-desktop/src-tauri/src/backup.rs`. The design put credentials in the OS credential store
+`clients/desktop/src-tauri/src/backup.rs`. The design put credentials in the OS credential store
 and refused to hand them back to the webview: `secure_store` rejects the `backup.creds:` prefix
 through its generic commands. That guard was worth nothing on its own, because **the webview also
 names the URL of every request**.
@@ -59,7 +59,7 @@ their folder is already exclusive to one vault and their existing snapshots have
 
 ### 3. The no-credential-store fallback could never upload (HIGH)
 
-`platform-desktop/src/backup.ts`. Where no credential store answers, credentials stay VEK-wrapped,
+`clients/desktop/src/backup.ts`. Where no credential store answers, credentials stay VEK-wrapped,
 so `secrets !== null`, so the code passed **no transport** and fell back to a webview `fetch` —
 which the same file documents as impossible, since no provider grants CORS to `tauri://localhost`.
 Cloud backup was 100% broken in that configuration while `cloudBackup: desktop` shipped

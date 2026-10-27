@@ -1,9 +1,9 @@
 packages:
   - packages/theme
   - packages/core
-  - packages/platform-extension
-  - packages/platform-mobile
-  - packages/platform-desktop
+  - clients/extension
+  - clients/mobile
+  - clients/desktop
   - website
   - nostr-relay/cf-worker
 

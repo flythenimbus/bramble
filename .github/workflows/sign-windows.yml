@@ -90,7 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          conf="$(node -p "require('./packages/platform-desktop/src-tauri/tauri.conf.json').version")"
+          conf="$(node -p "require('./clients/desktop/src-tauri/tauri.conf.json').version")"
           if [ "$conf" != "${{ inputs.version }}" ]; then
             echo "::error::checked out $conf but this run is for ${{ inputs.version }}; the release commit is probably not pushed yet"
             exit 1
@@ -121,7 +121,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p unsigned
-          cp packages/platform-desktop/src-tauri/target/release/bundle/nsis/*-setup.exe unsigned/
+          cp clients/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe unsigned/
           ls -la unsigned/
 
       - name: Upload the unsigned installer

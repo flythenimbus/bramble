@@ -6,7 +6,7 @@ own click handlers, router and re-renders run. That is the difference that
 matters for save-capture testing, where the entire question is what the app does
 to the DOM when a login lands.
 
-This complements, and does not replace, `packages/platform-extension/src/fixtures/sites/`:
+This complements, and does not replace, `clients/extension/src/fixtures/sites/`:
 
 | | what it is | drives |
 |---|---|---|

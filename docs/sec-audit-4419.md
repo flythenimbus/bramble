@@ -73,7 +73,7 @@ built to close.
   session-persistent nonce under a fixed key. AES-256-GCM tags are enforced by the `aes-gcm` crate
   (decrypt fails closed); no unauthenticated decryption of secret data.
 - **Randomness:** all key/nonce/salt/keypair material comes from `getrandom` / `OsRng` (Rust) and
-  `crypto.getRandomValues` (JS). The one `Math.random` in the tree (`platform-extension/src/content/picker.ts:320`)
+  `crypto.getRandomValues` (JS). The one `Math.random` in the tree (`clients/extension/src/content/picker.ts:320`)
   only builds a DOM element id, not security material.
 - **Signature verification (`roster_sig.rs`, `nostr.rs`, `passkey.rs`):** all length-check inputs and
   return `Ok(false)` / error instead of accept-on-error; no signing/verifying-key confusion; passkey

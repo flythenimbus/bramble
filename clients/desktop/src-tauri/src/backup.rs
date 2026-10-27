@@ -745,7 +745,7 @@ mod tests {
     /// since reqwest, not the test, decides what finally goes on the wire.
     ///
     ///   docker compose up -d
-    ///   cargo test --manifest-path packages/platform-desktop/src-tauri/Cargo.toml -- --ignored
+    ///   cargo test --manifest-path clients/desktop/src-tauri/Cargo.toml -- --ignored
     #[test]
     #[ignore = "needs the MinIO from docker compose"]
     fn signs_a_request_minio_accepts() {

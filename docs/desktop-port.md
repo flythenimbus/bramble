@@ -13,7 +13,7 @@ and is marked `[unverified]`. Do a research pass before committing to any of tho
 
 - **Feasible, and the cheapest of the three platform ports so far.** `packages/core` talks to its
   host through eight adapter interfaces injected by `PlatformContext`. A desktop port is a new
-  `packages/platform-desktop` implementing those, plus a Rust binary. The hard parts are not the
+  `clients/desktop` implementing those, plus a Rust binary. The hard parts are not the
   port; they are three net-new native subsystems (browser IPC, auto-type, SSH agent).
 - **Tauri is the right pick, and the reason is `core-rust`, not the framework's merits.** The
   extension reaches the crypto core through wasm-bindgen and mobile reaches it through uniffi. A
@@ -57,7 +57,7 @@ own WebRTC, the browser link, and the whole release and packaging story below.
   rather than copied into a third block, so the struct-returning calls have one body. All
   three feature configurations check clean and the crate's tests still pass: 58 under the
   default wasm features, 51 under `native`, the difference being the wasm-only modules.
-- **`packages/platform-desktop`**: Vite + React SPA mirroring platform-mobile, plus `src-tauri`
+- **`clients/desktop`**: Vite + React SPA mirroring platform-mobile, plus `src-tauri`
   scaffolded by the 2.11.4 CLI (tauri 2.11.3, tauri-build 2.6.3) so the config matches the
   shipped schema rather than being hand-written.
 - **The VEK lives in the Rust process.** `src-tauri/src/crypto.rs` exposes 19 commands wrapping
@@ -161,7 +161,7 @@ in a *platform* package that core does not also happen to use is never generated
 lands in the DOM, matches no rule, and does nothing, which is the worst way for a style to
 fail. The extension and mobile never noticed because their own `.tsx` files are thin mounts
 whose classes all exist in core anyway; desktop is the first package with markup of its own.
-Fixed with `packages/platform-desktop/src/styles/index.css`, which imports core's stylesheet
+Fixed with `clients/desktop/src/styles/index.css`, which imports core's stylesheet
 and adds its own `@source`. Anything styled directly in the other platform packages will need
 the same. Check the built CSS rather than the screen: a missing utility looks identical to one
 that is simply not doing what you expected.
@@ -1020,7 +1020,7 @@ cross-compile.
 ### Homebrew
 
 A **cask**, not a formula: it is a GUI app shipped as a disk image. The canonical copy is
-`packages/platform-desktop/homebrew/bramble.rb`. Keeping it here is what lets `pnpm run test:brew`
+`clients/desktop/homebrew/bramble.rb`. Keeping it here is what lets `pnpm run test:brew`
 check it against the live release, and it means a release that renames an artifact fails a test
 rather than a stranger's `brew install`.
 
@@ -1154,7 +1154,7 @@ globs reach into other applications' support directories.
 ### NixOS
 
 `flake.nix` at the repository root builds the app from source
-(`packages/platform-desktop/nix/package.nix`), so NixOS users can install it without waiting on
+(`clients/desktop/nix/package.nix`), so NixOS users can install it without waiting on
 nixpkgs:
 
 ```bash
@@ -1396,7 +1396,7 @@ TargetNotFound rather than no update. It is keyed under both arches instead.
 
 Each phase retires a risk.
 
-- **Phase 0, walking skeleton. DONE**: `packages/platform-desktop` (Vite + React, mirroring
+- **Phase 0, walking skeleton. DONE**: `clients/desktop` (Vite + React, mirroring
   platform-mobile) plus `src-tauri` as its own crate. The `native` feature split. Linux now builds
   and packages as well, and has now been run: the UI renders under WebKitGTK, retiring risk 1.
   **Windows now builds too**, cross-compiled from the Mac a release is cut on (see

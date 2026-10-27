@@ -9,9 +9,9 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-const PBXPROJ = "packages/platform-mobile/ios/App/App.xcodeproj/project.pbxproj";
-const GRADLE = "packages/platform-mobile/android/app/build.gradle";
-const PKG = "packages/platform-mobile/package.json";
+const PBXPROJ = "clients/mobile/ios/App/App.xcodeproj/project.pbxproj";
+const GRADLE = "clients/mobile/android/app/build.gradle";
+const PKG = "clients/mobile/package.json";
 
 const fail = (msg: string): never => {
 	console.error(`error: ${msg}`);

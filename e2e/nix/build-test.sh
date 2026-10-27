@@ -23,8 +23,8 @@ NIX=(nix --extra-experimental-features "nix-command flakes")
 # target/ from the host would be both wrong for this platform and enormous to copy.
 say "preparing a clean tree"
 mkdir -p /tmp/build && cp -r /src/. /tmp/build/ && cd /tmp/build
-rm -rf node_modules dist dist-linux dist-chromium packages/*/node_modules \
-	packages/platform-desktop/src-tauri/target packages/core-rust/target
+rm -rf node_modules dist dist-linux dist-chromium packages/*/node_modules clients/*/node_modules \
+	clients/desktop/src-tauri/target packages/core-rust/target
 ok "tree at /tmp/build"
 
 say "nix build .#bramble"

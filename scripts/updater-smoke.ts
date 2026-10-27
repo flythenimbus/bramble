@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** Overridable so this can be exercised against a scratch directory rather than a real build. */
-const TARGET = join(ROOT, "packages/platform-desktop/src-tauri/target");
+const TARGET = join(ROOT, "clients/desktop/src-tauri/target");
 // Builds are universal by default and land under the triple; --aarch64 ones do not. Whichever is
 // there is the one to serve, since this only ever feeds a build on this machine.
 const MACOS =
@@ -33,8 +33,8 @@ const MACOS =
 		join(TARGET, "release/bundle/macos"),
 	].find((dir) => existsSync(join(dir, "Bramble.app"))) ??
 	join(TARGET, "universal-apple-darwin/release/bundle/macos");
-const CONF = join(ROOT, "packages/platform-desktop/src-tauri/tauri.conf.json");
-const PATCH = join(ROOT, "packages/platform-desktop/src-tauri/tauri.local-update.conf.json");
+const CONF = join(ROOT, "clients/desktop/src-tauri/tauri.conf.json");
+const PATCH = join(ROOT, "clients/desktop/src-tauri/tauri.local-update.conf.json");
 
 const fail = (message: string): never => {
 	console.error(`error: ${message}`);

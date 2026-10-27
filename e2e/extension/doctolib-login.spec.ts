@@ -11,7 +11,7 @@ import { createVault, openPopup, seedExampleLogin, waitOutPickerClickGuard } fro
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string =>
 	readFileSync(
-		path.resolve(dir, `../../packages/platform-extension/src/fixtures/sites/${name}.html`),
+		path.resolve(dir, `../../clients/extension/src/fixtures/sites/${name}.html`),
 		"utf8",
 	);
 

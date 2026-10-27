@@ -1,4 +1,4 @@
-// Tauri native-chrome adapter: generates packages/platform-desktop/src-tauri/locales/<code>.json
+// Tauri native-chrome adapter: generates clients/desktop/src-tauri/locales/<code>.json
 // from the en source, which the desktop binary embeds with include_str! and resolves from the OS
 // locale at startup (see src-tauri/src/i18n.rs). Covers the tray menu and the macOS menu bar,
 // neither of which the webview can draw, so neither can use the Lingui catalogs.

@@ -39,7 +39,7 @@ log = "0.4"
 # uniffi, unlike the extension and mobile. `native` leaves both binding layers off and
 # carries snow/k256 for the sync modules. This is what keeps the VEK in this process
 # rather than in the webview. See docs/desktop-port.md.
-vault-crypto = { path = "../../core-rust", default-features = false, features = ["native"] }
+vault-crypto = { path = "../../../packages/core-rust", default-features = false, features = ["native"] }
 # The spotlight window's backdrop blur. CSS backdrop-filter cannot do this: it blurs what is
 # behind an element within the same page, and the desktop behind a transparent window is not
 # in that compositing tree. This inserts the native view (NSVisualEffectView / Acrylic) that

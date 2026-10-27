@@ -10,7 +10,7 @@ export default defineConfig({
 	plugins: [linguiMacroPlugin(), react(), tailwindcss()],
 	resolve: {
 		alias: {
-			"@core": resolve(import.meta.dirname, "../core/src"),
+			"@core": resolve(import.meta.dirname, "../../packages/core/src"),
 		},
 	},
 	// Tauri owns the console; letting Vite clear it hides Rust panics and build errors.

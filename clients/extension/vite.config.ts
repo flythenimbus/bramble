@@ -16,7 +16,10 @@ const outDir = resolve(
 	import.meta.dirname,
 	process.env.EXTENSION_OUT_DIR ?? (target === "firefox" ? "dist-firefox" : "dist-chromium"),
 );
-const manifestSrc = resolve(import.meta.dirname, `../manifests/${target}/manifest.json`);
+const manifestSrc = resolve(
+	import.meta.dirname,
+	`../../packages/manifests/${target}/manifest.json`,
+);
 
 export default defineConfig({
 	root,
@@ -57,7 +60,7 @@ export default defineConfig({
 	],
 	resolve: {
 		alias: {
-			"@core": resolve(import.meta.dirname, "../core/src"),
+			"@core": resolve(import.meta.dirname, "../../packages/core/src"),
 		},
 	},
 	build: {

@@ -260,11 +260,11 @@ secrets, and is accurate. Left alone.)
   `EnrollOptions`; add a joiner-side `onSas` callback.
 - **Host plumbing**: `adapters/shell.ts` `SyncEvent` gains kind `"enroll-approval"` with `sas` and
   `label`, plus `approveEnrollment?(approved)` and `getPendingEnrollApproval?()` (lets a popup that
-  was closed and reopened pick up an in-flight prompt). `platform-extension/src/sync/messages.ts`:
+  was closed and reopened pick up an in-flight prompt). `clients/extension/src/sync/messages.ts`:
   `SYNC_ENROLL_APPROVE` schema, `SyncEventMsgSchema` gains `sas`/`label`.
   `background/sync.ts` routes it and injects `devicePubB64` in `withDeviceKey`.
   `offscreen-core.ts` holds the pending approval, resolves it on the message, broadcasts the event.
-  `platform-mobile/src/sync/sync-manager.ts`: the same, in-process.
+  `clients/mobile/src/sync/sync-manager.ts`: the same, in-process.
 - **UI**: inviter approval modal (SAS in three groups, the joiner's label and key fingerprint via
   the existing helper at SyncConnectSection.tsx:32, Approve / Reject). The label is
   attacker-controlled and is labelled as context, not proof; the SAS is the check. Joiner

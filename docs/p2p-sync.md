@@ -591,7 +591,7 @@ device management). Notes on how it maps to code:
   singleton), with `enroll-host` (enrollment) and `roster-sync` (continuous sync) each a
   configuration of it. The **extension** runs these in the offscreen document (the `WEB_RTC`
   reason; no `chrome.storage`, so it bridges to the background); **mobile** runs them
-  in-process in the webview (`platform-mobile/src/sync/sync-manager.ts`).
+  in-process in the webview (`clients/mobile/src/sync/sync-manager.ts`).
 - **Cross-network TURN** (`nostr-relay/cf-worker` + `transport/ice.ts`): the relay Worker's
   `POST /ice-servers` mints short-lived Cloudflare TURN credentials; `startMeshSession`
   fetches them (URL derived from the relay, or an explicit override) and passes them to the

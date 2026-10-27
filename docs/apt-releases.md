@@ -92,7 +92,7 @@ generated on-card with no off-card backup, `ykman openpgp keys set-touch sig on`
 
 ### The keyring, and how a key is rotated
 
-`packages/platform-desktop/apt/bramble-keyring.asc` is the committed public keyring. It is served
+`clients/desktop/apt/bramble-keyring.asc` is the committed public keyring. It is served
 as `keys.asc` for new installs **and shipped inside the `.deb`** at the same path the install
 snippet writes (`bundle.linux.deb.files` in `tauri.conf.json`), so it reaches existing users
 through a normal package upgrade rather than only at install time. dpkg takes over the file the

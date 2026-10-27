@@ -21,7 +21,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PACKAGE = "packages/platform-desktop/nix/package.nix";
+const PACKAGE = "clients/desktop/nix/package.nix";
 const HASH = /hash = "(sha256-[A-Za-z0-9+/=]+)"/;
 // Any syntactically valid hash that cannot be the right one; nix reports what it got instead.
 const WRONG = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";

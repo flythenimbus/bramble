@@ -15,7 +15,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-const CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
+const CONF = "clients/desktop/src-tauri/tauri.conf.json";
 
 const args = process.argv.slice(2);
 const pubkeyAt = args.indexOf("--pubkey");

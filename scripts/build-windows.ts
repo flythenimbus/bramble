@@ -41,7 +41,7 @@ import { fileURLToPath } from "node:url";
 import { signingKey } from "./desktop-signing-key.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
+const CONF = "clients/desktop/src-tauri/tauri.conf.json";
 const WORKFLOW = "sign-windows.yml";
 
 const fail = (message: string): never => {
@@ -59,9 +59,9 @@ const forwarded = argv.filter(
 );
 
 /** Where both routes put the installer, so everything downstream reads one path. */
-const BUNDLE = join("packages/platform-desktop/src-tauri/target", triple, "release/bundle/nsis");
+const BUNDLE = join("clients/desktop/src-tauri/target", triple, "release/bundle/nsis");
 /** The dispatched run, handed from --ci-start to --ci-collect. */
-const RUN_ID_FILE = join(ROOT, "packages/platform-desktop/src-tauri/target/.windows-signing-run");
+const RUN_ID_FILE = join(ROOT, "clients/desktop/src-tauri/target/.windows-signing-run");
 
 const has = (bin: string): boolean => {
 	try {

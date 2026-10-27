@@ -54,6 +54,237 @@ importers:
         specifier: ^8.21.3
         version: 8.21.3
 
+  clients/desktop:
+    dependencies:
+      '@tauri-apps/api':
+        specifier: ^2.11.1
+        version: 2.11.1
+      '@tauri-apps/plugin-autostart':
+        specifier: ^2.5.1
+        version: 2.5.1
+      '@tauri-apps/plugin-clipboard-manager':
+        specifier: ^2.3.2
+        version: 2.3.2
+      '@tauri-apps/plugin-dialog':
+        specifier: ^2.7.2
+        version: 2.7.2
+      '@tauri-apps/plugin-global-shortcut':
+        specifier: ^2.3.2
+        version: 2.3.2
+      '@tauri-apps/plugin-log':
+        specifier: ^2.9.0
+        version: 2.9.0
+      '@tauri-apps/plugin-opener':
+        specifier: ^2.5.4
+        version: 2.5.4
+      '@tauri-apps/plugin-process':
+        specifier: ^2.3.1
+        version: 2.3.1
+      '@tauri-apps/plugin-updater':
+        specifier: ^2.10.1
+        version: 2.10.1
+      '@vault/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.8)
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@lingui/babel-plugin-lingui-macro':
+        specifier: ^6.6.0
+        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@tauri-apps/cli':
+        specifier: ^2.11.4
+        version: 2.11.4
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.5
+        version: 19.2.5(@types/react@19.2.18)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.0
+        version: 6.1.0(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@26.4.0)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: ^4.1.12
+        version: 4.1.12(@types/node@26.4.0)(happy-dom@21.0.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
+  clients/extension:
+    dependencies:
+      '@vault/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      jsqr:
+        specifier: ^1.4.0
+        version: 1.4.0
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+      tldts:
+        specifier: ^6.1.86
+        version: 6.1.86
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@lingui/babel-plugin-lingui-macro':
+        specifier: ^6.6.0
+        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@types/chrome':
+        specifier: ^0.0.270
+        version: 0.0.270
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.5
+        version: 19.2.5(@types/react@19.2.18)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.0
+        version: 6.1.0(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1(@noble/hashes@2.2.0)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: ^4.1.12
+        version: 4.1.12(@types/node@26.4.0)(happy-dom@21.0.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      web-ext:
+        specifier: ^10.8.0
+        version: 10.8.0(jiti@2.7.0)
+
+  clients/mobile:
+    dependencies:
+      '@aparajita/capacitor-secure-storage':
+        specifier: ^8.0.0
+        version: 8.0.0
+      '@capacitor/android':
+        specifier: ^8.5.3
+        version: 8.5.3(@capacitor/core@8.5.3)
+      '@capacitor/app':
+        specifier: ^8.1.1
+        version: 8.1.1(@capacitor/core@8.5.3)
+      '@capacitor/clipboard':
+        specifier: ^8.0.1
+        version: 8.0.1(@capacitor/core@8.5.3)
+      '@capacitor/core':
+        specifier: ^8.5.3
+        version: 8.5.3
+      '@capacitor/device':
+        specifier: ^8.0.3
+        version: 8.0.3(@capacitor/core@8.5.3)
+      '@capacitor/filesystem':
+        specifier: ^8.1.3
+        version: 8.1.3(@capacitor/core@8.5.3)
+      '@capacitor/ios':
+        specifier: ^8.5.3
+        version: 8.5.3(@capacitor/core@8.5.3)
+      '@capacitor/preferences':
+        specifier: ^8.0.1
+        version: 8.0.1(@capacitor/core@8.5.3)
+      '@capacitor/share':
+        specifier: ^8.0.1
+        version: 8.0.1(@capacitor/core@8.5.3)
+      '@capacitor/splash-screen':
+        specifier: ^8.0.2
+        version: 8.0.2(@capacitor/core@8.5.3)
+      '@vault/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      jsqr:
+        specifier: ^1.4.0
+        version: 1.4.0
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@capacitor/cli':
+        specifier: ^8.5.3
+        version: 8.5.3
+      '@lingui/babel-plugin-lingui-macro':
+        specifier: ^6.6.0
+        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.5
+        version: 19.2.5(@types/react@19.2.18)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.0
+        version: 6.1.0(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      concurrently:
+        specifier: ^9.2.4
+        version: 9.2.4
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@26.4.0)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: ^4.1.12
+        version: 4.1.12(@types/node@26.4.0)(happy-dom@21.0.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
   nostr-relay/cf-worker:
     devDependencies:
       typescript:
@@ -168,237 +399,6 @@ importers:
       vite-plugin-babel:
         specifier: ^1.7.3
         version: 1.7.3(@babel/core@7.29.7)(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      vitest:
-        specifier: ^4.1.12
-        version: 4.1.12(@types/node@26.4.0)(happy-dom@21.0.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-
-  packages/platform-desktop:
-    dependencies:
-      '@tauri-apps/api':
-        specifier: ^2.11.1
-        version: 2.11.1
-      '@tauri-apps/plugin-autostart':
-        specifier: ^2.5.1
-        version: 2.5.1
-      '@tauri-apps/plugin-clipboard-manager':
-        specifier: ^2.3.2
-        version: 2.3.2
-      '@tauri-apps/plugin-dialog':
-        specifier: ^2.7.2
-        version: 2.7.2
-      '@tauri-apps/plugin-global-shortcut':
-        specifier: ^2.3.2
-        version: 2.3.2
-      '@tauri-apps/plugin-log':
-        specifier: ^2.9.0
-        version: 2.9.0
-      '@tauri-apps/plugin-opener':
-        specifier: ^2.5.4
-        version: 2.5.4
-      '@tauri-apps/plugin-process':
-        specifier: ^2.3.1
-        version: 2.3.1
-      '@tauri-apps/plugin-updater':
-        specifier: ^2.10.1
-        version: 2.10.1
-      '@vault/core':
-        specifier: workspace:*
-        version: link:../core
-      lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.8)
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
-    devDependencies:
-      '@lingui/babel-plugin-lingui-macro':
-        specifier: ^6.6.0
-        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
-      '@tailwindcss/vite':
-        specifier: ^4.3.3
-        version: 4.3.3(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@tauri-apps/cli':
-        specifier: ^2.11.4
-        version: 2.11.4
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: ^19.2.5
-        version: 19.2.5(@types/react@19.2.18)
-      '@vitejs/plugin-react':
-        specifier: ^6.1.0
-        version: 6.1.0(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      sharp:
-        specifier: ^0.35.5
-        version: 0.35.5(@types/node@26.4.0)
-      tailwindcss:
-        specifier: ^4.3.3
-        version: 4.3.3
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^8.3.5
-        version: 8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
-      vitest:
-        specifier: ^4.1.12
-        version: 4.1.12(@types/node@26.4.0)(happy-dom@21.0.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-
-  packages/platform-extension:
-    dependencies:
-      '@vault/core':
-        specifier: workspace:*
-        version: link:../core
-      jsqr:
-        specifier: ^1.4.0
-        version: 1.4.0
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
-      tldts:
-        specifier: ^6.1.86
-        version: 6.1.86
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@lingui/babel-plugin-lingui-macro':
-        specifier: ^6.6.0
-        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
-      '@tailwindcss/vite':
-        specifier: ^4.3.3
-        version: 4.3.3(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@types/chrome':
-        specifier: ^0.0.270
-        version: 0.0.270
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: ^19.2.5
-        version: 19.2.5(@types/react@19.2.18)
-      '@vitejs/plugin-react':
-        specifier: ^6.1.0
-        version: 6.1.0(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      fake-indexeddb:
-        specifier: ^6.2.5
-        version: 6.2.5
-      jsdom:
-        specifier: ^29.1.1
-        version: 29.1.1(@noble/hashes@2.2.0)
-      tailwindcss:
-        specifier: ^4.3.3
-        version: 4.3.3
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^8.3.5
-        version: 8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
-      vitest:
-        specifier: ^4.1.12
-        version: 4.1.12(@types/node@26.4.0)(happy-dom@21.0.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      web-ext:
-        specifier: ^10.8.0
-        version: 10.8.0(jiti@2.7.0)
-
-  packages/platform-mobile:
-    dependencies:
-      '@aparajita/capacitor-secure-storage':
-        specifier: ^8.0.0
-        version: 8.0.0
-      '@capacitor/android':
-        specifier: ^8.5.3
-        version: 8.5.3(@capacitor/core@8.5.3)
-      '@capacitor/app':
-        specifier: ^8.1.1
-        version: 8.1.1(@capacitor/core@8.5.3)
-      '@capacitor/clipboard':
-        specifier: ^8.0.1
-        version: 8.0.1(@capacitor/core@8.5.3)
-      '@capacitor/core':
-        specifier: ^8.5.3
-        version: 8.5.3
-      '@capacitor/device':
-        specifier: ^8.0.3
-        version: 8.0.3(@capacitor/core@8.5.3)
-      '@capacitor/filesystem':
-        specifier: ^8.1.3
-        version: 8.1.3(@capacitor/core@8.5.3)
-      '@capacitor/ios':
-        specifier: ^8.5.3
-        version: 8.5.3(@capacitor/core@8.5.3)
-      '@capacitor/preferences':
-        specifier: ^8.0.1
-        version: 8.0.1(@capacitor/core@8.5.3)
-      '@capacitor/share':
-        specifier: ^8.0.1
-        version: 8.0.1(@capacitor/core@8.5.3)
-      '@capacitor/splash-screen':
-        specifier: ^8.0.2
-        version: 8.0.2(@capacitor/core@8.5.3)
-      '@vault/core':
-        specifier: workspace:*
-        version: link:../core
-      jsqr:
-        specifier: ^1.4.0
-        version: 1.4.0
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
-    devDependencies:
-      '@capacitor/cli':
-        specifier: ^8.5.3
-        version: 8.5.3
-      '@lingui/babel-plugin-lingui-macro':
-        specifier: ^6.6.0
-        version: 6.6.0(@babel/core@7.29.7)(@babel/types@8.0.4)
-      '@tailwindcss/vite':
-        specifier: ^4.3.3
-        version: 4.3.3(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: ^19.2.5
-        version: 19.2.5(@types/react@19.2.18)
-      '@vitejs/plugin-react':
-        specifier: ^6.1.0
-        version: 6.1.0(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
-      concurrently:
-        specifier: ^9.2.4
-        version: 9.2.4
-      sharp:
-        specifier: ^0.35.5
-        version: 0.35.5(@types/node@26.4.0)
-      tailwindcss:
-        specifier: ^4.3.3
-        version: 4.3.3
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^8.3.5
-        version: 8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
       vitest:
         specifier: ^4.1.12
         version: 4.1.12(@types/node@26.4.0)(happy-dom@21.0.4)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.3.5(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))

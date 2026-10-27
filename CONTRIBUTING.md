@@ -139,8 +139,8 @@ Run them locally before you push if your change touches autofill, unlock, or
 sync.
 
 Especially welcome: new real-site autofill fixtures
-(`packages/platform-extension/src/fixtures/sites`) and import-format coverage
-(`packages/platform-extension/src/fixtures/imports`). These are the cheapest way
+(`clients/extension/src/fixtures/sites`) and import-format coverage
+(`clients/extension/src/fixtures/imports`). These are the cheapest way
 to make Bramble more robust and they rarely conflict with other work.
 
 ## User-facing strings

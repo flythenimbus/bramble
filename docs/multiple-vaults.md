@@ -47,8 +47,8 @@ this document only describes the deltas.
 The choke points, so the deltas below have context:
 
 - **One blob at a fixed key.** Extension `VAULT_BLOB_KEY = "vault-blob-b64"`
-  (`packages/platform-extension/src/storage.ts`), mobile `VAULT_FILE = "vault.vlt1"`
-  (`packages/platform-mobile/src/adapters/storage.ts`). The shared `StorageAdapter`
+  (`clients/extension/src/storage.ts`), mobile `VAULT_FILE = "vault.vlt1"`
+  (`clients/mobile/src/adapters/storage.ts`). The shared `StorageAdapter`
   (`packages/core/src/adapters/storage.ts`) is id-less by design: `readVaultBlob()`
   / `writeVaultBlob(blob)` take no identifier.
 - **No vault identity anywhere.** The VLT1 header is `MAGIC + VERSION + slotCount`
@@ -159,7 +159,7 @@ today, so single-vault users see no change.
 - **1 vault** -> that vault's unlock screen directly, no picker.
 - **N vaults** -> a picker: one row per vault (label + created date), styled on the
   existing passkey picker (`choiceRow` in
-  `packages/platform-extension/src/content/html/save-passkey-body.ts`, styles
+  `clients/extension/src/content/html/save-passkey-body.ts`, styles
   `.tp-choice` / `.tp-avatar` in `content/html/corner-styles.ts`), plus a "Create
   new vault" row (the passkey picker already has a "create new" row variant to copy)
   and a "Restore from backup" row. The primary vault is pre-highlighted / first.
@@ -1165,7 +1165,7 @@ the single-VEK assumption.
   (`vaultId ?? primaryId` in `storage.ts`, `sync-config.ts`, `useVaultRegistry.syncKey`)
   plus a UI warning banner. No autofill or biometric code reads it. It can be removed as a
   follow-up once those fallbacks resolve the active vault instead.
-- **Mobile** (`platform-mobile/src/native-crypto.ts`): the native uniffi plugin holds one
+- **Mobile** (`clients/mobile/src/native-crypto.ts`): the native uniffi plugin holds one
   VEK and every method is a parameterless singleton. The vek never crosses the shared
   interface (the extension injects and strips inside its background), and `withVault` is
   optional, so the native adapter is untouched. (A required vault id would force a

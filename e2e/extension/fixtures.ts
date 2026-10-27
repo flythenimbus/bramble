@@ -9,7 +9,7 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
  * EXTENSION_DIR picks another build (the combining e2e's). */
 const EXTENSION_PATH = path.resolve(
 	dir,
-	"../../packages/platform-extension",
+	"../../clients/extension",
 	process.env.EXTENSION_DIR ?? "dist-chromium",
 );
 
@@ -51,7 +51,7 @@ export async function launchExtensionContext(
 	// `vault.registry`, which migrateNamespacing publishes BEFORE the ghost-record reap it was
 	// meant to wait out, and which already exists on a reused profile — so it never held anything
 	// back. The reap now spares records too young to distinguish from a create in progress and
-	// re-reads before writing, so racing it is safe (see platform-extension/src/storage.ts).
+	// re-reads before writing, so racing it is safe (see clients/extension/src/storage.ts).
 	return { context, extensionId, profileDir };
 }
 

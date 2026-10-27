@@ -113,21 +113,21 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: mobile-wasm
-          path: packages/platform-mobile/public/wasm
+          path: clients/mobile/public/wasm
           retention-days: 1
 
       - name: Upload the built extension
         uses: actions/upload-artifact@v7
         with:
           name: dist-chromium
-          path: packages/platform-extension/dist-chromium
+          path: clients/extension/dist-chromium
           retention-days: 1
 
       - name: Upload the built extension (combining on)
         uses: actions/upload-artifact@v7
         with:
           name: dist-chromium-combine
-          path: packages/platform-extension/dist-chromium-combine
+          path: clients/extension/dist-chromium-combine
           retention-days: 1
 
   transport-contract-chromium:
@@ -213,7 +213,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: dist-chromium
-          path: packages/platform-extension/dist-chromium
+          path: clients/extension/dist-chromium
 
       # The full Chromium build, not just the headless shell: loading an MV3 extension and
       # starting its service worker needs the real one (see e2e/README.md).
@@ -267,20 +267,20 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: dist-chromium
-          path: packages/platform-extension/dist-chromium
+          path: clients/extension/dist-chromium
 
       - name: Download the built extension (combining on)
         uses: actions/download-artifact@v8
         with:
           name: dist-chromium-combine
-          path: packages/platform-extension/dist-chromium-combine
+          path: clients/extension/dist-chromium-combine
 
       # The mobile peer is a real SPA and loads its crypto from here; see the build job.
       - name: Download the mobile WASM
         uses: actions/download-artifact@v8
         with:
           name: mobile-wasm
-          path: packages/platform-mobile/public/wasm
+          path: clients/mobile/public/wasm
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
@@ -335,7 +335,7 @@ jobs:
       - name: Cache Rust deps
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: packages/platform-desktop/src-tauri
+          workspaces: clients/desktop/src-tauri
 
       # Tauri's Linux prerequisites plus two of ours: libdbus for the Secret Service backend of
       # the credential store, libxdo for the tray and the global shortcut.
@@ -350,7 +350,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test the shell
-        run: cd packages/platform-desktop/src-tauri && cargo test
+        run: cd clients/desktop/src-tauri && cargo test
 
       # A throwaway updater key. The bundler refuses to produce updater artifacts unsigned, and the
       # real key never leaves the maintainer's machine (docs/release-signing.md), so CI signs with
@@ -369,7 +369,7 @@ jobs:
         run: pnpm run build:macos
 
       - name: Show what was produced
-        run: ls -la packages/platform-desktop/src-tauri/target/release/bundle/*/
+        run: ls -la clients/desktop/src-tauri/target/release/bundle/*/
 
       # The AppImage carries the build host's libraries, and three of them decide whether it starts
       # on a machine that is not the builder: a bundled libwayland-client is a blank window on any
@@ -379,7 +379,7 @@ jobs:
       - name: Assert the AppImage bundles what it should
         run: |
           set -euo pipefail
-          appdir="$(echo packages/platform-desktop/src-tauri/target/release/bundle/appimage/*.AppDir)"
+          appdir="$(echo clients/desktop/src-tauri/target/release/bundle/appimage/*.AppDir)"
           # Named separately: an unbuilt AppImage leaves nothing to search, and every check below
           # would pass by finding nothing rather than by the bundle being right.
           [ -d "$appdir" ] || { echo "::error::no AppDir at $appdir"; exit 1; }
@@ -402,13 +402,13 @@ jobs:
       - name: Assert the .deb ships the APT keyring
         run: |
           set -euo pipefail
-          deb="$(echo packages/platform-desktop/src-tauri/target/release/bundle/deb/*.deb)"
+          deb="$(echo clients/desktop/src-tauri/target/release/bundle/deb/*.deb)"
           [ -f "$deb" ] || { echo "::error::no .deb at $deb"; exit 1; }
           out="$(mktemp -d)"
           dpkg-deb -x "$deb" "$out"
           shipped="$out/usr/share/keyrings/bramble-keyring.asc"
           [ -f "$shipped" ] || { echo "::error::$deb does not ship /usr/share/keyrings/bramble-keyring.asc"; exit 1; }
-          cmp "$shipped" packages/platform-desktop/apt/bramble-keyring.asc
+          cmp "$shipped" clients/desktop/apt/bramble-keyring.asc
           echo "ok: the .deb ships the committed keyring"
 
   desktop-windows:
@@ -432,7 +432,7 @@ jobs:
       - name: Cache Rust deps
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: packages/platform-desktop/src-tauri -> target
+          workspaces: clients/desktop/src-tauri -> target
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
@@ -442,7 +442,7 @@ jobs:
       # transport or the registry host-registration on a real MSVC toolchain, and nothing else
       # runs their tests at all. A green cross-build is not evidence either of them is right.
       - name: Test the shell
-        run: cd packages/platform-desktop/src-tauri && cargo test
+        run: cd clients/desktop/src-tauri && cargo test
 
       - name: Generate a throwaway signing key
         shell: bash
@@ -466,4 +466,4 @@ jobs:
 
       - name: Show what was produced
         shell: bash
-        run: ls -la packages/platform-desktop/src-tauri/target/release/bundle/*/
+        run: ls -la clients/desktop/src-tauri/target/release/bundle/*/

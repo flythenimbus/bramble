@@ -45,7 +45,7 @@ key compromise.
 
 **Fix - four edits** (the audit first scoped three; implementation found a fourth CRYPTO_* path):
 
-1. New `packages/platform-extension/src/sender.ts`:
+1. New `clients/extension/src/sender.ts`:
    ```ts
    /// <reference types="chrome" />
    import { api } from "./platform-api";
@@ -119,7 +119,7 @@ the predicate layered and fail-safe in both directions:
    real regression. The origin check alone already rejects content scripts, since the browser sets
    `sender.origin` and a content script can never forge the extension origin.)
    ```ts
-   // packages/platform-extension/src/sender.ts
+   // clients/extension/src/sender.ts
    export function isExtensionSender(sender: chrome.runtime.MessageSender): boolean {
      const src = sender.origin ?? sender.url ?? "";
      if (src) return src === EXTENSION_ORIGIN || src.startsWith(`${EXTENSION_ORIGIN}/`);

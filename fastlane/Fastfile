@@ -28,7 +28,7 @@ TEAM_ID = CredentialsManager::AppfileConfig.try_fetch_value(:team_id)
 # Android listing at `<root>/fastlane/metadata/android/`, so it lives here and the iOS one keeps it
 # company rather than sitting two directories deeper. Everything below is therefore addressed from
 # the repo root.
-PROJECT = "#{REPO}/packages/platform-mobile/ios/App/App.xcodeproj"
+PROJECT = "#{REPO}/clients/mobile/ios/App/App.xcodeproj"
 # deliver's metadata dir, nested in ios/ so the App Store listing sits beside the Android one
 # (metadata/android/, where supply expects it). The two could share metadata/ directly -
 # deliver skips `android` as a known supply dir - but it rejects any other non-locale child, so
@@ -43,15 +43,15 @@ METADATA = "#{REPO}/fastlane/metadata/ios"
 SCREENSHOTS = "#{REPO}/fastlane/screenshots"
 # Where gym drops the .ipa + .dSYM.zip. Without this it writes to the working directory, which
 # since fastlane moved to the repo root means littering the root with build artifacts. This path
-# is already gitignored (packages/platform-mobile/ios/.gitignore, `App/output`).
-BUILD_OUT = "#{REPO}/packages/platform-mobile/ios/App/output"
+# is already gitignored (clients/mobile/ios/.gitignore, `App/output`).
+BUILD_OUT = "#{REPO}/clients/mobile/ios/App/output"
 # Force DerivedData (incl. the SPM checkout cache) onto the internal disk, at a stable
 # repo-local (gitignored) path. Xcode's default here points at an external Transcend
 # volume that EPERMs the SPM cache and breaks `build_app` (see
-# packages/platform-mobile/docs/development.md quirks 3-6). /tmp avoided that but macOS
+# clients/mobile/docs/development.md quirks 3-6). /tmp avoided that but macOS
 # prunes /tmp after ~3 days, corrupting the SPM checkout (.git kept, working tree gone);
 # a repo-local path is internal, not auto-pruned, and never committed.
-DERIVED = "#{REPO}/packages/platform-mobile/ios/DerivedData"
+DERIVED = "#{REPO}/clients/mobile/ios/DerivedData"
 
 # Xcode's EXPORT step rewrites the build number unless told not to: `xcodebuild -help` documents
 # manageAppVersionAndBuildNumber as "Defaults to YES", and gym doesn't set it. That silently shipped
@@ -104,7 +104,7 @@ platform :ios do
   # Absolute cd so it works regardless of fastlane's working directory.
   private_lane :prepare do
     sh("cd '#{REPO}' && pnpm core:build && pnpm ffi:build:ios && " \
-       "cd packages/platform-mobile && npx cap sync ios")
+       "cd clients/mobile && npx cap sync ios")
   end
 
   desc "Build a distribution IPA to ~/Desktop (no upload; no API key needed)"

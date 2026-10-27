@@ -93,7 +93,7 @@ jobs:
       - name: Check the signed index against the shipped keyring
         run: |
           set -euo pipefail
-          gpg --dearmor < packages/platform-desktop/apt/bramble-keyring.asc > "$RUNNER_TEMP/keyring.gpg"
+          gpg --dearmor < clients/desktop/apt/bramble-keyring.asc > "$RUNNER_TEMP/keyring.gpg"
           gpgv --keyring "$RUNNER_TEMP/keyring.gpg" "$HOME/.aptly/public/dists/stable/InRelease"
 
       - name: Check the live repository

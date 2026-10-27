@@ -13,7 +13,7 @@
 #   android    + cross-compile the Android jniLibs (needs the NDK + cargo-ndk).
 #   all        bindings + ios + android.
 #
-# Outputs go to packages/platform-mobile/native-build/ (gitignored, regenerable).
+# Outputs go to clients/mobile/native-build/ (gitignored, regenerable).
 # Wiring these into the Xcode/Gradle projects is the next step (not done here).
 set -euo pipefail
 
@@ -23,7 +23,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # rebuild of a tag matches the published binary. See rustflags-reproducible.sh.
 export RUSTFLAGS="$(bash "$here/scripts/rustflags-reproducible.sh")${RUSTFLAGS:+ $RUSTFLAGS}"
 crate="$here/packages/core-rust"
-mobile="$here/packages/platform-mobile"
+mobile="$here/clients/mobile"
 out="$mobile/native-build"
 lib_name="vault_crypto"            # cdylib/staticlib stem (libvault_crypto.*)
 ffi="--no-default-features --features ffi"

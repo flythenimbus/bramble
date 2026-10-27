@@ -20,19 +20,19 @@ this file is the human-readable build recipe, and it ships inside that archive.
 ```sh
 corepack enable
 pnpm install --frozen-lockfile        # the lockfile pins every JS dependency
-pnpm run wasm:build                    # Rust -> WASM into packages/platform-extension/public/wasm
+pnpm run wasm:build                    # Rust -> WASM into clients/extension/public/wasm
 pnpm run build:firefox                 # TARGET=firefox vite build
 ```
 
-The built, unpacked extension is in **`packages/platform-extension/dist-firefox/`** — that directory
+The built, unpacked extension is in **`clients/extension/dist-firefox/`** — that directory
 is what was uploaded to AMO. (`pnpm run bundle:firefox` runs the same `vite build` and additionally
 zips `dist-firefox/`; the GitHub release attaches that `.zip`.)
 
 ## What is where
 
 - **Rust crate:** `packages/core-rust/` (compiled by `wasm:build`).
-- **TypeScript:** shared core in `packages/core/`, the extension in `packages/platform-extension/src/`,
-  bundled by Vite (`packages/platform-extension/vite.config.ts`, gated on `TARGET=firefox`).
+- **TypeScript:** shared core in `packages/core/`, the extension in `clients/extension/src/`,
+  bundled by Vite (`clients/extension/vite.config.ts`, gated on `TARGET=firefox`).
 - **Manifest:** `packages/manifests/firefox/manifest.json` (copied into `dist-firefox/` at build).
 
 ## Notes for the reviewer

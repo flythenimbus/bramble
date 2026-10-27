@@ -61,7 +61,7 @@ portable consolation prize.
 | Import wizard + preview + warnings | `core/src/app/screens/Import/ImportShell.tsx` | Needs a non-file branch; the preview/commit half is unchanged. |
 | Lossy-mapping conventions | `core/src/export/kdbx.ts`, `core/src/import/types.ts` | `ImportResult.warnings`, unique-key collision handling. |
 | TOTP parse/serialize | `core/src/util/totp.ts` (`parseTotp`, otpauth) | CXF wants structured secret/period/digits/algorithm. |
-| Auto-lock grace for OS UI | `platform-mobile/src/adapters/shell.ts` (`armFilePickGrace`) | The exchange sheet backgrounds the app, same trap as the file picker. |
+| Auto-lock grace for OS UI | `clients/mobile/src/adapters/shell.ts` (`armFilePickGrace`) | The exchange sheet backgrounds the app, same trap as the file picker. |
 | Per-target capability gating | `core/src/flags.ts` | New `credentialExchange` key, iOS-only. |
 
 ## Phase 0 result: the wire format is CXF (RESOLVED 2026-07-29)
@@ -285,13 +285,13 @@ Verified 2026-07-29 on iPhone 17 Pro / iOS 26.4:
 - **The Phase 0 spike runs there today.** `swiftc -sdk iphonesimulator -target
   arm64-apple-ios26.0-simulator` produces a CLI binary that `simctl spawn` runs against the real
   framework. No app target, no test target, no device. Kept at
-  `packages/platform-mobile/scripts/cxf-wire-probe.swift`; re-run it whenever a wire-format question
+  `clients/mobile/scripts/cxf-wire-probe.swift`; re-run it whenever a wire-format question
   comes up:
 
   ```sh
   xcrun swiftc -sdk $(xcrun --sdk iphonesimulator --show-sdk-path) \
     -target arm64-apple-ios26.0-simulator \
-    packages/platform-mobile/scripts/cxf-wire-probe.swift -o /tmp/cxf-probe
+    clients/mobile/scripts/cxf-wire-probe.swift -o /tmp/cxf-probe
   xcrun simctl spawn booted /tmp/cxf-probe
   ```
 - **The credential provider extension registers.** `pluginkit -m -v -p

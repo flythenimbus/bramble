@@ -5,7 +5,7 @@ import { createVault, expectUnlocked, openPopup, optionsUrl } from "./helpers";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string) =>
-	path.join(dir, "../../packages/platform-extension/src/fixtures/imports", name);
+	path.join(dir, "../../clients/extension/src/fixtures/imports", name);
 
 // The parser's own rules are unit-tested in lastpass.test.ts. What is only reachable here is the
 // whole path: the provider card the import screen builds from IMPORT_PROVIDERS, the file read,

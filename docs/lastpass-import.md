@@ -3,7 +3,7 @@
 What `import/lastpass.ts` has to cope with, and the evidence for each rule. Every claim below is
 confirmed against at least two real exports (see [Provenance](#provenance)).
 
-Fixtures: `packages/platform-extension/src/fixtures/imports/lastpass.csv` (current header) and
+Fixtures: `clients/extension/src/fixtures/imports/lastpass.csv` (current header) and
 `lastpass-legacy.csv` (pre-TOTP header).
 
 ## Two header variants

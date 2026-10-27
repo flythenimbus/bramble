@@ -15,7 +15,7 @@ dated **June 2026** and flagged where they are unverified. Re-verify before acti
   Firefox is from Chrome.
 - **The reuse story is genuinely strong and already built for.** `packages/core` talks to its host
   only through five adapter interfaces injected by `PlatformContext`. A mobile port is, at its
-  heart, a new `packages/platform-mobile` that implements those adapters against Capacitor
+  heart, a new `clients/mobile` that implements those adapters against Capacitor
   plugins. The crypto crate already compiles natively (it has an `rlib` crate type and `cargo test`
   runs today), and iOS/Android icon asset catalogs are already generated under `icon/`. Someone
   anticipated this.
@@ -56,7 +56,7 @@ P2P sync path is validated end-to-end. The sections below this one are the origi
 forward-looking analysis (still accurate for the unbuilt parts); this section is the
 ground truth of what exists.
 
-- **Phase 0 — walking skeleton: DONE.** `packages/platform-mobile` is a Vite SPA mounting
+- **Phase 0 — walking skeleton: DONE.** `clients/mobile` is a Vite SPA mounting
   `@core`'s App with mobile adapters. Capacitor 8 (the iOS project is **Swift Package
   Manager**, not CocoaPods); `ios/` + `android/` are committed; the React UI + router + WASM
   + WebCrypto boot in WKWebView (rendered on the simulator).
@@ -234,7 +234,7 @@ ground truth of what exists.
   edge, the small-screen UI sweep).
 
 Dev workflow + the environment quirks hit while building this are in
-[`packages/platform-mobile/docs/development.md`](../packages/platform-mobile/docs/development.md).
+[`clients/mobile/docs/development.md`](../clients/mobile/docs/development.md).
 The device-management/revocation TODO lives in [p2p-sync.md](p2p-sync.md).
 
 ### Next steps (where to resume)
@@ -288,7 +288,7 @@ The repo is a pnpm workspace with two JS packages plus a Rust crate:
 
 - `packages/core` (`@vault/core`): React 19 + TanStack Router + the entire vault domain. Talks to
   its host **only** through adapter interfaces. This is the reusable product.
-- `packages/platform-extension` (`@vault/platform-extension`): the Chrome MV3 implementation of
+- `clients/extension` (`@vault/platform-extension`): the Chrome MV3 implementation of
   those adapters, plus all the extension-only machinery (background SW, content scripts, offscreen
   doc, popup/options pages).
 - `packages/core-rust`: the Rust crypto + KDBX4 crate. `crate-type = ["cdylib", "rlib"]`, so it
@@ -308,7 +308,7 @@ interface Platform {
 ```
 
 (`packages/core/src/adapters/` also defines a `messaging` adapter.) **A mobile port is a new
-`packages/platform-mobile` that implements these five interfaces against Capacitor plugin APIs,
+`clients/mobile` that implements these five interfaces against Capacitor plugin APIs,
 plus the native `ios/` and `android/` projects Capacitor generates and you own, plus a single SPA
 entry (one `index.html` mounting `@core` App) instead of the extension's six bundles.** The extension
 package is left untouched; both ship from one `core`.
@@ -320,7 +320,7 @@ package is left untouched; both ship from one `core`.
 | `packages/core-rust` | ~100% (with a refactor) | Already compiles native. Split into a pure-Rust core + thin `wasm-bindgen` wrapper (browser) + thin `uniffi` wrapper (native Swift/Kotlin), gating `getrandom`'s js feature to `wasm32`. The core then serves three targets: WASM in the webview, and Swift + Kotlin bindings linked into both a custom Capacitor crypto plugin (main app) and the autofill providers. See OS-level autofill. |
 | `packages/core` domain (vault-format, slot-policy, recovery-code, import, useVault orchestration) | ~95% | Pure logic over adapters and WASM. The one real change is the WebAuthn path (see blockers). |
 | `packages/core` UI (App, router, screens, components, entry-modes) | ~85% | Ports, but needs a responsive-layout pass (today it is popup-dimensioned) and a shell-adapter rethink (no `window.close`, no pop-out). |
-| `packages/platform-extension` | ~0% for mobile | This is the Chrome impl. `content/` and most of `background/` do not port. Their logic either collapses (offscreen) or becomes native (autofill). |
+| `clients/extension` | ~0% for mobile | This is the Chrome impl. `content/` and most of `background/` do not port. Their logic either collapses (offscreen) or becomes native (autofill). |
 
 ## What ports cleanly (low or no work)
 
@@ -361,7 +361,7 @@ package is left untouched; both ship from one `core`.
 
 ## What needs a new platform implementation (medium effort, mechanical)
 
-Each is a `packages/platform-mobile` adapter plus, where noted, a Capacitor plugin (official,
+Each is a `clients/mobile` adapter plus, where noted, a Capacitor plugin (official,
 community, or a small in-house one). None is conceptually hard; this is the bulk of the "make it run"
 work.
 
@@ -373,7 +373,7 @@ work.
 | `clipboard` | `chrome.alarms` + offscreen clear | `@capacitor/clipboard` (mobile is plain-text only) plus our own auto-clear timer (no Capacitor plugin provides a timeout, and none exposes Android `EXTRA_IS_SENSITIVE`, so a tiny custom plugin may be wanted for the sensitive flag). |
 | `shell` (pop-out, open settings, active tab, QR) | `chrome.windows` / `chrome.tabs` | In-app navigation (no pop-out, no `window.close`); settings is a route; "active tab URL" has no meaning on mobile (drop from autofill matching in-app); QR via `@capacitor-mlkit/barcode-scanning` (camera) instead of `captureVisibleTab`. |
 | lifecycle / auto-lock | `chrome.idle`, `chrome.alarms`, `chrome.commands` | `@capacitor/app` `appStateChange` / `pause` / `resume`: lock on the mobile pause event; sliding auto-lock via a timer. No OS screen-lock hook needed (pause covers it). |
-| build | Vite 6-bundle extension build | Single SPA: point Capacitor `webDir` at `dist`, `server.url` at the Vite dev server for live reload, `npx cap sync` to push assets + native deps. Add `packages/platform-mobile` to the pnpm workspace. No separate backend process; native code is Capacitor plugins. |
+| build | Vite 6-bundle extension build | Single SPA: point Capacitor `webDir` at `dist`, `server.url` at the Vite dev server for live reload, `npx cap sync` to push assets + native deps. Add `clients/mobile` to the pnpm workspace. No separate backend process; native code is Capacitor plugins. |
 | icons | `icon/web` | `icon/ios` (full `AppIcon-*.png` + `Contents.json` asset catalog) and `icon/android/res/mipmap-*` already exist; feed them through `@capacitor/assets` or drop them into the native projects. The icon pipeline is mobile-ready. |
 
 ## The hard problems (the real unknowns)
@@ -383,7 +383,7 @@ work.
 There are no content scripts on mobile. Filling credentials into other apps and into mobile browsers
 is a single OS mechanism per platform, the **credential provider**, and it runs as native code
 (Swift on iOS, Kotlin on Android) in a target **outside the webview** that must read and decrypt the
-vault itself. None of `packages/platform-extension/src/content/` ports. This is the dominant
+vault itself. None of `clients/extension/src/content/` ports. This is the dominant
 workstream and the reason the project is "a native password manager whose main UI happens to be a
 Capacitor webview." Full mechanics, the app-vs-website unification, the cross-process unlock, the
 memory constraint, and the shared-Rust-core enabler are in the dedicated section
@@ -476,7 +476,7 @@ The user-visible promise of a mobile password manager is filling logins into oth
 mobile browsers. On mobile that is not a browser extension and not the webview: it is the OS
 **credential provider** mechanism, implemented as native targets (Swift on iOS, Kotlin on Android)
 that run outside Bramble's webview and must read and decrypt the vault themselves. This is the
-largest and riskiest workstream. None of `packages/platform-extension/src/content/` (detection,
+largest and riskiest workstream. None of `clients/extension/src/content/` (detection,
 fill, capture, picker, corner-prompt) ports; the fill engine is rebuilt natively.
 
 ### One provider serves both apps and websites
@@ -788,7 +788,7 @@ is a later additive feature on top of this plumbing.
 Status as of this session: **0 done · 1 mostly done · 2 mostly done · 3–5 not started** (see
 Implementation status up top).
 
-0. **[DONE] Walking skeleton (days).** Add `packages/platform-mobile`; `npx cap add ios/android`; point
+0. **[DONE] Walking skeleton (days).** Add `clients/mobile`; `npx cap add ios/android`; point
    `webDir` at a minimal SPA mounting `@core` App with stub adapters. Get the real React UI + WASM +
    WebCrypto + router booting in WKWebView and Android System WebView **on real devices**. Icons
    already exist. Retires the biggest cheap unknown: does our stack even run on-device. Highest
@@ -839,7 +839,7 @@ Provider target survives `cap sync`, builds + embeds, reads a shared App Group t
 provisions the restricted AutoFill capability under the real Apple team, and is recognized by the
 system (`pluginkit`) as a password provider. The only unshown step is the simulator's Settings/fill UI
 (a sim limitation, device-only). See the "Phase 3 autofill: PROBED" note in Implementation status and
-`packages/platform-mobile/docs/development.md` (quirk 13). Remaining go/no-go for autofill is the
+`clients/mobile/docs/development.md` (quirk 13). Remaining go/no-go for autofill is the
 **Android `AutofillService` probe**; the iOS unknown is retired.
 
 ## Effort and risk at a glance

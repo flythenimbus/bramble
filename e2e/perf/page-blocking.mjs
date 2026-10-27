@@ -18,7 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const EXTENSION = path.resolve(here, "../../packages/platform-extension/dist-chromium");
+const EXTENSION = path.resolve(here, "../../clients/extension/dist-chromium");
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith("--")) ?? "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 const scrolls = Number(args.find((a) => a.startsWith("--scrolls="))?.split("=")[1] ?? 30);

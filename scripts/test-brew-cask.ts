@@ -28,7 +28,7 @@ import { dockerProblem } from "./docker-available.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IMAGE = "homebrew/brew:latest";
-const CASK = "packages/platform-desktop/homebrew/bramble.rb";
+const CASK = "clients/desktop/homebrew/bramble.rb";
 const SCRIPT = "e2e/brew/cask-test.sh";
 const MANIFEST = "website/public/desktop/latest.json";
 

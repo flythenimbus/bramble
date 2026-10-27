@@ -34,9 +34,9 @@ index and only one of them consumes the others' work:
    pushes. It also feeds the iOS credential provider through `setIndex`, so
    filtering here removes archived entries from the OS QuickType and passkey
    identity stores as well.
-2. `platform-extension/background/autofill-index.ts` (`hydrateIndexForOwner`),
+2. `clients/extension/background/autofill-index.ts` (`hydrateIndexForOwner`),
    which rebuilds from the vault file when no view has pushed an index.
-3. `platform-mobile/android/.../VaultReader.kt` (`readLogins`, `readPasskeys`),
+3. `clients/mobile/android/.../VaultReader.kt` (`readLogins`, `readPasskeys`),
    which reads the vault file directly through uniffi and never sees the
    TypeScript index at all.
 

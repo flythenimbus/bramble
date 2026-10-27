@@ -6,7 +6,7 @@ import { createVault, openPopup, optionsUrl } from "./helpers";
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.join(
 	dir,
-	"../../packages/platform-extension/src/fixtures/imports/bitwarden-passkeys.json",
+	"../../clients/extension/src/fixtures/imports/bitwarden-passkeys.json",
 );
 
 // The marker exists so someone cleaning up duplicated entries can see which copy holds a

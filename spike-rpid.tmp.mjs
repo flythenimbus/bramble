@@ -13,7 +13,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const ROOT = path.resolve("packages/platform-extension");
+const ROOT = path.resolve("clients/extension");
 const DIR = path.join(ROOT, "dist-chromium");
 
 const PROBE_JS = `

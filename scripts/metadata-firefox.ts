@@ -1,5 +1,5 @@
 // Push the Firefox (AMO) store listing summary + description, localized, from
-// packages/platform-extension/store/firefox/<locale>/*.txt. One PATCH updates every
+// clients/extension/store/firefox/<locale>/*.txt. One PATCH updates every
 // locale at once. The name + short manifest description already localize from the
 // package _locales (see chrome-manifest.mjs); this is the long detailed description
 // (and optionally a richer summary), which is not a manifest field.
@@ -19,7 +19,7 @@ import { amoJwt } from "./amo-auth.ts";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const STORE = resolve("packages/platform-extension/store/firefox");
+const STORE = resolve("clients/extension/store/firefox");
 const MANIFEST = resolve("packages/manifests/firefox/manifest.json");
 // Override AMO_BASE_URL for a staging instance; strip a trailing slash for URL joins.
 const API_BASE = (process.env.AMO_BASE_URL ?? "https://addons.mozilla.org/api/v5/").replace(

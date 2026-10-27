@@ -726,7 +726,7 @@ Nix store, and the shipped macOS disk image carries it at `Contents/MacOS/brambl
   The round trip, keep-N against the server's own listing, and **two vaults sharing one folder
   staying out of each other's retention**, against real Nextcloud and real MinIO. That last one is
   the finding from the security review, now covered against servers rather than a fake.
-- `cargo test -- --ignored` in `platform-desktop/src-tauri` — 1 passing. The Rust SigV4 signer
+- `cargo test -- --ignored` in `clients/desktop/src-tauri` — 1 passing. The Rust SigV4 signer
   against MinIO, which validates strictly, for PUT, a byte-identical GET, and DELETE. Our vectors
   only ever proved the two signers agreed with each other; this proves the desktop's agrees with a
   server, and it is the whole desktop S3 path end to end apart from the UI.
@@ -822,7 +822,7 @@ and the "no credential store" UI that adapter drives is for a Linux session miss
 Service, not for a phone.
 
 **What mobile cannot promise is a schedule.** There is no background scheduler on either OS, so
-`platform-mobile/src/backup.ts` runs on unlock and on resume, and the frequency setting means
+`clients/mobile/src/backup.ts` runs on unlock and on resume, and the frequency setting means
 "next time you open Bramble after this long" rather than a wall-clock time. Credentials stay
 VEK-wrapped, so a run only happens while that vault is open.
 

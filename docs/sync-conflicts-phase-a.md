@@ -242,10 +242,10 @@ Admission: candidates are remote entries and conflicts whose `(id, hlc)` this de
 ### Task 5: The extension background writes history under its own writer key
 
 **Files:**
-- Modify: `packages/platform-extension/src/background/sync-clock.ts` (`makeClock(\`${id}#bg\`)`)
-- Modify: `packages/platform-extension/src/background/vault-io.ts`. The `mutate` callback also receives the payload, and the function witnesses conflict stamps beside entries and tombstones.
-- Modify: `packages/platform-extension/src/background/corner-prompt.ts:149,224`, `packages/platform-extension/src/background/passkey-store.ts:133,175`
-- Test: `packages/platform-extension/src/background/corner-prompt-commit.test.ts`, `packages/platform-extension/src/background/passkey-store.test.ts` (create if absent), `packages/platform-extension/src/background/vault-io.settings.test.ts`
+- Modify: `clients/extension/src/background/sync-clock.ts` (`makeClock(\`${id}#bg\`)`)
+- Modify: `clients/extension/src/background/vault-io.ts`. The `mutate` callback also receives the payload, and the function witnesses conflict stamps beside entries and tombstones.
+- Modify: `clients/extension/src/background/corner-prompt.ts:149,224`, `clients/extension/src/background/passkey-store.ts:133,175`
+- Test: `clients/extension/src/background/corner-prompt-commit.test.ts`, `clients/extension/src/background/passkey-store.test.ts` (create if absent), `clients/extension/src/background/vault-io.settings.test.ts`
 
 **Interfaces:**
 - Consumes: `nextCausal`, `heldVersions`.
@@ -257,7 +257,7 @@ Admission: candidates are remote entries and conflicts whose `(id, hlc)` this de
   - `"background stamps carry the #bg node"`: the new envelope's `hlc.node` ends with `#bg`.
   - The create and replace cases for `savePlacement`.
   - In `vault-io.settings.test.ts`: `"a background write keeps conflicts"`, beside the existing settings case.
-- [ ] **Step 2: Run, expect FAIL**: `cd packages/platform-extension && CI=true npx vitest run src/background`
+- [ ] **Step 2: Run, expect FAIL**: `cd clients/extension && CI=true npx vitest run src/background`
 - [ ] **Step 3: Implement.**
   - New envelopes spread `nextCausal({ hlc, bases: [], held: [] })`.
   - Replacements spread `nextCausal({ hlc, bases: [enc], held: heldVersions(payload, enc.id) })`.

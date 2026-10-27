@@ -2,7 +2,7 @@
 // mark + "Bramble" wordmark centered (the "<icon> Bramble" lockup). Source mark is
 // the app icon's white foreground (icon/android/.../ic_launcher_foreground.png).
 //
-// Run: node scripts/gen-splash.mjs   (from packages/platform-mobile)
+// Run: node scripts/gen-splash.mjs   (from clients/mobile)
 // Re-run after changing the logo source or the lockup constants below.
 
 import { existsSync } from "node:fs";

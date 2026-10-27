@@ -21,7 +21,7 @@ import { createVault, openPopup, optionsUrl, STRONG_PW } from "./helpers";
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const PASSKEY_FIXTURE = path.resolve(
 	dir,
-	"../../packages/platform-extension/src/fixtures/imports/bitwarden-passkeys.json",
+	"../../clients/extension/src/fixtures/imports/bitwarden-passkeys.json",
 );
 
 /** The password protecting the exported file. Deliberately not STRONG_PW, so a mix-up between the

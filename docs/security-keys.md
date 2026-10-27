@@ -101,7 +101,7 @@ browser WebAuthn while attached and fails an extension-originated request with
 (`background/webauthn-proxy-init.ts`, because such a request has no active tab).
 Anything doing WebAuthn must go through `createPrfCredential` / `getPrfSecret`,
 which carry the `PASSKEY_PROXY_PAUSE` / `RESUME` envelope from
-`platform-extension/src/shell.ts`. Calling `navigator.credentials` directly looks
+`clients/extension/src/shell.ts`. Calling `navigator.credentials` directly looks
 exactly like an authenticator that does not support PRF.
 
 ### One rpID for platform keys, the implicit one for security keys

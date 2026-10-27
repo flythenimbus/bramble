@@ -6,7 +6,7 @@ import { expect, test } from "./fixtures";
 // permission at runtime does not retro-fit them, so the service worker that owns the native port
 // never gains `chrome.runtime.connectNative`, and neither does the page that asked for the grant.
 // Only a context created afterwards has it. That single fact is what forces the page-side pairing
-// path in packages/platform-extension/src/desktop-link.ts; see
+// path in clients/extension/src/desktop-link.ts; see
 // docs/desktop-link-optional-permission.md.
 //
 // This is not a security gate. If Chromium ever starts refreshing bindings, nothing breaks: the

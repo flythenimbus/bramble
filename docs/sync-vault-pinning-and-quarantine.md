@@ -20,14 +20,14 @@ A Chromium extension user (1.30.1) with two synced vaults, "work-desktop" and "p
 
 Root cause, confirmed in code and reproduced by `e2e/sync/vault-switch-sync.spec.ts` ("...even when that vault's sync group lists the same devices"):
 
-- `maybeStartSync` (`packages/platform-extension/src/background/sync.ts:253`) starts the offscreen roster-sync host with ONE vault's group key and device keypair, and no-ops while `syncRunning` (`sync.ts:281`), so unlocking another vault never redirects it.
+- `maybeStartSync` (`clients/extension/src/background/sync.ts:253`) starts the offscreen roster-sync host with ONE vault's group key and device keypair, and no-ops while `syncRunning` (`sync.ts:281`), so unlocking another vault never redirects it.
 - The host's four callbacks (`syncLocalPayload`, `syncApplyRemote`, `syncLocalRoster`, `syncApplyRoster`, `sync.ts:377-428`) each call `resolveSyncVault()`, i.e. follow whichever vault is active NOW, falling back to the first registered vault (`sync/sync-config.ts:25`). The per-frame peer gate (`currentRoster`, `packages/core/src/sync/transport/roster-sync.ts:223-231,338`) reads the active vault's device list, and falls back to the session's start-time list when that read is empty or unparseable.
-- Mobile and desktop use ONE Noise device keypair for all their vaults (`packages/platform-desktop/src/sync/keys.ts:47`, `packages/platform-mobile/src/sync/sync-manager.ts:93`), so a device in both groups passes the other vault's gate.
-- Result: while the host still served personal-desktop's group, work-desktop became active and unlocked, and personal-desktop's payload was merged into work-desktop's file. The desktop app pins its session (`packages/platform-desktop/src/sync/roster.ts:165-209`); the extension never did.
+- Mobile and desktop use ONE Noise device keypair for all their vaults (`clients/desktop/src/sync/keys.ts:47`, `clients/mobile/src/sync/sync-manager.ts:93`), so a device in both groups passes the other vault's gate.
+- Result: while the host still served personal-desktop's group, work-desktop became active and unlocked, and personal-desktop's payload was merged into work-desktop's file. The desktop app pins its session (`clients/desktop/src/sync/roster.ts:165-209`); the extension never did.
 
 Aggravating factors fixed here:
 
-- A correct-password unlock starts sync as soon as the key unwraps (`packages/platform-extension/src/background/session.ts:359`), before entries load, so a damaged vault reaches its sync group before anything can clean it.
+- A correct-password unlock starts sync as soon as the key unwraps (`clients/extension/src/background/session.ts:359`), before entries load, so a damaged vault reaches its sync group before anything can clean it.
 - `loadEntries` (`packages/core/src/hooks/useVault.tsx:557`) decrypts the whole vault in one call that throws on the first bad entry, so one stray entry bricks the unlock.
 - Merges accept any incoming entry verbatim (`packages/core/src/sync/apply-remote.ts:72`), and the extension runs its relay and desktop-link merges without a queue (`sync.ts:387-391`, unlike desktop's `applyInFlight`).
 - `useCryptoErrorMessage` (`packages/core/src/hooks/useCryptoErrorMessage.tsx`) passes unknown messages through, so the raw AEAD error reaches the unlock screen.
@@ -74,14 +74,14 @@ Changes after review: dropped the "every entry fails, change nothing" guard (it 
 ### Task 1: Pin extension sync to a vault id
 
 **Files:**
-- Modify: `packages/platform-extension/src/sync/messages.ts:13-21,76-80`
-- Modify: `packages/platform-extension/src/offscreen-core.ts:69-75,114-176,617-670`
-- Modify: `packages/platform-extension/src/offscreen.ts:17-35`
-- Modify: `packages/platform-extension/src/background/sync.ts:228-460`
-- Modify: `packages/platform-extension/src/background/session.ts:114-118`
-- Modify: `packages/platform-extension/src/sync/sync-config.ts:16-28`
+- Modify: `clients/extension/src/sync/messages.ts:13-21,76-80`
+- Modify: `clients/extension/src/offscreen-core.ts:69-75,114-176,617-670`
+- Modify: `clients/extension/src/offscreen.ts:17-35`
+- Modify: `clients/extension/src/background/sync.ts:228-460`
+- Modify: `clients/extension/src/background/session.ts:114-118`
+- Modify: `clients/extension/src/sync/sync-config.ts:16-28`
 - Modify: `docs/multiple-vaults.md` (the sync section that calls the cross-vault case "milder")
-- Test: `packages/platform-extension/src/offscreen-roster-sync.test.ts`, `packages/platform-extension/src/background/sync.test.ts`
+- Test: `clients/extension/src/offscreen-roster-sync.test.ts`, `clients/extension/src/background/sync.test.ts`
 
 **Interfaces:**
 - Produces: `RosterSyncMsg.vaultId: string`; `SyncBridge` methods take `vaultId` first; background message payloads `SYNC_LOCAL_PAYLOAD {vaultId}`, `SYNC_APPLY_REMOTE {vaultId, payloadJson}`, `SYNC_LOCAL_ROSTER {vaultId}`, `SYNC_APPLY_ROSTER {vaultId, rosterJson}`; offscreen message `SYNC_ROSTER_STOP {keepVaultId: string | null}` (stops the roster sessions unless they serve `keepVaultId`; never touches enrollment); `stopSync(opts?: { keepVaultId?: string | null }): Promise<void>`; `retargetSync(activeVaultId: string | null): void`; `syncApplyRemote(vaultId: string, payloadJson: string): Promise<boolean>` exported from `background/sync.ts`.
@@ -456,7 +456,7 @@ Expected: PASS.
 - [ ] **Step 11: Commit**
 
 ```bash
-git add packages/platform-extension/src/sync/messages.ts packages/platform-extension/src/offscreen-core.ts packages/platform-extension/src/offscreen.ts packages/platform-extension/src/background/sync.ts packages/platform-extension/src/background/session.ts packages/platform-extension/src/sync/sync-config.ts packages/platform-extension/src/offscreen-roster-sync.test.ts packages/platform-extension/src/background/sync.test.ts docs/multiple-vaults.md
+git add clients/extension/src/sync/messages.ts clients/extension/src/offscreen-core.ts clients/extension/src/offscreen.ts clients/extension/src/background/sync.ts clients/extension/src/background/session.ts clients/extension/src/sync/sync-config.ts clients/extension/src/offscreen-roster-sync.test.ts clients/extension/src/background/sync.test.ts docs/multiple-vaults.md
 git commit -m "fix(extension): pin each sync session to the vault it started for" -m "The offscreen host ran one vault's group while every storage callback followed the active vault, so after a switch a peer of the old group merged its entries into the new vault's file. Callbacks now carry the session's vault id and do nothing unless it is still active, a vault switch stops roster sync for any other vault without touching a pairing in progress, and one vault's merges run one at a time."
 ```
 
@@ -466,13 +466,13 @@ git commit -m "fix(extension): pin each sync session to the vault it started for
 
 **Files:**
 - Modify: `packages/core-rust/src/lib.rs:612-632` (decrypt_entry), the `wasm_exports` module (~line 640+), the tests module (~line 1000)
-- Modify: `packages/platform-desktop/src-tauri/src/crypto.rs:190-205`, `packages/platform-desktop/src/adapters/crypto.ts:140`
-- Modify: `packages/platform-mobile/android/app/src/main/java/app/bramble/mobile/NativeCryptoPlugin.kt:226-246`
-- Modify: `packages/platform-mobile/ios/App/App/NativeCrypto.swift:227-244`
-- Modify: `packages/platform-mobile/src/native-crypto.ts:78,247`
+- Modify: `clients/desktop/src-tauri/src/crypto.rs:190-205`, `clients/desktop/src/adapters/crypto.ts:140`
+- Modify: `clients/mobile/android/app/src/main/java/app/bramble/mobile/NativeCryptoPlugin.kt:226-246`
+- Modify: `clients/mobile/ios/App/App/NativeCrypto.swift:227-244`
+- Modify: `clients/mobile/src/native-crypto.ts:78,247`
 - Modify: `packages/core/src/adapters/crypto.ts:158-161`, `packages/core/src/wasm.ts:86`
-- Modify: `packages/platform-extension/src/offscreen-core.ts:361-369`, `packages/platform-extension/src/crypto.ts:173-174`
-- Test: `packages/platform-extension/src/offscreen-decrypt-batch.test.ts`
+- Modify: `clients/extension/src/offscreen-core.ts:361-369`, `clients/extension/src/crypto.ts:173-174`
+- Test: `clients/extension/src/offscreen-decrypt-batch.test.ts`
 
 **Interfaces:**
 - Produces: Rust `pub fn decrypt_entries_core(payloads: &[EncryptedPayload]) -> Result<Vec<Option<String>>, CryptoError>`; uniffi `decrypt_entries(payloads: Vec<EncryptedPayload>) -> Result<Vec<Option<String>>, CryptoError>`; wasm `decrypt_entries(entries: JsValue) -> Result<JsValue, CryptoError>` returning an array with `null` for failures; TS `CryptoAdapter.decryptEntries(payloads: EncryptedPayload[]): Promise<(string | null)[]>`.
@@ -626,7 +626,7 @@ Swift:
 
 `native-crypto.ts`: the plugin method type becomes `Promise<{ values: (string | null)[] }>` and `decrypt_entries` returns `(string | null)[]`.
 
-Run: `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:testDebugUnitTest` from `packages/platform-mobile/android`, and `xcodebuild -project packages/platform-mobile/ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug build` (`pnpm ios:beta` is the TestFlight release lane; don't use it here). Expected: both compile.
+Run: `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:testDebugUnitTest` from `clients/mobile/android`, and `xcodebuild -project clients/mobile/ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug build` (`pnpm ios:beta` is the TestFlight release lane; don't use it here). Expected: both compile.
 
 - [ ] **Step 7: TypeScript adapters.**
   - `adapters/crypto.ts`: `decryptEntries(payloads: EncryptedPayload[]): Promise<(string | null)[]>;` with the comment "A failed entry is null; only a locked vault rejects."
@@ -641,7 +641,7 @@ Run: `pnpm typecheck`, `CI=true pnpm --filter @vault/core test`, `CI=true pnpm -
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/core-rust/src/lib.rs packages/platform-desktop/src-tauri/src/crypto.rs packages/platform-desktop/src/adapters/crypto.ts packages/platform-mobile packages/core/src/adapters/crypto.ts packages/core/src/wasm.ts packages/platform-extension/src/offscreen-core.ts packages/platform-extension/src/crypto.ts packages/platform-extension/src/offscreen-decrypt-batch.test.ts packages/core/src/hooks/useVault.tsx
+git add packages/core-rust/src/lib.rs clients/desktop/src-tauri/src/crypto.rs clients/desktop/src/adapters/crypto.ts clients/mobile packages/core/src/adapters/crypto.ts packages/core/src/wasm.ts clients/extension/src/offscreen-core.ts clients/extension/src/crypto.ts clients/extension/src/offscreen-decrypt-batch.test.ts packages/core/src/hooks/useVault.tsx
 git commit -m "feat(crypto): report undecryptable entries per entry in batch decrypt" -m "One call per vault as before, but an entry that fails returns null instead of failing the whole batch, so a single stray entry no longer makes a vault unopenable. Only a locked vault rejects the call."
 ```
 
@@ -653,10 +653,10 @@ git commit -m "feat(crypto): report undecryptable entries per entry in batch dec
 - Modify: `packages/core/src/adapters/storage.ts` (StorageAdapter)
 - Modify: `packages/core/src/hooks/useVaultRegistry.tsx:193-210` (`makeVaultScopedStorage`)
 - Test: `packages/core/src/hooks/useVaultRegistry.test.tsx`
-- Modify: `packages/platform-extension/src/storage.ts` (key helpers ~line 23, the two key-removal lists ~lines 116-121 and 169-174)
-- Test: `packages/platform-extension/src/storage.test.ts`
-- Modify: `packages/platform-desktop/src-tauri/src/storage.rs` (`ops` module: paths, read/write, `delete_vault`; commands), `packages/platform-desktop/src-tauri/src/lib.rs:252-262` (handler list), `packages/platform-desktop/src/adapters/storage.ts`
-- Modify: `packages/platform-mobile/src/adapters/storage.ts` (file helpers ~line 27, `deleteVaultBlob` ~line 227)
+- Modify: `clients/extension/src/storage.ts` (key helpers ~line 23, the two key-removal lists ~lines 116-121 and 169-174)
+- Test: `clients/extension/src/storage.test.ts`
+- Modify: `clients/desktop/src-tauri/src/storage.rs` (`ops` module: paths, read/write, `delete_vault`; commands), `clients/desktop/src-tauri/src/lib.rs:252-262` (handler list), `clients/desktop/src/adapters/storage.ts`
+- Modify: `clients/mobile/src/adapters/storage.ts` (file helpers ~line 27, `deleteVaultBlob` ~line 227)
 
 **Interfaces:**
 - Produces on `StorageAdapter`:
@@ -823,7 +823,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/core/src/adapters/storage.ts packages/core/src/hooks/useVaultRegistry.tsx packages/core/src/hooks/useVaultRegistry.test.tsx packages/platform-extension/src/storage.ts packages/platform-extension/src/storage.test.ts packages/platform-desktop/src-tauri/src/storage.rs packages/platform-desktop/src-tauri/src/lib.rs packages/platform-desktop/src/adapters/storage.ts packages/platform-mobile/src/adapters/storage.ts
+git add packages/core/src/adapters/storage.ts packages/core/src/hooks/useVaultRegistry.tsx packages/core/src/hooks/useVaultRegistry.test.tsx clients/extension/src/storage.ts clients/extension/src/storage.test.ts clients/desktop/src-tauri/src/storage.rs clients/desktop/src-tauri/src/lib.rs clients/desktop/src/adapters/storage.ts clients/mobile/src/adapters/storage.ts
 git commit -m "feat(storage): give each vault a quarantine store beside its file" -m "Entries a vault can't decrypt need somewhere durable to go that is not the vault itself and not settings storage, which desktop rewrites whole and resets when corrupt. Each platform now keeps one quarantine store per vault next to the vault's file, removed with the vault."
 ```
 
@@ -1147,9 +1147,9 @@ git commit -m "fix(vault): set aside entries a vault can't decrypt instead of re
 - Modify: `packages/core/src/adapters/crypto.ts` (next to `CRYPTO_SESSION_CHANGED`)
 - Modify: `packages/core/src/adapters/shell.ts` (next to `setActiveVault`)
 - Modify: `packages/core/src/hooks/useVault.tsx` (the unlock paths at `~769`, `~817`, `~1349`, the biometric unlock, and the mount path at `~658`)
-- Modify: `packages/platform-extension/src/shell.ts`, `packages/platform-extension/src/session-keys.ts`
-- Modify: `packages/platform-extension/src/background/session.ts:240-265,342-366`, `packages/platform-extension/src/background/sync.ts` (maybeStartSync)
-- Test: `packages/core/src/hooks/useVault.quarantine.test.tsx`, `packages/platform-extension/src/background/session.test.ts`
+- Modify: `clients/extension/src/shell.ts`, `clients/extension/src/session-keys.ts`
+- Modify: `clients/extension/src/background/session.ts:240-265,342-366`, `clients/extension/src/background/sync.ts` (maybeStartSync)
+- Test: `packages/core/src/hooks/useVault.quarantine.test.tsx`, `clients/extension/src/background/session.test.ts`
 
 **Interfaces:**
 - Produces: `export const VAULT_OPEN_FAILED = "VAULT_OPEN_FAILED";`; `ShellAdapter.notifyVaultOpened?(vaultId: string): void | Promise<void>`; background message `VAULT_OPENED {vaultId}`; session key `OPENED_VAULT_KEY = "sync.openedVault"` holding the vault id whose entries loaded since the last unlock.
@@ -1285,7 +1285,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/core/src/adapters/crypto.ts packages/core/src/adapters/shell.ts packages/core/src/hooks/useVault.tsx packages/core/src/hooks/useVault.quarantine.test.tsx packages/platform-extension/src/shell.ts packages/platform-extension/src/session-keys.ts packages/platform-extension/src/background/session.ts packages/platform-extension/src/background/session.test.ts packages/platform-extension/src/background/sync.ts
+git add packages/core/src/adapters/crypto.ts packages/core/src/adapters/shell.ts packages/core/src/hooks/useVault.tsx packages/core/src/hooks/useVault.quarantine.test.tsx clients/extension/src/shell.ts clients/extension/src/session-keys.ts clients/extension/src/background/session.ts clients/extension/src/background/session.test.ts clients/extension/src/background/sync.ts
 git commit -m "fix(vault): sync a vault only once it has opened, and relock one that didn't" -m "The extension started sync the moment the key unwrapped, so a damaged vault reached its sync group before the open could clean it. Sync now waits for the UI to report which vault's entries loaded, and a vault whose entries fail to load is locked again."
 ```
 
@@ -1375,9 +1375,9 @@ git commit -m "fix(ui): show calm, translated copy instead of raw crypto errors"
 **Files:**
 - Modify: `packages/core/src/sync/apply-remote.ts`
 - Test: `packages/core/src/sync/apply-remote.test.ts`
-- Modify: `packages/platform-extension/src/background/sync.ts` (makeVaultSyncPort, applyRemoteNow), `packages/platform-extension/src/offscreen-core.ts` (new op), `packages/platform-extension/src/background/offscreen-client.ts:99-110` (`USE_VEK`)
-- Modify: `packages/platform-desktop/src/sync/roster.ts:155-220`
-- Modify: `packages/platform-mobile/src/sync/sync-manager.ts:~400-445`
+- Modify: `clients/extension/src/background/sync.ts` (makeVaultSyncPort, applyRemoteNow), `clients/extension/src/offscreen-core.ts` (new op), `clients/extension/src/background/offscreen-client.ts:99-110` (`USE_VEK`)
+- Modify: `clients/desktop/src/sync/roster.ts:155-220`
+- Modify: `clients/mobile/src/sync/sync-manager.ts:~400-445`
 
 **Interfaces:**
 - Consumes: `entryVersionKey` (Task 4), tolerant `decryptEntries` / wasm `decrypt_entries` (Task 2), the per-vault apply queue (Task 1).
@@ -1532,7 +1532,7 @@ In `background/sync.ts`, add to `makeVaultSyncPort`:
 
 and keep refusals per vault for the worker's lifetime: `const refusedByVault = new Map<string, Set<string>>();`, and in `applyRemoteNow`: `const rejected = refusedByVault.get(ctx.vaultId) ?? new Set<string>(); refusedByVault.set(ctx.vaultId, rejected); await applyRemotePayload(makeVaultSyncPort(ctx), remote, { rejected });`. Add an `offscreen-decrypt-batch.test.ts` case: `CRYPTO_CHECK_ENTRIES` with `[entry("a"), entry("broken")]` returns `{ ok: true, data: [true, false] }`.
 
-- [ ] **Step 5: Desktop and mobile ports.** In `platform-desktop/src/sync/roster.ts` `startRoster`, create `const rejected = new Set<string>();` next to `const gen = sessionGen;`, pass `crypto: desktopCrypto` to `createVaultSyncPort`, and call `applyRemotePayload(port, decodeEntriesPayload(json), { rejected })`. Same in `platform-mobile/src/sync/sync-manager.ts` with `crypto: mobileCrypto`, the set created per session next to its `gen`. A per-session set means a transient wrong-key state can't make a refusal outlive the session.
+- [ ] **Step 5: Desktop and mobile ports.** In `clients/desktop/src/sync/roster.ts` `startRoster`, create `const rejected = new Set<string>();` next to `const gen = sessionGen;`, pass `crypto: desktopCrypto` to `createVaultSyncPort`, and call `applyRemotePayload(port, decodeEntriesPayload(json), { rejected })`. Same in `clients/mobile/src/sync/sync-manager.ts` with `crypto: mobileCrypto`, the set created per session next to its `gen`. A per-session set means a transient wrong-key state can't make a refusal outlive the session.
 
 - [ ] **Step 6: Run everything touched.**
 
@@ -1542,7 +1542,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/core/src/sync/apply-remote.ts packages/core/src/sync/apply-remote.test.ts packages/platform-extension/src/background/sync.ts packages/platform-extension/src/offscreen-core.ts packages/platform-extension/src/background/offscreen-client.ts packages/platform-extension/src/offscreen-decrypt-batch.test.ts packages/platform-desktop/src/sync/roster.ts packages/platform-mobile/src/sync/sync-manager.ts
+git add packages/core/src/sync/apply-remote.ts packages/core/src/sync/apply-remote.test.ts clients/extension/src/background/sync.ts clients/extension/src/offscreen-core.ts clients/extension/src/background/offscreen-client.ts clients/extension/src/offscreen-decrypt-batch.test.ts clients/desktop/src/sync/roster.ts clients/mobile/src/sync/sync-manager.ts
 git commit -m "fix(sync): refuse incoming entries that don't decrypt under the vault's key" -m "Every member of a sync group shares the vault key, so an entry that doesn't decrypt can only be another vault's or damaged. Merges now check the entries that would win and drop the rest, remembering refusals so a peer's rebroadcast isn't re-checked every few seconds. Protects devices from a peer that is still broken."
 ```
 

@@ -205,7 +205,7 @@ This is a constraint on the binding layers rather than on the algorithm, and it
 is the single largest implementation risk in the feature.
 
 Every crypto call on the extension is a `chrome.runtime.sendMessage` round trip
-to the offscreen document (`platform-extension/src/crypto.ts`), JSON-serialized,
+to the offscreen document (`clients/extension/src/crypto.ts`), JSON-serialized,
 with a standing note that `sendMessage` mangles a `Uint8Array` so bytes travel as
 base64 or `number[]`. Capacitor's bridge has the same shape. Every one of the
 `CryptoAdapter`'s methods was designed for one entry at a time.
@@ -329,7 +329,7 @@ the cross-language check that matters: that hash is what a peer verifies a trans
 Run it **module-scoped**:
 
 ```
-cd packages/platform-mobile/android
+cd clients/mobile/android
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   ANDROID_SERIAL=<serial> ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=app.bramble.mobile.FileSealInstrumentedTest
@@ -476,7 +476,7 @@ The crypto host (the offscreen document on Chrome, the event page on Firefox) ho
 wasm, the background holds the VEKs, and the view holds the file. Moving a 90 MB file
 between them as `chrome.runtime` messages is the cliff described above, so the bytes
 move through IndexedDB instead, which every extension context shares, and only keys
-travel as messages (`platform-extension/src/files.ts`, `files/host.ts`, `files/idb.ts`).
+travel as messages (`clients/extension/src/files.ts`, `files/host.ts`, `files/idb.ts`).
 
 - **Attach.** The view parks the picked `Blob` in the `handoff` store and sends
   `CRYPTO_FILE_SEAL` naming it. The background injects the vault's VEK and, from the

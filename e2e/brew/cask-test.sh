@@ -123,7 +123,7 @@ ok "has a zap stanza"
 
 say "the cask points at the current release"
 [ "$VERSION" = "$EXPECTED" ] ||
-	die "cask is $VERSION but the update manifest says $EXPECTED; bump packages/platform-desktop/homebrew/bramble.rb"
+	die "cask is $VERSION but the update manifest says $EXPECTED; bump clients/desktop/homebrew/bramble.rb"
 ok "$VERSION matches the update manifest"
 
 # The published SHA256SUMS is the release's own record of what it shipped. Comparing against it

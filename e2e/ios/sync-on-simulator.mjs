@@ -5,7 +5,7 @@
 // Playwright drives the extension; the app's WKWebView is driven over WebKit's inspector protocol
 // through ios_webkit_debug_proxy, which Playwright can't speak. Pairs over the HOSTED relay: App
 // Transport Security refuses cleartext to a local one. Needs a Debug build installed and launched
-// on a booted simulator, and the proxy serving its pages (packages/platform-mobile/docs/development.md):
+// on a booted simulator, and the proxy serving its pages (clients/mobile/docs/development.md):
 //
 //   ios_webkit_debug_proxy -s unix:<webinspectord_sim.socket> -c null:9321,:9322-9420 --no-frontend
 //   BRAMBLE_EXTENSION=<dist-chromium> IOS_INSPECT_PORT=9322 node e2e/ios/sync-on-simulator.mjs

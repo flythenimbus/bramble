@@ -26,7 +26,7 @@ packages/core-rust/target/
 # Cargo.lock IS committed: this crate ships compiled artifacts (jniLibs + wasm) in the
 # released apps, so the dependency graph must be pinned. Without it a rebuild of a tag
 # resolves newer patch releases and no longer matches the published binary.
-packages/platform-extension/public/wasm/
+clients/extension/public/wasm/
 
 # Signing keys must never be committed (see docs/release-signing.md)
 *.pem
@@ -54,7 +54,7 @@ playwright-report/
 .playwright/
 
 # iOS build output. Unanchored on purpose: the existing rules in
-# packages/platform-mobile/ios/.gitignore are path-anchored (`App/App.ipa`), so anything
+# clients/mobile/ios/.gitignore are path-anchored (`App/App.ipa`), so anything
 # gym writes elsewhere - e.g. the repo root, which is now fastlane's working directory -
 # slipped through. The Fastfile also pins an output_directory so these shouldn't appear
 # at the root at all; this is the backstop.
@@ -65,5 +65,5 @@ playwright-report/
 # compiled appex (binary + code signature) that is rebuilt every time, and the .provisionprofile
 # files are per-machine signing material. Both got committed twice by a `git add -A packages`
 # before this existed.
-packages/platform-desktop/macos/build/
+clients/desktop/macos/build/
 *.provisionprofile

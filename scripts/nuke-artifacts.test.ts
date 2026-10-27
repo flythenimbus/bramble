@@ -18,13 +18,13 @@ function touch(path: string): void {
 	writeFileSync(join(root, path), "x");
 }
 
-const TARGET = "packages/platform-desktop/src-tauri/target";
+const TARGET = "clients/desktop/src-tauri/target";
 const PROXY = `${TARGET}/release/bundle/macos/Bramble.app/Contents/MacOS/bramble-proxy`;
 
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "nuke-artifacts-"));
 	touch("packages/core-rust/target/debug/libvault.rlib");
-	touch("packages/platform-mobile/ios/DerivedData/Build/Products/App.app/App");
+	touch("clients/mobile/ios/DerivedData/Build/Products/App.app/App");
 	touch(`${TARGET}/debug/bramble-desktop`);
 	touch(`${TARGET}/x86_64-pc-windows-msvc/release/bramble-desktop.exe`);
 	touch(`${TARGET}/release/deps/libtauri.rlib`);
@@ -33,7 +33,7 @@ beforeEach(() => {
 	touch(`${TARGET}/release/bundle/dmg/Bramble.dmg`);
 	// Neighbours that must survive.
 	touch("desktop-updater-key.backup.age");
-	touch("packages/platform-mobile/ios/App/VaultCryptoFFI/VaultCrypto.xcframework/Info.plist");
+	touch("clients/mobile/ios/App/VaultCryptoFFI/VaultCrypto.xcframework/Info.plist");
 	touch("packages/core-rust/src/lib.rs");
 });
 
@@ -42,7 +42,7 @@ describe("nukeArtifacts", () => {
 		nukeArtifacts(root);
 
 		assert.equal(existsSync(join(root, "packages/core-rust/target")), false);
-		assert.equal(existsSync(join(root, "packages/platform-mobile/ios/DerivedData")), false);
+		assert.equal(existsSync(join(root, "clients/mobile/ios/DerivedData")), false);
 		assert.equal(existsSync(join(root, `${TARGET}/debug`)), false);
 		assert.equal(existsSync(join(root, `${TARGET}/x86_64-pc-windows-msvc`)), false);
 		assert.equal(existsSync(join(root, `${TARGET}/release/deps`)), false);
@@ -62,10 +62,7 @@ describe("nukeArtifacts", () => {
 		assert.equal(existsSync(join(root, "desktop-updater-key.backup.age")), true);
 		assert.equal(
 			existsSync(
-				join(
-					root,
-					"packages/platform-mobile/ios/App/VaultCryptoFFI/VaultCrypto.xcframework/Info.plist",
-				),
+				join(root, "clients/mobile/ios/App/VaultCryptoFFI/VaultCrypto.xcframework/Info.plist"),
 			),
 			true,
 		);

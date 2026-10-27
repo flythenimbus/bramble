@@ -95,7 +95,7 @@ lives from arrival until the setup screen takes it, or until the process ends.
 | URI parsing and validation | `core/src/util/totp.ts` (`parseTotp`) | Accepts `otpauth://totp/` and bare secrets. Already rejects HOTP and migration blobs. |
 | Failure taxonomy | `core/src/util/totp.ts` (`classifyScannedQr`) | `not-found` / `vendor-app` / `migration` / `not-totp` is exactly the set an inbound URI can hit. Only the copy differs. |
 | One-shot prefill of the create form | `core/src/app/pending-create-entry.ts` | The idiom to copy, and the destination for the "new login" leg. |
-| Cold-launch vs warm-launch dual path | `platform-mobile/src/main.tsx:75-80` | The credential-exchange handoff already solved this shape. |
+| Cold-launch vs warm-launch dual path | `clients/mobile/src/main.tsx:75-80` | The credential-exchange handoff already solved this shape. |
 | Entry search and list rendering | `core/src/app/screens/VaultHome/vault-search.ts`, `list-item.ts` | The "attach to an existing login" picker should not hand-roll a list. |
 | Route guards, back fallback | `core/src/app/router.tsx`, [routing.md](routing.md) | The new route is an ordinary `_app` child. |
 
@@ -143,7 +143,7 @@ first; both platform phases then reduce to delivery.
 
 ## Phase 1: iOS
 
-1. **Register the scheme** in `packages/platform-mobile/ios/App/App/Info.plist`. The file
+1. **Register the scheme** in `clients/mobile/ios/App/App/Info.plist`. The file
    is hand-maintained and referenced by `INFOPLIST_FILE`; `cap sync` does not rewrite it.
 
    ```xml
@@ -187,7 +187,7 @@ first; both platform phases then reduce to delivery.
 ## Phase 2: Android
 
 1. **Add the intent filter** to `.MainActivity` in
-   `packages/platform-mobile/android/app/src/main/AndroidManifest.xml`. It is already
+   `clients/mobile/android/app/src/main/AndroidManifest.xml`. It is already
    `exported="true"` and `launchMode="singleTask"`.
 
    ```xml

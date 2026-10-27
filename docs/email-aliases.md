@@ -662,7 +662,7 @@ has to take a position on.
 
 The hostname we send has to be the registrable domain, cleanly derived, because
 it ends up in an address the user reads and gives out. `registrableDomain`
-(`platform-extension/src/dedupe.ts`) already does this for the corner prompt; the
+(`clients/extension/src/dedupe.ts`) already does this for the corner prompt; the
 alias path uses the same derivation rather than passing a raw form URL through.
 
 And the address discloses where it was used. Anyone shown

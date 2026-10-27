@@ -31,9 +31,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-const TARGET = "packages/platform-desktop/src-tauri/target";
-const CONF = "packages/platform-desktop/src-tauri/tauri.conf.json";
-const PATCH = "packages/platform-desktop/src-tauri/tauri.local-update.conf.json";
+const TARGET = "clients/desktop/src-tauri/target";
+const CONF = "clients/desktop/src-tauri/tauri.conf.json";
+const PATCH = "clients/desktop/src-tauri/tauri.local-update.conf.json";
 
 const { version } = JSON.parse(readFileSync(CONF, "utf8"));
 

@@ -7,7 +7,7 @@ import { createVault, optionsUrl } from "./helpers";
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const BITWARDEN_FIXTURE = path.join(
 	dir,
-	"../../packages/platform-extension/src/fixtures/imports/bitwarden.json",
+	"../../clients/extension/src/fixtures/imports/bitwarden.json",
 );
 
 /** Pick the Bitwarden card on the import screen and hand it the fixture. */
@@ -40,10 +40,7 @@ test("re-importing the same file adds nothing and says so", async ({ context, ex
 	await expect(second.getByText(/items ready to import/i)).toBeHidden();
 });
 
-const GOOGLE_FIXTURE = path.join(
-	dir,
-	"../../packages/platform-extension/src/fixtures/imports/google.csv",
-);
+const GOOGLE_FIXTURE = path.join(dir, "../../clients/extension/src/fixtures/imports/google.csv");
 
 async function pickGoogle(page: Page, extensionId: string) {
 	await page.goto(`${optionsUrl(extensionId)}?screen=import`);
