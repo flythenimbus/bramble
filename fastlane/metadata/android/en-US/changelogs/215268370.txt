@@ -1,0 +1,8 @@
+What's new in this release:
+
+- Attach files to your entries: a passport scan, a contract, a recovery key. Files are encrypted on your device before they leave it, sync between your devices, and are included in your backups.
+- KeePass import and export now carry attachments too.
+- A login imported for a site on its own port, like a router or a home server, now matches that exact port.
+- Security updates to the libraries the app is built on.
+
+No account, no cloud. Everything stays on your devices.
