@@ -1,6 +1,6 @@
 # Docker image for the node signaling relay (see ../README.md).
 #
-#   docker build -t bramble-relay nostr-relay/node
+#   docker build -t bramble-relay services/nostr-relay/node
 #   docker run -p 7400:7400 bramble-relay          # ws://localhost:7400
 #   docker run -p 9000:9000 -e PORT=9000 bramble-relay
 FROM node:22-alpine

@@ -4,8 +4,8 @@
 // to current subscribers, and stores no events. The vault never touches it; it
 // only relays encrypted, group-key-addressed signaling blobs.
 //
-// Run:  node nostr-relay/node/relay.mjs            (defaults to ws://localhost:7400)
-//       PORT=9000 node nostr-relay/node/relay.mjs
+// Run:  node services/nostr-relay/node/relay.mjs            (defaults to ws://localhost:7400)
+//       PORT=9000 node services/nostr-relay/node/relay.mjs
 //
 // Clients publish:  ["EVENT", { kind: 20000, tags: [["d", roomId]], content, ... }]
 //          and sub: ["REQ", subId, { kinds: [20000], "#d": [roomId] }]
@@ -97,7 +97,7 @@ function parseIceServers() {
 	try {
 		parsed = JSON.parse(raw);
 	} catch {
-		throw new Error("Invalid ICE_SERVERS JSON; see nostr-relay/README.md");
+		throw new Error("Invalid ICE_SERVERS JSON; see services/nostr-relay/README.md");
 	}
 	if (!Array.isArray(parsed)) {
 		throw new Error("ICE_SERVERS must be a JSON array");

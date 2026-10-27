@@ -14,7 +14,7 @@ export default defineConfig({
 	...base,
 	webServer: [
 		{
-			command: "node nostr-relay/node/relay.mjs",
+			command: "node services/nostr-relay/node/relay.mjs",
 			port: 7400,
 			// The attachments and idle-traffic specs read /stats; this suite runs them too.
 			env: { RELAY_STATS: "1" },

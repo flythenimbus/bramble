@@ -10,10 +10,10 @@ document, and WebRTC connects them over loopback.
 1. **Run the relay** (separate terminal, leave it running):
 
    ```sh
-   node nostr-relay/node/relay.mjs  # ws://localhost:7400
+   node services/nostr-relay/node/relay.mjs  # ws://localhost:7400
    ```
 
-   See [../nostr-relay/README.md](../nostr-relay/README.md). Any Nostr relay works;
+   See [../services/nostr-relay/README.md](../services/nostr-relay/README.md). Any Nostr relay works;
    this local one keeps testing self-contained.
 
 2. **Build and load the extension as two devices:**

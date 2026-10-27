@@ -125,7 +125,7 @@ production ones.
 pnpm test:e2e:sync
 ```
 
-The config starts the relay (`nostr-relay/node/relay.mjs`, port 7400) and the mobile dev server
+The config starts the relay (`services/nostr-relay/node/relay.mjs`, port 7400) and the mobile dev server
 (port 5199) itself. Nothing external is contacted.
 
 **Rebuild the extension first.** The mobile peer is served by vite and picks up `@core` changes

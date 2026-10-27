@@ -5,7 +5,7 @@ packages:
   - clients/mobile
   - clients/desktop
   - website
-  - nostr-relay/cf-worker
+  - services/nostr-relay/cf-worker
 
 # Build scripts the cf-worker's wrangler toolchain needs to fetch its platform
 # binaries; pnpm blocks unapproved postinstall scripts by default.

@@ -22,7 +22,7 @@ export default defineConfig({
 	// the read-only specs too. adb reverse (in the fixture) is what lets the phone reach it.
 	webServer: [
 		{
-			command: "node nostr-relay/node/relay.mjs",
+			command: "node services/nostr-relay/node/relay.mjs",
 			port: 7400,
 			reuseExistingServer: !process.env.CI,
 			stdout: "ignore",

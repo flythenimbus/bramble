@@ -571,7 +571,7 @@ Source of truth is the persisted `sync.group` roster.
   import time, so the Chrome service worker can import them and the offscreen document / FF
   event page provides the document context. This mirrors the offscreen refactor already planned
   in `firefox-port.md`.
-- Ship the minimal Nostr-subset relay source in `/nostr-relay/` for users who want to self-host;
+- Ship the minimal Nostr-subset relay source in `/services/nostr-relay/` for users who want to self-host;
   the default relay URL is overridable in settings.
 
 ## Implementation status (built)
@@ -592,7 +592,7 @@ device management). Notes on how it maps to code:
   configuration of it. The **extension** runs these in the offscreen document (the `WEB_RTC`
   reason; no `chrome.storage`, so it bridges to the background); **mobile** runs them
   in-process in the webview (`clients/mobile/src/sync/sync-manager.ts`).
-- **Cross-network TURN** (`nostr-relay/cf-worker` + `transport/ice.ts`): the relay Worker's
+- **Cross-network TURN** (`services/nostr-relay/cf-worker` + `transport/ice.ts`): the relay Worker's
   `POST /ice-servers` mints short-lived Cloudflare TURN credentials; `startMeshSession`
   fetches them (URL derived from the relay, or an explicit override) and passes them to the
   peers, so enrollment *and* ongoing sync cross networks/VPNs. The relay + ICE URLs are

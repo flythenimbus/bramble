@@ -8,7 +8,7 @@ export function deriveIceUrl(relayUrl: string): string {
 		if (u.protocol === "ws:") u.protocol = "http:";
 		else if (u.protocol === "wss:") u.protocol = "https:";
 		u.pathname = "/ice-servers";
-		// The query stays: a private relay's token rides in it (nostr-relay/README.md).
+		// The query stays: a private relay's token rides in it (services/nostr-relay/README.md).
 		u.hash = "";
 		return u.toString();
 	} catch {

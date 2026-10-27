@@ -19,7 +19,7 @@ export default defineConfig({
 	webServer: [
 		{
 			// A WebSocket server, so wait on the port rather than an HTTP response.
-			command: "node nostr-relay/node/relay.mjs",
+			command: "node services/nostr-relay/node/relay.mjs",
 			port: 7400,
 			// The attachments spec reads /stats to show file bytes never passed through it.
 			env: { RELAY_STATS: "1" },

@@ -1,7 +1,7 @@
 # Signaling relay
 
 A minimal WebSocket relay for P2P sync (see
-[../docs/p2p-sync.md](../docs/p2p-sync.md)). It speaks just enough of the Nostr
+[../../docs/p2p-sync.md](../../docs/p2p-sync.md)). It speaks just enough of the Nostr
 protocol (NIP-01 `REQ` / `EVENT` / `CLOSE`) to fan out **ephemeral** events
 (kind 20000-29999) to current subscribers. It does not persist events or see
 the vault: it only relays encrypted, group-key-addressed signaling blobs while
@@ -17,8 +17,8 @@ relay; both the signaling and ICE endpoints are configurable in Settings.
 The `ws`-based node version, for development and self-hosting:
 
 ```sh
-node nostr-relay/node/relay.mjs            # ws://localhost:7400
-PORT=9000 node nostr-relay/node/relay.mjs  # custom port
+node services/nostr-relay/node/relay.mjs            # ws://localhost:7400
+PORT=9000 node services/nostr-relay/node/relay.mjs  # custom port
 ```
 
 `POST /ice-servers` (same origin as the relay URL) serves the STUN/TURN list.
@@ -42,7 +42,7 @@ For STUN, explicitly choose a server you want clients to contact:
 
 ```sh
 ICE_SERVERS='[{"urls":"stun:stun.example.com:3478"}]' \
-  node nostr-relay/node/relay.mjs
+  node services/nostr-relay/node/relay.mjs
 ```
 
 For TURN, use a server that supports the shared-secret, time-limited credential
@@ -56,7 +56,7 @@ Then start the relay with the TURN URLs:
 ```sh
 ICE_SERVERS='[{"urls":["turn:turn.example.com:3478?transport=udp","turn:turn.example.com:3478?transport=tcp"]}]' \
 TURN_SECRET='replace-with-the-same-secret-configured-on-the-turn-server' \
-  node nostr-relay/node/relay.mjs
+  node services/nostr-relay/node/relay.mjs
 ```
 
 Each request gets a username of `<expiry>:<tag>` and a credential computed
@@ -161,7 +161,7 @@ Set `RELAY_DEBUG=1` to trace connections, subscriptions, EVENT fan-out,
 rejections and ICE endpoint requests:
 
 ```sh
-RELAY_DEBUG=1 node nostr-relay/node/relay.mjs
+RELAY_DEBUG=1 node services/nostr-relay/node/relay.mjs
 # Docker: add -e RELAY_DEBUG=1 to docker run
 ```
 
@@ -176,7 +176,7 @@ enable tracing only while diagnosing a connection and configure log rotation.
 Same relay as a container (non-root, with a healthcheck on the HTTP probe):
 
 ```sh
-docker build -t bramble-relay nostr-relay/node
+docker build -t bramble-relay services/nostr-relay/node
 docker run -d --name bramble-relay -p 127.0.0.1:7400:7400 \
   --restart unless-stopped --log-opt max-size=10m --log-opt max-file=3 bramble-relay
 # custom port: -p 127.0.0.1:9000:9000 -e PORT=9000
@@ -201,7 +201,7 @@ effectively zero, and a SQLite-backed Durable Object runs on the Workers free
 plan.
 
 ```sh
-cd nostr-relay/cf-worker
+cd services/nostr-relay/cf-worker
 pnpm exec wrangler login   # one-time
 pnpm run deploy            # -> wss://bramble-relay.<subdomain>.workers.dev
 pnpm run dev               # local miniflare at ws://localhost:8787
@@ -215,7 +215,7 @@ TURN on the Worker needs four secrets (`pnpm exec wrangler secret put <NAME>`):
 from, and `TURN_ANALYTICS_TOKEN` (Account Analytics: Read) and `CF_ACCOUNT_ID`
 for the monthly ceiling and the per-credential cap. Without the first two the
 ICE endpoint returns an empty list. The limits themselves are `vars` in
-`wrangler.jsonc`; see [../docs/turn-credentials.md](../docs/turn-credentials.md).
+`wrangler.jsonc`; see [../../docs/turn-credentials.md](../../docs/turn-credentials.md).
 A `RELAY_TOKEN` secret makes a Worker private, exactly as on the Node relay
 (see "Limits and private mode").
 

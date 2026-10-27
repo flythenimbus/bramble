@@ -13,7 +13,7 @@ limited in what it can use, and a total that stays inside the free tier.
 
 ## Stage A: the hosted Worker (built)
 
-One global Durable Object, `IceGuard` (`nostr-relay/cf-worker/src/ice-guard.ts`), is asked before
+One global Durable Object, `IceGuard` (`services/nostr-relay/cf-worker/src/ice-guard.ts`), is asked before
 every mint, and a cron trigger asks it to check usage every 10 minutes. The limits are wrangler
 vars; the rules are pure functions in `ice-policy.ts`, tested with `node --test`.
 
@@ -48,7 +48,7 @@ and every cron run logs that the ceiling and cap don't.
 ### Deploying
 
 ```sh
-cd nostr-relay/cf-worker
+cd services/nostr-relay/cf-worker
 pnpm exec wrangler secret put TURN_ANALYTICS_TOKEN   # API token: Account > Account Analytics > Read
 pnpm exec wrangler secret put CF_ACCOUNT_ID
 pnpm run deploy
@@ -93,7 +93,7 @@ The same tickets, an in-process rate limit (`ICE_REQUESTS_PER_MINUTE` with a liv
 `ICE_TICKETLESS_PER_MINUTE` without, per IPv4 address or IPv6 /64) answering STUN only past it,
 `ICE_REQUIRE_TICKET`, and a 2-hour default lifetime. Behind a proxy every request comes from the proxy, so
 `TRUST_PROXY` names the proxy whose `X-Forwarded-For` is believed, and only it. Covered by
-`nostr-relay/node/relay.test.mjs`, which starts the relay and asks it as a client would.
+`services/nostr-relay/node/relay.test.mjs`, which starts the relay and asks it as a client would.
 
 No ceiling and no revocation: those rest on Cloudflare's billing data and revoke API, and a
 shared-secret credential can't be revoked by itself (coturn checks only the HMAC and the expiry).

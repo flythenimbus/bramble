@@ -252,7 +252,7 @@ What the relay can observe, and the mitigations:
 
 - **Already good (current signaling):** the event author is a **fresh ephemeral key per session**
   (`nostr-signer.ts`), content is group-key-encrypted, and events use **ephemeral kinds
-  (20000-29999)** so the relay stores nothing (`nostr-relay/cf-worker`). No cross-session author
+  (20000-29999)** so the relay stores nothing (`services/nostr-relay/cf-worker`). No cross-session author
   linkage, nothing at rest.
 - **Room-id linkage → rotate per epoch (implemented).** The sync room is derived per hourly epoch
   (`deriveRoomId(groupKey, label, epoch)`); the mesh publishes to the current epoch and subscribes to
@@ -269,7 +269,7 @@ What the relay can observe, and the mitigations:
   fallback and the Tor-running crowd is the WebRTC-off crowd. Caveat: a browser extension can't
   provide Tor; it needs Tor Browser, an OS SOCKS proxy, or (Firefox-only) the `proxy` API routing
   just the relay socket through a local `tor`. And a Cloudflare Worker can't be an onion service, so
-  onion ⇒ self-host the node relay (`nostr-relay/node`).
+  onion ⇒ self-host the node relay (`services/nostr-relay/node`).
 - **NIP-42 (relay AUTH) — access control, not privacy.** It binds identity to the relay (the wrong
   tool for anonymity) but is the right tool to lock a self-hosted relay to your own devices.
 
