@@ -1,10 +1,8 @@
 Nouveautés de cette version :
 
-- Lorsqu’une même entrée est modifiée sur deux appareils avant leur synchronisation, Bramble conserve désormais les deux versions et affiche le conflit, afin que vous puissiez les comparer et en garder une seule ou les deux. Auparavant, l’une des modifications était silencieusement perdue.
-- L’enregistrement d’une modification ne remplace plus un changement qui s’est synchronisé pendant que vous modifiiez l’entrée.
-- Modifier une entrée archivée la laisse archivée.
-- Importation depuis Enpass et AliasVault. Les identifiants que vous possédez déjà dans un autre gestionnaire de mots de passe sont retenus au lieu d’être dupliqués.
-- Les numéros de carte s’affichent groupés et se copient sous forme de chiffres simples. Les notes peuvent être sélectionnées et copiées, et le champ des notes s’agrandit à mesure que vous saisissez du texte.
-- Messages d’erreur de sauvegarde Dropbox plus clairs et correction du rejet des clés d’alias DuckDuckGo.
+- Vous pouvez joindre des fichiers à vos entrées : une copie de passeport, un contrat, une clé de récupération. Les fichiers sont chiffrés sur votre appareil avant de le quitter, synchronisés entre vos appareils et inclus dans vos sauvegardes.
+- L’import et l’export KeePass incluent désormais aussi les pièces jointes.
+- Un identifiant importé pour un site sur son propre port, comme un routeur ou un serveur domestique, correspond désormais exactement à ce port.
+- Mises à jour de sécurité des bibliothèques sur lesquelles repose l’application.
 
-Pas de compte, pas de cloud. Tout reste sur vos appareils.
+Aucun compte, aucun cloud. Tout reste sur vos appareils.

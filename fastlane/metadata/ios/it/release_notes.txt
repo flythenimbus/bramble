@@ -1,10 +1,8 @@
 Novità in questa versione:
 
-- Quando la stessa voce viene modificata su due dispositivi prima della sincronizzazione, Bramble ora conserva entrambe le versioni e mostra il conflitto, così è possibile confrontarle e conservarne una o entrambe. In precedenza, una modifica andava persa in silenzio.
-- Il salvataggio di una modifica non sovrascrive più una modifica sincronizzata durante la modifica.
-- La modifica di una voce archiviata la mantiene archiviata.
-- Importazione da Enpass e AliasVault. Gli accessi già presenti da un altro gestore di password vengono trattenuti invece di essere duplicati.
-- I numeri delle carte vengono mostrati a gruppi e copiati come sole cifre. Le note possono essere selezionate e copiate e il campo note si espande man mano che si digita.
-- Errori di backup di Dropbox più chiari e correzione del rifiuto delle chiavi alias di DuckDuckGo.
+- È possibile allegare file alle proprie voci: una scansione del passaporto, un contratto, una chiave di ripristino. I file vengono crittografati sul dispositivo prima di lasciarlo, si sincronizzano tra i dispositivi e sono inclusi nei backup.
+- L'importazione e l'esportazione KeePass ora includono anche gli allegati.
+- Un accesso importato per un sito su una porta specifica, come un router o un server domestico, ora corrisponde esattamente a quella porta.
+- Aggiornamenti di sicurezza alle librerie su cui si basa l'app.
 
-Nessun account, nessun cloud. Tutto rimane sui dispositivi personali.
+Nessun account, nessun cloud. Tutto rimane sui propri dispositivi.

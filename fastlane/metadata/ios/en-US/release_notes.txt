@@ -1,10 +1,8 @@
 What's new in this release:
 
-- When the same entry is edited on two devices before they sync, Bramble now keeps both versions and shows the conflict, so you can compare them and keep one or both. Before, one edit was silently lost.
-- Saving an edit no longer overwrites a change that synced in while you were editing.
-- Editing an archived entry keeps it archived.
-- Import from Enpass and AliasVault. Logins you already have from another password manager are held back instead of duplicated.
-- Card numbers show in groups and copy as plain digits. Notes can be selected and copied, and the notes field grows as you type.
-- Clearer Dropbox backup errors, and a fix for DuckDuckGo alias keys being rejected.
+- Attach files to your entries: a passport scan, a contract, a recovery key. Files are encrypted on your device before they leave it, sync between your devices, and are included in your backups.
+- KeePass import and export now carry attachments too.
+- A login imported for a site on its own port, like a router or a home server, now matches that exact port.
+- Security updates to the libraries the app is built on.
 
 No account, no cloud. Everything stays on your devices.

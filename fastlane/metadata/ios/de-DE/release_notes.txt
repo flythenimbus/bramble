@@ -1,10 +1,8 @@
-Was ist neu in dieser Version:
+Neu in dieser Version:
 
-- Wenn derselbe Eintrag auf zwei Geräten bearbeitet wird, bevor diese synchronisiert werden, behält Bramble jetzt beide Versionen und zeigt den Konflikt an, sodass Sie sie vergleichen und eine oder beide behalten können. Zuvor ging eine Bearbeitung unbemerkt verloren.
-- Das Speichern einer Bearbeitung überschreibt keine Änderung mehr, die während der Bearbeitung synchronisiert wurde.
-- Beim Bearbeiten eines archivierten Eintrags bleibt dieser archiviert.
-- Import aus Enpass und AliasVault. Logins, die Sie bereits aus einem anderen Passwort-Manager haben, werden zurückgehalten statt dupliziert.
-- Kartennummern werden in Gruppen angezeigt und als reine Ziffern kopiert. Notizen können ausgewählt und kopiert werden, und das Notizfeld wächst beim Tippen mit.
-- Verständlichere Fehlermeldungen bei Dropbox-Backups und eine Korrektur für abgelehnte DuckDuckGo-Alias-Schlüssel.
+- Dateien an Einträge anhängen: einen Reisepass-Scan, einen Vertrag, einen Wiederherstellungsschlüssel. Dateien werden auf Ihrem Gerät verschlüsselt, bevor sie es verlassen, zwischen Ihren Geräten synchronisiert und in Ihre Backups aufgenommen.
+- KeePass-Import und -Export enthalten jetzt ebenfalls Anhänge.
+- Ein Login, der für eine Website auf einem eigenen Port importiert wurde, etwa für einen Router oder Heimserver, stimmt jetzt mit genau diesem Port überein.
+- Sicherheitsupdates für die Bibliotheken, auf denen die App basiert.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.
