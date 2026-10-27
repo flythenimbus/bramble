@@ -172,6 +172,14 @@ method chips (password / security key / biometric / recovery) then reflect that
 vault's slots. After unlock, `/vault` as today. A "Switch vault" action locks and
 returns to the picker.
 
+Exception (extension): a view the background opens for a page to unlock in (the autofill
+"Vault locked" row, the corner prompt's "Unlock & Save", a passkey request) skips the picker
+and boots on the unlock screen of the vault the UI last opened. That id is
+`vault.lastOpenedId` in `chrome.storage.local`, written on `VAULT_OPENED` so it survives lock.
+Before opening the view the background writes it as `vault.activeId` (only when no vault is
+selected), which the UI already restores on boot. "Choose a different vault" still reaches the
+picker. A deleted vault falls back to the picker.
+
 ### Router and context
 
 Extend the router context slice from `{ isLocked, ready, entries }` to also carry

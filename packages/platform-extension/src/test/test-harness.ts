@@ -157,6 +157,19 @@ export function pageSender(host: string, tabId?: number, frameId = 0): any {
 export const TEST_ACTIVE_VAULT = "v1";
 export const TEST_VEK_KEY = `vault.vek:${TEST_ACTIVE_VAULT}`;
 
+/** A `localSeed` registering vaults v1 and v2. Each needs a blob, or the storage migration reaps
+ * the record as a ghost. */
+export const TWO_VAULTS = {
+	"vault.registry": {
+		vaults: [
+			{ id: "v1", label: "", createdAt: 1 },
+			{ id: "v2", label: "", createdAt: 2 },
+		],
+	},
+	"vault-blob-b64:v1": "AA==",
+	"vault-blob-b64:v2": "AA==",
+};
+
 export function defaultOffscreen(msg: AnyMsg): OffscreenResponse {
 	switch (msg.type) {
 		case "CRYPTO_GENERATE_VEK":

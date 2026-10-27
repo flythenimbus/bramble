@@ -20,6 +20,7 @@ import {
 	passkeyMakeCredential,
 	savePlacement,
 } from "./passkey-store";
+import { openUnlockView } from "./popout";
 import { getPasskeyProviderEnabled } from "./prefs";
 import { on } from "./router";
 import { vaultLocked } from "./session";
@@ -46,30 +47,6 @@ async function activeTabId(): Promise<number | undefined> {
 	} catch {
 		return undefined;
 	}
-}
-
-/** Open the unlock UI. Returns the detached window's id so it can be closed once unlocked
- *  (so it doesn't cover the page's corner prompt); undefined when the browser-action popup
- *  was used instead (it dismisses on its own). */
-async function openPopupForUnlock(): Promise<number | undefined> {
-	try {
-		const openPopup = (api.action as { openPopup?: () => Promise<void> }).openPopup;
-		if (typeof openPopup === "function") {
-			await openPopup.call(api.action);
-			return undefined;
-		}
-	} catch {}
-	try {
-		const win = await api.windows.create({
-			url: api.runtime.getURL("popup.html?detached=1"),
-			type: "popup",
-			focused: true,
-			width: 500,
-			height: 600,
-		});
-		return win?.id;
-	} catch {}
-	return undefined;
 }
 
 async function waitForUnlock(timeoutMs: number): Promise<boolean> {
@@ -118,7 +95,7 @@ function cardPayload(
 // Open the popup so a user gesture can unlock the vault, then wait until it is unlocked.
 async function ensureUnlocked(): Promise<boolean> {
 	if (!vaultLocked()) return true;
-	const unlockWindowId = await openPopupForUnlock();
+	const unlockWindowId = await openUnlockView();
 	const ok = await waitForUnlock(UNLOCK_TIMEOUT_MS);
 	// Close the unlock window once we're in, so it doesn't sit on top of the page's corner
 	// prompt (the passkey picker / confirmation that runs next).

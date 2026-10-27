@@ -5,6 +5,7 @@ import {
 	pageSender,
 	setAutofillIndex,
 	TEST_VEK_KEY,
+	TWO_VAULTS,
 } from "../test/test-harness";
 
 afterEach(() => {
@@ -189,8 +190,12 @@ describe("CORNER_PROMPT_RESPONSE (non-committing actions)", () => {
 		expect(bg.state.broadcasts).toHaveLength(0);
 	});
 
-	it("save-unlock-first while locked parks a handoff and opens the popup", async () => {
-		const bg = await loadBackground({ hasOpenPopup: true });
+	it("save-unlock-first while locked parks a handoff and opens the popup on the last opened vault", async () => {
+		const bg = await loadBackground({
+			hasOpenPopup: true,
+			localSeed: { ...TWO_VAULTS, "vault.lastOpenedId": "v2" },
+			sessionSeed: { "vault.activeId": undefined },
+		});
 		// Locked capture -> save prompt.
 		const cap = await bg.send(
 			{ type: "CORNER_PROMPT_CAPTURE", payload: { username: "bob", password: "pw" } },
@@ -204,6 +209,7 @@ describe("CORNER_PROMPT_RESPONSE (non-committing actions)", () => {
 		expect(resp).toEqual({ ok: true, data: null });
 		expect(bg.state.session["cornerPrompt.handoff"]).toMatchObject({ intent: "save" });
 		expect(bg.chrome.action.openPopup).toHaveBeenCalled();
+		expect(bg.state.session["vault.activeId"]).toBe("v2");
 	});
 });
 

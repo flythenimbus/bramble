@@ -5,6 +5,7 @@ import {
 	loadBackground,
 	pageSender,
 	TEST_VEK_KEY,
+	TWO_VAULTS,
 } from "../test/test-harness";
 
 afterEach(() => {
@@ -14,6 +15,8 @@ afterEach(() => {
 const HANDOFF_KEY = "popout.handoff";
 const UNLOCK_WINDOW_KEY = "popout.unlockWindowId";
 const CORNER_HANDOFF_KEY = "cornerPrompt.handoff";
+const ACTIVE_KEY = "vault.activeId";
+const LAST_OPENED_KEY = "vault.lastOpenedId";
 
 describe("POPOUT_OPEN", () => {
 	it("stashes the handoff before creating the detached window", async () => {
@@ -99,6 +102,48 @@ describe("POPOUT_OPEN", () => {
 		expect(bg.state.windowsCreated).toHaveLength(2);
 		expect(bg.state.windowsCreated[1]).not.toHaveProperty("left");
 		expect(bg.state.session["popout.windowId"]).toBe(999);
+	});
+
+	describe("an unlock pop-out boots on the last opened vault", () => {
+		/** Locked with no vault selected (as after a lock), `v2` opened last. */
+		const openUnlockPopout = async (lastOpened: string, opts: { reason?: string } = {}) => {
+			const bg = await loadBackground({
+				localSeed: { ...TWO_VAULTS, [LAST_OPENED_KEY]: lastOpened },
+				sessionSeed: { [ACTIVE_KEY]: undefined },
+			});
+			await bg.send(
+				{ type: "POPOUT_OPEN", payload: { reason: "unlock", ...opts } },
+				pageSender("example.com", 4),
+			);
+			return bg;
+		};
+
+		it("selects that vault, so the window shows its unlock screen and not the picker", async () => {
+			const bg = await openUnlockPopout("v2");
+			expect(bg.state.session[ACTIVE_KEY]).toBe("v2");
+		});
+
+		it("falls back to the picker when that vault was deleted", async () => {
+			const bg = await openUnlockPopout("gone");
+			expect(bg.state.session[ACTIVE_KEY]).toBeUndefined();
+		});
+
+		it("only applies to unlock pop-outs", async () => {
+			const bg = await openUnlockPopout("v2", { reason: undefined });
+			expect(bg.state.session[ACTIVE_KEY]).toBeUndefined();
+		});
+
+		it("leaves a vault the user already selected alone", async () => {
+			const bg = await loadBackground({
+				localSeed: { ...TWO_VAULTS, [LAST_OPENED_KEY]: "v2" },
+				sessionSeed: { [ACTIVE_KEY]: "v1" },
+			});
+			await bg.send(
+				{ type: "POPOUT_OPEN", payload: { reason: "unlock" } },
+				pageSender("example.com", 4),
+			);
+			expect(bg.state.session[ACTIVE_KEY]).toBe("v1");
+		});
 	});
 
 	it("focuses (does not duplicate) a route-only handoff with no draft", async () => {

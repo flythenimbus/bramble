@@ -698,6 +698,21 @@ describe("sync waits for the vault to open", () => {
 		expect(types(bg)).not.toContain("SYNC_ROSTER_SYNC");
 	});
 
+	it("remembers the opened vault across a lock, for the next unlock pop-out", async () => {
+		const bg = await loadBackground({ localSeed: syncSeed });
+		await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
+		await bg.send({ type: "VAULT_OPENED", payload: { vaultId: TEST_ACTIVE_VAULT } });
+		await bg.send({ type: "CRYPTO_LOCK" });
+		expect(bg.state.local["vault.lastOpenedId"]).toBe(TEST_ACTIVE_VAULT);
+	});
+
+	it("does not remember an open reported for a vault that isn't active", async () => {
+		const bg = await loadBackground({ localSeed: syncSeed });
+		await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });
+		await bg.send({ type: "VAULT_OPENED", payload: { vaultId: "someone-else" } });
+		expect(bg.state.local["vault.lastOpenedId"]).toBeUndefined();
+	});
+
 	it("forgets an open when the vault locks", async () => {
 		const bg = await loadBackground({ localSeed: syncSeed });
 		await bg.send({ type: "CRYPTO_UNWRAP_PASSWORD_SLOT" });

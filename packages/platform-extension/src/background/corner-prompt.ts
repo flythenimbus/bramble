@@ -24,6 +24,7 @@ import {
 	updateLoginCredentials,
 } from "./autofill-index";
 import { sendToOffscreen } from "./offscreen-client";
+import { openUnlockView } from "./popout";
 import { appendNeverSaveSite, getNeverSaveSites, getOfferToSavePref } from "./prefs";
 import { type MessageEnvelope, on } from "./router";
 import { refreshActiveVaultId, requireActiveVaultId, vaultLocked } from "./session";
@@ -429,25 +430,7 @@ async function cornerPromptResponse(
 				chosenEntryId: response.chosenEntryId,
 			};
 			await api.storage.session.set({ [CORNER_HANDOFF_KEY]: handoff });
-			try {
-				// chrome.action.openPopup is Chrome 127+; fall back to a detached window.
-				const openPopupFn = (api.action as { openPopup?: () => Promise<void> }).openPopup;
-				if (typeof openPopupFn === "function") {
-					await openPopupFn.call(api.action);
-				} else {
-					throw new Error("openPopup unavailable");
-				}
-			} catch {
-				try {
-					await api.windows.create({
-						url: api.runtime.getURL("popup.html?detached=1"),
-						type: "popup",
-						focused: true,
-						width: 500,
-						height: 600,
-					});
-				} catch {}
-			}
+			await openUnlockView();
 			return { ok: true, data: null };
 		}
 		if (response.action === "save") {

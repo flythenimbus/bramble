@@ -1,9 +1,12 @@
 /// <reference types="chrome" />
 
+import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api } from "../platform-api";
-import { CORNER_HANDOFF_KEY } from "../session-keys";
+import { ACTIVE_VAULT_SESSION_KEY, CORNER_HANDOFF_KEY } from "../session-keys";
+import { extensionStorage } from "../storage";
 import { getAutoLockMinutes } from "./prefs";
 import { type MessageEnvelope, on } from "./router";
+import { resolveActiveVaultId } from "./vek-store";
 import { armViewGrace } from "./view-lock";
 
 // In-memory only: a draft can hold a plaintext password, never persist to local.
@@ -15,6 +18,23 @@ const POPOUT_WINDOW_KEY = "popout.windowId";
 // Id of a pop-out opened solely to unlock (the picker's "Vault locked" row). It is a step in the
 // page's fill flow, not a place the user asked to be, so it closes itself once the vault unlocks.
 const POPOUT_UNLOCK_WINDOW_KEY = "popout.unlockWindowId";
+// The vault the UI last opened. In local (not session) so it outlives the lock that clears the
+// active id. A UUID, not a secret.
+export const LAST_OPENED_VAULT_KEY = "vault.lastOpenedId";
+
+/** Make the last opened vault the active one, so a view opened to unlock boots on its unlock
+ * screen instead of the picker. Leaves an existing selection alone and skips a deleted vault. */
+async function targetLastOpenedVault(): Promise<void> {
+	try {
+		if ((await resolveActiveVaultId()) !== null) return;
+		const id = await extensionStorage.getMeta(LAST_OPENED_VAULT_KEY);
+		if (typeof id !== "string") return;
+		const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY));
+		if (reg.vaults.some((v) => v.id === id)) {
+			await api.storage.session.set({ [ACTIVE_VAULT_SESSION_KEY]: id });
+		}
+	} catch {}
+}
 
 /** Focus the tracked pop-out window if it is still open. Returns false when there is none:
  * the id was never stored, or the window was closed while the worker slept (windows.get
@@ -37,14 +57,15 @@ const CHROME_INSET = 80;
 
 /** Create the pop-out window, anchored beside `anchor` when the position is usable. Chrome rejects
  *  bounds that fall (mostly) off-screen, which used to take the whole pop-out down with them - so a
- *  rejected position falls back to letting the browser place the window. */
+ *  rejected position (or no anchor) falls back to letting the browser place the window. */
 async function createPopoutWindow(
-	anchor: chrome.windows.Window | undefined,
+	anchor?: chrome.windows.Window,
 ): Promise<chrome.windows.Window | undefined> {
 	const url = api.runtime.getURL("popup.html?detached=1");
 	const base = { url, type: "popup" as const, focused: true, width: WIDTH, height: HEIGHT };
-	const top = (anchor?.top ?? 0) + CHROME_INSET;
-	const left = (anchor?.left ?? 0) + (anchor?.width ?? WIDTH) - WIDTH;
+	if (!anchor) return api.windows.create(base).catch(() => undefined);
+	const top = (anchor.top ?? 0) + CHROME_INSET;
+	const left = (anchor.left ?? 0) + (anchor.width ?? WIDTH) - WIDTH;
 	const created = await api.windows.create({ ...base, top, left }).catch(() => undefined);
 	if (!created) return api.windows.create(base).catch(() => undefined);
 	if (created.id !== undefined) {
@@ -54,6 +75,21 @@ async function createPopoutWindow(
 			.catch(() => undefined);
 	}
 	return created;
+}
+
+/** Open a view to unlock in, on the last opened vault: the toolbar popup (Chrome 127+), else a
+ *  detached window. Returns the detached window's id, or undefined for the toolbar popup, which
+ *  dismisses itself. */
+export async function openUnlockView(): Promise<number | undefined> {
+	await targetLastOpenedVault();
+	try {
+		const openPopup = (api.action as { openPopup?: () => Promise<void> }).openPopup;
+		if (typeof openPopup === "function") {
+			await openPopup.call(api.action);
+			return undefined;
+		}
+	} catch {}
+	return (await createPopoutWindow())?.id;
 }
 
 async function popoutOpen(
@@ -73,6 +109,7 @@ async function popoutOpen(
 	if (handoff?.draft === undefined && (await focusExistingPopout())) {
 		return { ok: true };
 	}
+	if (payload?.reason === "unlock") await targetLastOpenedVault();
 
 	// Stash the handoff before creating the window so the new window's boot read sees it.
 	if (handoff) {

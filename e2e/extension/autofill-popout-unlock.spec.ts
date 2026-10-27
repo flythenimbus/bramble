@@ -3,9 +3,11 @@ import { expect, test } from "./fixtures";
 import {
 	createVault,
 	lock,
+	lockToPicker,
 	openPopup,
 	STRONG_PW,
 	seedExampleLogin,
+	selectVault,
 	waitOutPickerClickGuard,
 } from "./helpers";
 
@@ -107,4 +109,51 @@ test("click-to-unlock closes the pop-out and re-surfaces the matches", async ({
 	await clickPickerRow(page);
 	await expect(page.locator("#user")).toHaveValue("alice@example.com", { timeout: 15_000 });
 	await expect(page.locator("#pass")).toHaveValue("s3cr3t-pw-01");
+});
+
+test("with several vaults, the unlock pop-out opens on the last one used, not the picker", async ({
+	context,
+	extensionId,
+}) => {
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+	await createVault(setup, extensionId);
+	await setup.close();
+	// Use the SECOND vault last, so landing on it can't be the picker's first-vault default.
+	const popup = await context.newPage();
+	await openPopup(popup, extensionId);
+	await lockToPicker(popup);
+	await selectVault(popup, /Vault 2/);
+	await seedExampleLogin(popup);
+	await lock(popup);
+	await popup.close();
+
+	const page = await context.newPage();
+	await serve(page);
+	await page.goto("https://example.com/");
+	const host = page.locator(HOST);
+	await expect(async () => {
+		await page.locator("#user").click();
+		await expect(host).toBeAttached({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+	await clickPickerRow(page);
+	await expect
+		.poll(() => context.pages().filter((p) => p.url().includes("detached=1")).length, {
+			timeout: 20_000,
+		})
+		.toBe(1);
+	const popout = context.pages().find((p) => p.url().includes("detached=1"))!;
+
+	await expect(popout.getByRole("heading", { name: /master password to unlock/i })).toBeVisible({
+		timeout: 20_000,
+	});
+	await expect(popout.getByTestId("active-vault-label")).toHaveText("Vault 2");
+	await popout.locator('input[type="password"]').first().fill(STRONG_PW);
+	await popout.getByRole("button", { name: "Unlock Vault" }).click();
+	await expect.poll(() => popout.isClosed(), { timeout: 15_000 }).toBe(true);
+
+	// Vault 2's login fills, so the pop-out really unlocked that vault.
+	await expect(host).toBeAttached({ timeout: 15_000 });
+	await clickPickerRow(page);
+	await expect(page.locator("#user")).toHaveValue("alice@example.com", { timeout: 15_000 });
 });

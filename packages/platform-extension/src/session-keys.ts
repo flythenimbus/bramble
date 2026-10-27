@@ -3,8 +3,9 @@
 
 /**
  * The id of the currently active/unlocked vault, so the background can sync THAT vault instead
- * of the primary. Written by the UI on unlock (`shell.setActiveVault`) and cleared on lock
- * (`clearSession`). It is a UUID, not a secret. See docs/multiple-vaults.md (Sync).
+ * of the primary. Written by the UI on unlock (`shell.setActiveVault`), by the background when it
+ * opens a view to unlock in (`openUnlockView`), and cleared on lock (`clearSession`). It is a
+ * UUID, not a secret. See docs/multiple-vaults.md (Sync).
  */
 export const ACTIVE_VAULT_SESSION_KEY = "vault.activeId";
 

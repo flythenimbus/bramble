@@ -9,7 +9,7 @@ import { clearIndex } from "./autofill-index";
 import { runDueBackups } from "./backup";
 import { CAPTURE_KEY_PREFIX } from "./corner-prompt";
 import { sendToOffscreen } from "./offscreen-client";
-import { closeUnlockPopout, POPOUT_HANDOFF_KEY } from "./popout";
+import { closeUnlockPopout, LAST_OPENED_VAULT_KEY, POPOUT_HANDOFF_KEY } from "./popout";
 import { getAutoLockMinutes } from "./prefs";
 import { extensionOnly, type MessageEnvelope, on, onBeforeDispatch, onPrefix } from "./router";
 import { maybeStartSync, retargetSync, stopSync } from "./sync";
@@ -388,6 +388,7 @@ on(
 			return { ok: false, error: "not the open vault" };
 		}
 		await api.storage.session.set({ [OPENED_VAULT_KEY]: vaultId });
+		await api.storage.local.set({ [LAST_OPENED_VAULT_KEY]: vaultId }).catch(() => {});
 		void maybeStartSync(vekStore.vekMutationSnapshot());
 		return { ok: true };
 	}),
