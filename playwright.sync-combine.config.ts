@@ -16,6 +16,8 @@ export default defineConfig({
 		{
 			command: "node nostr-relay/node/relay.mjs",
 			port: 7400,
+			// The attachments and idle-traffic specs read /stats; this suite runs them too.
+			env: { RELAY_STATS: "1" },
 			reuseExistingServer: !process.env.CI,
 			stdout: "ignore",
 		},
