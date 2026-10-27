@@ -1,0 +1,9 @@
+{
+	"name": "bramble-mailbox-server",
+	"version": "0.0.0",
+	"private": true,
+	"license": "AGPL-3.0-only",
+	"author": "Webvana Inc.",
+	"description": "Store-and-forward mailbox for Bramble sync: holds sealed changes and files until every device has them.",
+	"type": "module"
+}

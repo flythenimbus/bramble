@@ -396,6 +396,8 @@ importers:
 
   packages/theme: {}
 
+  services/mailbox: {}
+
   services/nostr-relay/cf-worker:
     devDependencies:
       typescript:
