@@ -37,6 +37,26 @@ describe("mailboxes", () => {
 		expect(await res.json()).toEqual({ error: "exists" });
 	});
 
+	it("lets a create finish a mailbox an interrupted create left without members", async () => {
+		const {
+			server,
+			devices: [a, b],
+		} = await setup(2);
+		const id = newMailboxId();
+		// The row a create writes before its members, as if the request died in between.
+		await server.deps.db
+			.insert(mailboxes)
+			.values({ id, retentionDays: 365, createdAt: server.clock.now });
+		const res = await a!.request("POST", `/v1/mailboxes/${id}`, {
+			members: [a!.sigKey, b!.sigKey],
+		});
+		expect(res.status).toBe(200);
+		expect(await memberStatuses(b!, id)).toEqual({
+			[a!.sigKey]: "active",
+			[b!.sigKey]: "eligible",
+		});
+	});
+
 	it("clamps retention to the server's ceiling", async () => {
 		const {
 			server,

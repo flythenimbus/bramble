@@ -83,14 +83,26 @@ export function mailboxRoutes(deps: AppDeps) {
 				})
 				.onConflictDoNothing()
 				.returning({ id: mailboxes.id });
-			if (created.length === 0) throw new HttpError(409, "exists");
+			if (created.length === 0) {
+				// Ids are fixed per group, so a create that died between its two writes would otherwise
+				// lock the group out until the sweep. A mailbox with no members is unclaimed.
+				const anyMember = await db
+					.select({ sigKey: members.sigKey })
+					.from(members)
+					.where(eq(members.mailboxId, id))
+					.limit(1)
+					.get();
+				if (anyMember) throw new HttpError(409, "exists");
+			}
 			const rows = [...new Set(body.members)].map((sigKey) => ({
 				mailboxId: id,
 				sigKey,
 				status: sigKey === caller ? ("active" as const) : ("eligible" as const),
 				addedAt: now,
 			}));
-			for (const part of chunk(rows, rowsPerInsert(4))) await db.insert(members).values(part);
+			for (const part of chunk(rows, rowsPerInsert(4))) {
+				await db.insert(members).values(part).onConflictDoNothing();
+			}
 			return c.json(await listMembers(deps, id));
 		},
 	);
