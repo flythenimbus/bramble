@@ -191,8 +191,12 @@ vault storage. Receiving is not enough. Two further rules:
   not sit on the server.
 
 A message is deleted when every recipient has acknowledged it, when it is replaced by a
-snapshot, or when it reaches the retention ceiling. Acknowledging and the delete it triggers
-are one atomic write on the server.
+snapshot, or when it reaches the retention ceiling. These are ordered writes, not one
+transaction (D1 has no interactive transactions): a post writes its body, then its row, then
+its deliveries, and a deletion removes rows before bodies. Cleanup after an acknowledgement,
+replacement or removal is scoped to the ids involved, so it can never catch a message whose
+delivery rows are still being written. A crash between steps leaves a duplicate or an orphan
+for the sweep, never an early deletion.
 
 ### Compaction
 
@@ -201,8 +205,8 @@ the others pile up a year of deltas for it.
 
 So the sender compacts its own backlog. When its messages still pending for some recipient pass
 a threshold (bytes or count), it posts a snapshot addressed only to those recipients, naming the
-messages it **replaces**. The server stores the snapshot and drops the replaced messages in one
-write.
+messages it **replaces**. The server stores the snapshot first, then drops the replaced messages'
+deliveries to those recipients, then deletes whatever nobody awaits any more.
 
 Only a device's own messages can be replaced, never another's. A device's state only grows
 under the join, so its snapshot provably contains everything it posted earlier; it cannot know
@@ -229,10 +233,16 @@ it does not sit on the server, and treated as a gap.
 ### Retention
 
 The server has a **ceiling** (default 365 days; an environment setting for self-hosters). A
-vault-scoped setting can ask for less, stored per mailbox. When a message or blob reaches it, the
-server deletes it and keeps a bodiless marker (sender, sequence range, expiry time) until the
-recipient next checks in, so the returning device learns it missed something and takes the gap
-path. It then catches up from a snapshot or over P2P.
+vault-scoped setting can ask for less, stored per mailbox. When a message reaches it, the server
+deletes it and keeps a marker per recipient and sender (sender, how many it missed, when), adding
+to an existing marker rather than starting another, until the recipient acknowledges it. The
+returning device learns it missed something and takes the gap path. It then catches up from a
+snapshot or over P2P. Sequence numbers live only inside the ciphertext, so the server learns
+counts, not positions; the recipient's own sequence tracking finds the exact gap.
+
+A blob expires without a marker: a returning device wants what its manifest names, and the
+wants path re-uploads it from whoever holds it. Markers age out at the ceiling, and a mailbox
+none of whose members has checked in for the ceiling is deleted with everything in it.
 
 Known limit, stated plainly: if a change's only copies are a pending mailbox message and a device
 that is lost before any other device collects it, the change is gone once the ceiling passes. The
@@ -416,34 +426,52 @@ billing   hosted only: accounts, checkout, Stripe and BTCPay webhooks, the tax l
 - **One query at a time per database.** A D1 database is single-threaded, and a `batch()` counts
   as one query. One database is fine for this traffic; the scale lever is more databases (50,000
   per paid account) keyed by mailbox id.
-- **Atomicity.** Acknowledge-and-delete and compaction's replace must each be one write. Confirm
-  that `batch()` is atomic; if not, express each as a single conditional statement.
-- **Expiry.** A cron trigger deletes expired rows, then their R2 objects, and a sweep removes any
-  R2 object with no row.
+- **No transactions needed.** Every multi-step write is ordered so a crash leaves a duplicate or
+  an orphan, never an early deletion (see "Acknowledgement and deletion"); the core never relies on
+  `batch()` being atomic.
+- **100 bound parameters per query.** D1's cap, so every multi-row insert and `IN` list in the
+  shared core is chunked (`services/mailbox/src/core/sql.ts`), and the same code runs on both.
+- **Expiry.** A cron trigger runs the same sweep the Node server runs hourly: expired rows, then
+  their R2 objects, then any R2 object with no row that is over an hour old.
 
-Starting tables (the builder refines them):
+The tables, as built (`services/mailbox/src/core/schema.ts`; the hosted plan adds `account_id`
+and `accounts`):
 
 ```
-mailboxes        id, account_id?, retention_days, created_at
+mailboxes        id, retention_days, created_at
 members          mailbox_id, sig_key, status (eligible|active), added_at, last_checked_day
-messages         id, mailbox_id, sender, kind, seq_from, seq_to, size, r2_key, created_at, expires_at
-deliveries       message_id, member, acked_at
-blobs            mailbox_id, hash, size, r2_key, created_at, expires_at
-blob_deliveries  mailbox_id, hash, member, acked_at
-blob_wants       mailbox_id, hash, member, created_at
-expiry_markers   mailbox_id, member, sender, seq_from, seq_to, expired_at
-accounts         id, number_hash, paid_through, frozen, quota_bytes
+messages         mailbox_id, id, sender, size, created_at, expires_at
+deliveries       mailbox_id, message_id, member          (a row per pending delivery; ack deletes it)
+blobs            mailbox_id, hash, size, uploader, created_at, expires_at
+blob_deliveries  mailbox_id, hash, member
+blob_wants       mailbox_id, member, hash, created_at
+expiry_markers   id, mailbox_id, member, sender, count, expired_at
 ```
+
+Foreign keys cascade: removing a member, message, blob or mailbox takes its deliveries, wants and
+markers in the same statement. Bodies are keyed `m/<mailbox>/<id>` and `b/<mailbox>/<hash>`.
 
 `last_checked_day` is coarse on purpose: the device list needs "checked in 40 days ago", not a
 timestamp.
 
 ### API sketch
 
-The builder settles exact shapes, status codes and versioning; this is the surface:
+The mailbox routes are built (Plan 1); the account routes arrive with the hosted plan. Request and
+response bodies are the zod schemas in `packages/core/src/sync/mailbox/protocol.ts`. Every `/v1`
+request carries `x-bramble-key` (the roster `sigKey`), `x-bramble-time` (epoch ms, within five
+minutes of the server), `x-bramble-content-sha256` and `x-bramble-sig`, an Ed25519 signature
+over:
 
 ```
-POST   /v1/mailboxes                         create; lists the first eligible members
+bramble-mailbox/v1\n<METHOD>\n<path and query>\n<time>\n<content sha256>
+```
+
+A clock outside the window gets `401 stale_time` with `serverTime`, so the client can correct and
+retry. A private server also wants `x-bramble-token`.
+
+```
+POST   /v1/mailboxes/:id                     create; lists the first eligible members
+PATCH  /v1/mailboxes/:id                     retention (clamped to the ceiling)
 POST   /v1/mailboxes/:id/members             add or remove eligible members (signed by an active one)
 POST   /v1/mailboxes/:id/activation          activate or deactivate the caller (signed by its own key)
 GET    /v1/mailboxes/:id/members             members with status and last-checked day
@@ -629,18 +657,20 @@ Worker and hands off to Stripe or BTCPay). No app sells anything in-app.
 
 ## Self-hosting
 
-The Node build in Docker, configured like the relay ([../services/nostr-relay/README.md](../services/nostr-relay/README.md)):
+The Node server (built; `pnpm --filter bramble-mailbox-server start`, see
+[../services/mailbox/README.md](../services/mailbox/README.md)), configured like the relay
+([../services/nostr-relay/README.md](../services/nostr-relay/README.md)):
 
-- `PORT`
-- `MAILBOX_TOKEN`: optional; when set, every request must carry it. This is the private mode, as
-  `RELAY_TOKEN` is for the relay.
+- `PORT`: default 7401.
+- `DATA_DIR`: where `mailbox.db` and the bodies live; default `./data`.
+- `MAILBOX_TOKEN`: optional; when set, every `/v1` request must carry it. This is the private
+  mode, as `RELAY_TOKEN` is for the relay.
 - `RETENTION_MAX_DAYS`: default 365.
-- `QUOTA_BYTES`: per mailbox.
-- `STORAGE=disk|s3`, plus S3 settings for the S3 backend.
-- `TRUST_PROXY`, as on the relay.
+- `QUOTA_BYTES`: per mailbox; unset means no limit.
+- `STORAGE=s3`, with its S3 settings, arrives with the Docker image (Plan 4).
 
-It contains no billing code, no account numbers and no ALTCHA (the token or a private network is
-the gate).
+There is no `TRUST_PROXY`: the server never reads a client address. It contains no billing code,
+no account numbers and no ALTCHA (the token or a private network is the gate).
 
 ## Phasing (design call)
 
