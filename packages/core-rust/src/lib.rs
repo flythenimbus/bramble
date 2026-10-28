@@ -56,6 +56,9 @@ pub mod files;
 // Ed25519 device-key signing for authenticated sync-roster mutations (Item A). Pure + sync,
 // compiled into both layers (all devices sign). See docs/p2p-sync-revocation-hardening.md.
 pub mod roster_sig;
+// Mailbox id and message sealing under keys derived from the VEK, compiled into both layers.
+// See docs/mailbox-service.md, "Keys and identity".
+pub mod mailbox;
 // SigV4 signing for S3-compatible backup targets. Only the desktop shell calls it (its webview
 // cannot reach a provider: no CORS grant for `tauri://localhost`), but it is declared
 // unconditionally so `cargo test` covers it in every feature set; nothing references it in the
