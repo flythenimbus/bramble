@@ -14,6 +14,9 @@ import init, {
 	is_locked,
 	KdbxWriter,
 	lock,
+	mailbox_id,
+	mailbox_open,
+	mailbox_seal,
 	open_file_meta,
 	open_kdbx4,
 	rotate_vek,
@@ -335,5 +338,27 @@ try {
 		throw new Error(`expected KDBX_WRONG_CREDENTIAL, got: ${msg}`);
 	console.log("  ok  wrong kdbx password (threw KDBX_WRONG_CREDENTIAL)");
 }
+
+console.log("mailbox: id, seal and open under a key derived from the VEK");
+unlock_with_vek(generate_vek());
+const groupKey = Buffer.alloc(32, 7).toString("base64");
+const mailboxId = mailbox_id(groupKey);
+assertEq("mailbox id is 43 base64url chars", /^[A-Za-z0-9_-]{43}$/.test(mailboxId), true);
+assertEq("mailbox id is stable", mailbox_id(groupKey), mailboxId);
+assertEq(
+	"mailbox round trip",
+	mailbox_open(groupKey, "aad", mailbox_seal(groupKey, "aad", "hello")),
+	"hello",
+);
+const bigPlain = "x".repeat(1 << 20);
+assertEq(
+	"mailbox 1 MiB round trip",
+	mailbox_open(groupKey, "aad", mailbox_seal(groupKey, "aad", bigPlain)),
+	bigPlain,
+);
+const sealedMsg = mailbox_seal(groupKey, "aad", "hello");
+expectThrow("mailbox open with another aad", () => mailbox_open(groupKey, "other", sealedMsg));
+lock();
+expectThrow("mailbox seal while locked", () => mailbox_seal(groupKey, "aad", "x"));
 
 console.log("\nALL CHECKS PASSED");

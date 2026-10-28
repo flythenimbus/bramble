@@ -26,6 +26,9 @@ function fakeWasm() {
 		decrypt_entry: vi.fn(() => "plain"),
 		encrypt_with_vek: vi.fn(() => ({ iv: "i", ciphertext: "c" })),
 		decrypt_with_vek: vi.fn(() => "plain"),
+		mailbox_id: vi.fn(() => "id"),
+		mailbox_seal: vi.fn(() => "sealed"),
+		mailbox_open: vi.fn(() => "opened"),
 		passkey_make_credential: vi.fn(() => ({
 			credentialId: "cid",
 			publicKeyCose: "pk",
@@ -47,6 +50,17 @@ const asWasm = (w: ReturnType<typeof fakeWasm>) => async () => w as unknown as V
 
 describe("buildCryptoAdapter", () => {
 	const magicVersion = new Uint8Array([1, 0]);
+
+	it("maps the mailbox calls to the core positionally", async () => {
+		const wasm = fakeWasm();
+		const a = buildCryptoAdapter(asWasm(wasm));
+		expect(await a.mailboxId!("G")).toBe("id");
+		expect(await a.mailboxSeal!("G", "AAD", "plain")).toBe("sealed");
+		expect(await a.mailboxOpen!("G", "AAD", "SEALED")).toBe("opened");
+		expect(wasm.mailbox_id).toHaveBeenCalledWith("G");
+		expect(wasm.mailbox_seal).toHaveBeenCalledWith("G", "AAD", "plain");
+		expect(wasm.mailbox_open).toHaveBeenCalledWith("G", "AAD", "SEALED");
+	});
 
 	it("maps each method onto the wasm call with positional args", async () => {
 		const wasm = fakeWasm();

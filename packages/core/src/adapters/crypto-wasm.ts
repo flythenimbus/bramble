@@ -136,6 +136,15 @@ export function buildCryptoAdapter(
 		async decryptWithVek(iv, ciphertext) {
 			return (await getWasm()).decrypt_with_vek(iv, ciphertext);
 		},
+		async mailboxId(groupKeyB64) {
+			return (await getWasm()).mailbox_id(groupKeyB64);
+		},
+		async mailboxSeal(groupKeyB64, aad, plaintext) {
+			return (await getWasm()).mailbox_seal(groupKeyB64, aad, plaintext);
+		},
+		async mailboxOpen(groupKeyB64, aad, sealedB64) {
+			return (await getWasm()).mailbox_open(groupKeyB64, aad, sealedB64);
+		},
 
 		async passkeyMakeCredential(rpId, userVerified) {
 			return (await getWasm()).passkey_make_credential(rpId, userVerified);

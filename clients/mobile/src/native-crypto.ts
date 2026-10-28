@@ -154,6 +154,17 @@ interface NativeCryptoPlugin {
 		magicVersionB64: string;
 	}): Promise<{ value: string | null }>;
 	decryptWithVek(o: { ivB64: string; ciphertextB64: string }): Promise<{ value: string }>;
+	mailboxId(o: { groupKeyB64: string }): Promise<{ value: string }>;
+	mailboxSeal(o: {
+		groupKeyB64: string;
+		aad: string;
+		plaintext: string;
+	}): Promise<{ value: string }>;
+	mailboxOpen(o: {
+		groupKeyB64: string;
+		aad: string;
+		sealedB64: string;
+	}): Promise<{ value: string }>;
 	passkeyMakeCredential(o: { rpId: string; userVerified: boolean }): Promise<PasskeyRegistration>;
 	passkeyGetAssertion(o: {
 		rpId: string;
@@ -335,6 +346,11 @@ const nativeModule: VaultCrypto = {
 		).value ?? undefined,
 	decrypt_with_vek: async (iv, ciphertext) =>
 		(await Native.decryptWithVek({ ivB64: iv, ciphertextB64: ciphertext })).value,
+	mailbox_id: async (groupKeyB64) => (await Native.mailboxId({ groupKeyB64 })).value,
+	mailbox_seal: async (groupKeyB64, aad, plaintext) =>
+		(await Native.mailboxSeal({ groupKeyB64, aad, plaintext })).value,
+	mailbox_open: async (groupKeyB64, aad, sealedB64) =>
+		(await Native.mailboxOpen({ groupKeyB64, aad, sealedB64 })).value,
 
 	passkey_make_credential: (rpId, userVerified) =>
 		Native.passkeyMakeCredential({ rpId, userVerified }),

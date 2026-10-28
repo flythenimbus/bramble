@@ -199,6 +199,12 @@ export interface CryptoAdapter {
 	encryptWithVek(plaintext: string): Promise<VekEncrypted>;
 	decryptWithVek(iv: string, ciphertext: string): Promise<string>;
 
+	// Mailbox crypto (docs/mailbox-service.md, "Keys and identity"): the VEK stays in the core.
+	// Optional so test doubles need not carry it; every real host implements all three.
+	mailboxId?(groupKeyB64: string): Promise<string>;
+	mailboxSeal?(groupKeyB64: string, aad: string, plaintext: string): Promise<string>;
+	mailboxOpen?(groupKeyB64: string, aad: string, sealedB64: string): Promise<string>;
+
 	// Passkey provider (authenticator role). Pure crypto: mint generates the key,
 	// assert signs with the stored private key. Neither needs the VEK loaded; the
 	// private key is decrypted from its entry separately (decryptEntry) first.

@@ -86,6 +86,11 @@ export interface VaultCrypto {
 	decrypt_entries?(entries: EncryptedPayload[]): Awaitable<(string | null)[]>;
 	encrypt_with_vek(plaintext: string): Awaitable<VekEncrypted>;
 	decrypt_with_vek(iv: string, ciphertext: string): Awaitable<string>;
+	/** The group's mailbox id, from the VEK salted by the group key (core-rust mailbox.rs). */
+	mailbox_id(groupKeyB64: string): Awaitable<string>;
+	/** Seal for the group's mailbox, binding `aad`; base64 out. */
+	mailbox_seal(groupKeyB64: string, aad: string, plaintext: string): Awaitable<string>;
+	mailbox_open(groupKeyB64: string, aad: string, sealedB64: string): Awaitable<string>;
 
 	passkey_make_credential(rpId: string, userVerified: boolean): Awaitable<PasskeyRegistration>;
 	passkey_import_pkcs8(pkcs8B64: string): Awaitable<PasskeyImportResult>;
