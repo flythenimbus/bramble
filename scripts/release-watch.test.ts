@@ -120,7 +120,7 @@ describe("watchDesktopRelease", () => {
 		assert.equal(conclusion, "success");
 		assert.equal(out.split(REQUESTS).length - 1, 1, "the prompt is printed exactly once");
 		// Not before the build is done: there is no request to approve yet.
-		const prompt = lines.findIndex((l) => l.includes(REQUESTS));
+		const prompt = lines.findIndex((l) => l.includes("approve the newest signing request"));
 		const building = lines.findIndex((l) => l.includes("Build (unsigned): in progress"));
 		assert.ok(building < prompt, "prompted only after the build");
 		assert.match(out, /windows: building in https:\/\/github\.com\/o\/r\/actions\/runs\/7/);
