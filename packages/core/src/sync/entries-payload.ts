@@ -8,6 +8,7 @@ import { z } from "zod";
 import { EncryptedEntrySchema } from "../vault-format";
 import { isFutureVersion, VersionVectorSchema } from "./causal";
 import { HlcSchema, isFutureStamp } from "./hlc";
+import { BLOB_HASH_RE } from "./mailbox/protocol";
 
 /** A deletion record: the deleted id and the stamp at which it was deleted. */
 export const TombstoneSchema = z.object({
@@ -38,7 +39,7 @@ export type SyncedSettings = z.infer<typeof SyncedSettingsSchema>;
 
 /** A blob's address: lowercase hex SHA-256. Exported so the manifest schema and the blob store
  * validate the same shape, since it is both a record field and a filesystem key. */
-export const BLOB_HASH_RE = /^[0-9a-f]{64}$/;
+export { BLOB_HASH_RE };
 
 /**
  * One file attachment's manifest entry. The bytes are NOT here: they live in the blob store,
