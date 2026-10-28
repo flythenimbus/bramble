@@ -61,4 +61,17 @@ describe("diskBodies", () => {
 		const files = await readdir(join(root, ".."));
 		expect(files).not.toContain("escape");
 	});
+
+	it("keeps keys that differ only in case apart, even on a case-insensitive filesystem", async () => {
+		const lower = "m/mbx/abcdefghijklmnopqrstuv";
+		const upper = "m/mbx/ABCDEFGHIJKLMNOPQRSTUV";
+		await store.put(lower, new Uint8Array([1]));
+		await store.put(upper, new Uint8Array([2]));
+		expect(await bytesOf((await store.get(lower))!.body)).toEqual(new Uint8Array([1]));
+		await store.delete(upper);
+		expect(await store.get(lower)).not.toBeNull();
+		const keys = [];
+		for await (const k of store.keys()) keys.push(k.key);
+		expect(keys).toEqual([lower]);
+	});
 });

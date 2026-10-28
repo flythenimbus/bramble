@@ -1,6 +1,6 @@
-// The self-hosted server's BodyStore: one file per body under a root directory. Writes go to a
-// sibling temp file and are renamed into place only once complete (and, with a sha256, verified),
-// so a reader never sees a partial body.
+// The self-hosted server's BodyStore: one file per body under a root directory, each key segment
+// hex-encoded. Writes go to a sibling temp file and are renamed into place only once complete (and,
+// with a sha256, verified), so a reader never sees a partial body.
 
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream, type Dirent } from "node:fs";
@@ -19,7 +19,9 @@ export function diskBodies(root: string): BodyStore {
 		if (segments.length === 0 || !segments.every((s) => SEGMENT.test(s))) {
 			throw new Error("invalid body key");
 		}
-		return join(root, ...segments);
+		// Hex on disk: ids are case-sensitive and macOS and Windows filesystems are not, so two ids
+		// differing only in case would otherwise be one file.
+		return join(root, ...segments.map((s) => Buffer.from(s, "utf8").toString("hex")));
 	}
 
 	return {
@@ -73,7 +75,11 @@ export function diskBodies(root: string): BodyStore {
 				if (!entry.isFile() || entry.name.includes(TEMP)) continue;
 				const full = join(entry.parentPath, entry.name);
 				const { mtimeMs } = await stat(full);
-				yield { key: relative(root, full).split(sep).join("/"), modifiedAt: mtimeMs };
+				const key = relative(root, full)
+					.split(sep)
+					.map((s) => Buffer.from(s, "hex").toString("utf8"))
+					.join("/");
+				yield { key, modifiedAt: mtimeMs };
 			}
 		},
 	};
