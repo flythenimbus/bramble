@@ -1,6 +1,7 @@
 # Mailbox: store-and-forward sync (planned)
 
-Status: design, not built. Branch `feat/mailbox-service`.
+Status: the server (Plan 1, `services/mailbox`) and the client crypto (Plan 2) are built; no client
+syncs through a mailbox yet.
 
 Sync today needs two devices online and unlocked at the same moment (see
 [p2p-sync.md](p2p-sync.md), "Deferred"). The mailbox removes that: a device drops its sealed
@@ -293,6 +294,9 @@ mailboxId = HKDF-SHA256(ikm = VEK, salt = groupKey, info = "bramble/mailbox/v1/i
 sealKey   = HKDF-SHA256(ikm = VEK, salt = groupKey, info = "bramble/mailbox/v1/seal")
 ```
 
+Both are 32 bytes, salted with the group key's 32 raw bytes; the id travels as base64url without
+padding.
+
 - **The VEK** keeps a pairing code's holder out.
 - **The group key** makes the mailbox belong to one group, not one vault key. Restoring a backup
   keeps the VEK but resets sync identity (`resetSyncState` in `backup/restore.ts`), and leaving a
@@ -307,12 +311,25 @@ The abandoned old mailbox empties itself: its messages expire at the ceiling, an
 members have not checked in for the ceiling is deleted.
 
 The VEK stays in the crypto host ([vek-residency-hardening.md](vek-residency-hardening.md)); the
-core exposes seal, open and id derivation through wasm and uniffi.
+core exposes seal, open and id derivation through wasm, uniffi and the desktop's Tauri commands
+(`core-rust/src/mailbox.rs`).
 
-**Sealing.** AEAD over the envelope, with the mailbox id, message id, sender `sigKey` and kind as
-associated data, then an Ed25519 signature by the sender over the result. A recipient checks the
-sender is an active roster member (a revoked device's post is refused) before merging, and
-`admit` still test-decrypts every incoming entry as it does for P2P.
+**Sealing.** A message body is the sender's signature, then the sealed bytes
+(`core/sync/mailbox/envelope.ts`):
+
+```
+sealed = 0x01 || nonce (12 random bytes) || AES-256-GCM(sealKey, nonce, plaintext, aad)
+aad    = "bramble-mailbox-aad/v1\n<mailboxId>\n<messageId>\n<sender sigKey>"
+signed = "bramble-mailbox-sig/v1\n<mailboxId>\n<messageId>\n<sha256 hex of sealed>"
+body   = Ed25519 signature by the sender's roster key over signed (64 bytes) || sealed
+```
+
+The AAD ties a body to its mailbox, message id and sender, so the server cannot move it. The
+signature proves which device sent it, which the VEK cannot, since every member holds the VEK. The
+message kind travels inside the ciphertext, so the server never sees it. A recipient checks the
+signature before it decrypts anything, checks the sender is an active roster member (a revoked
+device's post is refused) before merging, and `admit` still test-decrypts every incoming entry as
+it does for P2P. File blobs are not enveloped: they are already sealed under their own file keys.
 
 **Requests.** Every mailbox request is signed by the device's `sigKey` over method, path, body
 hash, timestamp and mailbox id. The server refuses timestamps outside a skew window. A post
