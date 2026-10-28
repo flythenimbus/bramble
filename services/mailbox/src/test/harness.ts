@@ -83,8 +83,10 @@ export interface RequestOpts {
 const b64 = (bytes: ArrayBuffer | Uint8Array) =>
 	Buffer.from(bytes as ArrayBuffer).toString("base64");
 
-/** A device with its own Ed25519 key, signing against the server's fake clock. */
-export async function makeDevice(server: TestServer) {
+type Send = (path: string, init: RequestInit) => Response | Promise<Response>;
+
+/** A device with its own Ed25519 key, signing with `now` and sending through `send`. */
+async function deviceWith(now: () => number, send: Send) {
 	const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, [
 		"sign",
 		"verify",
@@ -92,7 +94,7 @@ export async function makeDevice(server: TestServer) {
 	const sigKey = b64(await crypto.subtle.exportKey("raw", pair.publicKey));
 
 	async function headers(method: string, path: string, bytes: Uint8Array, opts: RequestOpts = {}) {
-		const time = opts.time ?? server.clock.now;
+		const time = opts.time ?? now();
 		const contentSha256 = await sha256Hex(bytes);
 		const message = new TextEncoder().encode(
 			canonicalRequest({ method, pathAndQuery: path, time, contentSha256 }),
@@ -123,11 +125,27 @@ export async function makeDevice(server: TestServer) {
 		if (body instanceof Uint8Array) h["content-length"] = String(sent.length);
 		const init: RequestInit = { method, headers: { ...h, ...opts.headers } };
 		if (method !== "GET") init.body = sent as Uint8Array<ArrayBuffer>;
-		return server.app.request(path, init);
+		return send(path, init);
 	}
 
 	return { sigKey, headers, request, encode };
 }
+
+/** Against the in-memory server, on its fake clock. */
+export const makeDevice = (server: TestServer) =>
+	deviceWith(
+		() => server.clock.now,
+		(path, init) => server.app.request(path, init),
+	);
+
+/** Against a real port, on the real clock. `baseUrl` may be a getter, so one key can follow a
+ * restarted server to its new port. fetch sets content-length itself. */
+export const makeRemoteDevice = (baseUrl: string | (() => string)) =>
+	deviceWith(Date.now, (path, init) => {
+		const { "content-length": _, ...headers } = init.headers as Record<string, string>;
+		const base = typeof baseUrl === "string" ? baseUrl : baseUrl();
+		return fetch(base + path, { ...init, headers });
+	});
 
 export type TestDevice = Awaited<ReturnType<typeof makeDevice>>;
 
