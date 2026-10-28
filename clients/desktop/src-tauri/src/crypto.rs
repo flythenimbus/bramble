@@ -207,6 +207,39 @@ pub fn crypto_decrypt_with_vek(iv: String, ciphertext: String) -> CmdResult<Stri
     map(vault_crypto::decrypt_with_vek(iv, ciphertext))
 }
 
+// ---- Mailbox (docs/mailbox-service.md, "Keys and identity"): the VEK stays in the core ----
+
+#[tauri::command]
+pub fn crypto_mailbox_id(group_key_b64: String) -> CmdResult<String> {
+    map(vault_crypto::mailbox::mailbox_id(group_key_b64))
+}
+
+#[tauri::command]
+pub fn crypto_mailbox_seal(
+    group_key_b64: String,
+    aad: String,
+    plaintext: String,
+) -> CmdResult<String> {
+    map(vault_crypto::mailbox::mailbox_seal(
+        group_key_b64,
+        aad,
+        plaintext,
+    ))
+}
+
+#[tauri::command]
+pub fn crypto_mailbox_open(
+    group_key_b64: String,
+    aad: String,
+    sealed_b64: String,
+) -> CmdResult<String> {
+    map(vault_crypto::mailbox::mailbox_open(
+        group_key_b64,
+        aad,
+        sealed_b64,
+    ))
+}
+
 // ---- Foreign-format import ----
 //
 // Both are pure conversions with no VEK involved: the caller encrypts what comes back
@@ -264,4 +297,31 @@ pub fn crypto_open_kdbx(
 fn decode_b64(value: &str, what: &str) -> CmdResult<Vec<u8>> {
     B64.decode(value)
         .map_err(|_| format!("could not decode the {what} sent over IPC"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD as B64, Engine};
+
+    #[test]
+    fn the_mailbox_commands_round_trip_through_the_core() {
+        let _g = crate::pairing::test_lock();
+        vault_crypto::unlock_with_vek(B64.encode([0x33u8; 32])).unwrap();
+        let group = B64.encode([5u8; 32]);
+        assert_eq!(crypto_mailbox_id(group.clone()).unwrap().len(), 43);
+        let sealed = crypto_mailbox_seal(group.clone(), "aad".into(), "hello".into()).unwrap();
+        assert_eq!(
+            crypto_mailbox_open(group, "aad".into(), sealed).unwrap(),
+            "hello"
+        );
+    }
+
+    #[test]
+    fn the_mailbox_commands_answer_a_locked_vault_with_an_error() {
+        let _g = crate::pairing::test_lock();
+        vault_crypto::lock();
+        let err = crypto_mailbox_seal(B64.encode([5u8; 32]), "aad".into(), "x".into()).unwrap_err();
+        assert!(err.contains("locked"), "{err}");
+    }
 }

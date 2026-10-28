@@ -81,3 +81,19 @@ describe("desktop KeePass export", () => {
 		});
 	});
 });
+
+describe("desktop mailbox crypto", () => {
+	it("invokes the mailbox commands with camelCase arguments", async () => {
+		h.replies.crypto_mailbox_id = "id";
+		h.replies.crypto_mailbox_seal = "sealed";
+		h.replies.crypto_mailbox_open = "opened";
+		expect(await desktopCrypto.mailboxId?.("G")).toBe("id");
+		expect(await desktopCrypto.mailboxSeal?.("G", "A", "P")).toBe("sealed");
+		expect(await desktopCrypto.mailboxOpen?.("G", "A", "S")).toBe("opened");
+		expect(h.calls).toEqual([
+			{ cmd: "crypto_mailbox_id", args: { groupKeyB64: "G" } },
+			{ cmd: "crypto_mailbox_seal", args: { groupKeyB64: "G", aad: "A", plaintext: "P" } },
+			{ cmd: "crypto_mailbox_open", args: { groupKeyB64: "G", aad: "A", sealedB64: "S" } },
+		]);
+	});
+});
