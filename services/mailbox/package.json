@@ -5,5 +5,27 @@
 	"license": "AGPL-3.0-only",
 	"author": "Webvana Inc.",
 	"description": "Store-and-forward mailbox for Bramble sync: holds sealed changes and files until every device has them.",
-	"type": "module"
+	"type": "module",
+	"scripts": {
+		"start": "node src/node/bin.ts",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit",
+		"db:generate": "drizzle-kit generate"
+	},
+	"dependencies": {
+		"@hono/node-server": "^2.1.5",
+		"@hono/zod-validator": "^0.9.1",
+		"@vault/core": "workspace:*",
+		"better-sqlite3": "^13.0.3",
+		"drizzle-orm": "^0.45.4",
+		"hono": "^4.13.14",
+		"zod": "^4.6.7"
+	},
+	"devDependencies": {
+		"@types/better-sqlite3": "^9.6.0",
+		"@types/node": "^24.13.3",
+		"drizzle-kit": "^0.31.11",
+		"typescript": "^5.9.3",
+		"vitest": "^4.1.12"
+	}
 }

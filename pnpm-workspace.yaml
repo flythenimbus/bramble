@@ -11,6 +11,7 @@ packages:
 # Build scripts the cf-worker's wrangler toolchain needs to fetch its platform
 # binaries; pnpm blocks unapproved postinstall scripts by default.
 onlyBuiltDependencies:
+  - better-sqlite3
   - esbuild
   - workerd
 

@@ -1,0 +1,580 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "3dac9700-593d-43fd-a156-1b7e9916cadd",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "blob_deliveries": {
+      "name": "blob_deliveries",
+      "columns": {
+        "mailbox_id": {
+          "name": "mailbox_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member": {
+          "name": "member",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "blob_deliveries_member": {
+          "name": "blob_deliveries_member",
+          "columns": [
+            "mailbox_id",
+            "member"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "blob_deliveries_mailbox_id_hash_blobs_mailbox_id_hash_fk": {
+          "name": "blob_deliveries_mailbox_id_hash_blobs_mailbox_id_hash_fk",
+          "tableFrom": "blob_deliveries",
+          "tableTo": "blobs",
+          "columnsFrom": [
+            "mailbox_id",
+            "hash"
+          ],
+          "columnsTo": [
+            "mailbox_id",
+            "hash"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "blob_deliveries_mailbox_id_member_members_mailbox_id_sig_key_fk": {
+          "name": "blob_deliveries_mailbox_id_member_members_mailbox_id_sig_key_fk",
+          "tableFrom": "blob_deliveries",
+          "tableTo": "members",
+          "columnsFrom": [
+            "mailbox_id",
+            "member"
+          ],
+          "columnsTo": [
+            "mailbox_id",
+            "sig_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "blob_deliveries_mailbox_id_hash_member_pk": {
+          "columns": [
+            "mailbox_id",
+            "hash",
+            "member"
+          ],
+          "name": "blob_deliveries_mailbox_id_hash_member_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "blob_wants": {
+      "name": "blob_wants",
+      "columns": {
+        "mailbox_id": {
+          "name": "mailbox_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member": {
+          "name": "member",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "blob_wants_mailbox_id_member_members_mailbox_id_sig_key_fk": {
+          "name": "blob_wants_mailbox_id_member_members_mailbox_id_sig_key_fk",
+          "tableFrom": "blob_wants",
+          "tableTo": "members",
+          "columnsFrom": [
+            "mailbox_id",
+            "member"
+          ],
+          "columnsTo": [
+            "mailbox_id",
+            "sig_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "blob_wants_mailbox_id_member_hash_pk": {
+          "columns": [
+            "mailbox_id",
+            "member",
+            "hash"
+          ],
+          "name": "blob_wants_mailbox_id_member_hash_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "blobs": {
+      "name": "blobs",
+      "columns": {
+        "mailbox_id": {
+          "name": "mailbox_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "uploader": {
+          "name": "uploader",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "blobs_expires_at": {
+          "name": "blobs_expires_at",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "blobs_mailbox_id_mailboxes_id_fk": {
+          "name": "blobs_mailbox_id_mailboxes_id_fk",
+          "tableFrom": "blobs",
+          "tableTo": "mailboxes",
+          "columnsFrom": [
+            "mailbox_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "blobs_mailbox_id_hash_pk": {
+          "columns": [
+            "mailbox_id",
+            "hash"
+          ],
+          "name": "blobs_mailbox_id_hash_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "deliveries": {
+      "name": "deliveries",
+      "columns": {
+        "mailbox_id": {
+          "name": "mailbox_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member": {
+          "name": "member",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "deliveries_member": {
+          "name": "deliveries_member",
+          "columns": [
+            "mailbox_id",
+            "member"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "deliveries_mailbox_id_message_id_messages_mailbox_id_id_fk": {
+          "name": "deliveries_mailbox_id_message_id_messages_mailbox_id_id_fk",
+          "tableFrom": "deliveries",
+          "tableTo": "messages",
+          "columnsFrom": [
+            "mailbox_id",
+            "message_id"
+          ],
+          "columnsTo": [
+            "mailbox_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "deliveries_mailbox_id_member_members_mailbox_id_sig_key_fk": {
+          "name": "deliveries_mailbox_id_member_members_mailbox_id_sig_key_fk",
+          "tableFrom": "deliveries",
+          "tableTo": "members",
+          "columnsFrom": [
+            "mailbox_id",
+            "member"
+          ],
+          "columnsTo": [
+            "mailbox_id",
+            "sig_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "deliveries_mailbox_id_message_id_member_pk": {
+          "columns": [
+            "mailbox_id",
+            "message_id",
+            "member"
+          ],
+          "name": "deliveries_mailbox_id_message_id_member_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "expiry_markers": {
+      "name": "expiry_markers",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "mailbox_id": {
+          "name": "mailbox_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "member": {
+          "name": "member",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sender": {
+          "name": "sender",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expired_at": {
+          "name": "expired_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "expiry_markers_member": {
+          "name": "expiry_markers_member",
+          "columns": [
+            "mailbox_id",
+            "member"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "expiry_markers_mailbox_id_member_members_mailbox_id_sig_key_fk": {
+          "name": "expiry_markers_mailbox_id_member_members_mailbox_id_sig_key_fk",
+          "tableFrom": "expiry_markers",
+          "tableTo": "members",
+          "columnsFrom": [
+            "mailbox_id",
+            "member"
+          ],
+          "columnsTo": [
+            "mailbox_id",
+            "sig_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "mailboxes": {
+      "name": "mailboxes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "retention_days": {
+          "name": "retention_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "members": {
+      "name": "members",
+      "columns": {
+        "mailbox_id": {
+          "name": "mailbox_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sig_key": {
+          "name": "sig_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_checked_day": {
+          "name": "last_checked_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "members_mailbox_id_mailboxes_id_fk": {
+          "name": "members_mailbox_id_mailboxes_id_fk",
+          "tableFrom": "members",
+          "tableTo": "mailboxes",
+          "columnsFrom": [
+            "mailbox_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "members_mailbox_id_sig_key_pk": {
+          "columns": [
+            "mailbox_id",
+            "sig_key"
+          ],
+          "name": "members_mailbox_id_sig_key_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "messages": {
+      "name": "messages",
+      "columns": {
+        "mailbox_id": {
+          "name": "mailbox_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sender": {
+          "name": "sender",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "size": {
+          "name": "size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "messages_expires_at": {
+          "name": "messages_expires_at",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "messages_mailbox_id_mailboxes_id_fk": {
+          "name": "messages_mailbox_id_mailboxes_id_fk",
+          "tableFrom": "messages",
+          "tableTo": "mailboxes",
+          "columnsFrom": [
+            "mailbox_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "messages_mailbox_id_id_pk": {
+          "columns": [
+            "mailbox_id",
+            "id"
+          ],
+          "name": "messages_mailbox_id_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

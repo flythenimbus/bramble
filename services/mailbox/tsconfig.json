@@ -1,0 +1,20 @@
+{
+	// Not the repo base: a Node server wants NodeNext resolution and no DOM libs. Node runs these
+	// files directly, so imports carry `.ts` and only erasable syntax is allowed.
+	"compilerOptions": {
+		"target": "ES2024",
+		"lib": ["ES2024"],
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"erasableSyntaxOnly": true,
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"types": ["node"]
+	},
+	"include": ["src/**/*", "drizzle.config.ts"]
+}
