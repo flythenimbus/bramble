@@ -134,3 +134,7 @@ export function signedJson<S extends z.ZodType>(schema: S, maxBytes: number) {
 export function param<S extends z.ZodType>(schema: S) {
 	return zValidator("param", schema, validationHook);
 }
+
+export function query<S extends z.ZodType>(schema: S) {
+	return zValidator("query", schema, validationHook);
+}

@@ -1,5 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { MAX_BLOB_BYTES, PostResponseSchema } from "@vault/core/src/sync/mailbox/protocol.ts";
+import {
+	INBOX_PAGE,
+	InboxResponseSchema,
+	MAX_BLOB_BYTES,
+	PostResponseSchema,
+} from "@vault/core/src/sync/mailbox/protocol.ts";
 import { describe, expect, it } from "vitest";
 import { ack, activate, createMailbox, inbox, setup, uploadBlob } from "../test/harness.ts";
 
@@ -75,6 +80,25 @@ describe("blobs", () => {
 		await uploadBlob(a, id, bytes);
 		expect((await inbox(a, id)).wanted).toEqual([]);
 		expect(await blobHashes(b, id)).toEqual([hash]);
+	});
+
+	it("pages what others want apart from what the caller must collect", async () => {
+		const { b, c, id } = await trio();
+		const hashes = Array.from({ length: INBOX_PAGE + 1 }, () =>
+			randomBytes(32).toString("hex"),
+		).sort();
+		expect((await b.request("PUT", `/v1/mailboxes/${id}/wants`, { hashes })).status).toBe(204);
+		const first = await inbox(c, id);
+		expect(first.more).toBe(false);
+		expect(first.wanted).toEqual(hashes.slice(0, INBOX_PAGE));
+		expect(first.wantedMore).toBe(true);
+		const res = await c.request(
+			"GET",
+			`/v1/mailboxes/${id}/inbox?wantedAfter=${first.wanted.at(-1)}`,
+		);
+		const next = InboxResponseSchema.parse(await res.json());
+		expect(next.wanted).toEqual(hashes.slice(INBOX_PAGE));
+		expect(next.wantedMore).toBe(false);
 	});
 
 	it("deletes the blob after its last recipient acknowledges it", async () => {

@@ -4,6 +4,7 @@
 import {
 	AckBodySchema,
 	INBOX_PAGE,
+	InboxQuerySchema,
 	type InboxResponse,
 	MAX_MESSAGE_BYTES,
 	MailboxIdSchema,
@@ -11,11 +12,11 @@ import {
 	PostMessageBodySchema,
 	type PostResponse,
 } from "@vault/core/src/sync/mailbox/protocol.ts";
-import { and, asc, count, eq, inArray, ne, notExists, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, ne, notExists, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppDeps, Env } from "./app.ts";
-import { HttpError, param, signedJson } from "./auth.ts";
+import { HttpError, param, query, signedJson } from "./auth.ts";
 import { fromBase64 } from "./base64.ts";
 import { messageKey } from "./bodies.ts";
 import { type Candidates, deleteUndelivered } from "./cleanup.ts";
@@ -180,7 +181,8 @@ export function messageRoutes(deps: AppDeps) {
 		},
 	);
 
-	r.get("/:id/inbox", mailboxParam, async (c) => {
+	r.get("/:id/inbox", mailboxParam, query(InboxQuerySchema), async (c) => {
+		const { wantedAfter } = c.req.valid("query");
 		const { id: mailboxId } = c.req.valid("param");
 		const caller = c.var.sigKey;
 		const { retentionDays } = await requireMember(deps, mailboxId, caller, "active");
@@ -242,6 +244,7 @@ export function messageRoutes(deps: AppDeps) {
 				and(
 					eq(blobWants.mailboxId, mailboxId),
 					ne(blobWants.member, caller),
+					wantedAfter ? gt(blobWants.hash, wantedAfter) : undefined,
 					eq(members.status, "active"),
 					notExists(
 						db
@@ -258,7 +261,8 @@ export function messageRoutes(deps: AppDeps) {
 			blobs: blobRows.slice(0, INBOX_PAGE),
 			wanted: wanted.slice(0, INBOX_PAGE).map((w) => w.hash),
 			markers,
-			more: rows.length > INBOX_PAGE || blobRows.length > INBOX_PAGE || wanted.length > INBOX_PAGE,
+			wantedMore: wanted.length > INBOX_PAGE,
+			more: rows.length > INBOX_PAGE || blobRows.length > INBOX_PAGE,
 			retentionDays,
 			usedBytes: await usedBytes(deps, mailboxId),
 			quotaBytes: deps.config.quotaBytes,

@@ -100,11 +100,14 @@ export const InboxResponseSchema = z.object({
 	blobs: z.array(
 		z.object({ hash: BlobHashSchema, size: z.int(), uploader: SigKeySchema, createdAt: z.int() }),
 	),
-	/** Hashes other active members want that this mailbox does not hold. */
+	/** Hashes other active members want that this mailbox does not hold, in hash order. */
 	wanted: z.array(BlobHashSchema),
+	/** More wanted hashes follow the last one: ask again with `wantedAfter` set to it. */
+	wantedMore: z.boolean(),
 	markers: z.array(
 		z.object({ id: z.int(), sender: SigKeySchema, count: z.int(), expiredAt: z.int() }),
 	),
+	/** More messages or blobs wait for the caller: collect and acknowledge these, then ask again. */
 	more: z.boolean(),
 	retentionDays: z.int(),
 	usedBytes: z.int(),
@@ -112,6 +115,9 @@ export const InboxResponseSchema = z.object({
 	serverTime: z.int(),
 });
 export type InboxResponse = z.infer<typeof InboxResponseSchema>;
+
+export const InboxQuerySchema = z.object({ wantedAfter: BlobHashSchema.optional() });
+export type InboxQuery = z.infer<typeof InboxQuerySchema>;
 
 export const MAILBOX_ERROR_CODES = [
 	"bad_request",
