@@ -19,13 +19,14 @@ async function collect(body: ReadableStream<Uint8Array> | Uint8Array): Promise<U
 	return new Uint8Array(await new Response(body).arrayBuffer());
 }
 
-export function memoryBodies(): BodyStore {
+/** `now` stamps modifiedAt; the harness passes its fake clock so orphan ages line up with the server's. */
+export function memoryBodies(now: () => number = Date.now): BodyStore {
 	const store = new Map<string, { bytes: Uint8Array; modifiedAt: number }>();
 	return {
 		async put(key, body, opts) {
 			const bytes = await collect(body);
 			if (opts?.sha256 && (await sha256Hex(bytes)) !== opts.sha256) throw new HashMismatchError();
-			store.set(key, { bytes, modifiedAt: Date.now() });
+			store.set(key, { bytes, modifiedAt: now() });
 		},
 		async get(key) {
 			const hit = store.get(key);
@@ -56,7 +57,7 @@ export function makeServer(opts: ServerOpts = {}) {
 	const { db } = openDb(":memory:");
 	const deps: AppDeps = {
 		db,
-		bodies: memoryBodies(),
+		bodies: memoryBodies(() => clock.now),
 		entitlement: { canPost: async () => opts.canPost ?? true },
 		now: () => clock.now,
 		config: {
