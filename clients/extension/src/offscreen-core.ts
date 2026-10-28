@@ -39,6 +39,9 @@ import {
 	CryptoFileOpenSchema,
 	CryptoFileResealMetaSchema,
 	CryptoFileSealSchema,
+	CryptoMailboxIdSchema,
+	CryptoMailboxOpenSchema,
+	CryptoMailboxSealSchema,
 	CryptoOpenKdbxSchema,
 	CryptoOpenPortableVaultSchema,
 	CryptoPasskeyGetSchema,
@@ -384,6 +387,9 @@ type SyncVek = {
 	decrypt_entries(entries: EncryptedPayload[]): (string | null)[];
 	encrypt_with_vek(plaintext: string): VekEncrypted;
 	decrypt_with_vek(iv: string, ciphertext: string): string;
+	mailbox_id(groupKeyB64: string): string;
+	mailbox_seal(groupKeyB64: string, aad: string, plaintext: string): string;
+	mailbox_open(groupKeyB64: string, aad: string, sealedB64: string): string;
 	open_file_meta(wrappedFek: string, fekIv: string, metaBlob: string, metaIv: string): string;
 	reseal_file_meta(wrappedFek: string, fekIv: string, metaJson: string): VekEncrypted;
 };
@@ -486,6 +492,21 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 			const p = CryptoDecryptOuterSchema.parse(payload);
 			const w = (await getWasm()) as unknown as SyncVek;
 			return withVek(w, p.vekB64, (w) => w.decrypt_with_vek(p.iv, p.ciphertext));
+		}
+		case "CRYPTO_MAILBOX_ID": {
+			const p = CryptoMailboxIdSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) => w.mailbox_id(p.groupKeyB64));
+		}
+		case "CRYPTO_MAILBOX_SEAL": {
+			const p = CryptoMailboxSealSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) => w.mailbox_seal(p.groupKeyB64, p.aad, p.plaintext));
+		}
+		case "CRYPTO_MAILBOX_OPEN": {
+			const p = CryptoMailboxOpenSchema.parse(payload);
+			const w = (await getWasm()) as unknown as SyncVek;
+			return withVek(w, p.vekB64, (w) => w.mailbox_open(p.groupKeyB64, p.aad, p.sealedB64));
 		}
 		// File attachments: the bytes stay in IndexedDB (files/host.ts). The two streaming ops
 		// take the vek only to construct, so they may await between chunks; the metadata ops are

@@ -193,6 +193,12 @@ export function defaultOffscreen(msg: AnyMsg): OffscreenResponse {
 			return { ok: true, data: { iv: "outerIv", ciphertext: "outerCt" } };
 		case "CRYPTO_DECRYPT_OUTER":
 			return { ok: true, data: '{"entries":[],"tombstones":[]}' };
+		case "CRYPTO_MAILBOX_ID":
+			return { ok: true, data: "mailbox-id" };
+		case "CRYPTO_MAILBOX_SEAL":
+			return { ok: true, data: "sealed" };
+		case "CRYPTO_MAILBOX_OPEN":
+			return { ok: true, data: "opened" };
 		case "CRYPTO_DECRYPT":
 			return { ok: true, data: "{}" };
 		case "CRYPTO_DECRYPT_BATCH":

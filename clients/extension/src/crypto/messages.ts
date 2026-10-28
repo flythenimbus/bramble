@@ -70,6 +70,21 @@ export const CryptoDecryptOuterSchema = z.object({
 	ciphertext: z.string(),
 	...vekInject,
 });
+// Mailbox crypto (docs/mailbox-service.md, "Keys and identity"): the key derives from the VEK, so
+// these are USE-VEK ops like the rest.
+export const CryptoMailboxIdSchema = z.object({ groupKeyB64: z.string(), ...vekInject });
+export const CryptoMailboxSealSchema = z.object({
+	groupKeyB64: z.string(),
+	aad: z.string(),
+	plaintext: z.string(),
+	...vekInject,
+});
+export const CryptoMailboxOpenSchema = z.object({
+	groupKeyB64: z.string(),
+	aad: z.string(),
+	sealedB64: z.string(),
+	...vekInject,
+});
 /** A KeePass database to open: parked in a handoff by the view, since one can be far larger than
  * a message may be. Its attachments come back as handoffs too. */
 export const CryptoOpenKdbxSchema = z.object({
@@ -187,6 +202,9 @@ export type CryptoDecrypt = z.infer<typeof CryptoDecryptSchema>;
 export type CryptoDecryptBatch = z.infer<typeof CryptoDecryptBatchSchema>;
 export type CryptoEncryptOuter = z.infer<typeof CryptoEncryptOuterSchema>;
 export type CryptoDecryptOuter = z.infer<typeof CryptoDecryptOuterSchema>;
+export type CryptoMailboxId = z.infer<typeof CryptoMailboxIdSchema>;
+export type CryptoMailboxSeal = z.infer<typeof CryptoMailboxSealSchema>;
+export type CryptoMailboxOpen = z.infer<typeof CryptoMailboxOpenSchema>;
 export type CryptoPasskeyMake = z.infer<typeof CryptoPasskeyMakeSchema>;
 export type CryptoPasskeyGet = z.infer<typeof CryptoPasskeyGetSchema>;
 export type CryptoPasskeyImportPkcs8 = z.infer<typeof CryptoPasskeyImportPkcs8Schema>;

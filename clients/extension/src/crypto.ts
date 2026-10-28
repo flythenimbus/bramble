@@ -30,6 +30,9 @@ import type {
 	CryptoDecryptOuter,
 	CryptoEncrypt,
 	CryptoEncryptOuter,
+	CryptoMailboxId,
+	CryptoMailboxOpen,
+	CryptoMailboxSeal,
 	CryptoPasskeyGet,
 	CryptoPasskeyImportPkcs8,
 	CryptoPasskeyMake,
@@ -189,6 +192,20 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 			send<VekEncrypted>("CRYPTO_ENCRYPT_OUTER", { plaintext } satisfies CryptoEncryptOuter),
 		decryptWithVek: (iv, ciphertext) =>
 			send<string>("CRYPTO_DECRYPT_OUTER", { iv, ciphertext } satisfies CryptoDecryptOuter),
+		mailboxId: (groupKeyB64) =>
+			send<string>("CRYPTO_MAILBOX_ID", { groupKeyB64 } satisfies CryptoMailboxId),
+		mailboxSeal: (groupKeyB64, aad, plaintext) =>
+			send<string>("CRYPTO_MAILBOX_SEAL", {
+				groupKeyB64,
+				aad,
+				plaintext,
+			} satisfies CryptoMailboxSeal),
+		mailboxOpen: (groupKeyB64, aad, sealedB64) =>
+			send<string>("CRYPTO_MAILBOX_OPEN", {
+				groupKeyB64,
+				aad,
+				sealedB64,
+			} satisfies CryptoMailboxOpen),
 
 		// The database goes over as a handoff rather than in the message, and its attachments come
 		// back the same way, each staged until the import seals it or the import is dropped.

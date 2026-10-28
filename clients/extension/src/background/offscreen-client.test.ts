@@ -152,3 +152,28 @@ describe("file ops through the seam", () => {
 		expect(host.handleHostMessage).not.toHaveBeenCalled();
 	});
 });
+
+// Mailbox crypto runs under one vault's key, the one the op is tagged with, never whichever vault
+// is active; the seam injects it and the offscreen loads it in the same synchronous section.
+describe("mailbox ops through the seam", () => {
+	it("injects the tagged vault's VEK into each mailbox op, not the active vault's", async () => {
+		const client = await import("./offscreen-client");
+		client.setInProcessSyncBridge(bridge);
+		for (const type of ["CRYPTO_MAILBOX_ID", "CRYPTO_MAILBOX_SEAL", "CRYPTO_MAILBOX_OPEN"]) {
+			await client.sendToOffscreen({ type, vaultId: "v1", payload: { groupKeyB64: "g" } });
+			expect(host.handleHostMessage).toHaveBeenLastCalledWith(type, {
+				groupKeyB64: "g",
+				vekB64: "vek:v1",
+			});
+		}
+	});
+
+	it("fails a mailbox op fast while that vault is locked", async () => {
+		const client = await import("./offscreen-client");
+		client.setInProcessSyncBridge(bridge);
+		await expect(
+			client.sendToOffscreen({ type: "CRYPTO_MAILBOX_SEAL", vaultId: "locked", payload: {} }),
+		).resolves.toEqual({ ok: false, error: "vault locked" });
+		expect(host.handleHostMessage).not.toHaveBeenCalled();
+	});
+});

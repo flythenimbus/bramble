@@ -18,6 +18,10 @@ const { order, stub } = vi.hoisted(() => {
 			order.push(`op:${loaded}`);
 			return { iv: "iv", ciphertext: "ct" };
 		},
+		mailbox_seal: (_groupKey: string, _aad: string, _plaintext: string) => {
+			order.push(`op:${loaded}`);
+			return "sealed";
+		},
 	};
 	return { order, stub };
 });
@@ -43,6 +47,35 @@ describe("offscreen crypto atomicity (the no-await rule)", () => {
 			}
 			// Sanity: both ops actually ran.
 			expect(order.filter((m) => m.startsWith("op:"))).toHaveLength(2);
+		}
+	});
+
+	it("loads the tagged vault's VEK and seals a mailbox message in the same synchronous section", async () => {
+		for (let round = 0; round < 25; round++) {
+			order.length = 0;
+			const [a, b] = await Promise.all([
+				handleHostMessage("CRYPTO_MAILBOX_SEAL", {
+					groupKeyB64: "g",
+					aad: "x",
+					plaintext: "A",
+					vekB64: "vekA",
+				}),
+				handleHostMessage("CRYPTO_MAILBOX_SEAL", {
+					groupKeyB64: "g",
+					aad: "x",
+					plaintext: "B",
+					vekB64: "vekB",
+				}),
+			]);
+			for (let i = 0; i < order.length; i++) {
+				const m = order[i];
+				if (m?.startsWith("op:")) expect(order[i - 1]).toBe(`load:${m.slice(3)}`);
+			}
+			expect(order.filter((m) => m.startsWith("op:"))).toHaveLength(2);
+			expect([a, b]).toEqual([
+				{ ok: true, data: "sealed" },
+				{ ok: true, data: "sealed" },
+			]);
 		}
 	});
 });
