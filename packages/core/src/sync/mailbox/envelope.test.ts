@@ -146,4 +146,31 @@ describe("message envelope", () => {
 			"unopenable",
 		);
 	});
+
+	it("rethrows a failure that is not the message's fault, such as a locked vault", async () => {
+		const { port, sigKey } = await device();
+		const body = await sealMessage(port, { ...fields(sigKey), plaintext: "hello" });
+		const locked = new Error("vault is locked");
+		port.mailboxOpen = vi.fn(async () => {
+			throw locked;
+		});
+		await expect(openMessage(port, { ...fields(sigKey), body })).rejects.toBe(locked);
+	});
+
+	it("reads the core's refusal from a bare string, as Tauri rejects", async () => {
+		const { port, sigKey } = await device();
+		const body = await sealMessage(port, { ...fields(sigKey), plaintext: "hello" });
+		port.mailboxOpen = vi.fn(() => Promise.reject("mailbox open failed"));
+		expect(await reason(openMessage(port, { ...fields(sigKey), body }))).toBe("unopenable");
+	});
+
+	it("does not open under a key that derives another mailbox, and blames the device", async () => {
+		const { port, sigKey } = await device();
+		const body = await sealMessage(port, { ...fields(sigKey), plaintext: "hello" });
+		port.mailboxId = async () => "N".repeat(43);
+		const opening = openMessage(port, { ...fields(sigKey), body });
+		await expect(opening).rejects.toThrow("does not derive this mailbox");
+		await expect(opening).rejects.not.toBeInstanceOf(MailboxOpenError);
+		expect(port.mailboxOpen).not.toHaveBeenCalled();
+	});
 });

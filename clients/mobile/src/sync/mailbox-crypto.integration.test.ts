@@ -6,8 +6,9 @@ import {
 	MailboxOpenError,
 	openMessage,
 	sealMessage,
+	signedText,
 } from "@core/sync/mailbox/envelope";
-import { MAILBOX_ID_RE } from "@core/sync/mailbox/protocol";
+import { MAILBOX_ID_RE, sha256Hex } from "@core/sync/mailbox/protocol";
 import type { VaultCrypto } from "@core/wasm";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -64,7 +65,7 @@ describe("mailbox envelope over the real core", () => {
 		expect(await openMessage(port(receiver.secretKey), { ...r, body })).toBe('{"kind":"delta"}');
 	});
 
-	it("refuses the same body under a different vault key", async () => {
+	it("blames the device, not the message, under a different vault key", async () => {
 		await crypto.generateVek();
 		const sender = wasm.roster_sig_generate_key();
 		const mailboxId = await crypto.mailboxId!(GROUP);
@@ -77,6 +78,24 @@ describe("mailbox envelope over the real core", () => {
 		const body = await sealMessage(port(sender.secretKey), { ...r, plaintext: "x" });
 		await crypto.generateVek();
 		const opening = openMessage(port(sender.secretKey), { ...r, body });
+		await expect(opening).rejects.toThrow("does not derive this mailbox");
+		await expect(opening).rejects.not.toBeInstanceOf(MailboxOpenError);
+	});
+
+	it("refuses a member's body re-signed by another and posted as another message", async () => {
+		await crypto.generateVek();
+		const a = wasm.roster_sig_generate_key();
+		const b = wasm.roster_sig_generate_key();
+		const mailboxId = await crypto.mailboxId!(GROUP);
+		const r = { groupKeyB64: GROUP, mailboxId, messageId: "C".repeat(22), sender: a.publicKey };
+		const sealed = (await sealMessage(port(a.secretKey), { ...r, plaintext: "x" })).subarray(64);
+		const moved = { ...r, messageId: "D".repeat(22), sender: b.publicKey };
+		const text = signedText({ ...moved, sealedSha256: await sha256Hex(sealed) });
+		const body = new Uint8Array([
+			...Buffer.from(wasm.roster_sign(b.secretKey, text), "base64"),
+			...sealed,
+		]);
+		const opening = openMessage(port(b.secretKey), { ...moved, body });
 		await expect(opening).rejects.toBeInstanceOf(MailboxOpenError);
 		await expect(opening).rejects.toMatchObject({ reason: "unopenable" });
 	});

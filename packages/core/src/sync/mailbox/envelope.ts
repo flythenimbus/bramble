@@ -10,6 +10,8 @@ import { sha256Hex } from "./protocol";
 const SIG_LEN = 64;
 /** A version byte, a 12-byte nonce and a 16-byte tag: the shortest message the core seals. */
 const MIN_SEALED = 1 + 12 + 16;
+/** The core's refusals of the sealed bytes themselves (`core-rust/src/mailbox.rs`). */
+const REFUSALS = ["mailbox open failed", "not a sealed mailbox message", "plaintext is not utf-8"];
 
 /** What sealing and opening need from a host: its CryptoAdapter, plus its roster key. */
 export interface MailboxCryptoPort {
@@ -63,7 +65,11 @@ export async function sealMessage(
 	return body;
 }
 
-/** Check the sender's signature, then open: nothing is decrypted for a body it did not sign. */
+/**
+ * Check the sender's signature, then open: nothing is decrypted for a body it did not sign. Only
+ * a fault in the message is a MailboxOpenError; anything else (a locked vault, a bridge timeout,
+ * the wrong vault's key) is rethrown, so the caller retries instead of quarantining.
+ */
 export async function openMessage(
 	port: MailboxCryptoPort,
 	r: Addressed & { groupKeyB64: string; body: Uint8Array },
@@ -75,9 +81,14 @@ export async function openMessage(
 	if (!(await port.verify(r.sender, text, bytesToBase64(sig)))) {
 		throw new MailboxOpenError("bad_signature");
 	}
+	if ((await port.mailboxId(r.groupKeyB64)) !== r.mailboxId) {
+		throw new Error("this vault's key does not derive this mailbox");
+	}
 	try {
 		return await port.mailboxOpen(r.groupKeyB64, messageAad(r), bytesToBase64(sealed));
-	} catch {
-		throw new MailboxOpenError("unopenable");
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : String(e);
+		if (REFUSALS.some((refusal) => msg.includes(refusal))) throw new MailboxOpenError("unopenable");
+		throw e;
 	}
 }
