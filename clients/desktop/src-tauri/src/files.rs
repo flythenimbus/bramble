@@ -705,12 +705,11 @@ mod tests {
     const OTHER: &str = "22222222-2222-4333-8444-555555555555";
     const HASH: &str = "abababababababababababababababababababababababababababababababab";
 
-    // The core holds one VEK for the process: the tests here that load it take turns.
-    static VEK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
+    // The core holds one VEK for the process, and the socket tests lock and unlock it too, so
+    // these take the crate's shared lock for vault_crypto state rather than one of their own.
     fn unlocked() -> std::sync::MutexGuard<'static, ()> {
         use base64::{engine::general_purpose::STANDARD as B64, Engine};
-        let held = VEK.lock().unwrap_or_else(|e| e.into_inner());
+        let held = crate::pairing::test_lock();
         vault_crypto::unlock_with_vek(B64.encode([0x5au8; 32])).unwrap();
         held
     }
