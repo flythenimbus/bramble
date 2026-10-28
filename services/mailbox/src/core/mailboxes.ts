@@ -17,6 +17,7 @@ import type { AppDeps, Env } from "./app.ts";
 import { HttpError, param, signedJson } from "./auth.ts";
 import { dropMember } from "./cleanup.ts";
 import { mailboxes, members } from "./schema.ts";
+import { chunk, rowsPerInsert } from "./sql.ts";
 
 /** Membership bodies are at most 2 x MAX_MEMBERS keys; this leaves ample room. */
 const SMALL_JSON_BYTES = 64 * 1024;
@@ -83,14 +84,13 @@ export function mailboxRoutes(deps: AppDeps) {
 				.onConflictDoNothing()
 				.returning({ id: mailboxes.id });
 			if (created.length === 0) throw new HttpError(409, "exists");
-			await db.insert(members).values(
-				[...new Set(body.members)].map((sigKey) => ({
-					mailboxId: id,
-					sigKey,
-					status: sigKey === caller ? ("active" as const) : ("eligible" as const),
-					addedAt: now,
-				})),
-			);
+			const rows = [...new Set(body.members)].map((sigKey) => ({
+				mailboxId: id,
+				sigKey,
+				status: sigKey === caller ? ("active" as const) : ("eligible" as const),
+				addedAt: now,
+			}));
+			for (const part of chunk(rows, rowsPerInsert(4))) await db.insert(members).values(part);
 			return c.json(await listMembers(deps, id));
 		},
 	);
@@ -120,18 +120,14 @@ export function mailboxRoutes(deps: AppDeps) {
 			await requireMember(deps, id, c.var.sigKey, "active");
 			const { add, remove } = c.req.valid("json");
 			const now = deps.now();
-			if (add.length > 0) {
-				await db
-					.insert(members)
-					.values(
-						[...new Set(add)].map((sigKey) => ({
-							mailboxId: id,
-							sigKey,
-							status: "eligible" as const,
-							addedAt: now,
-						})),
-					)
-					.onConflictDoNothing();
+			const rows = [...new Set(add)].map((sigKey) => ({
+				mailboxId: id,
+				sigKey,
+				status: "eligible" as const,
+				addedAt: now,
+			}));
+			for (const part of chunk(rows, rowsPerInsert(4))) {
+				await db.insert(members).values(part).onConflictDoNothing();
 			}
 			for (const sigKey of new Set(remove)) await dropMember(deps, id, sigKey, false);
 			return c.json(await listMembers(deps, id));

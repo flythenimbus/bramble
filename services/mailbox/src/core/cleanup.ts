@@ -15,6 +15,7 @@ import {
 	members,
 	messages,
 } from "./schema.ts";
+import { chunk, IN_LIST } from "./sql.ts";
 
 export interface Candidates {
 	messages: string[];
@@ -29,13 +30,13 @@ export async function deleteUndelivered(
 ): Promise<number> {
 	const { db, bodies } = deps;
 	let deleted = 0;
-	if (candidates.messages.length > 0) {
+	for (const ids of chunk(candidates.messages, IN_LIST)) {
 		const gone = await db
 			.delete(messages)
 			.where(
 				and(
 					eq(messages.mailboxId, mailboxId),
-					inArray(messages.id, candidates.messages),
+					inArray(messages.id, ids),
 					notExists(
 						db
 							.select({ one: sql`1` })
@@ -53,13 +54,13 @@ export async function deleteUndelivered(
 		for (const { id } of gone) await bodies.delete(messageKey(mailboxId, id));
 		deleted += gone.length;
 	}
-	if (candidates.blobs.length > 0) {
+	for (const hashes of chunk(candidates.blobs, IN_LIST)) {
 		const gone = await db
 			.delete(blobs)
 			.where(
 				and(
 					eq(blobs.mailboxId, mailboxId),
-					inArray(blobs.hash, candidates.blobs),
+					inArray(blobs.hash, hashes),
 					notExists(
 						db
 							.select({ one: sql`1` })

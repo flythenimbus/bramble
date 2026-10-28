@@ -5,6 +5,7 @@ import { randomBytes, type webcrypto } from "node:crypto";
 import {
 	canonicalRequest,
 	HEADERS,
+	InboxResponseSchema,
 	MembersResponseSchema,
 	sha256Hex,
 } from "@vault/core/src/sync/mailbox/protocol.ts";
@@ -159,4 +160,39 @@ export async function memberStatuses(device: TestDevice, id: string) {
 	expect(res.status).toBe(200);
 	const { members } = MembersResponseSchema.parse(await res.json());
 	return Object.fromEntries(members.map((m) => [m.sigKey, m.status]));
+}
+
+export const newMessageId = () => randomBytes(16).toString("base64url");
+
+/** `from` posts `bytes` (default: 8 random bytes) to mailbox `id`. */
+export async function postMessage(
+	from: TestDevice,
+	id: string,
+	opts: { msgId?: string; bytes?: Uint8Array; to?: TestDevice[]; replaces?: string[] } = {},
+) {
+	const msgId = opts.msgId ?? newMessageId();
+	const bytes = opts.bytes ?? randomBytes(8);
+	const body: Record<string, unknown> = { id: msgId, body: Buffer.from(bytes).toString("base64") };
+	if (opts.to) body.to = opts.to.map((d) => d.sigKey);
+	if (opts.replaces) body.replaces = opts.replaces;
+	const res = await from.request("POST", `/v1/mailboxes/${id}/messages`, body);
+	return { res, msgId };
+}
+
+export async function inbox(device: TestDevice, id: string) {
+	const res = await device.request("GET", `/v1/mailboxes/${id}/inbox`);
+	expect(res.status).toBe(200);
+	return InboxResponseSchema.parse(await res.json());
+}
+
+export const inboxIds = async (device: TestDevice, id: string) =>
+	(await inbox(device, id)).messages.map((m) => m.id).sort();
+
+export async function ack(
+	device: TestDevice,
+	id: string,
+	body: { messages?: string[]; blobs?: string[]; markers?: number[] },
+) {
+	const res = await device.request("POST", `/v1/mailboxes/${id}/acks`, body);
+	expect(res.status).toBe(204);
 }

@@ -17,6 +17,7 @@ import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type { Env } from "./app.ts";
+import { fromBase64 } from "./base64.ts";
 
 export class HttpError extends Error {
 	readonly status: ContentfulStatusCode;
@@ -42,8 +43,6 @@ export const SigningHeadersSchema = z.object({
 });
 
 const JSON_TYPE = /^application\/json(;|$)/i;
-
-const fromBase64 = (s: string) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
 
 async function verifyEd25519(publicB64: string, sigB64: string, message: string): Promise<boolean> {
 	try {

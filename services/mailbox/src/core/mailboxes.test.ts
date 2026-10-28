@@ -144,7 +144,4 @@ describe("membership", () => {
 		).toBe(200);
 		expect((await memberStatuses(a!, id))[b!.sigKey]).toBe("eligible");
 	});
-
-	it.todo("removing a member drops its pending deliveries and deletes what nobody else awaits");
-	it.todo("deactivating stops deliveries to the member and deletes what nobody else awaits");
 });
