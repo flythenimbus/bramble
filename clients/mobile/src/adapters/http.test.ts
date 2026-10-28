@@ -155,8 +155,13 @@ describe("mobileHttp in the dev browser", () => {
 describe("mobileHttp with a body too large for the bridge", () => {
 	const source = (size: number) => ({
 		size,
-		read: async (offset: number, length: number) =>
-			Uint8Array.from({ length }, (_, i) => (offset + i) % 251),
+		// A plain loop: Uint8Array.from with a mapper costs ~20x more over 9 MiB, enough to push this
+		// test past its timeout on a loaded CI runner.
+		read: async (offset: number, length: number) => {
+			const out = new Uint8Array(length);
+			for (let i = 0; i < length; i++) out[i] = (offset + i) % 251;
+			return out;
+		},
 	});
 
 	it("spools the body to a file and sends it from there, then deletes it", async () => {
