@@ -335,7 +335,7 @@ export function Auth() {
 			)}
 			<div className="px-6 py-6">
 				<div className="w-full max-w-md mx-auto">
-					<div className="mb-5">
+					<div className="mb-5 text-center">
 						<div className="flex justify-center mb-3">
 							<BrambleGlyph className="w-16 h-16 text-foreground" />
 						</div>
