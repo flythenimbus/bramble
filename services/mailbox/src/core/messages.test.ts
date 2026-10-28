@@ -1,18 +1,26 @@
 import { randomBytes } from "node:crypto";
-import { INBOX_PAGE, PostResponseSchema } from "@vault/core/src/sync/mailbox/protocol.ts";
+import {
+	INBOX_PAGE,
+	MAX_MESSAGE_BYTES,
+	PostResponseSchema,
+} from "@vault/core/src/sync/mailbox/protocol.ts";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
 	ack,
 	activate,
 	createMailbox,
+	gatedBodies,
 	inbox,
 	inboxIds,
 	memberStatuses,
 	newMessageId,
 	postMessage,
+	replaceMessages,
 	setup,
+	type TestServer,
 } from "../test/harness.ts";
-import { blobs, messages } from "./schema.ts";
+import { blobs, deliveries, messages } from "./schema.ts";
 import { chunk } from "./sql.ts";
 import { DAY_MS } from "./time.ts";
 
@@ -182,9 +190,19 @@ describe("compaction", () => {
 		const { msgId: m2 } = await postMessage(a, id);
 		await ack(b, id, { messages: [m1] });
 		const { msgId: fromB } = await postMessage(b, id, { to: [c] });
-		const { msgId: s } = await postMessage(a, id, { to: [c], replaces: [m1, m2, fromB] });
+		const { msgId: s } = await postMessage(a, id, { to: [c] });
+		expect((await replaceMessages(a, id, s, [m1, m2, fromB])).status).toBe(204);
 		expect(await inboxIds(c, id)).toEqual([fromB, s].sort());
 		expect(await inboxIds(b, id)).toEqual([m2]);
+	});
+
+	it("lets only a snapshot's sender name what it replaces", async () => {
+		const { a, b, c, id } = await trio();
+		const { msgId: m1 } = await postMessage(a, id, { to: [c] });
+		const { msgId: s } = await postMessage(a, id, { to: [c] });
+		const res = await replaceMessages(b, id, s, [m1]);
+		expect(res.status).toBe(404);
+		expect(await inboxIds(c, id)).toEqual([m1, s].sort());
 	});
 });
 
@@ -216,5 +234,92 @@ describe("membership cleanup", () => {
 		expect((await memberStatuses(a, id))[b.sigKey]).toBe("eligible");
 		const { msgId: next } = await postMessage(a, id);
 		expect(await inboxIds(c, id)).toEqual([next]);
+	});
+});
+
+describe("raw bodies", () => {
+	it("refuses a body that does not match its signed hash, and keeps nothing", async () => {
+		const { server, a, b, id } = await trio();
+		const { res } = await postMessage(a, id, { request: { sendBytes: randomBytes(8) } });
+		expect(res.status).toBe(401);
+		expect(await res.json()).toEqual({ error: "bad_signature" });
+		expect(await inboxIds(b, id)).toEqual([]);
+		let n = 0;
+		for await (const _ of server.deps.bodies.keys()) n++;
+		expect(n).toBe(0);
+	});
+
+	it("refuses a declared length over MAX_MESSAGE_BYTES without reading the body", async () => {
+		const { a, id } = await trio();
+		const { res } = await postMessage(a, id, {
+			request: { headers: { "content-length": String(MAX_MESSAGE_BYTES + 1) } },
+		});
+		expect(res.status).toBe(413);
+		expect(await res.json()).toEqual({ error: "too_large" });
+	});
+});
+
+describe("membership changing mid-post", () => {
+	async function gatedTrio() {
+		const gate = gatedBodies();
+		const { server, devices } = await setup(3, { wrapBodies: gate.wrap });
+		const [a, b, c] = [devices[0]!, devices[1]!, devices[2]!];
+		const id = await createMailbox(a, [b, c]);
+		await activate(id, b, c);
+		return { gate, server, a, b, c, id };
+	}
+
+	const recipientsOf = async (server: TestServer, msgId: string) =>
+		(await server.deps.db.select().from(deliveries).where(eq(deliveries.messageId, msgId)).all())
+			.map((d: { member: string }) => d.member)
+			.sort();
+
+	it("delivers to whoever is active when the post lands, when a member is removed during it", async () => {
+		const { gate, server, a, b, c, id } = await gatedTrio();
+		gate.hold();
+		const posting = postMessage(a, id);
+		await gate.entered();
+		expect(
+			(await a.request("POST", `/v1/mailboxes/${id}/members`, { remove: [c.sigKey] })).status,
+		).toBe(200);
+		gate.release();
+		const { res, msgId } = await posting;
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ stored: true, recipients: 1 });
+		expect(await recipientsOf(server, msgId)).toEqual([b.sigKey]);
+	});
+
+	it("does not address a member that deactivated during the post", async () => {
+		const { gate, server, a, b, c, id } = await gatedTrio();
+		gate.hold();
+		const posting = postMessage(a, id);
+		await gate.entered();
+		expect(
+			(await b.request("POST", `/v1/mailboxes/${id}/activation`, { active: false })).status,
+		).toBe(200);
+		gate.release();
+		const { msgId } = await posting;
+		expect(await recipientsOf(server, msgId)).toEqual([c.sigKey]);
+	});
+
+	it("restores deliveries a failed attempt never wrote when the post is repeated", async () => {
+		const { server, a, b, c, id } = await trio();
+		const msgId = newMessageId();
+		const bytes = randomBytes(8);
+		const now = server.clock.now;
+		// What a post that died after its row and before its deliveries leaves behind.
+		await server.deps.bodies.put(`m/${id}/${msgId}`, bytes);
+		await server.deps.db.insert(messages).values({
+			mailboxId: id,
+			id: msgId,
+			sender: a.sigKey,
+			size: 8,
+			createdAt: now,
+			expiresAt: now + DAY_MS,
+		});
+		const { res } = await postMessage(a, id, { msgId, bytes });
+		expect(await res.json()).toEqual({ stored: true, recipients: 2 });
+		expect(await inboxIds(b, id)).toEqual([msgId]);
+		expect(await inboxIds(c, id)).toEqual([msgId]);
 	});
 });

@@ -50,6 +50,8 @@ export interface ServerOpts {
 	token?: string;
 	retentionMaxDays?: number;
 	canPost?: boolean;
+	/** Wraps the in-memory body store, e.g. with gatedBodies. */
+	wrapBodies?: (inner: BodyStore) => BodyStore;
 }
 
 export function makeServer(opts: ServerOpts = {}) {
@@ -57,7 +59,7 @@ export function makeServer(opts: ServerOpts = {}) {
 	const { db } = openDb(":memory:");
 	const deps: AppDeps = {
 		db,
-		bodies: memoryBodies(() => clock.now),
+		bodies: (opts.wrapBodies ?? ((b) => b))(memoryBodies(() => clock.now)),
 		entitlement: { canPost: async () => opts.canPost ?? true },
 		now: () => clock.now,
 		config: {
@@ -190,19 +192,32 @@ export async function memberStatuses(device: TestDevice, id: string) {
 
 export const newMessageId = () => randomBytes(16).toString("base64url");
 
-/** `from` posts `bytes` (default: 8 random bytes) to mailbox `id`. */
+/** `from` posts `bytes` (default: 8 random bytes) to mailbox `id`, raw, with `id` and `to` in the query. */
 export async function postMessage(
 	from: TestDevice,
 	id: string,
-	opts: { msgId?: string; bytes?: Uint8Array; to?: TestDevice[]; replaces?: string[] } = {},
+	opts: { msgId?: string; bytes?: Uint8Array; to?: TestDevice[]; request?: RequestOpts } = {},
 ) {
 	const msgId = opts.msgId ?? newMessageId();
 	const bytes = opts.bytes ?? randomBytes(8);
-	const body: Record<string, unknown> = { id: msgId, body: Buffer.from(bytes).toString("base64") };
-	if (opts.to) body.to = opts.to.map((d) => d.sigKey);
-	if (opts.replaces) body.replaces = opts.replaces;
-	const res = await from.request("POST", `/v1/mailboxes/${id}/messages`, body);
+	const to = opts.to ? `&to=${encodeURIComponent(opts.to.map((d) => d.sigKey).join(","))}` : "";
+	const res = await from.request(
+		"POST",
+		`/v1/mailboxes/${id}/messages?id=${msgId}${to}`,
+		bytes,
+		opts.request,
+	);
 	return { res, msgId };
+}
+
+/** `from` says its snapshot `snapshotId` replaces its earlier `replaces` for the snapshot's recipients. */
+export async function replaceMessages(
+	from: TestDevice,
+	id: string,
+	snapshotId: string,
+	replaces: string[],
+) {
+	return from.request("POST", `/v1/mailboxes/${id}/messages/${snapshotId}/replaces`, { replaces });
 }
 
 export async function inbox(device: TestDevice, id: string) {
@@ -233,4 +248,42 @@ export async function uploadBlob(
 	const hash = await sha256Hex(bytes);
 	const res = await from.request("PUT", `/v1/mailboxes/${id}/blobs/${hash}`, bytes, opts);
 	return { res, hash };
+}
+
+/**
+ * A body store whose `put` can be held open, to change membership while an upload is in flight:
+ * `hold()`, start the request, `await entered()`, act, then `release()`.
+ */
+export function gatedBodies() {
+	let gate: Promise<void> | null = null;
+	let open = () => {};
+	let arrived = () => {};
+	let entered: Promise<void> = Promise.resolve();
+	return {
+		wrap(inner: BodyStore): BodyStore {
+			return {
+				...inner,
+				async put(key, body, opts) {
+					if (gate) {
+						arrived();
+						await gate;
+					}
+					return inner.put(key, body, opts);
+				},
+			};
+		},
+		hold() {
+			gate = new Promise((resolve) => {
+				open = resolve;
+			});
+			entered = new Promise((resolve) => {
+				arrived = resolve;
+			});
+		},
+		entered: () => entered,
+		release() {
+			gate = null;
+			open();
+		},
+	};
 }

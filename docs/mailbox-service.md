@@ -204,9 +204,10 @@ The server cannot read, so it cannot merge. Left alone, a device offline for a y
 the others pile up a year of deltas for it.
 
 So the sender compacts its own backlog. When its messages still pending for some recipient pass
-a threshold (bytes or count), it posts a snapshot addressed only to those recipients, naming the
-messages it **replaces**. The server stores the snapshot first, then drops the replaced messages'
-deliveries to those recipients, then deletes whatever nobody awaits any more.
+a threshold (bytes or count), it posts a snapshot addressed only to those recipients, then names
+the messages it **replaces** in a second, small request. The server drops the replaced messages'
+deliveries to the snapshot's recipients and deletes whatever nobody awaits any more. The snapshot
+is stored before anything it replaces goes, so a failure between the two only leaves duplicates.
 
 Only a device's own messages can be replaced, never another's. A device's state only grows
 under the join, so its snapshot provably contains everything it posted earlier; it cannot know
@@ -469,6 +470,13 @@ bramble-mailbox/v1\n<METHOD>\n<path and query>\n<time>\n<content sha256>
 A clock outside the window gets `401 stale_time` with `serverTime`, so the client can correct and
 retry. A private server also wants `x-bramble-token`.
 
+Message and blob bodies travel raw (`application/octet-stream`, with a `content-length`), never
+inside JSON: the server streams them into storage against the signed content hash without
+decoding them, so a 16 MiB message costs it no more memory than a small one. A message's `id` and
+`to` ride in the signed query string. Its deliveries are written in one statement against the
+members active when the body has landed, so a member removed mid-upload is simply not addressed,
+and repeating a post fills in any delivery an earlier attempt never wrote.
+
 ```
 POST   /v1/mailboxes/:id                     create; lists the first eligible members
 PATCH  /v1/mailboxes/:id                     retention (clamped to the ceiling)
@@ -476,8 +484,10 @@ POST   /v1/mailboxes/:id/members             add or remove eligible members (sig
 POST   /v1/mailboxes/:id/activation          activate or deactivate the caller (signed by its own key)
 GET    /v1/mailboxes/:id/members             members with status and last-checked day
 PUT    /v1/mailboxes/:id/wants               the blob hashes the caller is missing
-POST   /v1/mailboxes/:id/messages            post a delta, snapshot (with `replaces`) or control
-GET    /v1/mailboxes/:id/inbox               pending messages, blobs and expiry markers for caller
+POST   /v1/mailboxes/:id/messages?id=&to=    post a delta, snapshot or control message (raw body)
+POST   /v1/mailboxes/:id/messages/:mid/replaces  the sender's earlier messages snapshot :mid replaces
+GET    /v1/mailboxes/:id/inbox?wantedAfter=  pending messages and blobs (more), wanted hashes
+                                             (wantedMore, paged by hash), expiry markers
 GET    /v1/mailboxes/:id/messages/:mid       one body
 PUT    /v1/mailboxes/:id/blobs/:hash         upload a blob
 GET    /v1/mailboxes/:id/blobs/:hash         download a blob

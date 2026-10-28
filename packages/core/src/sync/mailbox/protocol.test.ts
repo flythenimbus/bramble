@@ -7,7 +7,8 @@ import {
 	MAILBOX_ID_RE,
 	MAX_LIST,
 	MESSAGE_ID_RE,
-	PostMessageBodySchema,
+	PostMessageQuerySchema,
+	ReplacesBodySchema,
 	SIG_KEY_RE,
 	sha256Hex,
 } from "./protocol";
@@ -52,9 +53,19 @@ describe("schemas", () => {
 		).toBe(false);
 	});
 
-	it("refuse a PostMessageBody whose `to` is empty", () => {
-		expect(PostMessageBodySchema.safeParse({ id: "A".repeat(22), body: "", to: [] }).success).toBe(
-			false,
-		);
+	it("read a post's query: `to` is a comma-separated key list and may not be empty", () => {
+		const key = `${"A".repeat(43)}=`;
+		const id = "A".repeat(22);
+		expect(PostMessageQuerySchema.parse({ id, to: `${key},${key}` })).toEqual({
+			id,
+			to: [key, key],
+		});
+		expect(PostMessageQuerySchema.parse({ id })).toEqual({ id });
+		expect(PostMessageQuerySchema.safeParse({ id, to: "" }).success).toBe(false);
+		expect(PostMessageQuerySchema.safeParse({ id, to: "not-a-key" }).success).toBe(false);
+	});
+
+	it("need at least one id to replace", () => {
+		expect(ReplacesBodySchema.safeParse({ replaces: [] }).success).toBe(false);
 	});
 });

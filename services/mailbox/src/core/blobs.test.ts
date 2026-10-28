@@ -6,7 +6,17 @@ import {
 	PostResponseSchema,
 } from "@vault/core/src/sync/mailbox/protocol.ts";
 import { describe, expect, it } from "vitest";
-import { ack, activate, createMailbox, inbox, setup, uploadBlob } from "../test/harness.ts";
+import {
+	ack,
+	activate,
+	createMailbox,
+	gatedBodies,
+	inbox,
+	setup,
+	uploadBlob,
+} from "../test/harness.ts";
+import { blobs } from "./schema.ts";
+import { DAY_MS } from "./time.ts";
 
 async function trio() {
 	const { server, devices } = await setup(3);
@@ -130,5 +140,45 @@ describe("blobs", () => {
 		let n = 0;
 		for await (const _ of server.deps.bodies.keys()) n++;
 		expect(n).toBe(0);
+	});
+
+	it("delivers a blob to whoever is active when the upload lands, when a member is removed during it", async () => {
+		const gate = gatedBodies();
+		const { devices } = await setup(3, { wrapBodies: gate.wrap });
+		const [a, b, c] = [devices[0]!, devices[1]!, devices[2]!];
+		const id = await createMailbox(a, [b, c]);
+		await activate(id, b, c);
+		gate.hold();
+		const uploading = uploadBlob(a, id, randomBytes(64));
+		await gate.entered();
+		expect(
+			(await a.request("POST", `/v1/mailboxes/${id}/members`, { remove: [c.sigKey] })).status,
+		).toBe(200);
+		gate.release();
+		const { res, hash } = await uploading;
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ stored: true, recipients: 1 });
+		expect(await blobHashes(b, id)).toEqual([hash]);
+	});
+
+	it("restores deliveries a failed upload never wrote when the blob is uploaded again", async () => {
+		const { server, a, b, c, id } = await trio();
+		const bytes = randomBytes(64);
+		const hash = Buffer.from(await crypto.subtle.digest("SHA-256", bytes)).toString("hex");
+		const now = server.clock.now;
+		// What an upload that died after its row and before its deliveries leaves behind.
+		await server.deps.bodies.put(`b/${id}/${hash}`, bytes);
+		await server.deps.db.insert(blobs).values({
+			mailboxId: id,
+			hash,
+			size: 64,
+			uploader: a.sigKey,
+			createdAt: now,
+			expiresAt: now + DAY_MS,
+		});
+		const { res } = await uploadBlob(a, id, bytes);
+		expect(await res.json()).toEqual({ stored: true, recipients: 2 });
+		expect(await blobHashes(b, id)).toEqual([hash]);
+		expect(await blobHashes(c, id)).toEqual([hash]);
 	});
 });

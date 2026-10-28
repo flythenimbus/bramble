@@ -57,14 +57,26 @@ export type MembersBody = z.infer<typeof MembersBodySchema>;
 export const ActivationBodySchema = z.object({ active: z.boolean() });
 export type ActivationBody = z.infer<typeof ActivationBodySchema>;
 
-export const PostMessageBodySchema = z.object({
+/**
+ * A post's query string. The request body is the sealed envelope itself, raw bytes, which the
+ * server streams into storage against the signed content hash and never decodes. `to` lists the
+ * recipients' keys, comma-separated (URL-encode it); without it, every other active member.
+ */
+export const PostMessageQuerySchema = z.object({
 	id: MessageIdSchema,
-	/** The sealed envelope, standard base64. */
-	body: z.base64(),
-	to: keys(1).optional(),
-	replaces: z.array(MessageIdSchema).max(MAX_LIST).optional(),
+	to: z
+		.string()
+		.transform((s) => s.split(","))
+		.pipe(keys(1))
+		.optional(),
 });
-export type PostMessageBody = z.infer<typeof PostMessageBodySchema>;
+export type PostMessageQuery = z.infer<typeof PostMessageQuerySchema>;
+
+/** Compaction: the caller's earlier messages a snapshot it posted replaces, for its recipients. */
+export const ReplacesBodySchema = z.object({
+	replaces: z.array(MessageIdSchema).min(1).max(MAX_LIST),
+});
+export type ReplacesBody = z.infer<typeof ReplacesBodySchema>;
 
 export const AckBodySchema = z.object({
 	messages: z.array(MessageIdSchema).max(MAX_LIST).default([]),

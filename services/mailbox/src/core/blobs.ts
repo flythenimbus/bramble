@@ -9,48 +9,63 @@ import {
 	type PostResponse,
 	WantsBodySchema,
 } from "@vault/core/src/sync/mailbox/protocol.ts";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, ne, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppDeps, Env } from "./app.ts";
 import { HttpError, param, signedJson } from "./auth.ts";
-import { blobKey, HashMismatchError } from "./bodies.ts";
+import { blobKey } from "./bodies.ts";
+import { deleteUndelivered } from "./cleanup.ts";
 import { mailboxParam, requireMember } from "./mailboxes.ts";
-import { activeMembers, checkQuota } from "./messages.ts";
-import { blobDeliveries, blobs, blobWants } from "./schema.ts";
+import { checkQuota } from "./messages.ts";
+import { blobDeliveries, blobs, blobWants, members } from "./schema.ts";
 import { chunk, rowsPerInsert } from "./sql.ts";
 import { DAY_MS } from "./time.ts";
+import { declaredLength, storeUpload } from "./upload.ts";
 
 /** MAX_WANTS hashes of 66 JSON bytes each, with room to spare. */
 const WANTS_JSON_BYTES = 1024 * 1024;
-
-class TooLargeError extends Error {}
-
-/** Passes bytes through, refusing more than `limit`, and counts what actually arrived. */
-function capped(limit: number) {
-	let seen = 0;
-	const stream = new TransformStream<Uint8Array, Uint8Array>({
-		transform(piece, controller) {
-			seen += piece.byteLength;
-			if (seen > limit) controller.error(new TooLargeError());
-			else controller.enqueue(piece);
-		},
-	});
-	return { stream, received: () => seen };
-}
 
 export function blobRoutes(deps: AppDeps) {
 	const { db } = deps;
 	const hashParam = param(z.object({ id: MailboxIdSchema, hash: BlobHashSchema }));
 	const r = new Hono<Env>();
 
-	async function pendingCount(mailboxId: string, hash: string): Promise<number> {
-		const row = await db
-			.select({ n: count() })
-			.from(blobDeliveries)
-			.where(and(eq(blobDeliveries.mailboxId, mailboxId), eq(blobDeliveries.hash, hash)))
-			.get();
-		return row?.n ?? 0;
+	/** Every active member but the uploader. */
+	function targets(mailboxId: string, caller: string) {
+		return and(
+			eq(members.mailboxId, mailboxId),
+			eq(members.status, "active"),
+			ne(members.sigKey, caller),
+		);
+	}
+
+	async function countOf(where: ReturnType<typeof targets>): Promise<number> {
+		return (await db.select({ n: count() }).from(members).where(where).get())?.n ?? 0;
+	}
+
+	/**
+	 * Deliver `hash` to the targets as they are now, in one statement, as messages do; running it
+	 * again fills in what an earlier attempt never wrote. Every want for it is answered after.
+	 */
+	async function deliver(mailboxId: string, hash: string, where: ReturnType<typeof targets>) {
+		await db
+			.insert(blobDeliveries)
+			.select(
+				db
+					.select({
+						mailboxId: sql<string>`${mailboxId}`.as("mailbox_id"),
+						hash: sql<string>`${hash}`.as("hash"),
+						member: members.sigKey,
+					})
+					.from(members)
+					.where(where),
+			)
+			.onConflictDoNothing();
+		await db
+			.delete(blobWants)
+			.where(and(eq(blobWants.mailboxId, mailboxId), eq(blobWants.hash, hash)));
+		return countOf(where);
 	}
 
 	r.put("/:id/blobs/:hash", hashParam, async (c) => {
@@ -58,12 +73,10 @@ export function blobRoutes(deps: AppDeps) {
 		const caller = c.var.sigKey;
 		// The signature covers contentSha256; the store checks the bytes against the same hash.
 		if (c.var.contentSha256 !== hash) throw new HttpError(400, "hash_mismatch");
-		const declared = Number(c.req.header("content-length"));
-		if (!Number.isSafeInteger(declared) || declared < 0) throw new HttpError(400, "bad_request");
-		if (declared > MAX_BLOB_BYTES) throw new HttpError(413, "too_large");
-
+		const declared = declaredLength(c, MAX_BLOB_BYTES);
 		const { retentionDays } = await requireMember(deps, mailboxId, caller, "active");
 		if (!(await deps.entitlement.canPost(mailboxId))) throw new HttpError(402, "collect_only");
+		const where = targets(mailboxId, caller);
 
 		const present = await db
 			.select({ hash: blobs.hash })
@@ -71,53 +84,44 @@ export function blobRoutes(deps: AppDeps) {
 			.where(and(eq(blobs.mailboxId, mailboxId), eq(blobs.hash, hash)))
 			.get();
 		if (present) {
+			// Held already: make sure every target has a delivery, without reading the body.
 			return c.json({
 				stored: true,
-				recipients: await pendingCount(mailboxId, hash),
+				recipients: await deliver(mailboxId, hash, where),
 			} satisfies PostResponse);
 		}
-		const recipients = (await activeMembers(deps, mailboxId)).filter((k) => k !== caller);
-		if (recipients.length === 0)
+		if ((await countOf(where)) === 0)
 			return c.json({ stored: false, recipients: 0 } satisfies PostResponse);
 		await checkQuota(deps, mailboxId, declared);
 
-		const body = c.req.raw.body;
-		if (!body) throw new HttpError(400, "bad_request");
-		const counter = capped(declared);
-		try {
-			await deps.bodies.put(blobKey(mailboxId, hash), body.pipeThrough(counter.stream), {
-				sha256: hash,
-			});
-		} catch (err) {
-			if (err instanceof HashMismatchError) throw new HttpError(400, "hash_mismatch");
-			if (err instanceof TooLargeError) throw new HttpError(413, "too_large");
-			throw err;
-		}
-
 		// Body, then row, then deliveries, as for messages.
+		const size = await storeUpload(
+			deps,
+			c,
+			blobKey(mailboxId, hash),
+			declared,
+			hash,
+			new HttpError(400, "hash_mismatch"),
+		);
 		const now = deps.now();
 		await db
 			.insert(blobs)
 			.values({
 				mailboxId,
 				hash,
-				size: counter.received(),
+				size,
 				uploader: caller,
 				createdAt: now,
 				expiresAt: now + retentionDays * DAY_MS,
 			})
 			.onConflictDoNothing();
-		for (const part of chunk(recipients, rowsPerInsert(3))) {
-			await db
-				.insert(blobDeliveries)
-				.values(part.map((member) => ({ mailboxId, hash, member })))
-				.onConflictDoNothing();
+		const recipients = await deliver(mailboxId, hash, where);
+		if (recipients === 0) {
+			// Everyone it was for left while it was being written.
+			await deleteUndelivered(deps, mailboxId, { messages: [], blobs: [hash] });
+			return c.json({ stored: false, recipients: 0 } satisfies PostResponse);
 		}
-		// Every want for it is answered now: those members hold a delivery.
-		await db
-			.delete(blobWants)
-			.where(and(eq(blobWants.mailboxId, mailboxId), eq(blobWants.hash, hash)));
-		return c.json({ stored: true, recipients: recipients.length } satisfies PostResponse);
+		return c.json({ stored: true, recipients } satisfies PostResponse);
 	});
 
 	r.get("/:id/blobs/:hash", hashParam, async (c) => {

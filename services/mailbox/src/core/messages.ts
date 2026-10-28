@@ -9,15 +9,15 @@ import {
 	MAX_MESSAGE_BYTES,
 	MailboxIdSchema,
 	MessageIdSchema,
-	PostMessageBodySchema,
+	PostMessageQuerySchema,
 	type PostResponse,
+	ReplacesBodySchema,
 } from "@vault/core/src/sync/mailbox/protocol.ts";
 import { and, asc, count, eq, gt, inArray, ne, notExists, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppDeps, Env } from "./app.ts";
 import { HttpError, param, query, signedJson } from "./auth.ts";
-import { fromBase64 } from "./base64.ts";
 import { messageKey } from "./bodies.ts";
 import { type Candidates, deleteUndelivered } from "./cleanup.ts";
 import { mailboxParam, requireMember } from "./mailboxes.ts";
@@ -30,11 +30,12 @@ import {
 	members,
 	messages,
 } from "./schema.ts";
-import { chunk, IN_LIST, rowsPerInsert } from "./sql.ts";
+import { chunk, IN_LIST } from "./sql.ts";
 import { DAY_MS, dayOf } from "./time.ts";
+import { declaredLength, storeUpload } from "./upload.ts";
 
-/** A base64 body of MAX_MESSAGE_BYTES plus its `to` and `replaces` lists. */
-const MESSAGE_JSON_BYTES = Math.ceil(MAX_MESSAGE_BYTES / 3) * 4 + 128 * 1024;
+/** MAX_LIST message ids of 25 JSON bytes each, with room to spare. */
+const REPLACES_JSON_BYTES = 64 * 1024;
 const ACK_JSON_BYTES = 256 * 1024;
 
 export async function usedBytes(deps: AppDeps, mailboxId: string): Promise<number> {
@@ -48,14 +49,6 @@ export async function usedBytes(deps: AppDeps, mailboxId: string): Promise<numbe
 	return Number(m?.total ?? 0) + Number(b?.total ?? 0);
 }
 
-export async function activeMembers(deps: AppDeps, mailboxId: string): Promise<string[]> {
-	const rows = await deps.db
-		.select({ sigKey: members.sigKey })
-		.from(members)
-		.where(and(eq(members.mailboxId, mailboxId), eq(members.status, "active")));
-	return rows.map((r) => r.sigKey);
-}
-
 export async function checkQuota(deps: AppDeps, mailboxId: string, adding: number): Promise<void> {
 	const quota = deps.config.quotaBytes;
 	if (quota !== null && (await usedBytes(deps, mailboxId)) + adding > quota) {
@@ -67,117 +60,155 @@ export function messageRoutes(deps: AppDeps) {
 	const { db } = deps;
 	const r = new Hono<Env>();
 
-	async function pendingCount(mailboxId: string, msgId: string): Promise<number> {
-		const row = await db
-			.select({ n: count() })
-			.from(deliveries)
-			.where(and(eq(deliveries.mailboxId, mailboxId), eq(deliveries.messageId, msgId)))
-			.get();
-		return row?.n ?? 0;
-	}
+	const messageParam = param(z.object({ id: MailboxIdSchema, mid: MessageIdSchema }));
 
-	/** The same id from the same sender is the same post; from anyone else it is a conflict. */
-	async function existingPost(
-		mailboxId: string,
-		msgId: string,
-		caller: string,
-	): Promise<PostResponse | null> {
-		const prior = await db
+	async function senderOf(mailboxId: string, msgId: string): Promise<string | null> {
+		const row = await db
 			.select({ sender: messages.sender })
 			.from(messages)
 			.where(and(eq(messages.mailboxId, mailboxId), eq(messages.id, msgId)))
 			.get();
-		if (!prior) return null;
-		if (prior.sender !== caller) throw new HttpError(409, "id_conflict");
-		return { stored: true, recipients: await pendingCount(mailboxId, msgId) };
+		return row?.sender ?? null;
 	}
 
+	/** Who a post from `caller` is for: every other active member, or those of them `to` names. */
+	function targets(mailboxId: string, caller: string, to: string[] | undefined) {
+		return and(
+			eq(members.mailboxId, mailboxId),
+			eq(members.status, "active"),
+			ne(members.sigKey, caller),
+			to ? inArray(members.sigKey, to) : undefined,
+		);
+	}
+
+	async function countOf(where: ReturnType<typeof targets>): Promise<number> {
+		return (await db.select({ n: count() }).from(members).where(where).get())?.n ?? 0;
+	}
+
+	/**
+	 * Deliver `msgId` to the targets as they are now, in one statement: a member removed or
+	 * deactivated while the body was being written is simply not matched. Running it again fills in
+	 * deliveries an earlier attempt never wrote and leaves the rest alone. Returns how many it is for.
+	 */
+	async function deliver(mailboxId: string, msgId: string, where: ReturnType<typeof targets>) {
+		await db
+			.insert(deliveries)
+			.select(
+				db
+					.select({
+						mailboxId: sql<string>`${mailboxId}`.as("mailbox_id"),
+						messageId: sql<string>`${msgId}`.as("message_id"),
+						member: members.sigKey,
+					})
+					.from(members)
+					.where(where),
+			)
+			.onConflictDoNothing();
+		return countOf(where);
+	}
+
+	r.post("/:id/messages", mailboxParam, query(PostMessageQuerySchema), async (c) => {
+		const { id: mailboxId } = c.req.valid("param");
+		const { id: msgId, to } = c.req.valid("query");
+		const caller = c.var.sigKey;
+		const declared = declaredLength(c, MAX_MESSAGE_BYTES);
+		const { retentionDays } = await requireMember(deps, mailboxId, caller, "active");
+		if (!(await deps.entitlement.canPost(mailboxId))) throw new HttpError(402, "collect_only");
+		const where = targets(mailboxId, caller, to);
+
+		const prior = await senderOf(mailboxId, msgId);
+		if (prior !== null) {
+			if (prior !== caller) throw new HttpError(409, "id_conflict");
+			// A repeat: the body is stored; make sure everyone it is for has a delivery.
+			return c.json({
+				stored: true,
+				recipients: await deliver(mailboxId, msgId, where),
+			} satisfies PostResponse);
+		}
+		if ((await countOf(where)) === 0)
+			return c.json({ stored: false, recipients: 0 } satisfies PostResponse);
+		await checkQuota(deps, mailboxId, declared);
+
+		// Body, then row, then deliveries: a crash leaves an orphan or an undelivered row the sweep
+		// removes, never a delivery without a body.
+		const key = messageKey(mailboxId, msgId);
+		const size = await storeUpload(
+			deps,
+			c,
+			key,
+			declared,
+			c.var.contentSha256,
+			new HttpError(401, "bad_signature"),
+		);
+		const now = deps.now();
+		await db
+			.insert(messages)
+			.values({
+				mailboxId,
+				id: msgId,
+				sender: caller,
+				size,
+				createdAt: now,
+				expiresAt: now + retentionDays * DAY_MS,
+			})
+			.onConflictDoNothing();
+		if ((await senderOf(mailboxId, msgId)) !== caller) throw new HttpError(409, "id_conflict");
+		const recipients = await deliver(mailboxId, msgId, where);
+		if (recipients === 0) {
+			// Everyone it was for left while it was being written.
+			await deleteUndelivered(deps, mailboxId, { messages: [msgId], blobs: [] });
+			return c.json({ stored: false, recipients: 0 } satisfies PostResponse);
+		}
+		return c.json({ stored: true, recipients } satisfies PostResponse);
+	});
+
 	r.post(
-		"/:id/messages",
-		mailboxParam,
-		...signedJson(PostMessageBodySchema, MESSAGE_JSON_BYTES),
+		"/:id/messages/:mid/replaces",
+		messageParam,
+		...signedJson(ReplacesBodySchema, REPLACES_JSON_BYTES),
 		async (c) => {
-			const { id: mailboxId } = c.req.valid("param");
-			const body = c.req.valid("json");
+			const { id: mailboxId, mid } = c.req.valid("param");
 			const caller = c.var.sigKey;
-			const { retentionDays } = await requireMember(deps, mailboxId, caller, "active");
-			if (!(await deps.entitlement.canPost(mailboxId))) throw new HttpError(402, "collect_only");
-
-			const prior = await existingPost(mailboxId, body.id, caller);
-			if (prior) return c.json(prior);
-
-			const bytes = fromBase64(body.body);
-			if (bytes.length > MAX_MESSAGE_BYTES) throw new HttpError(413, "too_large");
-
-			const to = body.to ? new Set(body.to) : null;
-			const recipients = (await activeMembers(deps, mailboxId)).filter(
-				(k) => k !== caller && (!to || to.has(k)),
-			);
-			if (recipients.length === 0)
-				return c.json({ stored: false, recipients: 0 } satisfies PostResponse);
-			await checkQuota(deps, mailboxId, bytes.length);
-
-			// Body, then row, then deliveries: a crash leaves an orphan or an undelivered row the sweep
-			// removes, never a delivery without a body.
-			const now = deps.now();
-			await deps.bodies.put(messageKey(mailboxId, body.id), bytes);
-			const inserted = await db
-				.insert(messages)
-				.values({
-					mailboxId,
-					id: body.id,
-					sender: caller,
-					size: bytes.length,
-					createdAt: now,
-					expiresAt: now + retentionDays * DAY_MS,
-				})
-				.onConflictDoNothing()
-				.returning({ id: messages.id });
-			if (inserted.length === 0) {
-				// Lost a race for this id: answer as for any repeat.
-				const raced = await existingPost(mailboxId, body.id, caller);
-				if (raced) return c.json(raced);
-			}
-			for (const part of chunk(recipients, rowsPerInsert(3))) {
+			await requireMember(deps, mailboxId, caller, "active");
+			// Only the snapshot's sender, and only for the snapshot's recipients: a device's state only
+			// grows, so its snapshot holds everything it posted before.
+			if ((await senderOf(mailboxId, mid)) !== caller) throw new HttpError(404, "not_found");
+			const recipients = (
 				await db
-					.insert(deliveries)
-					.values(part.map((member) => ({ mailboxId, messageId: body.id, member })));
+					.select({ member: deliveries.member })
+					.from(deliveries)
+					.where(and(eq(deliveries.mailboxId, mailboxId), eq(deliveries.messageId, mid)))
+			).map((row) => row.member);
+			const own: string[] = [];
+			for (const part of chunk(c.req.valid("json").replaces, IN_LIST)) {
+				const rows = await db
+					.select({ id: messages.id })
+					.from(messages)
+					.where(
+						and(
+							eq(messages.mailboxId, mailboxId),
+							eq(messages.sender, caller),
+							ne(messages.id, mid),
+							inArray(messages.id, part),
+						),
+					);
+				own.push(...rows.map((row) => row.id));
 			}
-
-			if (body.replaces && body.replaces.length > 0) {
-				// Only the caller's own messages, and only for this post's recipients: a device's state
-				// only grows, so its snapshot holds everything it posted before.
-				const own: string[] = [];
-				for (const part of chunk(body.replaces, IN_LIST)) {
-					const rows = await db
-						.select({ id: messages.id })
-						.from(messages)
+			for (const ids of chunk(own, 40)) {
+				for (const who of chunk(recipients, 40)) {
+					await db
+						.delete(deliveries)
 						.where(
 							and(
-								eq(messages.mailboxId, mailboxId),
-								eq(messages.sender, caller),
-								ne(messages.id, body.id),
-								inArray(messages.id, part),
+								eq(deliveries.mailboxId, mailboxId),
+								inArray(deliveries.messageId, ids),
+								inArray(deliveries.member, who),
 							),
 						);
-					own.push(...rows.map((row) => row.id));
 				}
-				for (const ids of chunk(own, 40)) {
-					for (const who of chunk(recipients, 40)) {
-						await db
-							.delete(deliveries)
-							.where(
-								and(
-									eq(deliveries.mailboxId, mailboxId),
-									inArray(deliveries.messageId, ids),
-									inArray(deliveries.member, who),
-								),
-							);
-					}
-				}
-				await deleteUndelivered(deps, mailboxId, { messages: own, blobs: [] });
 			}
-			return c.json({ stored: true, recipients: recipients.length } satisfies PostResponse);
+			await deleteUndelivered(deps, mailboxId, { messages: own, blobs: [] });
+			return c.body(null, 204);
 		},
 	);
 
