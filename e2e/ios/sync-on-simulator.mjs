@@ -40,8 +40,9 @@ async function connectApp() {
 		}
 		if (m.method === "Target.dispatchMessageFromTarget") {
 			const r = JSON.parse(m.params.message);
-			pending.get(r.id)?.(r);
+			const settle = pending.get(r.id);
 			pending.delete(r.id);
+			if (typeof settle === "function") settle(r);
 		}
 	};
 	await new Promise((resolve, reject) => {
