@@ -11,7 +11,7 @@ import {
 	PostMessageBodySchema,
 	type PostResponse,
 } from "@vault/core/src/sync/mailbox/protocol.ts";
-import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne, notExists, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppDeps, Env } from "./app.ts";
@@ -20,7 +20,15 @@ import { fromBase64 } from "./base64.ts";
 import { messageKey } from "./bodies.ts";
 import { deleteUndelivered } from "./cleanup.ts";
 import { mailboxParam, requireMember } from "./mailboxes.ts";
-import { blobs, deliveries, expiryMarkers, members, messages } from "./schema.ts";
+import {
+	blobDeliveries,
+	blobs,
+	blobWants,
+	deliveries,
+	expiryMarkers,
+	members,
+	messages,
+} from "./schema.ts";
 import { chunk, IN_LIST, rowsPerInsert } from "./sql.ts";
 import { DAY_MS, dayOf } from "./time.ts";
 
@@ -206,12 +214,51 @@ export function messageRoutes(deps: AppDeps) {
 			.from(expiryMarkers)
 			.where(and(eq(expiryMarkers.mailboxId, mailboxId), eq(expiryMarkers.member, caller)))
 			.orderBy(asc(expiryMarkers.id));
+		const blobRows = await db
+			.select({
+				hash: blobs.hash,
+				size: blobs.size,
+				uploader: blobs.uploader,
+				createdAt: blobs.createdAt,
+			})
+			.from(blobDeliveries)
+			.innerJoin(
+				blobs,
+				and(eq(blobs.mailboxId, blobDeliveries.mailboxId), eq(blobs.hash, blobDeliveries.hash)),
+			)
+			.where(and(eq(blobDeliveries.mailboxId, mailboxId), eq(blobDeliveries.member, caller)))
+			.orderBy(asc(blobs.createdAt), asc(blobs.hash))
+			.limit(INBOX_PAGE + 1);
+		// What other active members want and this mailbox does not hold: the caller uploads any of
+		// these it has.
+		const wanted = await db
+			.selectDistinct({ hash: blobWants.hash })
+			.from(blobWants)
+			.innerJoin(
+				members,
+				and(eq(members.mailboxId, blobWants.mailboxId), eq(members.sigKey, blobWants.member)),
+			)
+			.where(
+				and(
+					eq(blobWants.mailboxId, mailboxId),
+					ne(blobWants.member, caller),
+					eq(members.status, "active"),
+					notExists(
+						db
+							.select({ one: sql`1` })
+							.from(blobs)
+							.where(and(eq(blobs.mailboxId, blobWants.mailboxId), eq(blobs.hash, blobWants.hash))),
+					),
+				),
+			)
+			.orderBy(asc(blobWants.hash))
+			.limit(INBOX_PAGE + 1);
 		const response: InboxResponse = {
 			messages: rows.slice(0, INBOX_PAGE),
-			blobs: [],
-			wanted: [],
+			blobs: blobRows.slice(0, INBOX_PAGE),
+			wanted: wanted.slice(0, INBOX_PAGE).map((w) => w.hash),
 			markers,
-			more: rows.length > INBOX_PAGE,
+			more: rows.length > INBOX_PAGE || blobRows.length > INBOX_PAGE || wanted.length > INBOX_PAGE,
 			retentionDays,
 			usedBytes: await usedBytes(deps, mailboxId),
 			quotaBytes: deps.config.quotaBytes,
@@ -266,6 +313,17 @@ export function messageRoutes(deps: AppDeps) {
 					),
 				);
 		}
+		for (const hashes of chunk(body.blobs, IN_LIST)) {
+			await db
+				.delete(blobDeliveries)
+				.where(
+					and(
+						eq(blobDeliveries.mailboxId, mailboxId),
+						eq(blobDeliveries.member, caller),
+						inArray(blobDeliveries.hash, hashes),
+					),
+				);
+		}
 		for (const ids of chunk(body.markers, IN_LIST)) {
 			await db
 				.delete(expiryMarkers)
@@ -277,7 +335,7 @@ export function messageRoutes(deps: AppDeps) {
 					),
 				);
 		}
-		await deleteUndelivered(deps, mailboxId, { messages: body.messages, blobs: [] });
+		await deleteUndelivered(deps, mailboxId, { messages: body.messages, blobs: body.blobs });
 		return c.body(null, 204);
 	});
 

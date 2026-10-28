@@ -5,6 +5,7 @@ import type { ErrorResponse } from "@vault/core/src/sync/mailbox/protocol.ts";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { Hono } from "hono";
 import { HttpError, signedRequest, tokenGate } from "./auth.ts";
+import { blobRoutes } from "./blobs.ts";
 import type { BodyStore } from "./bodies.ts";
 import { mailboxRoutes } from "./mailboxes.ts";
 import { messageRoutes } from "./messages.ts";
@@ -43,5 +44,6 @@ export function createApp(deps: AppDeps) {
 	app.use("/v1/*", tokenGate(deps.config.token), signedRequest(deps.now));
 	app.route("/v1/mailboxes", mailboxRoutes(deps));
 	app.route("/v1/mailboxes", messageRoutes(deps));
+	app.route("/v1/mailboxes", blobRoutes(deps));
 	return app;
 }

@@ -73,6 +73,10 @@ export type TestServer = ReturnType<typeof makeServer>;
 export interface RequestOpts {
 	time?: number;
 	token?: string;
+	/** Applied last, over the signed headers. */
+	headers?: Record<string, string>;
+	/** Sent instead of the signed body, to test a body that does not match its hash. */
+	sendBytes?: Uint8Array;
 }
 
 const b64 = (bytes: ArrayBuffer | Uint8Array) =>
@@ -113,8 +117,11 @@ export async function makeDevice(server: TestServer) {
 		const bytes = encode(body);
 		const h = await headers(method, path, bytes, opts);
 		if (body !== undefined && !(body instanceof Uint8Array)) h["content-type"] = "application/json";
-		const init: RequestInit = { method, headers: h };
-		if (method !== "GET") init.body = bytes as Uint8Array<ArrayBuffer>;
+		const sent = opts.sendBytes ?? bytes;
+		// fetch sends a length for a known-size body; app.request does not, so set it as fetch would.
+		if (body instanceof Uint8Array) h["content-length"] = String(sent.length);
+		const init: RequestInit = { method, headers: { ...h, ...opts.headers } };
+		if (method !== "GET") init.body = sent as Uint8Array<ArrayBuffer>;
 		return server.app.request(path, init);
 	}
 
@@ -195,4 +202,16 @@ export async function ack(
 ) {
 	const res = await device.request("POST", `/v1/mailboxes/${id}/acks`, body);
 	expect(res.status).toBe(204);
+}
+
+/** `from` uploads `bytes` as a blob, addressed by their SHA-256. */
+export async function uploadBlob(
+	from: TestDevice,
+	id: string,
+	bytes: Uint8Array,
+	opts: RequestOpts = {},
+) {
+	const hash = await sha256Hex(bytes);
+	const res = await from.request("PUT", `/v1/mailboxes/${id}/blobs/${hash}`, bytes, opts);
+	return { res, hash };
 }
