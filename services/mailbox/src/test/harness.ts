@@ -1,8 +1,14 @@
 // Test-only: an in-memory server with a fake clock, and devices that sign requests the way the
 // apps will (an Ed25519 roster key over canonicalRequest).
 
-import type { webcrypto } from "node:crypto";
-import { canonicalRequest, HEADERS, sha256Hex } from "@vault/core/src/sync/mailbox/protocol.ts";
+import { randomBytes, type webcrypto } from "node:crypto";
+import {
+	canonicalRequest,
+	HEADERS,
+	MembersResponseSchema,
+	sha256Hex,
+} from "@vault/core/src/sync/mailbox/protocol.ts";
+import { expect } from "vitest";
 import { type AppDeps, createApp } from "../core/app.ts";
 import { type BodyStore, HashMismatchError } from "../core/bodies.ts";
 import { openDb } from "../node/db.ts";
@@ -115,3 +121,42 @@ export async function makeDevice(server: TestServer) {
 }
 
 export type TestDevice = Awaited<ReturnType<typeof makeDevice>>;
+
+export const newMailboxId = () => randomBytes(32).toString("base64url");
+
+/** A server and `n` devices, each with its own key. */
+export async function setup(n: number, opts: ServerOpts = {}) {
+	const server = makeServer(opts);
+	const devices = await Promise.all(Array.from({ length: n }, () => makeDevice(server)));
+	return { server, devices };
+}
+
+/** `owner` creates a mailbox listing itself (active) and `others` (eligible). */
+export async function createMailbox(
+	owner: TestDevice,
+	others: TestDevice[] = [],
+	id = newMailboxId(),
+) {
+	const res = await owner.request("POST", `/v1/mailboxes/${id}`, {
+		members: [owner.sigKey, ...others.map((d) => d.sigKey)],
+	});
+	expect(res.status).toBe(200);
+	return id;
+}
+
+/** `others` activate themselves in `id`. */
+export async function activate(id: string, ...others: TestDevice[]) {
+	for (const d of others) {
+		expect(
+			(await d.request("POST", `/v1/mailboxes/${id}/activation`, { active: true })).status,
+		).toBe(200);
+	}
+}
+
+/** Each member's status, keyed by sigKey, as `device` sees it. */
+export async function memberStatuses(device: TestDevice, id: string) {
+	const res = await device.request("GET", `/v1/mailboxes/${id}/members`);
+	expect(res.status).toBe(200);
+	const { members } = MembersResponseSchema.parse(await res.json());
+	return Object.fromEntries(members.map((m) => [m.sigKey, m.status]));
+}
