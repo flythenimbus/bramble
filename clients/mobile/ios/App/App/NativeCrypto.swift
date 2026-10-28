@@ -34,6 +34,9 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "sealPortableVault", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "openPortableVault", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "decryptWithVek", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "mailboxId", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "mailboxSeal", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "mailboxOpen", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "passkeyImportPkcs8", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "openKdbx4", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "saveKdbx4", returnType: CAPPluginReturnPromise),
@@ -302,6 +305,29 @@ public class NativeCryptoPlugin: CAPPlugin, CAPBridgedPlugin {
 		guard let iv = str(call, "ivB64"), let ct = str(call, "ciphertextB64") else { return }
 		do {
 			call.resolve(["value": try App.decryptWithVek(ivB64: iv, ciphertextB64: ct)])
+		} catch { fail(call, error) }
+	}
+
+	// --- mailbox (docs/mailbox-service.md, "Keys and identity"): the VEK stays in the core ---
+
+	@objc func mailboxId(_ call: CAPPluginCall) {
+		guard let g = str(call, "groupKeyB64") else { return }
+		do {
+			call.resolve(["value": try App.mailboxId(groupKeyB64: g)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func mailboxSeal(_ call: CAPPluginCall) {
+		guard let g = str(call, "groupKeyB64"), let aad = str(call, "aad"), let pt = str(call, "plaintext") else { return }
+		do {
+			call.resolve(["value": try App.mailboxSeal(groupKeyB64: g, aad: aad, plaintext: pt)])
+		} catch { fail(call, error) }
+	}
+
+	@objc func mailboxOpen(_ call: CAPPluginCall) {
+		guard let g = str(call, "groupKeyB64"), let aad = str(call, "aad"), let sealed = str(call, "sealedB64") else { return }
+		do {
+			call.resolve(["value": try App.mailboxOpen(groupKeyB64: g, aad: aad, sealedB64: sealed)])
 		} catch { fail(call, error) }
 	}
 

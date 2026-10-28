@@ -324,6 +324,36 @@ class NativeCryptoPlugin : Plugin() {
         }
     }
 
+    // --- mailbox (docs/mailbox-service.md, "Keys and identity"): the VEK stays in the core ---
+
+    @PluginMethod
+    fun mailboxId(call: PluginCall) {
+        val g = str(call, "groupKeyB64") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.mailboxId(g)))
+        }
+    }
+
+    @PluginMethod
+    fun mailboxSeal(call: PluginCall) {
+        val g = str(call, "groupKeyB64") ?: return
+        val aad = str(call, "aad") ?: return
+        val pt = str(call, "plaintext") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.mailboxSeal(g, aad, pt)))
+        }
+    }
+
+    @PluginMethod
+    fun mailboxOpen(call: PluginCall) {
+        val g = str(call, "groupKeyB64") ?: return
+        val aad = str(call, "aad") ?: return
+        val sealed = str(call, "sealedB64") ?: return
+        call.runCrypto {
+            call.resolve(JSObject().put("value", uniffi.vault_crypto.mailboxOpen(g, aad, sealed)))
+        }
+    }
+
     // --- passkey import ---
 
     @PluginMethod
