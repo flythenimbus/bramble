@@ -1,8 +1,10 @@
 // The mailbox server as one Hono app, the same on Node and Workers; storage and payment differences
 // arrive through AppDeps. See docs/mailbox-service.md.
 
+import type { ErrorResponse } from "@vault/core/src/sync/mailbox/protocol.ts";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { Hono } from "hono";
+import { HttpError, signedRequest, tokenGate } from "./auth.ts";
 import type { BodyStore } from "./bodies.ts";
 import type * as schema from "./schema.ts";
 
@@ -24,8 +26,18 @@ export interface AppDeps {
 
 export type Env = { Variables: { sigKey: string; contentSha256: string } };
 
-export function createApp(_deps: AppDeps) {
+export function createApp(deps: AppDeps) {
 	const app = new Hono<Env>();
+	app.onError((err, c) => {
+		if (err instanceof HttpError) {
+			const body: ErrorResponse = { error: err.code };
+			if (err.serverTime !== undefined) body.serverTime = err.serverTime;
+			return c.json(body, err.status);
+		}
+		return c.body(null, 500);
+	});
+	app.notFound((c) => c.json({ error: "not_found" } satisfies ErrorResponse, 404));
 	app.get("/health", (c) => c.text("ok"));
+	app.use("/v1/*", tokenGate(deps.config.token), signedRequest(deps.now));
 	return app;
 }
