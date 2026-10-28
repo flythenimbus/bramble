@@ -11,9 +11,14 @@ packages:
 # Build scripts the cf-worker's wrangler toolchain needs to fetch its platform
 # binaries; pnpm blocks unapproved postinstall scripts by default.
 onlyBuiltDependencies:
-  - better-sqlite3
   - esbuild
   - workerd
+
+# better-sqlite3 ships N-API binaries for every platform we run on (prebuilds/) and loads them
+# first. Allowing its build only makes pnpm run node-gyp, which fails on a runner whose Visual
+# Studio node-gyp cannot recognise.
+ignoredBuiltDependencies:
+  - better-sqlite3
 
 # Transitive advisory pins, each forced by a dev tool that still ranges onto a
 # vulnerable version. None ship to users: all are Node-only build/test tooling.
