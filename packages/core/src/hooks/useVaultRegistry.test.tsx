@@ -143,7 +143,8 @@ describe("VaultRegistryProvider", () => {
 	});
 
 	it("dropActiveRecord forgets the active vault's record and deselects it (no blob delete)", async () => {
-		const { get, deleteVaultBlob } = mount(two);
+		const three = addVault(two, { id: "c", label: "Family", createdAt: 3 });
+		const { get, deleteVaultBlob } = mount(three);
 		await act(async () => {});
 		await act(async () => {
 			get().selectVault("b");
@@ -155,8 +156,23 @@ describe("VaultRegistryProvider", () => {
 		// State only: the record is gone and it's deselected, but the blob is left for
 		// useVault.deleteVault to erase (after re-auth).
 		expect(deleteVaultBlob).not.toHaveBeenCalled();
-		expect(get().vaults.map((v) => v.id)).toEqual(["a"]);
+		expect(get().vaults.map((v) => v.id)).toEqual(["a", "c"]);
 		expect(get().activeId).toBeUndefined();
+	});
+
+	// The router skips the picker for a single vault, so leaving none selected sent the unlock
+	// screen's reads to no vault at all (desktop: a "default" file that doesn't exist).
+	it("dropActiveRecord selects the remaining vault when only one is left", async () => {
+		const { get } = mount(two);
+		await act(async () => {});
+		await act(async () => {
+			get().selectVault("b");
+		});
+		await act(async () => {
+			await get().dropActiveRecord();
+		});
+		expect(get().vaults.map((v) => v.id)).toEqual(["a"]);
+		expect(get().activeId).toBe("a");
 	});
 
 	it("rename and dropActiveRecord do nothing when no vault is active (can't target another)", async () => {

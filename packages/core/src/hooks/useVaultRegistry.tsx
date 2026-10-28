@@ -72,6 +72,10 @@ const DEFAULT: VaultRegistryValue = {
 
 const VaultRegistryContext = createContext<VaultRegistryValue>(DEFAULT);
 
+/** The vault to select with no choice made: the only one, since the router skips the picker for it. */
+const soleVaultId = (reg: VaultRegistry) =>
+	reg.vaults.length === 1 ? reg.vaults[0]?.id : undefined;
+
 export function useVaultRegistry(): VaultRegistryValue {
 	return useContext(VaultRegistryContext);
 }
@@ -98,9 +102,7 @@ export function VaultRegistryProvider({
 		// auto-select only when there's exactly one vault; several with none unlocked -> picker.
 		const unlocked = (await shell?.getActiveVault?.()) ?? null;
 		const restore = unlocked && reg.vaults.some((v) => v.id === unlocked) ? unlocked : undefined;
-		setActiveId(
-			(cur) => cur ?? restore ?? (reg.vaults.length === 1 ? reg.vaults[0]?.id : undefined),
-		);
+		setActiveId((cur) => cur ?? restore ?? soleVaultId(reg));
 		setReady(true);
 	}, [storage, shell]);
 
@@ -147,12 +149,14 @@ export function VaultRegistryProvider({
 		},
 		[registry, persist, activeId],
 	);
-	// State only: forget the active vault's record and deselect it. The blob is erased by
+	// State only: forget the active vault's record and deselect it (selecting the only vault left,
+	// as on launch). The blob is erased by
 	// useVault.deleteVault() (after re-auth), which then calls this. Not a standalone delete.
 	const dropActiveRecord = useCallback(async () => {
 		if (!activeId) return;
-		await persist(removeVault(registry, activeId));
-		setActiveId(undefined);
+		const next = removeVault(registry, activeId);
+		await persist(next);
+		setActiveId(soleVaultId(next));
 	}, [registry, persist, activeId]);
 
 	const value = useMemo<VaultRegistryValue>(
