@@ -18,7 +18,7 @@ import type { AppDeps, Env } from "./app.ts";
 import { HttpError, param, signedJson } from "./auth.ts";
 import { fromBase64 } from "./base64.ts";
 import { messageKey } from "./bodies.ts";
-import { deleteUndelivered } from "./cleanup.ts";
+import { type Candidates, deleteUndelivered } from "./cleanup.ts";
 import { mailboxParam, requireMember } from "./mailboxes.ts";
 import {
 	blobDeliveries,
@@ -301,9 +301,11 @@ export function messageRoutes(deps: AppDeps) {
 		const caller = c.var.sigKey;
 		await requireMember(deps, mailboxId, caller, "active");
 		const body = c.req.valid("json");
-		// Only the caller's own deliveries: an id it was never sent changes nothing.
+		// Only the caller's own deliveries: an id it was never sent changes nothing, and only what it
+		// held is a candidate for deletion (a message mid-post has no deliveries yet).
+		const held: Candidates = { messages: [], blobs: [] };
 		for (const ids of chunk(body.messages, IN_LIST)) {
-			await db
+			const gone = await db
 				.delete(deliveries)
 				.where(
 					and(
@@ -311,10 +313,12 @@ export function messageRoutes(deps: AppDeps) {
 						eq(deliveries.member, caller),
 						inArray(deliveries.messageId, ids),
 					),
-				);
+				)
+				.returning({ id: deliveries.messageId });
+			held.messages.push(...gone.map((g) => g.id));
 		}
 		for (const hashes of chunk(body.blobs, IN_LIST)) {
-			await db
+			const gone = await db
 				.delete(blobDeliveries)
 				.where(
 					and(
@@ -322,7 +326,9 @@ export function messageRoutes(deps: AppDeps) {
 						eq(blobDeliveries.member, caller),
 						inArray(blobDeliveries.hash, hashes),
 					),
-				);
+				)
+				.returning({ hash: blobDeliveries.hash });
+			held.blobs.push(...gone.map((g) => g.hash));
 		}
 		for (const ids of chunk(body.markers, IN_LIST)) {
 			await db
@@ -335,7 +341,7 @@ export function messageRoutes(deps: AppDeps) {
 					),
 				);
 		}
-		await deleteUndelivered(deps, mailboxId, { messages: body.messages, blobs: body.blobs });
+		await deleteUndelivered(deps, mailboxId, held);
 		return c.body(null, 204);
 	});
 

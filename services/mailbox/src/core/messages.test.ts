@@ -12,7 +12,9 @@ import {
 	postMessage,
 	setup,
 } from "../test/harness.ts";
+import { blobs, messages } from "./schema.ts";
 import { chunk } from "./sql.ts";
+import { DAY_MS } from "./time.ts";
 
 async function trio(opts: Parameters<typeof setup>[1] = {}) {
 	const { server, devices } = await setup(4, opts);
@@ -98,6 +100,38 @@ describe("collecting", () => {
 		expect(await inboxIds(c, id)).toEqual([]);
 		expect(await server.deps.bodies.get(`m/${id}/${msgId}`)).toBeNull();
 		expect((await inbox(a, id)).usedBytes).toBe(0);
+	});
+
+	it("never deletes what the caller did not hold, even mid-post before its deliveries exist", async () => {
+		const { server, a, c, id } = await trio();
+		const { db, bodies } = server.deps;
+		const now = server.clock.now;
+		const msgId = newMessageId();
+		const hash = "a".repeat(64);
+		// Body and row written, deliveries not yet: the state a post passes through on D1.
+		await bodies.put(`m/${id}/${msgId}`, new Uint8Array([1]));
+		await db.insert(messages).values({
+			mailboxId: id,
+			id: msgId,
+			sender: a.sigKey,
+			size: 1,
+			createdAt: now,
+			expiresAt: now + DAY_MS,
+		});
+		await bodies.put(`b/${id}/${hash}`, new Uint8Array([2]));
+		await db.insert(blobs).values({
+			mailboxId: id,
+			hash,
+			size: 1,
+			uploader: a.sigKey,
+			createdAt: now,
+			expiresAt: now + DAY_MS,
+		});
+		await ack(c, id, { messages: [msgId], blobs: [hash] });
+		expect(await bodies.get(`m/${id}/${msgId}`)).not.toBeNull();
+		expect(await bodies.get(`b/${id}/${hash}`)).not.toBeNull();
+		expect(await db.select().from(messages).all()).toHaveLength(1);
+		expect(await db.select().from(blobs).all()).toHaveLength(1);
 	});
 
 	it("ignores acks for messages the caller was never sent", async () => {
