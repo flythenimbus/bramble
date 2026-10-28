@@ -786,3 +786,78 @@ git commit -m "docs(mailbox): describe the protocol and server as built"
   flake's `pnpmDeps` hash in `clients/desktop/nix/package.nix` goes stale. Refresh it on a machine
   with Nix (`pnpm run test:nix` reports the expected hash) before the next Nix release.
 - **Pushing** waits for the owner.
+
+## Outcome
+
+Status: built, 2026-10-27, on `feat/mailbox-service` (unpushed). The server suite has 80 tests; one
+fresh review of the plan's range found no Critical issues and six Important ones, all fixed with
+a test that failed first. Not yet run anywhere but this machine: the Nix build and CI.
+
+### Calls made during the build
+
+Each was a deviation from the text above, made where the plan was wrong or silent:
+
+- **Ordered writes, scoped cleanup.** Cleanup after an ack, replacement or removal only considers
+  the ids involved (and, for an ack, only deliveries the caller actually held), because a post
+  writes its row before its deliveries. The sweep's global pass waits an hour.
+- **Deliveries are addressed when the body lands.** One `INSERT ... SELECT` against the members
+  active then, instead of a list fixed before the upload. Repeating a post or upload fills in
+  missing deliveries, so `recipients` in a repeat's answer is who it is for now, not a stored copy
+  of the first answer.
+- **Raw message bodies.** Message bodies travel as raw bytes with `id` and `to` in the signed
+  query, not base64 in JSON. `replaces` is its own request after the snapshot.
+- **`more` and `wanted` are paged apart.** `more` means "you have more to collect"; `wanted`
+  pages by hash with `wantedAfter` and `wantedMore`.
+- **D1's 100-parameter cap.** Every multi-row insert and `IN` list is chunked (`sql.ts`), so the
+  same core runs on D1.
+- **Cascading foreign keys.** Removing a member, message, blob or mailbox takes its deliveries,
+  wants and markers in one statement.
+- **Case-proof disk keys.** Body paths are hex-encoded on disk, because macOS and Windows
+  filesystems fold case.
+- **A memberless mailbox is unclaimed.** A create interrupted between its two writes can be
+  completed by the next one.
+- **Validation details.**
+  - Signing headers are a zod schema checked inside the signature middleware (a failure is 401,
+    not the validator's 400).
+  - Signed JSON without a JSON content type is refused, since Hono would read it as `{}`.
+  - Uploads require `content-length` and record the bytes actually received.
+- **Small API choices.**
+  - Membership-changing routes return the member list.
+  - Settings and acks return 204.
+  - An unknown snapshot, or one the caller did not send, answers `replaces` with 404.
+
+### Left for later
+
+Found by the final review, judged minor, not done:
+
+1. `docs/mailbox-service.md` still opens with "Status: design, not built".
+2. Lowering `RETENTION_MAX_DAYS` does not reach mailboxes created before it. Apply
+   `min(stored, ceiling)` where retention is used.
+3. `SIG_KEY_RE` accepts non-canonical base64, so one key can be listed twice. Restrict the last
+   character before the `=` to `[AEIMQUYcgkosw048]`, before clients ship.
+4. A signed request can be replayed within the five-minute window: an old `{active:false}`, or
+   an `add` after a `remove`. Decide on a policy before Plan 3.
+5. Temp files a crash leaves in the disk store are never swept.
+6. Sweeps have no in-flight guard; one running past an hour overlaps the next.
+7. The orphan pass makes one query per stored body, too many for a Worker. Batch it in Plan 5.
+8. Quota is checked, then written, so concurrent posts can overshoot it.
+9. A want for a hash already in the mailbox creates no delivery. A late member must GET it
+   directly, or the server could turn such a want into a delivery.
+10. A 404 covers both "not yours" and "row present, body missing". The client needs a
+    self-heal rule for the second (ack it and treat it as a gap).
+11. A re-upload of a hash landing between a row's deletion and its body's could lose the new
+    body.
+12. A repeated post under collect-only gets 402 rather than its answer.
+13. Two protocol requirements are only in this doc: uploads must send `content-length`, and the
+    server must sit at the host root, since signatures cover the path as the server sees it.
+14. The default `DATA_DIR` (`services/mailbox/data` when run from the package) is not
+    git-ignored.
+15. Unexpected 500s log nothing. The message, with no request data, would help a self-hoster.
+16. There is no `HOST` variable; the server binds every interface, as the relay does.
+17. `MAX_MEMBERS` caps a request, not a mailbox.
+18. One test casts a response instead of parsing it with the protocol schema.
+19. Two posts of the same id from different members at the same moment can overwrite each
+    other's body before the row conflict is noticed.
+
+For Plan 3: membership reconciliation should remove every key not active in the roster, not only
+revoked ones, since any active member can add arbitrary keys.
