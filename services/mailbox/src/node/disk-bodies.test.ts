@@ -29,7 +29,8 @@ describe("diskBodies", () => {
 		await store.put("b/mbx/one", streamOf(big), { sha256: await sha256Hex(big) });
 		const got = await store.get("b/mbx/one");
 		expect(got?.size).toBe(big.length);
-		expect(await bytesOf(got!.body)).toEqual(big);
+		// Buffer.compare: toEqual walks a 3 MiB array element by element, about 4 s.
+		expect(Buffer.compare(Buffer.from(await bytesOf(got!.body)), Buffer.from(big))).toBe(0);
 	});
 
 	it("leaves nothing behind when the hash does not match", async () => {
