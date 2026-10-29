@@ -37,6 +37,7 @@
 		"type": "module"
 	},
 	"permissions": ["storage", "unlimitedStorage", "alarms", "idle", "clipboardWrite", "identity"],
+	"optional_permissions": ["nativeMessaging"],
 	"host_permissions": ["<all_urls>"],
 	"content_scripts": [
 		{

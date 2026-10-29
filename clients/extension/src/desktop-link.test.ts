@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The desktop link is native messaging, and only the Chromium build declares the permission. The
-// section it drives is rendered whenever the platform provides the adapter, so if the adapter
-// exists on Firefox the user gets a Connect button whose only possible outcome is an error.
+// The desktop link is native messaging. The section it drives is rendered whenever the platform
+// provides the adapter, so if the adapter exists on a build that cannot declare the permission the
+// user gets a Connect button whose only possible outcome is an error.
 //
-// Chromium declares it OPTIONAL and asks at connect time, so both arrays have to count: gating on
-// `permissions` alone would hide the section on the very build the feature ships on.
+// Both builds declare it OPTIONAL and ask at connect time, so both arrays have to count: gating on
+// `permissions` alone would hide the section on the very builds the feature ships on.
 
 const h = vi.hoisted(() => ({
 	permissions: ["nativeMessaging"] as string[] | undefined,

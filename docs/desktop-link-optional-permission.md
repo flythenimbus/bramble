@@ -37,8 +37,8 @@ anywhere.
 - **This is not a manifest edit.** A granted permission never reaches a context that already exists,
   including the service worker that owns the native port. Pairing has to move to a context created
   after the grant. That is the whole cost of the change, and it is most of the work below.
-- **Firefox is untouched.** Its manifest declares `nativeMessaging` in neither array, so the adapter
-  gate stays closed and the Settings section stays hidden, exactly as today.
+- **Firefox followed on 2026-10-29** with the same optional declaration. See
+  [desktop-port.md](desktop-port.md#firefox).
 
 ## What the spike measured
 

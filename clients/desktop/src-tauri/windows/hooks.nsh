@@ -55,6 +55,7 @@ Var BramblePurgeData
   DeleteRegKey HKCU "Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\app.bramble.desktop"
   DeleteRegKey HKCU "Software\BraveSoftware\Brave-Browser-Beta\NativeMessagingHosts\app.bramble.desktop"
   DeleteRegKey HKCU "Software\Microsoft\Edge\NativeMessagingHosts\app.bramble.desktop"
+  DeleteRegKey HKCU "Software\Mozilla\NativeMessagingHosts\app.bramble.desktop"
   ; Left over from before Vivaldi was pointed at Chrome's key. Harmless but dead, and an uninstall
   ; is the right time to stop carrying it.
   DeleteRegKey HKCU "Software\Vivaldi\NativeMessagingHosts\app.bramble.desktop"

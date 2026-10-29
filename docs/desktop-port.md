@@ -328,10 +328,7 @@ extension  --native messaging (stdio)-->  bramble-proxy (small spawned binary)
 The proxy is a small Rust binary shipped with the app. It needs a native-messaging host manifest per
 browser (file paths on macOS and Linux, registry keys on Windows) listing the allowed extension IDs.
 Firefox supports the same mechanism with `allowed_extensions` keyed on the addon ID rather than
-Chrome's `chrome-extension://` origins, so both existing targets are covered `[unverified: exact
-paths and key names]`. Firefox is not in fact wired up on any platform: it reads a different
-schema from a different place, and the Firefox build of the extension asks for `nativeMessaging`
-in neither permission array, so a manifest for it would be a file nothing acts on.
+Chrome's `chrome-extension://` origins, from different places; see [Firefox](#firefox).
 
 If the browser-spawned host did the work itself, **no handshake would be needed at all**: the
 browser only spawns hosts whose manifest allowlists the extension ID, and stdio is a private
@@ -728,12 +725,8 @@ a stale path. So under an AppImage the proxy is copied into the app data directo
 manifest names the copy. The copy is rewritten on every launch, through a rename rather than in
 place, because a browser may be running the previous one.
 
-Firefox is still not covered, on any platform. It reads a different schema
-(`allowed_extensions` with the addon id) from a different directory, but the blocker is upstream
-of that: the Firefox build of the extension declares `nativeMessaging` in neither permission array,
-so a manifest for it would be a file no browser would ever act on. Adding it means a permission the
-extension has to declare and AMO has to review, though the Chromium side now declares it optional
-and asks at connect time, which is the cheaper shape to ask a reviewer for.
+Firefox is covered on all three platforms since 2026-10-29; see [Firefox](#firefox). Its
+permission is optional, as Chromium's is, which is the cheaper shape to ask an AMO reviewer for.
 
 **A hybrid-GPU laptop can stall once on first draw, and it is not ours.** On a machine with an
 Intel iGPU rendering and a discrete card runtime-suspended in `D3hot`, the first interaction can
@@ -803,18 +796,38 @@ worker start, which is why `openDesktopLink()` runs there unconditionally. See
 
 ### Firefox
 
-Firefox has no part in the browser link. Its manifest names `nativeMessaging` in neither permission
-array, and the desktop app writes Chromium-shaped host manifests (`allowed_origins`) into Chromium
-support directories, where Firefox wants `allowed_extensions` under Mozilla's. Both ends would need
-work.
+Firefox links the same way, added 2026-10-29. Its manifest declares `nativeMessaging` as optional,
+as Chromium's does, and the desktop app writes it a host manifest of its own, because Firefox
+differs in both shape and place. The shape names the add-on rather than an origin
+(`allowed_extensions: ["firefox@bramble.app"]`, the `gecko.id`); the places are:
 
-The extension adapter is therefore absent unless the running manifest declares the permission
-somewhere, which is what keeps the Settings section from appearing. BOTH arrays count: Chromium now
-declares it optional and asks at connect time, so reading only `permissions` would hide the section
-on the very build that ships the feature. Read from the manifest rather than sniffed from the
-browser, so it turns itself on the day Firefox support lands instead of needing to be remembered.
-Without that gate a Firefox release would have shipped a Connect button whose only possible outcome
-is an error.
+| | Firefox reads | Firefox is detected by |
+|---|---|---|
+| macOS | `~/Library/Application Support/Mozilla/NativeMessagingHosts/` | `~/Library/Application Support/Firefox` |
+| Linux | `~/.mozilla/native-messaging-hosts/`, even under XDG | `~/.mozilla/firefox` or `$XDG_CONFIG_HOME/mozilla/firefox` |
+| Windows | `HKCU\Software\Mozilla\NativeMessagingHosts\app.bramble.desktop` -> `app.bramble.desktop.firefox.json` in the app data dir | `%APPDATA%\Mozilla\Firefox` (roaming) |
+
+Linux is the surprising row: Firefox's XDG support moved new profiles under XDG_CONFIG_HOME, but
+`nsXREDirProvider.cpp` forces the legacy `~/.mozilla` for native manifests ("Keep forcing the legacy
+path for compatibility"). Firefox spawns the host with the manifest path and the add-on id as its
+arguments, where Chrome passes an origin; the proxy reads neither, so it needed no change.
+
+Checked against Firefox on macOS with `web-ext` and a probe add-on carrying the real id: Firefox
+spawns the proxy from the manifest `install_firefox` writes, and without it refuses with "No such
+native application". Linux and Windows are unit-tested only. Not covered or tried: Snap and Flatpak
+Firefox, whose sandboxes handle native messaging their own way.
+
+The pairing flow carries over unchanged. Firefox re-injects APIs into running contexts when a
+permission is granted (`permissionsChanged` in Schemas.sys.mjs), so its background may not need the
+lent pipe Chromium's worker does, but lending is harmless there. An open native port counts as
+activity for Firefox's event page (`activeNativePorts`), so the held link keeps it awake, as it
+keeps Chromium's worker.
+
+The extension adapter is absent unless the running manifest declares the permission somewhere,
+which is what keeps the Settings section from appearing on a build that cannot link. BOTH arrays
+count: both browsers declare it optional and ask at connect time, so reading only `permissions`
+would hide the section on the very builds that ship the feature. Without that gate a release would
+ship a Connect button whose only possible outcome is an error.
 
 Note the two questions this gate does not answer. Whether the permission is HELD is
 `permission.granted()`, and whether a given context can actually call the API is a third thing

@@ -96,6 +96,7 @@ vi.mock("../platform-api", () => ({
 			},
 		},
 	},
+	disconnectReason: () => "disconnected",
 }));
 
 // The crypto lives in the offscreen document. Sealing is modelled as a reversible rename, so the

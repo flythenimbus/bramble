@@ -5,7 +5,7 @@
 // See background/desktop-link.ts.
 
 import type { DesktopLinkAdapter, DesktopLinkStatus } from "@core/adapters/desktop-link";
-import { api } from "./platform-api";
+import { api, disconnectReason } from "./platform-api";
 
 async function dispatch<T = unknown>(type: string, extra?: Record<string, unknown>): Promise<T> {
 	const res = await api.runtime.sendMessage({ type, ...extra });
@@ -16,17 +16,12 @@ async function dispatch<T = unknown>(type: string, extra?: Record<string, unknow
 /**
  * Whether this browser can talk to the desktop app at all.
  *
- * The link is native messaging, and only the Chromium manifest asks for the permission: the
- * desktop app writes Chromium-shaped host manifests (`allowed_origins`) into Chromium support
- * directories, and Firefox wants `allowed_extensions` in a Mozilla one. So on Firefox there is
+ * The link is native messaging, so a build whose manifest does not declare the permission has
  * nothing at either end, and offering to connect would be a settings section whose only outcome
- * is an error.
+ * is an error. Read from the manifest rather than sniffing the browser.
  *
- * Read from the manifest rather than sniffing the browser, so this turns itself on the day
- * Firefox support is added rather than needing to be remembered.
- *
- * BOTH permission arrays count. Chromium asks for `nativeMessaging` at connect time rather than
- * at install (see docs/desktop-link-optional-permission.md), so it is declared optional there;
+ * BOTH permission arrays count. Both browsers ask for `nativeMessaging` at connect time rather
+ * than at install (see docs/desktop-link-optional-permission.md), so it is declared optional;
  * declaring it required again must keep working.
  *
  * This answers "could this browser ever do it", not "may it right now". That second question is
@@ -116,7 +111,7 @@ function openNativeProxy(): { ready: Promise<void>; close(): void } | null {
 		// Tell the background rather than just going quiet. Chrome reports a missing host, a
 		// manifest that does not name this extension, and a host that exited all as the same bare
 		// disconnect, so this is the only signal there is.
-		const dead = api.runtime.lastError?.message ?? "disconnected";
+		const dead = disconnectReason(native);
 		try {
 			relay.postMessage({ dead });
 		} catch {

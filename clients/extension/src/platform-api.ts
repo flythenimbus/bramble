@@ -9,3 +9,10 @@ const g = globalThis as typeof globalThis & {
 	chrome?: typeof chrome;
 };
 export const api: typeof chrome = (g.browser ?? g.chrome) as typeof chrome;
+
+/** Why a port closed, read in its onDisconnect. Chrome reports it in `runtime.lastError`, Firefox
+ * on the port's own `error`, which is how Firefox names a missing or refusing native host. */
+export function disconnectReason(port: chrome.runtime.Port): string {
+	const own = (port as { error?: { message?: string } }).error?.message;
+	return own ?? api.runtime.lastError?.message ?? "disconnected";
+}

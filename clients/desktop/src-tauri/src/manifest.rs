@@ -17,12 +17,12 @@
 //! \NativeMessagingHosts\<host>`, whose default value is the path to the file. So the Windows
 //! table is a path AND a key, and `install_all` writes a value rather than a file.
 //!
-//! Firefox is absent on all three: it reads a different manifest schema from a different
-//! location, and the Firefox build of the extension declares `nativeMessaging` in neither
-//! permission array, so a host manifest for it would be something no browser would ever act
-//! on. See docs/desktop-port.md.
+//! Firefox gets its own manifest on all three, because it differs in both shape and place: it
+//! names the add-on id under `allowed_extensions` rather than origins, and keeps host manifests
+//! apart from its profiles (Mozilla's support directory on macOS, `~/.mozilla` on Linux, a
+//! `Software\Mozilla` key on Windows). See docs/desktop-port.md.
 //!
-//! Nothing here depends on HOW the Chromium extension holds that permission. It is optional there
+//! Nothing here depends on HOW the extension holds that permission. It is optional
 //! now, asked for when the user connects rather than at install, but this file keys on the
 //! extension id and a browser refuses an unpermitted `connectNative` before any manifest is
 //! consulted. So a manifest written for a browser that has not been granted it yet is harmless
@@ -53,6 +53,39 @@ const HOST_NAME: &str = APP_IDENTIFIER;
 /// Do not take this from cws-public.pem: that is the upload-signing key, and it derives a
 /// different, wrong id.
 const ALLOWED_EXTENSION_IDS: &[&str] = &["kmokhdhoggbdcgoepifeckhgbfakaknm"];
+
+/// The Firefox add-on, by the `gecko.id` in packages/manifests/firefox. AMO and unpacked builds
+/// share it, so one entry covers development and production here too.
+const FIREFOX_EXTENSION_ID: &str = "firefox@bramble.app";
+
+/// Which browser family a host manifest is written for. Chromium admits extensions by origin and
+/// Firefox by add-on id, each under its own key.
+#[derive(Clone, Copy)]
+enum Schema {
+    Chromium,
+    Firefox,
+}
+
+/// Firefox's profile directory, which only answers "is Firefox installed", as the Chromium table
+/// does. Its host manifests live elsewhere: see `FIREFOX_HOSTS`.
+#[cfg(target_os = "macos")]
+const FIREFOX_PROFILES: &str = "Library/Application Support/Firefox";
+#[cfg(target_os = "linux")]
+const FIREFOX_PROFILES: &str = ".mozilla/firefox";
+
+/// Where Firefox reads per-user host manifests, relative to the home directory on Linux too: it
+/// forces `~/.mozilla` for these even where its profiles have moved under XDG_CONFIG_HOME.
+#[cfg(target_os = "macos")]
+const FIREFOX_HOSTS: &str = "Library/Application Support/Mozilla/NativeMessagingHosts";
+#[cfg(target_os = "linux")]
+const FIREFOX_HOSTS: &str = ".mozilla/native-messaging-hosts";
+
+/// Firefox's key is the vendor's rather than the browser's, and its profiles sit under ROAMING
+/// AppData where Chromium's are local.
+#[cfg(windows)]
+const FIREFOX_KEY: &str = r"Software\Mozilla";
+#[cfg(windows)]
+const FIREFOX_PROFILES: &str = r"Mozilla\Firefox";
 
 /// Chromium-family browsers and where they keep their host manifests, relative to the root
 /// `browser_root` resolves. Each entry's PARENT must already exist for us to install into it.
@@ -216,21 +249,34 @@ struct HostManifest {
     path: String,
     #[serde(rename = "type")]
     kind: String,
-    allowed_origins: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    allowed_origins: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    allowed_extensions: Option<Vec<String>>,
 }
 
-fn manifest_for(proxy: &Path) -> HostManifest {
+fn manifest_for(proxy: &Path, schema: Schema) -> HostManifest {
+    let (allowed_origins, allowed_extensions) = match schema {
+        Schema::Chromium => (
+            Some(
+                ALLOWED_EXTENSION_IDS
+                    // The trailing slash is not decoration: Chrome matches these as origins and
+                    // silently ignores an entry without it.
+                    .iter()
+                    .map(|id| format!("chrome-extension://{id}/"))
+                    .collect(),
+            ),
+            None,
+        ),
+        Schema::Firefox => (None, Some(vec![FIREFOX_EXTENSION_ID.to_string()])),
+    };
     HostManifest {
         name: HOST_NAME.to_string(),
         description: "Bramble password manager".to_string(),
         path: proxy.display().to_string(),
         kind: "stdio".to_string(),
-        allowed_origins: ALLOWED_EXTENSION_IDS
-            // The trailing slash is not decoration: Chrome matches these as origins and
-            // silently ignores an entry without it.
-            .iter()
-            .map(|id| format!("chrome-extension://{id}/"))
-            .collect(),
+        allowed_origins,
+        allowed_extensions,
     }
 }
 
@@ -291,8 +337,8 @@ fn copy_into(dir: &Path, mounted: &Path) -> Option<PathBuf> {
 
 /// Serialise the manifest and put it at `path`, through a temporary file so a browser reading
 /// it concurrently never sees half a document.
-fn write_manifest(path: &Path, proxy: &Path) -> std::io::Result<()> {
-    let body = serde_json::to_vec_pretty(&manifest_for(proxy))
+fn write_manifest(path: &Path, proxy: &Path, schema: Schema) -> std::io::Result<()> {
+    let body = serde_json::to_vec_pretty(&manifest_for(proxy, schema))
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, &body)?;
@@ -305,7 +351,11 @@ fn write_manifest(path: &Path, proxy: &Path) -> std::io::Result<()> {
 fn install_into(browser_dir: &Path, proxy: &Path) -> std::io::Result<()> {
     let hosts = browser_dir.join("NativeMessagingHosts");
     fs::create_dir_all(&hosts)?;
-    write_manifest(&hosts.join(format!("{HOST_NAME}.json")), proxy)
+    write_manifest(
+        &hosts.join(format!("{HOST_NAME}.json")),
+        proxy,
+        Schema::Chromium,
+    )
 }
 
 /// Install into every browser present under `root`, returning the ones written.
@@ -328,6 +378,43 @@ pub fn install_all(root: &Path, proxy: &Path) -> Vec<&'static str> {
         }
     }
     installed
+}
+
+/// Whether Firefox is installed. Linux has two places to look: `~/.mozilla/firefox`, and
+/// `mozilla/firefox` under XDG_CONFIG_HOME for a profile Firefox created there.
+#[cfg(target_os = "macos")]
+fn firefox_present(home: &Path, _config: &Path) -> bool {
+    home.join(FIREFOX_PROFILES).is_dir()
+}
+#[cfg(target_os = "linux")]
+fn firefox_present(home: &Path, config: &Path) -> bool {
+    home.join(FIREFOX_PROFILES).is_dir() || config.join("mozilla/firefox").is_dir()
+}
+
+/// Install Firefox's manifest if Firefox is present, returning whether it was written.
+///
+/// `home` is the home directory and `config` is what `browser_root` resolved. The two differ
+/// only on Linux, where Firefox may keep its profiles under XDG_CONFIG_HOME.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn install_firefox(home: &Path, config: &Path, proxy: &Path) -> bool {
+    if !firefox_present(home, config) {
+        return false;
+    }
+    let hosts = home.join(FIREFOX_HOSTS);
+    let written = fs::create_dir_all(&hosts).and_then(|()| {
+        write_manifest(
+            &hosts.join(format!("{HOST_NAME}.json")),
+            proxy,
+            Schema::Firefox,
+        )
+    });
+    match written {
+        Ok(()) => true,
+        Err(e) => {
+            log::warn!("native messaging manifest for Firefox: {e}");
+            false
+        }
+    }
 }
 
 /// Where the one manifest file lives on Windows.
@@ -364,7 +451,7 @@ fn install_into(browser_key: &str, manifest: &Path) -> std::io::Result<()> {
 #[cfg(windows)]
 pub fn install_all(root: &Path, data_dir: &Path, proxy: &Path) -> Vec<&'static str> {
     let manifest = manifest_file(data_dir);
-    if let Err(e) = write_manifest(&manifest, proxy) {
+    if let Err(e) = write_manifest(&manifest, proxy, Schema::Chromium) {
         // Nothing below this is worth doing: every key would name a file that is not there.
         log::error!("native messaging manifest {}: {e}", manifest.display());
         return Vec::new();
@@ -382,6 +469,32 @@ pub fn install_all(root: &Path, data_dir: &Path, proxy: &Path) -> Vec<&'static s
         }
     }
     installed
+}
+
+/// Firefox's manifest, a separate file because its shape differs from the Chromium one.
+#[cfg(windows)]
+fn firefox_manifest_file(data_dir: &Path) -> PathBuf {
+    data_dir.join(format!("{HOST_NAME}.firefox.json"))
+}
+
+/// Install Firefox's manifest and key if Firefox is present, returning whether it was written.
+///
+/// `roaming` is `%APPDATA%`, where Firefox keeps its profiles.
+#[cfg(windows)]
+pub fn install_firefox(roaming: &Path, data_dir: &Path, proxy: &Path) -> bool {
+    if !roaming.join(FIREFOX_PROFILES).is_dir() {
+        return false;
+    }
+    let manifest = firefox_manifest_file(data_dir);
+    let written = write_manifest(&manifest, proxy, Schema::Firefox)
+        .and_then(|()| install_into(FIREFOX_KEY, &manifest));
+    match written {
+        Ok(()) => true,
+        Err(e) => {
+            log::warn!("native messaging manifest for Firefox: {e}");
+            false
+        }
+    }
 }
 
 /// Refresh every manifest against the running binary's location. Called at startup, which is
@@ -402,7 +515,16 @@ pub fn refresh() {
             return;
         };
         #[cfg(any(target_os = "macos", target_os = "linux"))]
-        let installed = install_all(&root, &proxy);
+        let installed = {
+            let mut installed = install_all(&root, &proxy);
+            match std::env::var_os("HOME") {
+                Some(home) if install_firefox(Path::new(&home), &root, &proxy) => {
+                    installed.push("Firefox")
+                }
+                _ => {}
+            }
+            installed
+        };
         #[cfg(windows)]
         let installed = {
             let Some(data_dir) = crate::socket_addr::app_data_dir() else {
@@ -413,7 +535,14 @@ pub fn refresh() {
                 log::error!("native messaging manifests: {}: {e}", data_dir.display());
                 return;
             }
-            install_all(&root, &data_dir, &proxy)
+            let mut installed = install_all(&root, &data_dir, &proxy);
+            match std::env::var_os("APPDATA") {
+                Some(roaming) if install_firefox(Path::new(&roaming), &data_dir, &proxy) => {
+                    installed.push("Firefox")
+                }
+                _ => {}
+            }
+            installed
         };
         if installed.is_empty() {
             log::info!("native messaging manifests: no supported browser found");
@@ -434,7 +563,12 @@ mod tests_common {
     fn the_manifest_has_the_shape_chrome_requires() {
         let dir = tempfile::tempdir().unwrap();
         let at = dir.path().join("host.json");
-        write_manifest(&at, Path::new("/opt/bramble/bramble-proxy")).unwrap();
+        write_manifest(
+            &at,
+            Path::new("/opt/bramble/bramble-proxy"),
+            Schema::Chromium,
+        )
+        .unwrap();
 
         let m: serde_json::Value = serde_json::from_slice(&fs::read(&at).unwrap()).unwrap();
         assert_eq!(m["name"], HOST_NAME);
@@ -446,6 +580,39 @@ mod tests_common {
             m["allowed_origins"][0],
             "chrome-extension://kmokhdhoggbdcgoepifeckhgbfakaknm/"
         );
+        assert!(m.get("allowed_extensions").is_none());
+    }
+
+    #[test]
+    fn the_firefox_manifest_names_the_add_on_rather_than_an_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let at = dir.path().join("host.json");
+        write_manifest(
+            &at,
+            Path::new("/opt/bramble/bramble-proxy"),
+            Schema::Firefox,
+        )
+        .unwrap();
+
+        let m: serde_json::Value = serde_json::from_slice(&fs::read(&at).unwrap()).unwrap();
+        assert_eq!(m["name"], HOST_NAME);
+        assert_eq!(m["type"], "stdio");
+        assert_eq!(m["path"], "/opt/bramble/bramble-proxy");
+        assert_eq!(m["allowed_extensions"][0], "firefox@bramble.app");
+        assert!(m.get("allowed_origins").is_none());
+    }
+
+    #[test]
+    fn the_firefox_id_is_the_one_the_extension_declares() {
+        // A drifted id is a host Firefox refuses to spawn, reported only as a disconnect.
+        let manifest: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../packages/manifests/firefox/manifest.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            manifest["browser_specific_settings"]["gecko"]["id"],
+            FIREFOX_EXTENSION_ID
+        );
     }
 
     #[test]
@@ -453,8 +620,8 @@ mod tests_common {
         // Rewritten on every launch, so the temp-and-rename must not accumulate.
         let dir = tempfile::tempdir().unwrap();
         let at = dir.path().join("host.json");
-        write_manifest(&at, Path::new("/old/bramble-proxy")).unwrap();
-        write_manifest(&at, Path::new("/new/bramble-proxy")).unwrap();
+        write_manifest(&at, Path::new("/old/bramble-proxy"), Schema::Chromium).unwrap();
+        write_manifest(&at, Path::new("/new/bramble-proxy"), Schema::Chromium).unwrap();
 
         let m: serde_json::Value = serde_json::from_slice(&fs::read(&at).unwrap()).unwrap();
         assert_eq!(m["path"], "/new/bramble-proxy");
@@ -507,6 +674,17 @@ mod tests_common {
                 "hooks.nsh has no cleanup for {name}'s registry key ({expected})"
             );
         }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_uninstaller_knows_firefoxs_key() {
+        let hooks = include_str!("../windows/hooks.nsh");
+        let expected = format!(r#"{FIREFOX_KEY}\NativeMessagingHosts\{HOST_NAME}"#);
+        assert!(
+            hooks.contains(&expected),
+            "hooks.nsh has no cleanup for Firefox's registry key ({expected})"
+        );
     }
 
     /// The purge line names an NSIS path that fails silently on a missing file, so pin it
@@ -608,6 +786,18 @@ mod tests_windows {
         // The manifest is still written: it is keyed to the app, not to any browser, and the
         // next browser to appear should find it already there.
         assert!(manifest_file(data.path()).is_file());
+    }
+
+    #[test]
+    fn a_firefox_that_is_not_installed_gets_no_key() {
+        let roaming = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        assert!(!install_firefox(
+            roaming.path(),
+            data.path(),
+            Path::new(r"C:\x\bramble-proxy.exe")
+        ));
+        assert!(!firefox_manifest_file(data.path()).exists());
     }
 }
 
@@ -759,6 +949,58 @@ mod tests {
 
         let m = read_manifest(root.path(), FIRST.1);
         assert_eq!(m["path"], "/new/location/bramble-proxy");
+    }
+
+    fn read_firefox_manifest(home: &Path) -> serde_json::Value {
+        let path = home.join(FIREFOX_HOSTS).join(format!("{HOST_NAME}.json"));
+        serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn firefox_gets_its_manifest_where_firefox_reads_it() {
+        let home = root_with(&[FIREFOX_PROFILES]);
+        assert!(install_firefox(
+            home.path(),
+            home.path(),
+            Path::new("/opt/bramble/bramble-proxy")
+        ));
+
+        let m = read_firefox_manifest(home.path());
+        assert_eq!(m["path"], "/opt/bramble/bramble-proxy");
+        assert_eq!(m["allowed_extensions"][0], FIREFOX_EXTENSION_ID);
+    }
+
+    #[test]
+    fn no_firefox_means_no_firefox_manifest() {
+        let home = tempfile::tempdir().unwrap();
+        assert!(!install_firefox(
+            home.path(),
+            home.path(),
+            Path::new("/tmp/bramble-proxy")
+        ));
+        assert!(!home.path().join(FIREFOX_HOSTS).exists());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn firefox_profiles_under_xdg_still_read_their_hosts_from_dot_mozilla() {
+        // Firefox's XDG support moved new profiles under XDG_CONFIG_HOME, but its native
+        // manifests stay forced to ~/.mozilla (nsXREDirProvider.cpp).
+        let home = tempfile::tempdir().unwrap();
+        let config = root_with(&["mozilla/firefox"]);
+        assert!(install_firefox(
+            home.path(),
+            config.path(),
+            Path::new("/tmp/bramble-proxy")
+        ));
+        assert_eq!(
+            read_firefox_manifest(home.path())["path"],
+            "/tmp/bramble-proxy"
+        );
+        assert!(!config
+            .path()
+            .join("mozilla/native-messaging-hosts")
+            .exists());
     }
 
     #[test]

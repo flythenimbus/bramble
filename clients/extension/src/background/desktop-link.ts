@@ -16,7 +16,7 @@
 // The crypto lives in the offscreen document, because MV3's service worker has no WASM host.
 // This module owns the port and the persistence and relays handshake messages across.
 
-import { api } from "../platform-api";
+import { api, disconnectReason } from "../platform-api";
 import { isExtensionSender } from "../sender";
 import { sendToOffscreen } from "./offscreen-client";
 import { extensionOnly, on } from "./router";
@@ -193,8 +193,8 @@ class NativeSession {
 		this.port.onDisconnect.addListener(() => {
 			// Chrome reports a missing host, a manifest that does not name this extension, and
 			// a host that exited all as the same bare disconnect, so this is the only signal
-			// there is. lastError carries what little detail exists.
-			this.failed = api.runtime.lastError?.message ?? "disconnected";
+			// there is, with what little detail the browser gives.
+			this.failed = disconnectReason(this.port);
 			for (const pending of this.queue.splice(0)) pending(null);
 		});
 	}
