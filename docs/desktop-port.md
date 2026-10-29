@@ -1093,14 +1093,14 @@ is cut, which is the intended noise rather than a surprise. The *published* copy
 `brew bump-cask-pr --version X.Y.Z bramble` does it in one command and computes the checksum itself,
 and for a cask with a working livecheck their bot usually opens that PR before you do.
 
-`uninstall` carries a `launchctl:` beside its `quit:`, because autostart landed as a launch agent:
-`autostart.rs` uses `MacosLauncher::LaunchAgent`, so enabling it writes
-`~/Library/LaunchAgents/Bramble.plist`. The label is the trap. auto-launch names both the plist and
-the label after `productName`, so it is `Bramble` rather than `app.bramble.desktop` like every
-other identifier in the file. brew unloads the service and deletes the plist on a plain
-`brew uninstall`, which is the right moment for it: left behind, it is a login item pointing at an
-app that is gone. Note this only shows up in a test if autostart was enabled at least once, since
-nothing writes the plist until it is.
+`uninstall` carries a `launchctl:` beside its `quit:`, because autostart is a launch agent:
+enabling it writes `~/Library/LaunchAgents/app.bramble.desktop.plist`. It lists `Bramble` as well,
+the label tauri-plugin-autostart used before the app wrote its own agent (#138, see
+[cloud-storage-backups.md](cloud-storage-backups.md)), for an install never launched since the
+update that moves it. brew unloads the service and deletes the plist on a plain `brew uninstall`,
+which is the right moment for it: left behind, it is a login item pointing at an app that is gone.
+Note this only shows up in a test if autostart was enabled at least once, since nothing writes the
+plist until it is.
 
 **Submitting it requires a Mac, and not for a technical reason.** homebrew-cask's pull request
 template has a checklist, prefaced with "do not tick a checkbox if you haven't performed its
@@ -1421,7 +1421,8 @@ Each phase retires a risk.
   whether or not it is unlocked. Credentials climb a ladder the app picks with no user input
   (OS store -> kernel keyring on Linux -> vault-wrapped and unlock-gated), and are pinned to the
   one origin they may be sent to. **Autostart landed** on all three
-  platforms (`tauri-plugin-autostart`; a Settings, General toggle, plus a prompt when a backup is
+  platforms (`tauri-plugin-autostart` on Windows and Linux, the app's own launch agent on macOS; a
+  Settings, General toggle, plus a prompt when a backup is
   first scheduled), which is what makes "runs as long as the computer is on" true rather than
   conditional on someone having launched the app. Outstanding: a two-device test. The TPM-sealed
   Linux tier that was queued behind this is **abandoned**: systemd refuses TPM keys in user scope,

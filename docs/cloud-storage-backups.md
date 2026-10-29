@@ -600,8 +600,8 @@ On a machine that gets rebooted and then used through the browser extension all 
 backup is not a daily backup. So the desktop app can start at login, and Settings, General carries
 a toggle for it: **Start Bramble at login**, phrased by what it buys rather than by what it does.
 
-`tauri-plugin-autostart` over the `auto-launch` crate, which means a login item
-(`~/Library/LaunchAgents`) on macOS, a `Run` registry value on Windows, and an XDG
+On macOS a launch agent the app writes itself (below), and elsewhere `tauri-plugin-autostart` over
+the `auto-launch` crate, which means a `Run` registry value on Windows and an XDG
 `~/.config/autostart` entry on Linux. XDG rather than a systemd user unit deliberately: this is a
 tray app, and an XDG entry starts once the graphical session exists where a user unit wanting
 `default.target` can come up with no display to render into. The TPM tier above is the reason that
@@ -611,13 +611,39 @@ The plugin records `current_exe()` and has no way to name anything else. Under N
 `.bramble-desktop-wrapped`, which started directly misses the environment `wrapGAppsHook3` sets: no
 TLS backend for WebKit, no loader for the tray icon (#108). So the Nix wrapper sets
 `BRAMBLE_LAUNCHER` to itself, and when that is an absolute path the app repairs the entry the
-plugin wrote: the desktop adapter calls `autostart_repoint` right after `enable()`, and every launch
-does the same for an entry an earlier build or version left. The repair swaps the program on the
+plugin wrote: `autostart_set_enabled` does it right after the plugin enables, and every launch does
+the same for an entry an earlier build or version left. The repair swaps the program on the
 `Exec=` line in place, keeping any key a desktop added to switch the entry off, and reads the file
 where auto-launch writes it (`$HOME/.config/autostart/Bramble.desktop`, which ignores
-`XDG_CONFIG_HOME`). Without the variable, and on macOS and Windows, the command does nothing. The
-path is still a store path, so after an upgrade the entry starts the old version until the new one
-is launched once, and nothing if the old path was collected first.
+`XDG_CONFIG_HOME`). Without the variable the repair does nothing. The path is still a store path,
+so after an upgrade the entry starts the old version until the new one is launched once, and
+nothing if the old path was collected first.
+
+**macOS writes its own agent, so System Settings names the app** (#138). The plugin's was
+`~/Library/LaunchAgents/Bramble.plist` holding only `Label`, `ProgramArguments` and `RunAtLoad`,
+and Login Items & Extensions listed it under the signing team, "Webvana Inc.", with a generic
+icon; the notification on enabling said "Software from 'Webvana Inc.'" as well.
+`launchd.plist(5)` says an app installing a legacy plist should name its bundle identifier in
+`AssociatedBundleIdentifiers`, but adding the key to that file was not enough. Tested by hand on
+macOS 26.6 against the signed 0.13.0, reading the records with `sfltool dumpbtm`:
+
+- macOS keeps one record per label and picks its parent the first time it sees the plist. It does
+  read a later edit (the record's generation goes up and it gains the bundle id), but the parent
+  stays: the key turned the generic icon into the app's, still under "Webvana Inc.".
+- Deleting the plist and writing it again under the same label reuses that record, parent and all.
+- An unseen label written with the key in a single write is filed under the app, and the
+  notification says "Bramble.app" can run in the background.
+- A deleted agent's record outlives its file for a while, then goes.
+
+So the agent is labelled with the bundle identifier and lives at `app.bramble.desktop.plist`,
+written whole by `autostart_set_enabled`, key included. Every launch moves a `Bramble.plist` the
+plugin left to the new label, starting the same program, and deletes it; one that does not parse
+is kept and logged. Switching off removes both. The plugin stays on Windows and Linux. The move
+makes a new record, which comes up enabled even where someone switched the old one off in System
+Settings and left the in-app toggle on. The toggle only ever reflected whether the file exists, so
+the two already disagreed, and the move announces itself with the same notification.
+
+Status: each step above was tested by hand; a signed build doing the move end to end has not been.
 
 The registered entry passes `--hidden`, and the main window is configured `visible: false` so an
 ordinary launch shows it explicitly and a login launch never flashes one. That inverts the usual

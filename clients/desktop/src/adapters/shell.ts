@@ -7,7 +7,6 @@ import { desktopDeviceLabel } from "@core/util/device-label";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { save } from "@tauri-apps/plugin-dialog";
 import { onSyncEvent, onSyncStatus } from "../sync/bus";
 import {
@@ -113,17 +112,12 @@ export const desktopShell: ShellAdapter = {
 
 	// Start with the session, so the backup tick belongs to a process that is running. The
 	// registered entry passes --hidden, which src-tauri/src/autostart.rs reads to go straight to
-	// the tray. Enabling writes a login item, a Run key, or an XDG entry depending on the OS; all
+	// the tray. Enabling writes a launch agent, a Run key, or an XDG entry depending on the OS; all
 	// three are user-visible and removable outside the app, so isEnabled is read rather than
 	// cached, and reflects a change made from the OS.
 	autostart: {
-		isEnabled,
-		setEnabled: async (on: boolean) => {
-			if (!on) return disable();
-			await enable();
-			// The plugin records the running binary; a Nix install names its wrapper instead (#108).
-			await invoke<void>("autostart_repoint");
-		},
+		isEnabled: () => invoke<boolean>("autostart_is_enabled"),
+		setEnabled: (on: boolean) => invoke<void>("autostart_set_enabled", { on }),
 	},
 
 	// The panel asking this window to open an entry. One window, so this is a route change

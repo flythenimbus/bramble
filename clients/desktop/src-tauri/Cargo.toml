@@ -72,7 +72,6 @@ chrono = "0.4"
 # Backup credentials are the only plaintext provider secrets in this process, and they are
 # handled while the vault may be locked; zeroize keeps freed copies from lingering.
 zeroize = { version = "1.8", features = ["derive"] }
-tauri-plugin-autostart = "2.5.1"
 sys-locale = "0.3"
 # Updating the app in place. Desktop-gated as the plugin's own docs show, so a future mobile
 # target does not try to build an updater that has no meaning there.
@@ -81,16 +80,27 @@ tauri-plugin-updater = "2.10.1"
 # Only for relaunching after an update lands.
 tauri-plugin-process = "2.3.1"
 
+# Starting at login. Not on macOS, which writes its own launch agent so System Settings can name
+# the app (#138); see autostart.rs.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+tauri-plugin-autostart = "2.5.1"
+
 [dev-dependencies]
 # Each storage test gets its own data dir, so they can run in parallel and clean up after
 # themselves. The suite writes real files: the code under test is the filesystem behaviour.
 tempfile = "3"
+
+# The macOS launch agent's tests run on Linux too, where nothing else needs the crate.
+[target.'cfg(unix)'.dev-dependencies]
+plist = "1.10"
 
 # The pairing private key lives in the OS credential store, not a file. Backends are
 # per-platform and their deps do not cross-compile, so each target picks its own: the
 # secret-service one pulls dbus, which has no business in a macOS build.
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3.6.3", features = ["apple-native"] }
+# Writing and reading the launch agent's plist. Already in the tree via tauri.
+plist = "1.10"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", features = ["windows-native"] }

@@ -97,10 +97,12 @@ pub fn purge_secrets() -> usize {
 
 pub fn run() {
     let builder = tauri::Builder::default()
-        .plugin(autostart::plugin())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init());
+
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.plugin(autostart::plugin());
 
     // macOS only. There the menu bar belongs to the screen rather than the window, costs no space,
     // and carries Cmd-Q and the Edit items the webview needs from the responder chain. Everywhere
@@ -176,7 +178,7 @@ pub fn run() {
             // path to the proxy, so an app update or a move silently breaks every browser.
             manifest::refresh();
 
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             autostart::refresh(app.handle());
 
             // The backup schedule. Runs from here, not from a JS timer, because the main window
@@ -259,7 +261,8 @@ pub fn run() {
             files::files_publish_staged,
             files::files_discard_staged,
             files::files_delete_vault,
-            autostart::autostart_repoint,
+            autostart::autostart_is_enabled,
+            autostart::autostart_set_enabled,
             crypto::crypto_is_locked,
             crypto::crypto_lock,
             crypto::crypto_generate_vek,

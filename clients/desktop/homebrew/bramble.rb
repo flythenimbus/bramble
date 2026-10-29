@@ -17,7 +17,10 @@ cask "bramble" do
 
   app "Bramble.app"
 
-  uninstall launchctl: "Bramble",
+  uninstall launchctl: [
+              "app.bramble.desktop",
+              "Bramble",
+            ],
             quit:      "app.bramble.desktop"
 
   zap trash: [

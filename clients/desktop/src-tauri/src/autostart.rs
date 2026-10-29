@@ -4,20 +4,25 @@
 //! (see `backup`), so on a machine that gets rebooted and never manually launched, a daily backup
 //! is not one. This is the piece that makes that claim honest.
 //!
-//! Mechanism per platform, all of it `tauri-plugin-autostart` over the `auto-launch` crate: a
-//! login item on macOS, a `Run` registry value on Windows, an XDG `~/.config/autostart` entry on
-//! Linux. XDG rather than a systemd user unit on purpose, because this is a tray app: an XDG entry
-//! starts once the graphical session exists, where a user unit wanting `default.target` can come
-//! up with no display to render into.
+//! Mechanism per platform: a launch agent this module writes on macOS (see `LaunchAgent`), and
+//! `tauri-plugin-autostart` over the `auto-launch` crate elsewhere, which is a `Run` registry value
+//! on Windows and an XDG `~/.config/autostart` entry on Linux. XDG rather than a systemd user unit
+//! on purpose, because this is a tray app: an XDG entry starts once the graphical session exists,
+//! where a user unit wanting `default.target` can come up with no display to render into.
 //!
 //! **The TPM credential tier will want a systemd user unit anyway**, since
 //! `LoadCredentialEncrypted=` only delivers to a systemd-started service, and at that point Linux
 //! autostart should move to the unit rather than keep both. See docs/cloud-storage-backups.md.
 
 #[cfg(any(target_os = "linux", all(test, unix)))]
-use std::{ffi::OsStr, fs, io, path::Path};
+use std::ffi::OsStr;
+#[cfg(any(target_os = "macos", all(test, unix)))]
+use std::path::PathBuf;
+#[cfg(any(target_os = "linux", target_os = "macos", all(test, unix)))]
+use std::{fs, io, path::Path};
 
-use tauri_plugin_autostart::MacosLauncher;
+#[cfg(not(target_os = "macos"))]
+use tauri_plugin_autostart::ManagerExt;
 
 /// Passed by the registered entry, so a login-launched app goes to the tray rather than putting a
 /// window in front of someone who did not ask for one.
@@ -28,11 +33,11 @@ pub const HIDDEN_FLAG: &str = "--hidden";
 #[cfg(target_os = "linux")]
 const LAUNCHER_ENV: &str = "BRAMBLE_LAUNCHER";
 
-/// `LaunchAgent` rather than `AppleScript`: a plist in `~/Library/LaunchAgents` is inspectable and
-/// removable by the user, where the AppleScript variant edits the opaque Login Items list and
-/// needs an automation permission prompt to do it.
+#[cfg(not(target_os = "macos"))]
 pub fn plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![HIDDEN_FLAG]))
+    tauri_plugin_autostart::Builder::new()
+        .arg(HIDDEN_FLAG)
+        .build()
 }
 
 /// Whether this launch came from the autostart entry rather than from a person.
@@ -40,43 +45,81 @@ pub fn launched_hidden() -> bool {
     std::env::args().any(|arg| arg == HIDDEN_FLAG)
 }
 
-/// Called by the frontend right after enabling, since the plugin has just written the entry.
-#[cfg(target_os = "linux")]
 #[tauri::command]
-pub fn autostart_repoint(app: tauri::AppHandle) -> Result<(), String> {
-    repoint_installed(&app)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+pub fn autostart_is_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    is_enabled(&app).map_err(|e| e.to_string())
 }
 
-#[cfg(not(target_os = "linux"))]
 #[tauri::command]
-pub fn autostart_repoint() -> Result<(), String> {
+pub fn autostart_set_enabled(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    set_enabled(&app, on).map_err(|e| e.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn is_enabled(app: &tauri::AppHandle) -> io::Result<bool> {
+    Ok(LaunchAgent::of(app)?.is_enabled())
+}
+
+#[cfg(target_os = "macos")]
+fn set_enabled(app: &tauri::AppHandle, on: bool) -> io::Result<()> {
+    let agent = LaunchAgent::of(app)?;
+    if !on {
+        return agent.disable();
+    }
+    agent.enable(&std::env::current_exe()?.canonicalize()?)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_enabled(app: &tauri::AppHandle) -> Result<bool, tauri_plugin_autostart::Error> {
+    app.autolaunch().is_enabled()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_enabled(app: &tauri::AppHandle, on: bool) -> Result<(), String> {
+    let manager = app.autolaunch();
+    if !on {
+        return manager.disable().map_err(|e| e.to_string());
+    }
+    manager.enable().map_err(|e| e.to_string())?;
+    // The plugin records the running binary; a Nix install names its wrapper instead (#108).
+    #[cfg(target_os = "linux")]
+    repair_installed(app).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Repairs an entry an earlier build or version wrote, which nothing else rewrites short of
 /// toggling.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn refresh<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    match repoint_installed(app) {
-        Ok(true) => log::info!("autostart entry repointed at the launcher"),
+    match repair_installed(app) {
+        Ok(true) => log::info!("autostart entry repaired"),
         Ok(false) => {}
-        Err(e) => log::warn!("autostart entry not repointed: {e}"),
+        Err(e) => log::warn!("autostart entry not repaired: {e}"),
     }
 }
 
+/// Where auto-launch 0.5.0 writes its entry from: `dirs::home_dir()`, which is `HOME` when set.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn home() -> Option<std::ffi::OsString> {
+    std::env::var_os("HOME").filter(|home| !home.is_empty())
+}
+
 #[cfg(target_os = "linux")]
-fn repoint_installed<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> io::Result<bool> {
-    // Where auto-launch 0.5.0 writes it: dirs::home_dir()/.config/autostart, not XDG_CONFIG_HOME.
-    let Some(home) = std::env::var_os("HOME").filter(|home| !home.is_empty()) else {
+fn repair_installed<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> io::Result<bool> {
+    let Some(home) = home() else {
         return Ok(false);
     };
+    // Not XDG_CONFIG_HOME: auto-launch ignores it.
     repoint_entry(
         &Path::new(&home).join(".config").join("autostart"),
         &app.package_info().name,
         std::env::var_os(LAUNCHER_ENV).as_deref(),
     )
+}
+
+#[cfg(target_os = "macos")]
+fn repair_installed<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> io::Result<bool> {
+    LaunchAgent::of(app)?.adopt_legacy()
 }
 
 /// Points `<dir>/<app_name>.desktop` at the launcher `value` names. `Ok(false)` without a
@@ -122,6 +165,107 @@ fn repointed(entry: &str, program: &str) -> Option<String> {
         .collect::<Vec<_>>()
         .join("\n");
     (out != entry).then_some(out)
+}
+
+/// The macOS login item: `<dir>/<id>.plist`, labelled with the bundle identifier and naming it in
+/// `AssociatedBundleIdentifiers`, so System Settings lists it as this app. The plugin's agent had
+/// neither, so macOS filed it under the signing team with a generic icon (#138), and it keeps that
+/// filing per label, so the plugin's `Bramble` label is moved rather than edited. A plist rather
+/// than the AppleScript login item: inspectable and removable by the user, and no automation
+/// prompt. See docs/cloud-storage-backups.md.
+#[cfg(any(target_os = "macos", all(test, unix)))]
+struct LaunchAgent {
+    /// `~/Library/LaunchAgents`.
+    dir: PathBuf,
+    /// The bundle identifier, and so the label.
+    id: String,
+    /// The plugin's label for the same entry: the product name.
+    legacy: String,
+}
+
+#[cfg(any(target_os = "macos", all(test, unix)))]
+impl LaunchAgent {
+    #[cfg(target_os = "macos")]
+    fn of<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> io::Result<Self> {
+        let home =
+            home().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;
+        Ok(Self {
+            dir: Path::new(&home).join("Library").join("LaunchAgents"),
+            id: app.config().identifier.clone(),
+            legacy: app.package_info().name.clone(),
+        })
+    }
+
+    fn file(&self) -> PathBuf {
+        self.dir.join(format!("{}.plist", self.id))
+    }
+
+    fn legacy_file(&self) -> PathBuf {
+        self.dir.join(format!("{}.plist", self.legacy))
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.file().exists() || self.legacy_file().exists()
+    }
+
+    /// Starts `program` hidden at login, in place of any agent the plugin wrote.
+    fn enable(&self, program: &Path) -> io::Result<()> {
+        let program = program
+            .to_str()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "app path is not UTF-8"))?;
+        let mut agent = plist::Dictionary::new();
+        agent.insert("Label".into(), self.id.as_str().into());
+        agent.insert(
+            "ProgramArguments".into(),
+            vec![program.into(), HIDDEN_FLAG.into()].into(),
+        );
+        agent.insert("RunAtLoad".into(), true.into());
+        self.write(agent)
+    }
+
+    fn disable(&self) -> io::Result<()> {
+        remove_if_present(&self.file())?;
+        remove_if_present(&self.legacy_file())
+    }
+
+    /// Moves the plugin's agent to this label, starting what it started. `Ok(false)` without one;
+    /// an agent that does not parse is an error and stays where it is.
+    fn adopt_legacy(&self) -> io::Result<bool> {
+        let legacy = self.legacy_file();
+        if !legacy.exists() {
+            return Ok(false);
+        }
+        let agent = plist::Value::from_file(&legacy)
+            .map_err(io::Error::other)?
+            .into_dictionary()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "agent is not a dict"))?;
+        self.write(agent).map(|()| true)
+    }
+
+    /// Writes `agent` under this label and naming this app, then drops the plugin's copy. One
+    /// write: macOS files the agent on first sight and an edit afterwards does not refile it.
+    fn write(&self, mut agent: plist::Dictionary) -> io::Result<()> {
+        agent.insert("Label".into(), self.id.as_str().into());
+        agent.insert(
+            "AssociatedBundleIdentifiers".into(),
+            vec![self.id.as_str().into()].into(),
+        );
+        let mut xml = Vec::new();
+        plist::Value::from(agent)
+            .to_writer_xml(&mut xml)
+            .map_err(io::Error::other)?;
+        fs::create_dir_all(&self.dir)?;
+        fs::write(self.file(), xml)?;
+        remove_if_present(&self.legacy_file())
+    }
+}
+
+#[cfg(any(target_os = "macos", all(test, unix)))]
+fn remove_if_present(file: &Path) -> io::Result<()> {
+    match fs::remove_file(file) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    }
 }
 
 #[cfg(all(test, unix))]
@@ -203,5 +347,158 @@ mod tests {
 
         assert!(!repoint_entry(dir.path(), "Bramble", Some(OsStr::new(WRAPPER))).unwrap());
         assert!(!dir.path().join("Bramble.desktop").exists());
+    }
+
+    const APP: &str = "/Applications/Bramble.app/Contents/MacOS/bramble-desktop";
+    const ID: &str = "app.bramble.desktop";
+
+    fn agent_in(dir: &Path) -> LaunchAgent {
+        LaunchAgent {
+            dir: dir.to_path_buf(),
+            id: ID.into(),
+            legacy: "Bramble".into(),
+        }
+    }
+
+    /// What auto-launch 0.5.0's `enable()` writes for this app.
+    fn plugin_agent(program: &str) -> String {
+        format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+             <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
+             \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+             <plist version=\"1.0\">\n  <dict>\n  <key>Label</key>\n  <string>Bramble</string>\n  \
+             <key>ProgramArguments</key>\n  \
+             <array><string>{program}</string><string>--hidden</string></array>\n  \
+             <key>RunAtLoad</key>\n  <true/>\n  </dict>\n</plist>"
+        )
+    }
+
+    fn read(file: &Path) -> plist::Value {
+        plist::Value::from_file(file).unwrap()
+    }
+
+    /// An agent starting `program` hidden, labelled and associated with the app. Keys compare
+    /// regardless of order.
+    fn named_for_the_app(program: &str) -> plist::Value {
+        let mut agent = plist::Dictionary::new();
+        agent.insert("Label".into(), ID.into());
+        agent.insert(
+            "ProgramArguments".into(),
+            vec![program.into(), HIDDEN_FLAG.into()].into(),
+        );
+        agent.insert("RunAtLoad".into(), true.into());
+        agent.insert("AssociatedBundleIdentifiers".into(), vec![ID.into()].into());
+        agent.into()
+    }
+
+    #[test]
+    fn enabling_writes_an_agent_naming_the_app() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = agent_in(dir.path());
+
+        agent.enable(Path::new(APP)).unwrap();
+
+        assert!(agent.is_enabled());
+        assert_eq!(
+            read(&dir.path().join("app.bramble.desktop.plist")),
+            named_for_the_app(APP)
+        );
+    }
+
+    #[test]
+    fn enabling_replaces_the_plugins_agent() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("Bramble.plist");
+        fs::write(&legacy, plugin_agent(APP)).unwrap();
+
+        agent_in(dir.path()).enable(Path::new(APP)).unwrap();
+
+        assert!(!legacy.exists());
+        assert!(dir.path().join("app.bramble.desktop.plist").exists());
+    }
+
+    #[test]
+    fn the_plugins_agent_alone_counts_as_enabled() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("Bramble.plist"), plugin_agent(APP)).unwrap();
+
+        assert!(agent_in(dir.path()).is_enabled());
+    }
+
+    #[test]
+    fn disabling_removes_both_agents() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = agent_in(dir.path());
+        agent.enable(Path::new(APP)).unwrap();
+        fs::write(dir.path().join("Bramble.plist"), plugin_agent(APP)).unwrap();
+
+        agent.disable().unwrap();
+
+        assert!(!agent.is_enabled());
+        assert!(fs::read_dir(dir.path()).unwrap().next().is_none());
+        agent.disable().unwrap();
+    }
+
+    #[test]
+    fn the_plugins_agent_moves_to_the_apps_label_starting_what_it_started() {
+        let dir = tempfile::tempdir().unwrap();
+        let moved = "/Users/someone/Applications/Bramble.app/Contents/MacOS/bramble-desktop";
+        fs::write(dir.path().join("Bramble.plist"), plugin_agent(moved)).unwrap();
+        let agent = agent_in(dir.path());
+
+        assert!(agent.adopt_legacy().unwrap());
+
+        assert!(!dir.path().join("Bramble.plist").exists());
+        assert_eq!(
+            read(&dir.path().join("app.bramble.desktop.plist")),
+            named_for_the_app(moved)
+        );
+        assert!(!agent.adopt_legacy().unwrap());
+    }
+
+    #[test]
+    fn nothing_is_adopted_where_autostart_is_off() {
+        let dir = tempfile::tempdir().unwrap();
+
+        assert!(!agent_in(dir.path()).adopt_legacy().unwrap());
+        assert!(fs::read_dir(dir.path()).unwrap().next().is_none());
+    }
+
+    #[test]
+    fn an_unreadable_plugin_agent_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("Bramble.plist");
+        fs::write(&legacy, "not a plist").unwrap();
+
+        assert!(agent_in(dir.path()).adopt_legacy().is_err());
+
+        assert_eq!(fs::read_to_string(&legacy).unwrap(), "not a plist");
+        assert!(!dir.path().join("app.bramble.desktop.plist").exists());
+    }
+
+    /// macOS's own reader, as the system will see the file.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_reads_the_association() {
+        let dir = tempfile::tempdir().unwrap();
+        agent_in(dir.path()).enable(Path::new(APP)).unwrap();
+
+        let out = std::process::Command::new("plutil")
+            .args([
+                "-extract",
+                "AssociatedBundleIdentifiers.0",
+                "raw",
+                "-o",
+                "-",
+            ])
+            .arg(dir.path().join("app.bramble.desktop.plist"))
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), ID);
     }
 }
