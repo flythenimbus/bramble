@@ -15,8 +15,9 @@ export default defineConfig({
 	// One fixture server and one browser per file; the races are timing-sensitive.
 	fullyParallel: false,
 	workers: 1,
-	// Firefox boots a fresh browser per case, so allow for three cold starts.
-	timeout: 120_000,
+	// Firefox boots a fresh browser per case, and the bfcache case up to three; each start may take
+	// the spec's 45 s startup budget.
+	timeout: 180_000,
 	expect: { timeout: 15_000 },
 	reporter: [["list"]],
 	forbidOnly: !!process.env.CI,

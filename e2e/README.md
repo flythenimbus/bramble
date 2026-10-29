@@ -47,6 +47,10 @@ pnpm test:transport-race                        # both; needs FIREFOX_BINARY
 - Chromium is driven by Playwright directly. **Firefox is driven by `web-ext`**, because Playwright
   cannot install a Firefox add-on (extensions are Chromium-only, persistent-context-only). For that
   project Playwright is just the runner.
+- The Firefox spec's `open()` returns only once web-ext reports the fixture installed, within its
+  own 45 s startup budget, so the harness's 15 s per step times the race rather than the browser
+  booting, as on Chromium. A cold first launch on a CI runner has run past 15 s by itself, which
+  failed the first case with no events at all.
 - Firefox must run headed (`FIREFOX_HEADLESS=0`) under Xvfb for the BFCache case to be meaningful;
   CI does this with `xvfb-run -a`, across both current Firefox and the 128 compatibility floor.
 - A missing `FIREFOX_BINARY` **fails** rather than skipping. A silently skipped security gate is a

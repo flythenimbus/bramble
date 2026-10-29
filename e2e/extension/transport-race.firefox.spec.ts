@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "@playwright/test";
@@ -72,7 +72,11 @@ for (const testCase of TRANSPORT_CASES) {
 					if (process.env.FIREFOX_HEADLESS !== "0") args.push("--arg=-headless");
 					// Detached so the wrapper leads a process group: stopProcess signals the group, which
 					// is the only way the Firefox web-ext started goes down with it. See stopProcess.
-					const child = spawn(webExt, args, { detached: true, stdio: "inherit" });
+					// stdout is piped, not inherited, so addonInstalled can read it.
+					const child = spawn(webExt, args, {
+						detached: true,
+						stdio: ["ignore", "pipe", "inherit"],
+					});
 					child.once("error", (error) => {
 						state.processError = `web-ext could not start Firefox: ${error.message}`;
 						state.notify();
@@ -82,12 +86,69 @@ for (const testCase of TRANSPORT_CASES) {
 						state.processError = `web-ext exited before the transport contract completed (code ${code}, signal ${signal})`;
 						state.notify();
 					});
+					try {
+						await addonInstalled(child);
+					} catch (error) {
+						state.stopping = true;
+						await stopProcess(child);
+						throw error;
+					}
 					return () => stopProcess(child);
 				},
 				server,
 				testCase,
 			),
 		);
+	});
+}
+
+/**
+ * How long Firefox gets to start and take the fixture, apart from the race's own budget. A cold
+ * first launch on a CI runner has run past 15 s on its own, which spent the whole race budget before
+ * any document existed; launches that made it took 11 s at most.
+ */
+const STARTUP_TIMEOUT_MS = 45_000;
+
+/** What web-ext logs once the add-on is in (lib/firefox/remote.js). */
+const INSTALLED = "as a temporary add-on";
+
+/**
+ * Resolves once web-ext has installed the fixture, which it does only after Firefox is up, so
+ * open() returns a ready browser the way the Chromium spec's does after page.goto. The start URL
+ * is already loading by then, and Firefox injects the content script into it. web-ext's output is
+ * passed through so the log keeps it.
+ */
+function addonInstalled(child: ChildProcess): Promise<void> {
+	child.stdout?.pipe(process.stdout, { end: false });
+	let output = "";
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(
+			() =>
+				settle(
+					new Error(
+						`Firefox did not start with the fixture installed within ${STARTUP_TIMEOUT_MS / 1000} s`,
+					),
+				),
+			STARTUP_TIMEOUT_MS,
+		);
+		const onData = (chunk: Buffer) => {
+			output += chunk.toString();
+			if (output.includes(INSTALLED)) settle();
+		};
+		const onExit = () => settle(new Error("web-ext exited before Firefox took the fixture"));
+		const onError = (error: Error) =>
+			settle(new Error(`web-ext could not start: ${error.message}`));
+		function settle(error?: Error) {
+			clearTimeout(timer);
+			child.stdout?.off("data", onData);
+			child.off("exit", onExit);
+			child.off("error", onError);
+			if (error) reject(error);
+			else resolve();
+		}
+		child.stdout?.on("data", onData);
+		child.once("exit", onExit);
+		child.once("error", onError);
 	});
 }
 
