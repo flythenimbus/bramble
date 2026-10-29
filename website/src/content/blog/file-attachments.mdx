@@ -1,0 +1,79 @@
+---
+title: "File attachments: keep the paperwork with the password"
+description: "Attach a file to any entry in Bramble: a passport scan, a page of recovery codes, a licence file. It is encrypted on your device, syncs between your devices, and goes into every backup."
+pubDate: 2026-10-28
+---
+
+Some of what a password manager is meant to look after is not a password. The recovery codes a
+site hands you as a PDF. The passport scan an airline keeps asking for. The licence file for
+software you paid for once, years ago. They tend to end up in a Downloads folder or a cloud drive,
+unencrypted and nowhere near the login they belong to.
+
+As of yesterday's releases, they can live in your vault instead. Open an entry, choose **Attach a
+file**, and it is encrypted on the spot, kept with that entry, and carried to your other devices.
+
+It is in every Bramble app: the browser extensions, the desktop app, and both phone apps.
+
+## Attaching and opening
+
+Any entry can carry files, up to 90 MB each. Pick one and Bramble encrypts it on your device before
+it is stored anywhere.
+
+**Open** gives the file back in whatever way suits the device. The desktop app opens it in your
+usual app for that kind of file. The phones hand it to the share sheet, so you can view it, save it
+or send it on. The browser extension saves a copy to your downloads.
+
+On the desktop app and the phones, that readable copy is temporary, and Bramble deletes it when the
+vault locks. In the extension it is an ordinary download, so it is yours to delete.
+
+One small thing in the extension: browsers close the popup the moment a file picker opens. So the
+popup offers to pop out into a window of its own, on the same entry, and you attach from there.
+
+## Encrypted like everything else
+
+A file gets the same treatment as an entry. It is sealed under a key of its own, and that key is
+sealed under your vault key, so only an unlocked vault can open it. Its name and type are sealed
+along with it.
+
+What is different is where it lives. The encrypted file is kept beside the vault rather than inside
+it, so editing a login does not mean re-encrypting a 40 MB PDF, and syncing that edit does not mean
+sending the PDF again.
+
+## How files sync
+
+Entries sync the way they always have. A file follows on its own: a device that does not have it
+yet asks your other devices, and one that has it sends it over the same encrypted, device-to-device
+connection that sync already uses. Every device gets a copy of every file, so the scan you attached
+on your laptop is on your phone the next time both are awake.
+
+When two devices cannot reach each other directly, the transfer can go through a TURN relay. It is
+still encrypted end to end, so the relay learns roughly how large the file is, never its name or
+contents, and you can point Bramble at your own TURN server instead. The
+[privacy policy](/privacy) has the details. Files never go through Bramble's signalling relay.
+
+## On Firefox
+
+Firefox extensions have no WebRTC, which is what file transfers between devices run over. So
+Firefox gets its files from the [Bramble desktop app](/blog/desktop-app-for-macos-and-linux) on the
+same computer instead. Pair the two once, as you would for filling, and files travel over that same
+link, which never leaves your machine.
+
+It works in both directions: a file you attach in Firefox reaches your other devices by way of the
+desktop app, and theirs reach Firefox the same way. Entries sync in Firefox exactly as before.
+Without the desktop app, Firefox still lists every attachment, and says it is waiting for the
+desktop app to hand it over.
+
+## Backups, KeePass, and the rest
+
+- **Backups carry every attachment.** A vault with files is backed up as one `.bramble` file with
+  the files inside, however large it gets. If a file has not reached this device yet, the backup
+  waits for it and says which one, rather than quietly taking a backup with a hole in it. Restoring
+  brings the files back with everything else.
+- **KeePass import and export carry attachments**, both ways, in every app. Import a KeePass
+  database and its files land on the entries they were on. Export one, and KeePassXC finds them
+  where it expects them.
+- **Two exports still leave files behind**: **Send to another app** on iPhone, and exporting a
+  selection of entries. A backup or a KeePass export takes everything.
+
+Grab it from [bramble.sh](https://bramble.sh), or read the
+[source](https://github.com/flythenimbus/bramble). Questions welcome, as always.
