@@ -1,11 +1,11 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Eye, EyeOff, Plus, X } from "lucide-react";
-import { useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import type { CustomField } from "../../hooks/useVault";
 import { Button } from "../components/ui/button";
 import { SelectField } from "../components/ui/select-field";
 import { TextField } from "../components/ui/text-field";
+import { useRevealState } from "../hooks/useRevealState";
 import { DetailField, DetailValue } from "./DetailField";
 
 /** Form-side shape of a custom field: the persisted `hidden` boolean becomes a "text"/"password" type. */
@@ -56,7 +56,7 @@ export function customFieldsSearchText(fields: CustomField[] | undefined): strin
 export function CustomFieldsEditor() {
 	const { register, control, watch } = useFormContext();
 	const { t } = useLingui();
-	const [shown, setShown] = useState<Record<string, boolean>>({});
+	const [shown, setShown] = useRevealState<Record<string, boolean>>({});
 	const { fields, append, remove } = useFieldArray({ control, name: CUSTOM_FIELDS_NAME });
 
 	return (
@@ -158,7 +158,7 @@ interface CustomFieldsDetailProps {
 /** Read-only render of an entry's custom fields in its detail view. */
 export function CustomFieldsDetail({ fields, copied, copy }: CustomFieldsDetailProps) {
 	const { t } = useLingui();
-	const [shown, setShown] = useState<Record<number, boolean>>({});
+	const [shown, setShown] = useRevealState<Record<number, boolean>>({});
 	return (
 		<>
 			{fields.map((field, index) => {

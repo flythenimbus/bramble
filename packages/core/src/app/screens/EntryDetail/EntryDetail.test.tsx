@@ -1,10 +1,11 @@
 /** @vitest-environment happy-dom */
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../../context/PlatformContext";
 import type { Entry } from "../../../hooks/useVault";
+import { concealSecrets } from "../../hooks/useRevealState";
 import { EntryDetail } from "./EntryDetail";
 
 // The attachments section reads the vault; these cases are about the entry's own actions.
@@ -123,6 +124,21 @@ describe("EntryDetail actions", () => {
 
 // The compare view renders each version through the mode's own detail body, but copying from a
 // version you are only comparing is not a use of the entry.
+// A closed desktop window only hides, so it reopens on this same detail view.
+describe("EntryDetail reveal", () => {
+	it("masks revealed fields again once the window is put away", () => {
+		show();
+		fireEvent.click(screen.getByRole("button", { name: "Show CVV" }));
+		fireEvent.click(screen.getByRole("button", { name: "Show card number" }));
+		expect(screen.getByText("123")).toBeTruthy();
+
+		act(() => concealSecrets());
+		expect(screen.queryByText("123")).toBeNull();
+		expect(screen.getByRole("button", { name: "Show CVV" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Show card number" })).toBeTruthy();
+	});
+});
+
 describe("EntryDetail conflict", () => {
 	it("copying a field in the compare view doesn't record a use", async () => {
 		const onUse = vi.fn();

@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { Eye, EyeOff } from "lucide-react";
-import { type ComponentProps, forwardRef, useId, useState } from "react";
+import { type ComponentProps, forwardRef, useId } from "react";
+import { useRevealState } from "../../hooks/useRevealState";
 import { Button } from "./button";
 import { FieldOutline } from "./field-outline";
 import { cn } from "./utils";
@@ -23,7 +24,7 @@ export const SecretArea = forwardRef<HTMLTextAreaElement, SecretAreaProps>(funct
 	const { t } = useLingui();
 	const id = useId();
 	const invalid = Boolean(error);
-	const [revealed, setRevealed] = useState(defaultRevealed);
+	const [revealed, setRevealed] = useRevealState(defaultRevealed);
 	return (
 		<div>
 			<div className="group relative">

@@ -42,6 +42,7 @@ import { PasswordStrengthMeter } from "../components/ui/password-strength-meter"
 import { SelectField } from "../components/ui/select-field";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
+import { useRevealState } from "../hooks/useRevealState";
 import { DetailField, DetailNotes, DetailValue } from "./DetailField";
 import type { EntryDetailBodyProps, EntryFieldsProps, EntryMode } from "./types";
 
@@ -79,7 +80,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const { shell } = usePlatform();
 	const { prefs } = usePrefs();
 	const { t } = useLingui();
-	const [showPassword, setShowPassword] = useState(false);
+	const [showPassword, setShowPassword] = useRevealState(false);
 	const {
 		fields: urlFields,
 		append: appendUrl,
@@ -109,7 +110,7 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 	const aliases = useAliasProvider();
 	const [aliasState, setAliasState] = useState<AliasFieldState>({ kind: "idle" });
 	const [totpScan, setTotpScan] = useState<TotpScanState>({ kind: "idle" });
-	const [showTotp, setShowTotp] = useState(false);
+	const [showTotp, setShowTotp] = useRevealState(false);
 	// Password at mount, so the cached breach flag only applies while the user hasn't edited it.
 	const [initialPassword] = useState(() => getValues("password"));
 
@@ -641,7 +642,7 @@ function PasswordChangelogField({
 }) {
 	const { t } = useLingui();
 	const [open, setOpen] = useState(false);
-	const [revealed, setRevealed] = useState<ReadonlySet<number>>(new Set());
+	const [revealed, setRevealed] = useRevealState<ReadonlySet<number>>(new Set());
 
 	const toggleReveal = (i: number) => {
 		setRevealed((prev) => {
@@ -733,7 +734,7 @@ function PasswordChangelogField({
 function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const login = entry as LoginEntry;
 	const { t } = useLingui();
-	const [showPassword, setShowPassword] = useState(false);
+	const [showPassword, setShowPassword] = useRevealState(false);
 
 	return (
 		<>

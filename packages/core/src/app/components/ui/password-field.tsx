@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { Eye, EyeOff } from "lucide-react";
-import { type ComponentProps, forwardRef, useState } from "react";
+import { type ComponentProps, forwardRef } from "react";
+import { useRevealState } from "../../hooks/useRevealState";
 import { Button } from "./button";
 import { TextField } from "./text-field";
 
@@ -15,7 +16,7 @@ type PasswordFieldProps = Omit<ComponentProps<typeof TextField>, "type" | "endAd
 export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
 	function PasswordField(props, ref) {
 		const { t } = useLingui();
-		const [show, setShow] = useState(false);
+		const [show, setShow] = useRevealState(false);
 		return (
 			<TextField
 				ref={ref}

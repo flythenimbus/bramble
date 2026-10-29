@@ -123,6 +123,13 @@ export interface ShellAdapter {
 	 * unlock screen rather than bypassing it. Returns an unsubscribe.
 	 */
 	onNavigateRequest?(callback: (href: string) => void): () => void;
+	/**
+	 * Subscribe to the host putting this window away WITHOUT unloading it (the desktop closing to
+	 * the tray, mobile going to the background), so it reopens with its state intact. Revealed
+	 * secrets are masked again here. Absent where closing unloads the page (extension). Returns an
+	 * unsubscribe.
+	 */
+	onHide?(callback: () => void): () => void;
 	/** True when already running inside a popped-out window; used to hide the pop-out affordance there. */
 	isDetached(): boolean;
 	// Static per-target capability flags live in flags.ts `CAPABILITIES` (resolved via `useCan`).

@@ -105,6 +105,14 @@ export const mobileShell: ShellAdapter = {
 			void sub.then((h) => h.remove());
 		};
 	},
+	// The webview outlives a trip to the background, so it comes back on the same screen.
+	// `pause` (didEnterBackground / onPause), not inactive, which a Face ID sheet also causes.
+	onHide(cb) {
+		const sub = App.addListener("pause", () => cb());
+		return () => {
+			void sub.then((h) => h.remove());
+		};
+	},
 
 	// Save bytes the user keeps (recovery code, encrypted vault export) via the native share
 	// sheet, so "Save to Files", Mail, etc. are offered - WKWebView has no <a download> or

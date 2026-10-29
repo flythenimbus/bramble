@@ -1,8 +1,9 @@
 /** @vitest-environment happy-dom */
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { concealSecrets } from "../../hooks/useRevealState";
 import { PasswordField } from "./password-field";
 
 // useLingui throws without an I18nProvider; an empty catalog falls back to source strings.
@@ -27,6 +28,16 @@ describe("PasswordField", () => {
 		expect(input.type).toBe("text"); // value is genuinely visible, not just relabeled
 
 		fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+		expect(input.type).toBe("password");
+	});
+
+	it("masks again once the window is put away", () => {
+		renderPw();
+		const input = screen.getByLabelText("Master password") as HTMLInputElement;
+		fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+		expect(input.type).toBe("text");
+
+		act(() => concealSecrets());
 		expect(input.type).toBe("password");
 	});
 

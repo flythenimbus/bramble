@@ -12,13 +12,16 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager, WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, WebviewWindow, WebviewWindowBuilder,
 };
 
 use crate::i18n;
 use crate::spotlight;
 
 pub const MAIN: &str = "main";
+
+/// Sent to the main window as it hides; the desktop shell's `onHide` listens for it.
+pub const HIDDEN_EVENT: &str = "main-hidden";
 
 /// Show or hide the Dock icon, following the main window.
 ///
@@ -77,6 +80,9 @@ pub fn hide_main(app: &AppHandle) {
         if close_destroys() {
             let _ = window.destroy();
         } else {
+            // A hidden page keeps its state, so it masks any password it is showing before it
+            // comes back.
+            let _ = window.emit_to(MAIN, HIDDEN_EVENT, ());
             let _ = window.hide();
         }
     }

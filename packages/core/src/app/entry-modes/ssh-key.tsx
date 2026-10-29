@@ -10,6 +10,7 @@ import { Button } from "../components/ui/button";
 import { SecretArea } from "../components/ui/secret-area";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
+import { useRevealState } from "../hooks/useRevealState";
 import { DetailField, DetailNotes, DetailValue } from "./DetailField";
 import type { EntryDetailBodyProps, EntryMode } from "./types";
 
@@ -41,7 +42,7 @@ interface SshKeyFormValues {
 function SshKeyFields() {
 	const { register } = useFormContext<SshKeyFormValues>();
 	const { t } = useLingui();
-	const [showPassphrase, setShowPassphrase] = useState(false);
+	const [showPassphrase, setShowPassphrase] = useRevealState(false);
 
 	return (
 		<>
@@ -83,7 +84,7 @@ interface KeyBlockProps {
 /** Multi-line key display with copy and (for secrets) reveal controls. */
 function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockProps) {
 	const { t } = useLingui();
-	const [revealed, setRevealed] = useState(false);
+	const [revealed, setRevealed] = useRevealState(false);
 	const masked = secret && !revealed;
 	return (
 		<div className="space-y-1.5">
@@ -126,7 +127,7 @@ function KeyBlock({ label, value, copyName, copied, onCopy, secret }: KeyBlockPr
 function SshKeyDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const key = entry as SshKeyEntry;
 	const { t } = useLingui();
-	const [showPassphrase, setShowPassphrase] = useState(false);
+	const [showPassphrase, setShowPassphrase] = useRevealState(false);
 	const fingerprint = useSshFingerprint(key.publicKey);
 	return (
 		<>

@@ -2,7 +2,6 @@ import { i18n } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { CreditCard, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import type { CardEntryData } from "../../hooks/useVault";
 import {
@@ -18,6 +17,7 @@ import {
 import { Button } from "../components/ui/button";
 import { TextArea } from "../components/ui/text-area";
 import { TextField } from "../components/ui/text-field";
+import { useRevealState } from "../hooks/useRevealState";
 import { DetailField, DetailNotes, DetailValue } from "./DetailField";
 import type { EntryDetailBodyProps, EntryMode } from "./types";
 
@@ -54,8 +54,8 @@ function CardFields() {
 		formState: { errors },
 	} = useFormContext<CardFormValues>();
 	const { t } = useLingui();
-	const [showNumber, setShowNumber] = useState(false);
-	const [showCvv, setShowCvv] = useState(false);
+	const [showNumber, setShowNumber] = useRevealState(false);
+	const [showCvv, setShowCvv] = useRevealState(false);
 
 	/** Localizes a schema issue. An empty number is allowed; only a filled one must be valid. */
 	const validateNumber = (value: string): string | true => {
@@ -188,8 +188,8 @@ function CardFields() {
 function CardDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	const card = entry as CardEntryData & { id: string };
 	const { t } = useLingui();
-	const [showNumber, setShowNumber] = useState(false);
-	const [showCvv, setShowCvv] = useState(false);
+	const [showNumber, setShowNumber] = useRevealState(false);
+	const [showCvv, setShowCvv] = useRevealState(false);
 	const expiry = cardExpiry(card);
 
 	return (

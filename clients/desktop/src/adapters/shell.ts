@@ -135,6 +135,14 @@ export const desktopShell: ShellAdapter = {
 		};
 	},
 
+	// Closing only hides the window (src-tauri/src/lifetime.rs), so the page keeps its state.
+	onHide: (callback) => {
+		const stop = listen("main-hidden", () => callback());
+		return () => {
+			void stop.then((off) => off());
+		};
+	},
+
 	// No corner prompt without the extension bridge (phase 4), so nothing is ever parked.
 	flushPendingCornerCapture: async () => false,
 
