@@ -30,6 +30,7 @@ import { plaintextSize } from "../../../vault/file-mutations";
 import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
 import { VaultChoiceList } from "../../components/VaultChoiceList";
+import { useCanAddFiles } from "../../hooks/useCanAddFiles";
 import { Header } from "./components/Header";
 import { KdbxUnlock } from "./components/KdbxUnlock";
 import { Shell } from "./components/Shell";
@@ -66,6 +67,9 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	// they are the database's attachments in the clear, so they go as soon as they are sealed,
 	// or as soon as the import is abandoned.
 	const [attachments, setAttachments] = useState<PlacedAttachment[]>([]);
+	// Where this browser can't add files (see useCanAddFiles), the file's attachments stay out, counted.
+	const canAddFiles = useCanAddFiles();
+	const [skippedFiles, setSkippedFiles] = useState(0);
 	const releaseRef = useRef<(() => Promise<void>) | null>(null);
 	const release = useCallback(() => {
 		const drop = releaseRef.current;
@@ -133,13 +137,14 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			setHeldBack(split.likelyDuplicates);
 			setPasswordDiffers(split.passwordDiffers);
 			setAttachments(placed);
+			setSkippedFiles(canAddFiles ? 0 : (res.attachments?.length ?? 0));
 			const offered = split.fresh.length + split.likelyDuplicates.length + placed.length;
 			if (offered > 0) {
 				setResult({ ...res, imported: split.fresh, byType: tallyByType(split.fresh) });
 			}
 			return offered;
 		},
-		[entries],
+		[entries, canAddFiles],
 	);
 
 	// Each file follows its entry: onto the copy kept of an entry the file repeats, or, for one
@@ -148,6 +153,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	// entry counts as the one it resembles until the user imports it anyway.
 	const placeAttachments = useCallback(
 		async (res: ImportResult, withHeldBack = false): Promise<PlacedAttachment[]> => {
+			if (!canAddFiles) return [];
 			const { sameAs, resembles } = splitAlreadyImported(entries, res.imported);
 			const placed: PlacedAttachment[] = [];
 			for (const { entry, ...file } of res.attachments ?? []) {
@@ -169,7 +175,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			}
 			return placed;
 		},
-		[entries, files, describeFile],
+		[entries, files, describeFile, canAddFiles],
 	);
 	const importHeldBack = async () => {
 		setResult((r) => {
@@ -392,7 +398,9 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			}
 			if (showResult(res, await placeAttachments(res)) === 0)
 				throw new Error(
-					t`Everything in this file is already in your vault, so there is nothing to import.`,
+					!canAddFiles && res.attachments?.length
+						? t`The only new things in this file are attachments, which this browser can add only once it's linked to the Bramble desktop app.`
+						: t`Everything in this file is already in your vault, so there is nothing to import.`,
 				);
 		} catch (e) {
 			release();
@@ -482,6 +490,15 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 						{attachments.length > 0 && (
 							<p className="text-xs text-muted-foreground">
 								<AttachmentsLine placed={attachments} />
+							</p>
+						)}
+						{skippedFiles > 0 && (
+							<p className="text-xs text-muted-foreground">
+								<Plural
+									value={skippedFiles}
+									one="# attachment in this file is left out: this browser can add files only once it's linked to the Bramble desktop app."
+									other="# attachments in this file are left out: this browser can add files only once it's linked to the Bramble desktop app."
+								/>
 							</p>
 						)}
 						{duplicates > 0 && (

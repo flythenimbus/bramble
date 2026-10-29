@@ -12,7 +12,8 @@ unencrypted and nowhere near the login they belong to.
 As of yesterday's releases, they can live in your vault instead. Open an entry, choose **Attach a
 file**, and it is encrypted on the spot, kept with that entry, and carried to your other devices.
 
-It is in every Bramble app: the browser extensions, the desktop app, and both phone apps.
+It is in the desktop app, both phone apps, and the extension for Chrome and the other Chromium
+browsers. Firefox has to wait a little longer; [more on that below](#on-firefox).
 
 ## Attaching and opening
 
@@ -53,15 +54,15 @@ contents, and you can point Bramble at your own TURN server instead. The
 
 ## On Firefox
 
-Firefox extensions have no WebRTC, which is what file transfers between devices run over. So
-Firefox gets its files from the [Bramble desktop app](/blog/desktop-app-for-macos-and-linux) on the
-same computer instead. Pair the two once, as you would for filling, and files travel over that same
-link, which never leaves your machine.
+Not yet. Firefox extensions have no WebRTC, which is what file transfers between devices run over.
+The way around that is the [Bramble desktop app](/blog/desktop-app-for-macos-and-linux) on the same
+computer, handing files over a link that never leaves your machine, but that link isn't available
+in Firefox yet. The first version of this post said it was, and that was wrong.
 
-It works in both directions: a file you attach in Firefox reaches your other devices by way of the
-desktop app, and theirs reach Firefox the same way. Entries sync in Firefox exactly as before.
-Without the desktop app, Firefox still lists every attachment, and says it is waiting for the
-desktop app to hand it over.
+Until it is, Firefox doesn't offer to attach or import files, because a file added there could never
+reach your other devices. Entries sync in Firefox exactly as before, and an entry that has files
+still lists them, so open those in Bramble on another device. Bringing the desktop link to Firefox
+is next.
 
 ## Backups, KeePass, and the rest
 
@@ -69,9 +70,9 @@ desktop app to hand it over.
   the files inside, however large it gets. If a file has not reached this device yet, the backup
   waits for it and says which one, rather than quietly taking a backup with a hole in it. Restoring
   brings the files back with everything else.
-- **KeePass import and export carry attachments**, both ways, in every app. Import a KeePass
-  database and its files land on the entries they were on. Export one, and KeePassXC finds them
-  where it expects them.
+- **KeePass import and export carry attachments**, both ways. Import a KeePass database and its
+  files land on the entries they were on (everywhere but Firefox, for now). Export one, and
+  KeePassXC finds them where it expects them.
 - **Two exports still leave files behind**: **Send to another app** on iPhone, and exporting a
   selection of entries. A backup or a KeePass export takes everything.
 

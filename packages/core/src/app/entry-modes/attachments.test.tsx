@@ -46,7 +46,13 @@ vi.mock("../hooks/usePopOut", () => ({
 	usePopOut: () => ({ canPopOut: false, popOut: () => {} }),
 }));
 
-const platform = { target: "chromium", shell: {} } as unknown as Platform;
+const platformFor = (target: string, paired?: boolean) =>
+	({
+		target,
+		shell: {},
+		desktopLink:
+			paired === undefined ? undefined : { status: async () => ({ paired, permitted: true }) },
+	}) as unknown as Platform;
 
 const record = (n: number): FileRecord =>
 	({
@@ -57,10 +63,10 @@ const record = (n: number): FileRecord =>
 		hlc: { wall: n, counter: 0, node: "x" },
 	}) as unknown as FileRecord;
 
-function mount() {
+function mount(target = "chromium", paired?: boolean) {
 	return render(
 		<I18nProvider i18n={i18n}>
-			<PlatformProvider platform={platform}>
+			<PlatformProvider platform={platformFor(target, paired)}>
 				<AttachmentsDetail entryId="e1" />
 			</PlatformProvider>
 		</I18nProvider>,
@@ -127,5 +133,35 @@ describe("a file not on this device yet", () => {
 		mount();
 		expect(await screen.findByRole("button", { name: "Open attachment" })).toBeTruthy();
 		expect(h.asked).toEqual([]);
+	});
+});
+
+// Firefox has no WebRTC in an extension, so the desktop link is the only way a file leaves it. Until
+// it is linked, a file attached there would never reach another device.
+describe("Firefox, which adds files only once linked to the desktop app", () => {
+	it("unlinked, still lists and opens the entry's files, but offers no attach", async () => {
+		h.held = new Set([record(1).hash]);
+		mount("firefox", false);
+		expect(await screen.findByRole("button", { name: "Open attachment" })).toBeTruthy();
+		expect(screen.queryByText("Attach a file")).toBeNull();
+	});
+
+	it("unlinked, draws nothing for an entry without files", () => {
+		h.files = [];
+		const { container } = mount("firefox", false);
+		expect(container.textContent).toBe("");
+	});
+
+	it("without a desktop link at all, offers no attach", async () => {
+		h.held = new Set([record(1).hash]);
+		mount("firefox");
+		expect(await screen.findByRole("button", { name: "Open attachment" })).toBeTruthy();
+		expect(screen.queryByText("Attach a file")).toBeNull();
+	});
+
+	it("linked, offers attach like any other browser", async () => {
+		h.files = [];
+		mount("firefox", true);
+		expect(await screen.findByText("Attach a file")).toBeTruthy();
 	});
 });

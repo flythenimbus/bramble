@@ -170,6 +170,10 @@ msgid "{remaining}s left"
 msgstr "{remaining}s restants"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{skippedFiles, plural, one {# attachment in this file is left out: this browser can add files only once it's linked to the Bramble desktop app.} other {# attachments in this file are left out: this browser can add files only once it's linked to the Bramble desktop app.}}"
+msgstr "{skippedFiles, plural, one {# pièce jointe dans ce fichier est omise : ce navigateur ne peut ajouter des fichiers qu’une fois connecté à l’application de bureau Bramble.} other {# pièces jointes dans ce fichier sont omises : ce navigateur ne peut ajouter des fichiers qu’une fois connecté à l’application de bureau Bramble.}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "{toExisting, plural, one {# attachment will be added to an entry you already have.} other {# attachments will be added to entries you already have.}}"
 msgstr "{toExisting, plural, one {# pièce jointe sera ajoutée à une entrée que vous avez déjà.} other {# pièces jointes seront ajoutées à des entrées que vous avez déjà.}}"
 
@@ -3449,6 +3453,10 @@ msgstr "L'application de bureau a proposé de partager son coffre-fort avec ce n
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."
 msgstr "Celui que vous avez enregistré avec Exporter une sauvegarde, ou une sauvegarde cloud."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "The only new things in this file are attachments, which this browser can add only once it's linked to the Bramble desktop app."
+msgstr "Les seuls nouveaux éléments dans ce fichier sont des pièces jointes, que ce navigateur ne peut ajouter qu’une fois connecté à l’application de bureau Bramble."
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 msgid "The other version"

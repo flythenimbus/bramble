@@ -13,6 +13,7 @@ import {
 } from "../../vault/file-mutations";
 import { Button } from "../components/ui/button";
 import { InlineConfirm } from "../components/ui/inline-confirm";
+import { useCanAddFiles } from "../hooks/useCanAddFiles";
 import { usePopOut } from "../hooks/usePopOut";
 
 /**
@@ -23,10 +24,11 @@ import { usePopOut } from "../hooks/usePopOut";
  */
 export function AttachmentsDetail({ entryId }: { entryId: string }) {
 	const { files, canAttachFiles } = useVaultState();
+	const canAdd = useCanAddFiles();
 	const mine = useMemo(() => files.filter((f) => f.entryId === entryId), [files, entryId]);
 	// Nothing to poll where the platform has no files: the rows aren't drawn.
 	const { held, status } = useArrivals(canAttachFiles ? mine : NO_FILES);
-	if (!canAttachFiles) return null;
+	if (!canAttachFiles || (!canAdd && mine.length === 0)) return null;
 	return (
 		<div className="pt-3 border-t border-border/50 space-y-2">
 			<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -41,7 +43,7 @@ export function AttachmentsDetail({ entryId }: { entryId: string }) {
 					status={status[record.hash]}
 				/>
 			))}
-			<AttachButton entryId={entryId} />
+			{canAdd && <AttachButton entryId={entryId} />}
 		</div>
 	);
 }

@@ -703,6 +703,13 @@ channel.
 
 ### The desktop link: the one path that is not the mesh
 
+**Status (2026-10-29): built late.** This section was written assuming a Firefox desktop link that
+did not exist until 2026-10-29 (see [desktop-port.md](desktop-port.md#firefox)). Firefox still adds
+files only while it is linked: `addFiles` (`flags.ts`) is off there and `useCanAddFiles` turns it on
+for a paired link, because an unlinked Firefox would keep a new file to itself and every other
+device's backup would wait on it. Unlinked, it lists and opens the files it holds, offers no
+attach, and imports leave attachments out with a counted line saying why.
+
 Firefox has no `RTCPeerConnection` in any extension context, so on Firefox the mesh
 can never carry a file. Its one way to a file is the native-messaging link to the
 desktop app on the same machine, which already carries entry sync. Files ride that

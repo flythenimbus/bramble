@@ -144,6 +144,11 @@ export const CAPABILITIES = {
 	// before a file is chosen (docs/routing.md, "Pop-out handoff"). So attaching from there hands
 	// over to the detached window first. Mobile and desktop are already windows.
 	filePickerNeedsWindow: { extension: true, mobile: false, desktop: false },
+	// Adding attachments, by attaching or importing. Off on Firefox, which has no WebRTC in an
+	// extension: the desktop link is its only route for file bytes, so an unlinked Firefox would keep
+	// the file to itself and every other device's backup would wait on it. useCanAddFiles turns it on
+	// once linked. Files already there still list and open. See docs/file-attachments.md.
+	addFiles: { chromium: true, firefox: false, android: true, ios: true, desktop: true },
 	// Separate "let the device passcode open the biometric gate" toggle. iOS only: the gate is
 	// a Keychain access control picked at write time, so both options exist there (.userPresence
 	// vs .biometryCurrentSet). Android's Keystore key is biometry-only already - allowing
