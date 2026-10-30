@@ -1,6 +1,6 @@
-// Which flat-CSV export a file actually is, decided from its header row alone. Shared by the
-// Apple/Google reader, the LastPass one and the AliasVault one, so a mis-picked file can be
-// named instead of silently half-imported. See docs/lastpass-import.md.
+// Which flat-CSV export a file actually is, decided from its header row alone. Shared by every
+// CSV reader, so a mis-picked file can be named instead of silently half-imported. See
+// docs/lastpass-import.md.
 
 /** A CSV export identified by its header row. */
 export interface CsvFormat {
@@ -44,7 +44,28 @@ export const ALIASVAULT_CSV: CsvFormat = {
 	signature: ["servicename", "currentpassword"],
 };
 
-const ALL: readonly CsvFormat[] = [APPLE_CSV, GOOGLE_CSV, LASTPASS_CSV, ALIASVAULT_CSV];
+// RoboForm: `Name,Url,MatchUrl,Login,Pwd,Note,Folder,RfFieldsV2`. The Windows desktop app writes
+// `URL` and `Password` instead, so the password column stays out of the signature.
+export const ROBOFORM_CSV: CsvFormat = {
+	label: "RoboForm",
+	signature: ["name", "url", "login", "note", "folder"],
+};
+
+// Dashlane: the logins file of its export, `username,username2,username3,title,password,note,url,
+// category,otpUrl`. Older exports end in `otpSecret` instead, so it stays out.
+export const DASHLANE_CSV: CsvFormat = {
+	label: "Dashlane",
+	signature: ["username", "username2", "title", "password", "url"],
+};
+
+const ALL: readonly CsvFormat[] = [
+	APPLE_CSV,
+	GOOGLE_CSV,
+	LASTPASS_CSV,
+	ALIASVAULT_CSV,
+	ROBOFORM_CSV,
+	DASHLANE_CSV,
+];
 
 /** A header row reduced to lower-cased, trimmed labels. */
 export function headerLabels(row: readonly string[] | undefined): string[] {

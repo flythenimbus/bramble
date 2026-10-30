@@ -133,13 +133,28 @@ function asBytes(raw: string | Uint8Array): Uint8Array {
 // a high-ratio zip bomb, so bound the decompressed total too.
 const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024;
 
+/** Unzip under the size cap. `corruptError` covers an unreadable archive (a truncated download). */
+export function unzipCapped(
+	raw: string | Uint8Array,
+	corruptError: string,
+): Record<string, Uint8Array> {
+	let files: Record<string, Uint8Array>;
+	try {
+		files = unzipSync(asBytes(raw));
+	} catch {
+		throw new Error(corruptError);
+	}
+	assertUnzipUnderCap(files);
+	return files;
+}
+
 /**
- * The shape every zipped vendor export shares: unzip under the size cap, find the one file
+ * The shape the zipped JSON exports share: unzip under the size cap, find the one file
  * that carries the data, parse it as JSON, and validate it. Only the file name and the error
  * wording differ per vendor, so those are the parameters.
  *
- * `corruptError` covers an unreadable archive (a truncated download); `formatError` covers a
- * readable archive that isn't this vendor's export, which is a different thing to tell a user.
+ * `formatError` covers a readable archive that isn't this vendor's export, which is a different
+ * thing to tell a user than `corruptError`.
  */
 export function readZippedJson<T>(
 	raw: string | Uint8Array,
@@ -150,13 +165,7 @@ export function readZippedJson<T>(
 		formatError: string;
 	},
 ): T {
-	let files: Record<string, Uint8Array>;
-	try {
-		files = unzipSync(asBytes(raw));
-	} catch {
-		throw new Error(opts.corruptError);
-	}
-	assertUnzipUnderCap(files);
+	const files = unzipCapped(raw, opts.corruptError);
 
 	const dataFile = opts.findData(files);
 	if (!dataFile) throw new Error(opts.formatError);

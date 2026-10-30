@@ -97,7 +97,7 @@ What it cannot do yet, and says so rather than failing quietly: Touch ID unlock,
 - **Peer-to-peer sync.** Sync your vault between your own devices over an end-to-end encrypted connection, [merged entry by entry](#how-sync-works). No server stores it, and a relay only ever passes along data it can't read.
 - **Breach checking.** Optional Have I Been Pwned lookup using k-anonymity, so nothing about your password leaves your machine.
 - **Auto-lock.** Locks after idle time by default (configurable).
-- **Import from the others.** Bring entries over from 1Password, Bitwarden, Proton Pass, LastPass, Enpass, AliasVault, KeePass (KDBX4 key files included), Apple Passwords, or Google Password Manager. On iOS 26, bring everything over straight from Apple Passwords or another app with no file in between, passkeys included ([how](https://bramble.sh/blog/credential-exchange)).
+- **Import from the others.** Bring entries over from 1Password, Bitwarden, Proton Pass, LastPass, Dashlane, Enpass, AliasVault, RoboForm, KeePass (KDBX4 key files included), Apple Passwords, or Google Password Manager. On iOS 26, bring everything over straight from Apple Passwords or another app with no file in between, passkeys included ([how](https://bramble.sh/blog/credential-exchange)).
 - **Multi-key vaults.** LUKS-style key slots, so your master password, a security key, biometrics, or your recovery code can each unlock the same vault.
 - **Multiple vaults.** Keep more than one vault side by side and pick which to unlock when you open Bramble. Handy for sharing a device, or walling off separate sets of logins behind their own master passwords.
 

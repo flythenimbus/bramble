@@ -43,3 +43,9 @@ real KDBX4 file and not merely one we can read.
 
 `keepass.xml` carries all five predefined XML entities plus a numeric character reference in one
 password, covering issue #79.
+
+`roboform.csv` is invented data in the exact shape of a real RoboForm extension export: a BOM, the
+fields column spilling over into one cell per field, and a safenote row shorter than the header.
+
+`dashlane.zip` is invented data in the layout of a real Dashlane CSV export: five CSVs, one per
+kind of item, with the headers and CRLF line endings Dashlane writes today.

@@ -1,0 +1,7 @@
+﻿Name,Url,MatchUrl,Login,Pwd,Note,Folder,RfFieldsV2
+Asana,https://app.asana.com/-/login,https://app.asana.com/-/login,jane.sample@example.com,123456,recovery codes are in the safe,,"User ID$,,,txt,jane.sample@example.com","Password$,,,pwd,123456","Security question,,,txt,blue"
+Costco Wholesale,https://www.costco.com/LogonForm,https://www.costco.com/LogonForm,jane.sample@example.com,123456,,,"User ID$,,,txt,jane.sample@example.com","Password$,,,pwd,123456"
+GitHub,https://github.com/login,https://github.com/login,octo-sample,123456,,/Dev/Hosting,"User ID$,,,txt,octo-sample","Password$,,,pwd,123456","TOTP KEY$,,,txt,JBSWY3DPEHPK3PXP"
+Docs,https://docs.example.com,,,,,/Dev
+Wi-Fi,,,,,"Network: Sample-5G
+Password: 123456",/Dev
