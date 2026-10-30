@@ -3,6 +3,7 @@ import type { ShellAdapter } from "../adapters/shell";
 import type { StorageAdapter } from "../adapters/storage";
 import { usePlatform } from "../context/PlatformContext";
 import {
+	activeDevices,
 	addDevice,
 	canonicalRosterEntry,
 	decodePairingCode,
@@ -35,6 +36,15 @@ async function signOwnEntry(shell: ShellAdapter, entry: RosterEntry): Promise<Ro
 	if (!shell.syncSigningPublicKey || !shell.signRoster) return entry;
 	const sigKey = await shell.syncSigningPublicKey();
 	return signRosterEntry(entry, sigKey, shell.signRoster);
+}
+
+/** The group no longer knows this device by its current key (its own entry is gone or carries an
+ * old one), so it can't sync, and can't invite either: a joiner would copy the stale entry. */
+export class UnrecognizedDeviceError extends Error {
+	constructor() {
+		super("this device's own roster entry is missing or carries an old key");
+		this.name = "UnrecognizedDeviceError";
+	}
 }
 
 /** What the inviter needs, after re-entering the master password, to admission-sign a joiner's entry
@@ -245,6 +255,12 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			await storage.setMeta("sync.iceUrl", iceUrl ?? "");
 			const groupKey = await ensureGroup();
 			const inviterPub = await shell.syncDevicePublicKey();
+			// A joiner copies our roster. If our own entry is gone or carries an old key, every device
+			// paired from here turns us away too: the pairing works and sync never does.
+			const ours = await storage.getMeta<{ roster: RosterPayload }>(syncKey("sync.group"));
+			if (!ours || !activeDevices(ours.roster).some((d) => d.publicKey === inviterPub)) {
+				throw new UnrecognizedDeviceError();
+			}
 			const psk = randomKeyB64();
 			const entries = await readEntriesPayload();
 			const { blob } = await readDecodedBlob();

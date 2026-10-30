@@ -3,6 +3,7 @@ import { Chrome, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PairedBrowser } from "../../../../adapters/pairing";
 import { usePlatform } from "../../../../context/PlatformContext";
+import { UnrecognizedDeviceError } from "../../../../hooks/useSyncEnrollment";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import { formatDate } from "../../../../util/format-date";
 import { Button } from "../../../components/ui/button";
@@ -134,7 +135,13 @@ export function BrowserPairingSection() {
 		} catch (e) {
 			// The link may be up even though the invite failed. Say so rather than looking as if
 			// nothing happened: delegation will work and sync will not.
-			setError(e instanceof Error ? e.message : String(e));
+			setError(
+				e instanceof UnrecognizedDeviceError
+					? t`This device can't add devices right now: your other devices no longer recognize it. Disconnect, then join again with a code from another device.`
+					: e instanceof Error
+						? e.message
+						: String(e),
+			);
 		}
 	};
 
