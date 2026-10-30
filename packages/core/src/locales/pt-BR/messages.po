@@ -2291,6 +2291,14 @@ msgstr "Agora não"
 msgid "Not on this device yet. Waiting for a device that has it."
 msgstr "Ainda não está neste dispositivo. Aguardando um dispositivo que o tenha."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Not syncing: this device can't read its sync key right now. Lock and unlock to try again. If it keeps happening, disconnect and join again with a code from another device."
+msgstr "Não está sincronizando: este dispositivo não consegue ler a chave de sincronização agora. Bloqueie e desbloqueie para tentar novamente. Se isso continuar, desconecte e entre novamente com um código de outro dispositivo."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Not syncing: your other devices no longer recognize this one. Disconnect, then join again with a code from another device."
+msgstr "Não está sincronizando: seus outros dispositivos não reconhecem mais este. Desconecte e entre novamente com um código de outro dispositivo."
+
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
@@ -3586,6 +3594,10 @@ msgstr "Este dispositivo"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 #~ msgid "This device can unlock with {name}."
 #~ msgstr "Este dispositivo pode ser desbloqueado com {name}."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "This device can't add devices right now: your other devices no longer recognize it. Disconnect, then join again with a code from another device."
+msgstr "Este dispositivo não pode adicionar dispositivos agora: seus outros dispositivos não o reconhecem mais. Desconecte e entre novamente com um código de outro dispositivo."
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "this device only"

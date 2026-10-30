@@ -2291,6 +2291,14 @@ msgstr "Nicht jetzt"
 msgid "Not on this device yet. Waiting for a device that has it."
 msgstr "Noch nicht auf diesem Gerät. Warten auf ein Gerät, das ihn hat."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Not syncing: this device can't read its sync key right now. Lock and unlock to try again. If it keeps happening, disconnect and join again with a code from another device."
+msgstr "Synchronisierung nicht möglich: Dieses Gerät kann seinen Synchronisationsschlüssel gerade nicht lesen. Sperren und entsperren Sie das Gerät und versuchen Sie es erneut. Falls das weiterhin auftritt, trennen Sie die Verbindung und treten Sie mit einem Code von einem anderen Gerät erneut bei."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Not syncing: your other devices no longer recognize this one. Disconnect, then join again with a code from another device."
+msgstr "Synchronisierung nicht möglich: Ihre anderen Geräte erkennen dieses Gerät nicht mehr. Trennen Sie die Verbindung und treten Sie dann mit einem Code von einem anderen Gerät erneut bei."
+
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
@@ -3586,6 +3594,10 @@ msgstr "Dieses Gerät"
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 #~ msgid "This device can unlock with {name}."
 #~ msgstr "Dieses Gerät kann mit {name} entsperrt werden."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "This device can't add devices right now: your other devices no longer recognize it. Disconnect, then join again with a code from another device."
+msgstr "Dieses Gerät kann derzeit keine Geräte hinzufügen: Ihre anderen Geräte erkennen es nicht mehr. Trennen Sie die Verbindung und treten Sie dann mit einem Code von einem anderen Gerät erneut bei."
 
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "this device only"
