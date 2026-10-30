@@ -32,6 +32,19 @@ const h = vi.hoisted(() => ({
 	askable: false,
 	granted: true,
 	requestGrants: true,
+	/** True in the toolbar popup, false in the detached window (and off the extension). */
+	canPopOut: false,
+	poppedOut: 0,
+	claims: 0,
+}));
+
+vi.mock("../../../hooks/usePopOut", () => ({
+	usePopOut: () => ({
+		canPopOut: h.canPopOut,
+		popOut: () => {
+			h.poppedOut++;
+		},
+	}),
 }));
 
 vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
@@ -79,7 +92,10 @@ const platform = {
 	shell: { onSyncEvent: () => () => {} },
 	desktopLink: {
 		status: async () => ({ paired: h.paired, pairedAt: 1, permitted: h.permitted }),
-		claimSyncInvite: async () => h.invite,
+		claimSyncInvite: async () => {
+			h.claims++;
+			return h.invite;
+		},
 		desktopSyncKey: async () => h.desktopKey,
 		unlink: async () => {
 			h.steps.push("unlink");
@@ -138,6 +154,9 @@ afterEach(() => {
 	h.askable = false;
 	h.granted = true;
 	h.requestGrants = true;
+	h.canPopOut = false;
+	h.poppedOut = 0;
+	h.claims = 0;
 });
 
 describe("what a desktop connect will do to this browser", () => {
@@ -412,5 +431,38 @@ describe("the browser permission the link needs", () => {
 
 		expect(await screen.findByLabelText(/pairing code/i)).toBeTruthy();
 		expect(screen.queryByRole("button", { name: /allow and continue/i })).toBeNull();
+	});
+});
+
+// Confirming a join means switching to the desktop app, which closes the toolbar popup and loses the
+// vault it was receiving. Claiming spends the invite, so the window has to come first.
+describe("in the toolbar popup", () => {
+	it("continues in a window instead of pairing there", async () => {
+		h.paired = false;
+		h.canPopOut = true;
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: "Continue in a window" }));
+		expect(h.poppedOut).toBe(1);
+		expect(screen.queryByLabelText("Pairing code")).toBeNull();
+	});
+
+	it("leaves an invite unclaimed for the window, and offers it", async () => {
+		h.canPopOut = true;
+		h.invite = "INVITE";
+		mount();
+		expect(await screen.findByRole("button", { name: "Continue in a window" })).toBeTruthy();
+		await new Promise((r) => setTimeout(r, 50));
+		expect(h.claims).toBe(0);
+		expect(screen.queryByText("Add the desktop's vault")).toBeNull();
+	});
+
+	it("offers nothing more once this vault already syncs with the app", async () => {
+		h.canPopOut = true;
+		h.desktopKey = "APP";
+		h.rosterOf.set("v1", ["APP"]);
+		h.groupOf.set("v1", "GROUP");
+		mount();
+		expect(await screen.findByText("This vault syncs with the desktop app.")).toBeTruthy();
+		expect(screen.queryByRole("button", { name: "Continue in a window" })).toBeNull();
 	});
 });

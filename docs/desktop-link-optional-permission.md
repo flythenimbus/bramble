@@ -134,9 +134,13 @@ it relocks the vault in the middle of a flow the user deliberately started.
 
 1. Connect is clicked in Settings. Settings renders only in `popup.html`, so this is either the
    action popup or the detached pop-out (`options.html` mounts `OptionsApp`, the setup flow).
-2. In the action popup, pop out first. `background/popout.ts` already carries route and draft through
-   `POPOUT_HANDOFF_KEY`, and `armViewGrace()` already covers the lock gap in the handoff, so the
-   typed code survives the move.
+2. In the action popup, pop out first. `background/popout.ts` carries the route through
+   `POPOUT_HANDOFF_KEY`, and `armViewGrace()` covers the lock gap in the handoff. This step was
+   described here but not built until 2026-10-29, when a Firefox test lost a joined vault: the
+   popup closes as soon as the user switches to the desktop app to compare the SAS, taking the
+   join that was about to write the vault with it. So in the popup the section now offers only
+   "Continue in a window" (`canPopOut` in `DesktopLinkSection`), and an already linked popup does
+   not claim invites, because claiming spends one.
 3. In the pop-out, call `permissions.request()`. Finding 4 says the window survives the dialog and
    the promise resolves.
 4. Reload the pop-out. Finding 1 says this is the only way to get a context with the binding.

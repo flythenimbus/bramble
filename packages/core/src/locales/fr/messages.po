@@ -991,6 +991,10 @@ msgstr "Connecté."
 msgid "Connected. {0} of {1} aliases used."
 msgstr "Connecté. {0} alias utilisé(s) sur {1}."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Connecting continues in a window, which stays open while you switch to the desktop app."
+msgstr "La connexion se poursuit dans une fenêtre qui reste ouverte pendant que vous basculez vers l’application de bureau."
+
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Connecting to your other device…"
 msgstr "Connexion à votre autre appareil…"
@@ -1012,6 +1016,10 @@ msgstr "Contenu"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Continue"
 msgstr "Continuer"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Continue in a window"
+msgstr "Continuer dans une fenêtre"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Controls which URLs this entry will offer credentials for."
@@ -3663,6 +3671,10 @@ msgstr "Délai dépassé"
 #: packages/core/src/app/entry-modes/note.tsx
 msgid "Title"
 msgstr "Titre"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "To add the desktop app's vault, continue in a window."
+msgstr "Pour ajouter le coffre de l’application de bureau, continuez dans une fenêtre."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle autofill on web pages"
