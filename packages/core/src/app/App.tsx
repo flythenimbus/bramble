@@ -61,10 +61,13 @@ function InnerApp({
 	pendingLogin?: PendingLogin;
 	pendingTotp?: string;
 }) {
-	const { isLocked, ready, entries } = useVault();
+	const { isLocked, ready, entries, unlockedWithRecoveryCode } = useVault();
 	const { ready: registryReady, vaults, activeId } = useVaultRegistry();
 	const { shell } = usePlatform();
-	const vault = useMemo(() => ({ isLocked, ready, entries }), [isLocked, ready, entries]);
+	const vault = useMemo(
+		() => ({ isLocked, ready, entries, unlockedWithRecoveryCode }),
+		[isLocked, ready, entries, unlockedWithRecoveryCode],
+	);
 	// Registry slice for the launch-time picker decision.
 	const registry = useMemo(
 		() => ({ ready: registryReady, count: vaults.length, hasActive: activeId != null }),

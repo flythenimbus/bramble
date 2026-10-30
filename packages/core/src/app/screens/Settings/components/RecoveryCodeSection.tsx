@@ -1,11 +1,13 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { LifeBuoy } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useVault } from "../../../../hooks/useVault";
 import { RecoveryCodeDisplay } from "../../../components/RecoveryCodeDisplay";
 import { Button } from "../../../components/ui/button";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
+import { cn } from "../../../components/ui/utils";
+import { useSettingsHighlight } from "../settings-search";
 import { Row } from "./primitives";
 
 /** Settings row to generate or reset the vault's one-time recovery code. */
@@ -23,6 +25,19 @@ export function RecoveryCodeSection() {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [freshCode, setFreshCode] = useState<string | null>(null);
+	// Highlighted after a password reset done with the recovery code: a suggestion, not a gate.
+	const [highlight, setHighlight] = useSettingsHighlight();
+	const highlighted = highlight === "recovery-code";
+	const highlightRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		if (highlighted) highlightRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+	}, [highlighted]);
+
+	const rotate = async () => {
+		setFreshCode(await generateRecoveryCode());
+		if (highlighted) setHighlight(undefined);
+	};
 
 	// Requires authorization: a master-password confirm if one is set, else a security-key tap.
 	const begin = async () => {
@@ -39,7 +54,7 @@ export function RecoveryCodeSection() {
 				setError(t`Couldn't verify your key. Try again.`);
 				return;
 			}
-			setFreshCode(await generateRecoveryCode());
+			await rotate();
 		} catch (e) {
 			setError((e as Error).message);
 		} finally {
@@ -57,7 +72,7 @@ export function RecoveryCodeSection() {
 				setError(t`Incorrect master password`);
 				return;
 			}
-			setFreshCode(await generateRecoveryCode());
+			await rotate();
 			setGating(false);
 			setPassword("");
 		} catch (err) {
@@ -68,7 +83,20 @@ export function RecoveryCodeSection() {
 	};
 
 	return (
-		<>
+		<div
+			ref={highlightRef}
+			className={cn(
+				"space-y-4",
+				highlighted && "rounded-lg border border-primary/40 bg-primary/5 p-3",
+			)}
+		>
+			{highlighted && (
+				<p className="text-xs text-primary">
+					<Trans>
+						You used your recovery code. You can reset it now so the old one stops working.
+					</Trans>
+				</p>
+			)}
 			<Row
 				icon={<LifeBuoy className="w-4 h-4 text-primary" />}
 				title={t`Recovery code`}
@@ -146,6 +174,6 @@ export function RecoveryCodeSection() {
 					)}
 				</div>
 			</Modal>
-		</>
+		</div>
 	);
 }

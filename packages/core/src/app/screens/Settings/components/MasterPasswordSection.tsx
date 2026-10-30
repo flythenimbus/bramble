@@ -10,7 +10,9 @@ import { Button } from "../../../components/ui/button";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { PasswordStrengthMeter } from "../../../components/ui/password-strength-meter";
+import { cn } from "../../../components/ui/utils";
 import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
+import { useSettingsHighlight } from "../settings-search";
 import { Row, Toggle } from "./primitives";
 
 interface PwFormValues {
@@ -23,8 +25,11 @@ interface PwFormValues {
 export function MasterPasswordSection() {
 	const {
 		hasPasswordSlot,
+		hasRecoveryCode,
+		unlockedWithRecoveryCode,
 		webauthnKeys,
 		verifyMasterPassword,
+		verifyRecoveryCode,
 		changeMasterPassword,
 		setMasterPassword,
 		disableMasterPassword,
@@ -41,12 +46,19 @@ export function MasterPasswordSection() {
 	const [disableError, setDisableError] = useState<string | null>(null);
 	const [disabling, setDisabling] = useState(false);
 	const [acceptedWeak, setAcceptedWeak] = useState(false);
+	// The change form proves the current recovery code instead of the password: the default
+	// after a recovery-code unlock, since the password is probably forgotten.
+	const [withRecoveryCode, setWithRecoveryCode] = useState(false);
 	const formErrorRef = useRef<HTMLDivElement>(null);
+	const [highlight, setHighlight] = useSettingsHighlight();
+	const highlighted = highlight === "master-password";
+	const highlightRef = useRef<HTMLDivElement>(null);
 
 	const {
 		register,
 		handleSubmit,
 		reset,
+		resetField,
 		setError,
 		watch,
 		formState: { errors, isSubmitting },
@@ -63,6 +75,10 @@ export function MasterPasswordSection() {
 		}
 	}, [formError]);
 
+	useEffect(() => {
+		if (highlighted) highlightRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+	}, [highlighted]);
+
 	const closeForm = () => {
 		setFormMode(null);
 		setFormError(null);
@@ -75,11 +91,17 @@ export function MasterPasswordSection() {
 		setPwSuccess(null);
 		try {
 			if (formMode === "change") {
-				const ok = await verifyMasterPassword(currentPassword);
+				const ok = withRecoveryCode
+					? await verifyRecoveryCode(currentPassword)
+					: await verifyMasterPassword(currentPassword);
 				if (!ok) {
 					setError(
 						"currentPassword",
-						{ message: t`Current password is incorrect` },
+						{
+							message: withRecoveryCode
+								? t`Recovery code is incorrect`
+								: t`Current password is incorrect`,
+						},
 						{ shouldFocus: true },
 					);
 					return;
@@ -92,6 +114,9 @@ export function MasterPasswordSection() {
 			}
 			reset();
 			setFormMode(null);
+			// Suggest rotating a recovery code that was just used, but leave it to the user.
+			if (withRecoveryCode || unlockedWithRecoveryCode) setHighlight("recovery-code");
+			else if (highlighted) setHighlight(undefined);
 		} catch (e) {
 			setFormError(cryptoError(e));
 		}
@@ -105,6 +130,7 @@ export function MasterPasswordSection() {
 		if (next && !hasPasswordSlot) {
 			setFormError(null);
 			reset();
+			setWithRecoveryCode(false);
 			setFormMode("set");
 		} else if (!next && hasPasswordSlot && hasWebauthnKey) {
 			setDisableError(null);
@@ -126,7 +152,25 @@ export function MasterPasswordSection() {
 	};
 
 	return (
-		<>
+		<div
+			ref={highlightRef}
+			className={cn(
+				"space-y-4",
+				highlighted && "rounded-lg border border-primary/40 bg-primary/5 p-3",
+			)}
+		>
+			{highlighted && (
+				<p className="text-xs text-primary">
+					{hasPasswordSlot ? (
+						<Trans>
+							You unlocked with your recovery code. If you've forgotten your master password, change
+							it here.
+						</Trans>
+					) : (
+						<Trans>You unlocked with your recovery code. You can set a master password here.</Trans>
+					)}
+				</p>
+			)}
 			<Row
 				icon={<Asterisk className="w-4 h-4 text-primary" />}
 				title={t`Master password`}
@@ -154,6 +198,7 @@ export function MasterPasswordSection() {
 							reset();
 							setFormError(null);
 							setPwSuccess(null);
+							setWithRecoveryCode(unlockedWithRecoveryCode && hasRecoveryCode);
 							setFormMode("change");
 						}}
 						className="rounded-md px-2.5 py-1 text-xs"
@@ -189,12 +234,35 @@ export function MasterPasswordSection() {
 						</div>
 					)}
 					{formMode === "change" && (
-						<PasswordField
-							label={t`Current password`}
-							autoFocus
-							error={errors.currentPassword?.message}
-							{...register("currentPassword", { required: t`Enter your current password` })}
-						/>
+						<div>
+							<PasswordField
+								label={withRecoveryCode ? t`Current recovery code` : t`Current password`}
+								autoFocus
+								error={errors.currentPassword?.message}
+								{...register("currentPassword", {
+									required: withRecoveryCode
+										? t`Enter your recovery code`
+										: t`Enter your current password`,
+								})}
+							/>
+							{hasRecoveryCode && (
+								<Button
+									variant="link"
+									size="none"
+									onClick={() => {
+										resetField("currentPassword");
+										setWithRecoveryCode((v) => !v);
+									}}
+									className="mt-1.5 text-xs"
+								>
+									{withRecoveryCode ? (
+										<Trans>Use your master password instead</Trans>
+									) : (
+										<Trans>Use your recovery code instead</Trans>
+									)}
+								</Button>
+							)}
+						</div>
 					)}
 					<div>
 						<PasswordField
@@ -291,6 +359,6 @@ export function MasterPasswordSection() {
 					</div>
 				</div>
 			</Modal>
-		</>
+		</div>
 	);
 }

@@ -8,7 +8,12 @@ import { createAppRouter } from "./router";
 
 // Guards are pure functions of injected context; a headless load() follows the
 // redirect chain, so the committed pathname is the guard's decision.
-type VaultSlice = { isLocked: boolean; ready: boolean; entries: Entry[] };
+type VaultSlice = {
+	isLocked: boolean;
+	ready: boolean;
+	entries: Entry[];
+	unlockedWithRecoveryCode?: boolean;
+};
 type RegistrySlice = { ready: boolean; count: number; hasActive: boolean };
 
 const login = (id: string): Entry => ({
@@ -20,15 +25,21 @@ const login = (id: string): Entry => ({
 	password: "",
 });
 
+async function load(initialPath: string, vault?: VaultSlice, registry?: RegistrySlice) {
+	const router = createAppRouter(initialPath);
+	router.update({
+		context: { vault: vault && { unlockedWithRecoveryCode: false, ...vault }, registry },
+	});
+	await router.load();
+	return router;
+}
+
 async function destination(
 	initialPath: string,
 	vault?: VaultSlice,
 	registry?: RegistrySlice,
 ): Promise<string> {
-	const router = createAppRouter(initialPath);
-	router.update({ context: { vault, registry } });
-	await router.load();
-	return router.state.location.pathname;
+	return (await load(initialPath, vault, registry)).state.location.pathname;
 }
 
 describe("route guards", () => {
@@ -60,6 +71,20 @@ describe("route guards", () => {
 		expect(await destination("/vault/abc", { isLocked: false, ready: true, entries: [] })).toBe(
 			"/vault",
 		);
+	});
+
+	it("lands a recovery-code unlock on the master password in Settings", async () => {
+		const router = await load("/", {
+			isLocked: false,
+			ready: true,
+			entries: [],
+			unlockedWithRecoveryCode: true,
+		});
+		expect(router.state.location.pathname).toBe("/settings");
+		expect(router.state.location.search).toEqual({
+			tab: "security",
+			highlight: "master-password",
+		});
 	});
 
 	it("makes no guard decision before context is injected (first-paint placeholder)", async () => {
@@ -139,7 +164,12 @@ describe("back-button history premise", () => {
 		const router = createAppRouter("/vault/abc/edit");
 		router.update({
 			context: {
-				vault: { isLocked: false, ready: true, entries: [login("abc")] },
+				vault: {
+					isLocked: false,
+					ready: true,
+					entries: [login("abc")],
+					unlockedWithRecoveryCode: false,
+				},
 				registry: undefined,
 			},
 		});
@@ -151,7 +181,12 @@ describe("back-button history premise", () => {
 		const router = createAppRouter("/vault");
 		router.update({
 			context: {
-				vault: { isLocked: false, ready: true, entries: [login("abc")] },
+				vault: {
+					isLocked: false,
+					ready: true,
+					entries: [login("abc")],
+					unlockedWithRecoveryCode: false,
+				},
 				registry: undefined,
 			},
 		});

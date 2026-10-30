@@ -291,6 +291,8 @@ export interface VaultState {
 	hasPasswordSlot: boolean;
 	/** Vault has a recovery code on file. False for pre-recovery-code vaults. */
 	hasRecoveryCode: boolean;
+	/** This session was unlocked with the recovery code; cleared on lock or vault switch. */
+	unlockedWithRecoveryCode: boolean;
 	/** Webauthn slots joined with their stored labels, for Settings. */
 	webauthnKeys: WebauthnKeyMeta[];
 	/** False until mount-time hydration resolves; route guards gate on this. */
@@ -425,6 +427,8 @@ export interface VaultActions {
 	 * render has landed, so sequential mutations see their own earlier writes. */
 	readEntries(): Entry[];
 	verifyMasterPassword(password: string): Promise<boolean>;
+	/** Check a recovery code against the vault's recovery slots without changing lock state. */
+	verifyRecoveryCode(code: string): Promise<boolean>;
 	/** Prove possession of a registered key (a tap) without changing lock state. */
 	verifyWithWebauthnKey(): Promise<boolean>;
 	changeMasterPassword(newPassword: string): Promise<void>;
@@ -561,6 +565,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const [webauthnSlots, setWebauthnSlots] = useState<WebauthnSlot[]>([]);
 	const [hasPasswordSlot, setHasPasswordSlot] = useState(false);
 	const [hasRecoveryCode, setHasRecoveryCode] = useState(false);
+	const [unlockedWithRecoveryCode, setUnlockedWithRecoveryCode] = useState(false);
 	// Set when a vault exists on disk but its blob can't be read/decoded (e.g. an
 	// FSA file whose read permission needs a fresh user gesture, or a corrupt blob).
 	const [vaultError, setVaultError] = useState<string | null>(null);
@@ -926,6 +931,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		if (!isLocked) setLockedByUser(false);
 	}, [isLocked]);
+
+	// A recovery-code session ends at the next lock or vault switch.
+	useEffect(() => {
+		if (isLocked) setUnlockedWithRecoveryCode(false);
+	}, [isLocked]);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: activeId is the change trigger
+	useEffect(() => {
+		setUnlockedWithRecoveryCode(false);
+	}, [activeId]);
 
 	// Reflect a background-initiated lock (auto-lock alarm): drop decrypted state
 	// so the guard redirects to the unlock screen.
@@ -1554,6 +1568,26 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, readDecodedBlob],
 	);
 
+	/** Check a recovery code against every recovery slot without unlocking. */
+	const verifyRecoveryCode = useCallback(
+		async (code: string) => {
+			const { blob } = await readDecodedBlob();
+			const normalized = normalizeRecoveryCode(code);
+			for (const slot of findRecoverySlots(blob)) {
+				const ok = await crypto.verifyPasswordSlot({
+					password: normalized,
+					saltB64: bytesToBase64(slot.salt),
+					slotIdB64: bytesToBase64(slot.slotId),
+					verifierB64: bytesToBase64(slot.verifier),
+					magicVersion: verifierPrefix(),
+				});
+				if (ok) return true;
+			}
+			return false;
+		},
+		[crypto, readDecodedBlob],
+	);
+
 	/**
 	 * Re-wrap the in-memory VEK under `password` as the vault's single password
 	 * slot. Shared core of set, re-enable, and change. Does NOT rotate the VEK
@@ -1790,6 +1824,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			if (!opened) throw new Error(t`Incorrect recovery code`);
 			await openUnlocked(activeId ?? null);
 			setIsLocked(false);
+			setUnlockedWithRecoveryCode(true);
 			void shell.flushPendingCornerCapture().catch(() => {});
 		},
 		[readDecodedBlob, crypto, openUnlocked, shell, activeId, t],
@@ -2022,6 +2057,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			hasWebauthnSlot,
 			hasPasswordSlot,
 			hasRecoveryCode,
+			unlockedWithRecoveryCode,
 			webauthnKeys,
 			biometricSupported: biometric !== undefined,
 			biometricAvailable,
@@ -2047,6 +2083,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			hasWebauthnSlot,
 			hasPasswordSlot,
 			hasRecoveryCode,
+			unlockedWithRecoveryCode,
 			webauthnKeys,
 			biometric,
 			biometricAvailable,
@@ -2164,6 +2201,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			resolveConflict,
 			readEntries,
 			verifyMasterPassword,
+			verifyRecoveryCode,
 			verifyWithWebauthnKey,
 			changeMasterPassword,
 			setMasterPassword,
@@ -2214,6 +2252,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			resolveConflict,
 			readEntries,
 			verifyMasterPassword,
+			verifyRecoveryCode,
 			verifyWithWebauthnKey,
 			changeMasterPassword,
 			setMasterPassword,
