@@ -232,13 +232,14 @@ export function SyncConnectSection() {
 	// Either signal: the countdown is the smooth one, the host event is the reliable one.
 	const inviteExpired = secondsLeft === 0 || hostExpired;
 
-	// Withdraw a prompt left over past expiry: the session is gone, so approving it would do
-	// nothing. Refusing also settles the host's parked promise.
+	// Withdraw a prompt our own code's countdown has outrun. Not on `hostExpired`: the host refuses
+	// its own parked prompt on expiry and usePendingEnrollApproval drops it, while the flag outlives
+	// that invite and would refuse the next one's prompt on sight, such as the browser link's.
 	useEffect(() => {
-		if (!inviteExpired || !approval) return;
+		if (secondsLeft !== 0 || !approval) return;
 		setApproval(null);
 		void shell.approveEnrollment?.(false);
-	}, [inviteExpired, approval, shell, setApproval]);
+	}, [secondsLeft, approval, shell, setApproval]);
 
 	// Dismissing the UI must stop the host listening too. Not stopSyncSpike, which would also drop
 	// this device's ongoing sync.
