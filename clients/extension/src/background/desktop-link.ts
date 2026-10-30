@@ -16,6 +16,7 @@
 // The crypto lives in the offscreen document, because MV3's service worker has no WASM host.
 // This module owns the port and the persistence and relays handshake messages across.
 
+import { defaultDeviceLabel } from "@core/util/device-label";
 import { api, disconnectReason } from "../platform-api";
 import { isExtensionSender } from "../sender";
 import { sendToOffscreen } from "./offscreen-client";
@@ -275,7 +276,9 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 		session.send({
 			kind: "pair",
 			v: PROTOCOL_VERSION,
-			label: `chrome-extension://${api.runtime.id}`,
+			// What the desktop lists this browser as. The same name sync gives it, rather than an
+			// origin, which Firefox does not have in chrome-extension:// form.
+			label: defaultDeviceLabel(),
 		});
 		const reply = await session.request({ message: start.message });
 		if (!reply?.ok) throw new Error("The desktop app refused the code.");

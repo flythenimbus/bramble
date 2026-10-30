@@ -524,6 +524,22 @@ describe("pairing borrows the page's native transport", () => {
 		expect(page.sent[2]).toEqual({ frame: { message: "xx1" } });
 	});
 
+	it("names itself to the desktop app as the browser, not an extension origin", async () => {
+		// The desktop lists linked browsers by this label; Firefox has no chrome-extension:// id.
+		vi.stubGlobal("navigator", {
+			userAgent:
+				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:144.0) Gecko/20100101 Firefox/144.0",
+		});
+		try {
+			const mod = await load();
+			const page = lend(EXT_SENDER);
+			await pairOver(mod, page);
+			expect(page.sent[1]).toMatchObject({ frame: { kind: "pair", label: "Firefox on Mac" } });
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
 	it("refuses a port from a content script and does not pair over it", async () => {
 		const mod = await load();
 		const evil = lend({ origin: "https://evil.example", tab: { id: 1 } });
