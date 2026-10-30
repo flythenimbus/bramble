@@ -11,6 +11,8 @@ export default defineConfig({
 	// canonical URLs; see the page `path` props and Footer links) and redirects the
 	// legacy .html URLs to them, so both keep working.
 	build: { format: "file" },
+	// Astro 7's default ("jsx") drops the space where a line of text wraps onto a tag.
+	compressHTML: true,
 	integrations: [mdx()],
 	markdown: {
 		shikiConfig: { themes: { light: "github-light", dark: "github-dark" }, wrap: true },
