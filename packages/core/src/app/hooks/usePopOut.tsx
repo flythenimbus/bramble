@@ -10,9 +10,12 @@ type DraftGetter = () => unknown;
 interface PopOutContextValue {
 	/** False when already detached (hides the affordance). */
 	canPopOut: boolean;
-	/** Snapshot the current route + draft and open a detached window. Pass `draft` to hand over
-	 * something else instead, e.g. a ceremony to resume (see webauthnNeedsWindow in flags.ts). */
-	popOut: (draft?: unknown) => void;
+	/** Snapshot the current route + form draft and open a detached window. Takes no argument, so
+	 * it is safe as `onClick={popOut}`: React's click event cannot be sent to the background. */
+	popOut: () => void;
+	/** Open the window on this route handing over `draft` instead, e.g. a ceremony to resume (see
+	 * webauthnNeedsWindow in flags.ts). */
+	popOutWith: (draft: unknown) => void;
 	/** Active form route registers its draft getter on mount, null on unmount. */
 	registerDraftGetter: (getter: DraftGetter | null) => void;
 	/** Returns the draft this window opened with, exactly once (undefined after). */
@@ -49,26 +52,24 @@ export function PopOutProvider({
 		return draft;
 	}, []);
 
-	const popOut = useCallback(
-		(draft?: unknown) => {
+	const popOutWith = useCallback(
+		(draft: unknown) => {
 			const path = router.state.location.href;
-			void shell.popOut({
-				path,
-				draft: draft ?? draftGetterRef.current?.(),
-				vaultId: activeId,
-			});
+			void shell.popOut({ path, draft, vaultId: activeId });
 		},
 		[router, shell, activeId],
 	);
+	const popOut = useCallback(() => popOutWith(draftGetterRef.current?.()), [popOutWith]);
 
 	const value = useMemo<PopOutContextValue>(
 		() => ({
 			canPopOut: popOutCapable && !shell.isDetached(),
 			popOut,
+			popOutWith,
 			registerDraftGetter,
 			takeInitialDraft,
 		}),
-		[shell, popOutCapable, popOut, registerDraftGetter, takeInitialDraft],
+		[shell, popOutCapable, popOut, popOutWith, registerDraftGetter, takeInitialDraft],
 	);
 
 	return <PopOutContext.Provider value={value}>{children}</PopOutContext.Provider>;

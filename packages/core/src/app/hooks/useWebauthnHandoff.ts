@@ -46,11 +46,11 @@ export function useWebauthnHandoff(
 } {
 	const needsWindow = useCan("webauthnNeedsWindow");
 	const { shell } = usePlatform();
-	const { popOut, takeInitialDraft } = usePopOut();
+	const { popOutWith, takeInitialDraft } = usePopOut();
 	// Only the attached popup is fatal. The detached window is a real window, and so is a tab.
 	const mustHandOff = needsWindow && !shell.isDetached();
 
-	const handOff = useCallback((intent: WebauthnHandoff) => popOut(intent), [popOut]);
+	const handOff = useCallback((intent: WebauthnHandoff) => popOutWith(intent), [popOutWith]);
 
 	const resumed = useRef(false);
 	useEffect(() => {

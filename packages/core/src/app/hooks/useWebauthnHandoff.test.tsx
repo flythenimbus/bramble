@@ -11,13 +11,13 @@ import { useWebauthnHandoff, type WebauthnHandoff } from "./useWebauthnHandoff";
 // tab, which never has the popup's lifetime. See docs/security-keys.md.
 
 const h = vi.hoisted(() => ({
-	popOut: vi.fn(),
+	popOutWith: vi.fn(),
 	draft: undefined as unknown,
 }));
 
 vi.mock("./usePopOut", () => ({
 	usePopOut: () => ({
-		popOut: h.popOut,
+		popOutWith: h.popOutWith,
 		takeInitialDraft: () => {
 			const d = h.draft;
 			h.draft = undefined; // one-shot, as the real one is
@@ -62,7 +62,7 @@ function mount(
 const mustHandOff = () => document.querySelector("button")?.dataset.must === "true";
 
 beforeEach(() => {
-	h.popOut.mockClear();
+	h.popOutWith.mockClear();
 	h.draft = undefined;
 });
 afterEach(cleanup);
@@ -88,7 +88,7 @@ describe("where a webauthn ceremony is allowed to run", () => {
 	it("passes the intent to the window it opens", () => {
 		mount("firefox");
 		document.querySelector("button")?.click();
-		expect(h.popOut).toHaveBeenCalledWith({ webauthn: "unlock" });
+		expect(h.popOutWith).toHaveBeenCalledWith({ webauthn: "unlock" });
 	});
 });
 
