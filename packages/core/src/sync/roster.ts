@@ -208,6 +208,11 @@ export function isActiveDevice(roster: RosterPayload, id: string): boolean {
 	return activeDevices(roster).some((d) => d.id === id);
 }
 
+/** Whether any roster holds a signed entry for `publicKey`: that device has had a signing key. */
+export function hasSignedEntry(rosters: RosterPayload[], publicKey: string): boolean {
+	return rosters.some((r) => r.devices.some((d) => d.publicKey === publicKey && !!d.sigKey));
+}
+
 /** The active device with this id, or undefined. */
 export function findDevice(roster: RosterPayload, id: string): RosterEntry | undefined {
 	return activeDevices(roster).find((d) => d.id === id);

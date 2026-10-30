@@ -6,10 +6,14 @@
 // keeps the same two in the Keychain/Keystore for the same reason.
 //
 // Generated on first use and stable after. Losing either is not fatal to the vault but does
-// evict this device from the group, so nothing here regenerates silently on a read failure:
-// an error propagates rather than quietly minting a new identity.
+// evict this device from the group, so nothing here regenerates silently on a read failure, or
+// while this device is in a group at all: an error propagates rather than quietly minting a new
+// identity.
 
+import { hasSignedEntry } from "@core/index";
+import { vaultSyncGroups } from "@core/sync/sync-keys";
 import { invoke } from "@tauri-apps/api/core";
+import { desktopStorage } from "../adapters/storage";
 import { desktopSyncCrypto } from "../sync-crypto";
 
 /** Namespaced so the credential store can hold unrelated secrets without collision. */
@@ -43,10 +47,15 @@ async function secureSet(key: string, value: unknown): Promise<void> {
 	await invoke("secure_set", { key, value: JSON.stringify(value) });
 }
 
+/** The groups this device is in, across every vault: both keypairs are shared by all of them. */
+const enrolledGroups = () => vaultSyncGroups((k) => desktopStorage.getMeta(k));
+
 /** This device's Noise static keypair. Only the public half goes in the roster. */
 export async function deviceKeypair(): Promise<DeviceKeypair> {
 	const stored = await secureGet<DeviceKeypair>(DEVICE_KEYPAIR_KEY);
 	if (stored?.privateKey && stored?.publicKey) return stored;
+	// Absent while enrolled: the store lost it, or it didn't come across with the vault.
+	if ((await enrolledGroups()).length > 0) throw new Error("this device's sync key is missing");
 	const generated = await desktopSyncCrypto.handshake_generate_keypair();
 	await secureSet(DEVICE_KEYPAIR_KEY, generated);
 	return generated;
@@ -56,6 +65,19 @@ export async function deviceKeypair(): Promise<DeviceKeypair> {
 export async function signingKeypair(): Promise<SigningKeypair> {
 	const stored = await secureGet<SigningKeypair>(SIGNING_KEY_KEY);
 	if (stored?.secretKey && stored?.publicKey) return stored;
+	// A signed entry of ours means a key existed. Unsigned ones predate signing, and minting here is
+	// how ensureOwnEntrySigned backfills them.
+	const groups = await enrolledGroups();
+	if (groups.length > 0) {
+		const { publicKey } = await deviceKeypair();
+		if (
+			hasSignedEntry(
+				groups.map((g) => g.roster),
+				publicKey,
+			)
+		)
+			throw new Error("this device's signing key is missing");
+	}
 	const generated = await desktopSyncCrypto.roster_sig_generate_key();
 	await secureSet(SIGNING_KEY_KEY, generated);
 	return generated;

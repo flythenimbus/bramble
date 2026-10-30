@@ -528,3 +528,86 @@ describe("combining siblings in the background (release B2)", () => {
 		}
 	});
 });
+
+// A device in a sync group must never mint a new identity: a fresh key would make it a stranger to
+// every peer, with no way back short of re-pairing.
+describe("sync identity for a vault in a group", () => {
+	type Handler = (m: unknown) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
+	async function handler(type: string): Promise<Handler> {
+		await loadSync();
+		const { on } = await import("./router");
+		const call = vi.mocked(on).mock.calls.find((c) => c[0] === type);
+		if (!call) throw new Error(`no ${type} handler`);
+		return call[1] as unknown as Handler;
+	}
+	const one = addVault(EMPTY_REGISTRY, { id: "a", label: "", createdAt: 1 });
+	const own = (sigKey?: string) => ({
+		devices: [
+			{
+				id: "me",
+				publicKey: "ME",
+				label: "me",
+				addedAt: 0,
+				hlc: { wall: 0, counter: 0, node: "me" },
+				...(sigKey ? { sigKey, sig: "s" } : {}),
+			},
+		],
+		revoked: [],
+	});
+	const generated = () =>
+		sendToOffscreen.mock.calls.filter((c) => c[0].type?.startsWith("SYNC_GENERATE_"));
+	function mint() {
+		sendToOffscreen.mockImplementation(async (m) => {
+			if (m.type === "SYNC_GENERATE_KEYPAIR")
+				return { ok: true, data: { privateKey: "p", publicKey: "NEW" } } as never;
+			if (m.type === "SYNC_GENERATE_SIGNING_KEY")
+				return { ok: true, data: { secretKey: "s", publicKey: "NEWSIG" } } as never;
+			return { ok: true };
+		});
+	}
+
+	it("creates the device key for a vault in no group", async () => {
+		stubChrome({ [VAULT_REGISTRY_KEY]: one }, { [ACTIVE_VAULT_SESSION_KEY]: "a" });
+		mint();
+		expect(await (await handler("SYNC_DEVICE_PUBKEY"))({})).toEqual({ ok: true, data: "NEW" });
+	});
+
+	it("never replaces the device key of a vault in a group", async () => {
+		stubChrome(
+			{ [VAULT_REGISTRY_KEY]: one, "sync.group:a": { groupKey: "g", roster: own() } },
+			{ [ACTIVE_VAULT_SESSION_KEY]: "a" },
+		);
+		mint();
+		const res = await (await handler("SYNC_DEVICE_PUBKEY"))({});
+		expect(res.ok).toBe(false);
+		expect(generated()).toHaveLength(0);
+	});
+
+	it("creates a signing key for an entry that predates signing, so it can be backfilled", async () => {
+		stubChrome(
+			{
+				[VAULT_REGISTRY_KEY]: one,
+				"sync.group:a": { groupKey: "g", roster: own() },
+				"sync.deviceKeypair:a": { privateKey: "p", publicKey: "ME" },
+			},
+			{ [ACTIVE_VAULT_SESSION_KEY]: "a" },
+		);
+		mint();
+		expect(await (await handler("SYNC_SIGNING_PUBKEY"))({})).toEqual({ ok: true, data: "NEWSIG" });
+	});
+
+	it("never replaces the signing key once this device's entry is signed", async () => {
+		stubChrome(
+			{
+				[VAULT_REGISTRY_KEY]: one,
+				"sync.group:a": { groupKey: "g", roster: own("my-sig") },
+				"sync.deviceKeypair:a": { privateKey: "p", publicKey: "ME" },
+			},
+			{ [ACTIVE_VAULT_SESSION_KEY]: "a" },
+		);
+		mint();
+		const res = await (await handler("SYNC_SIGNING_PUBKEY"))({});
+		expect(res.ok).toBe(false);
+		expect(generated()).toHaveLength(0);
+	});
+});

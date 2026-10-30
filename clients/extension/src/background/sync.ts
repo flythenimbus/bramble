@@ -16,6 +16,7 @@ import {
 	emptyEntriesPayload,
 	encodeEntriesPayload,
 	encodeRoster,
+	hasSignedEntry,
 	mergeEntriesPayload,
 	mergeRemoteRoster,
 	SYNC_LAST_SYNCED_KEY,
@@ -119,6 +120,9 @@ on(
 		const ctx = await requireSyncVault();
 		let kp = await getStoredKeypair(ctx);
 		if (!kp) {
+			// In a group, the key existed: a new one would be a stranger to every peer.
+			if (await getStoredGroup(ctx))
+				return { ok: false, error: "this device's sync key can't be read" };
 			const res = await sendToOffscreen({ type: "SYNC_GENERATE_KEYPAIR" });
 			if (!res.ok || !res.data)
 				return { ok: false, error: res.error ?? "keypair generation failed" };
@@ -184,6 +188,14 @@ on(
 		const ctx = await requireSyncVault();
 		let kp = await getStoredSigningKey(ctx);
 		if (!kp) {
+			// A signed entry of ours means a key existed. Unsigned ones predate signing, and minting
+			// here is how ensureOwnEntrySigned backfills them.
+			const group = await getStoredGroup(ctx);
+			if (group) {
+				const pub = (await getStoredKeypair(ctx))?.publicKey;
+				if (!pub || hasSignedEntry([group.roster], pub))
+					return { ok: false, error: "this device's signing key can't be read" };
+			}
 			const res = await sendToOffscreen({ type: "SYNC_GENERATE_SIGNING_KEY" });
 			if (!res.ok || !res.data)
 				return { ok: false, error: res.error ?? "signing key generation failed" };

@@ -8,6 +8,7 @@ import {
 	emptyRoster,
 	encodeRoster,
 	findDevice,
+	hasSignedEntry,
 	isActiveDevice,
 	mergeRemoteRoster,
 	mergeRosters,
@@ -335,5 +336,25 @@ describe("remote-roster future-stamp guard (revocation integrity)", () => {
 			now,
 		);
 		expect(isActiveDevice(merged, "phone")).toBe(true);
+	});
+});
+
+describe("hasSignedEntry", () => {
+	const entry = (publicKey: string, sigKey?: string) => ({
+		id: publicKey,
+		publicKey,
+		label: publicKey,
+		addedAt: 0,
+		hlc: { wall: 0, counter: 0, node: publicKey },
+		...(sigKey ? { sigKey, sig: "s" } : {}),
+	});
+
+	it("is true only for a signed entry carrying this device's key", () => {
+		const rosters = [{ devices: [entry("ME"), entry("PEER", "k")], revoked: [] }];
+		expect(hasSignedEntry(rosters, "ME")).toBe(false);
+		expect(hasSignedEntry(rosters, "PEER")).toBe(true);
+		expect(hasSignedEntry([...rosters, { devices: [entry("ME", "m")], revoked: [] }], "ME")).toBe(
+			true,
+		);
 	});
 });

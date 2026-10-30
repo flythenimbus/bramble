@@ -14,6 +14,7 @@ import {
 	encodeRoster,
 	ensureDeviceId,
 	type HybridClock,
+	hasSignedEntry,
 	makeClock,
 	mergeRemoteRoster,
 	type RosterEntry,
@@ -25,7 +26,7 @@ import {
 } from "@core/index";
 import { blobArrived } from "@core/sync/blob-arrivals";
 import { answerBlobStatus } from "@core/sync/blob-status";
-import { syncKeyFor } from "@core/sync/sync-keys";
+import { syncKeyFor, vaultSyncGroups } from "@core/sync/sync-keys";
 import {
 	type BlobSyncSession,
 	startBlobSync,
@@ -82,6 +83,9 @@ interface DeviceKeypair {
 
 const DEVICE_KEYPAIR_KEY = "sync.deviceKeypair";
 
+/** The groups this device is in, across every vault: both keypairs are shared by all of them. */
+const enrolledGroups = () => vaultSyncGroups((k) => mobileStorage.getMeta(k));
+
 // Sync transport crypto (Noise handshake + Nostr + roster signing): native on device (iOS +
 // Android), so it shares the one native module that holds the VEK (the vault already runs native
 // there) and works under iOS Lockdown Mode where WASM is gone. The in-webview WASM module is only
@@ -109,6 +113,9 @@ async function deviceKeypair(): Promise<DeviceKeypair> {
 		await Preferences.remove({ key: `meta:${DEVICE_KEYPAIR_KEY}` });
 		return legacy;
 	}
+	// Enrolled means a key existed: the Keychain failed to return it (the plugin reports any error
+	// as absent) or didn't come across in a restore. A new one would be a stranger to the group.
+	if ((await enrolledGroups()).length > 0) throw new Error("this device's sync key can't be read");
 	const wasm = await loadSyncCrypto();
 	const kp = await wasm.handshake_generate_keypair();
 	await secureStorage.set(DEVICE_KEYPAIR_KEY, kp);
@@ -127,6 +134,19 @@ const SIGNING_KEY_KEY = "sync.signingKey";
 async function signingKeypair(): Promise<SigningKeypair> {
 	const stored = await secureStorage.get<SigningKeypair>(SIGNING_KEY_KEY);
 	if (stored?.secretKey && stored?.publicKey) return stored;
+	// A signed entry of ours means a key existed. Unsigned ones predate signing, and minting here is
+	// how ensureOwnEntrySigned backfills them.
+	const groups = await enrolledGroups();
+	if (groups.length > 0) {
+		const { publicKey } = await deviceKeypair();
+		if (
+			hasSignedEntry(
+				groups.map((g) => g.roster),
+				publicKey,
+			)
+		)
+			throw new Error("this device's signing key can't be read");
+	}
 	const wasm = await loadSyncCrypto();
 	const kp = await wasm.roster_sig_generate_key();
 	await secureStorage.set(SIGNING_KEY_KEY, kp);
