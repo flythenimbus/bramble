@@ -1197,6 +1197,10 @@ msgstr "Mot de passe actuel"
 msgid "Current password is incorrect"
 msgstr "Le mot de passe actuel est incorrect."
 
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Current recovery code"
+msgstr "Code de récupération actuel"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Custom fields"
 msgstr "Champs personnalisés"
@@ -1445,6 +1449,10 @@ msgstr "Entrez votre mot de passe maître pour déverrouiller votre coffre-fort"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Enter your Nextcloud WebDAV address, not the site you sign in to. Files, then Files settings, shows it at the bottom left; it looks like https://cloud.example.com/remote.php/dav/files/USERNAME/. Sign in with an app password, and write the backup folder below as a path, like /path/to/dir."
 msgstr "Saisissez l’adresse WebDAV de votre Nextcloud, et non celle du site de connexion. Dans Fichiers, puis Paramètres de Fichiers, elle s’affiche en bas à gauche ; elle ressemble à https://cloud.example.com/remote.php/dav/files/USERNAME/. Connectez-vous avec un mot de passe d’application et indiquez ci-dessous le dossier de sauvegarde sous forme de chemin, par exemple /chemin/vers/dossier."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Enter your recovery code"
+msgstr "Saisissez votre code de récupération"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
@@ -2717,6 +2725,10 @@ msgstr "Reconnecter"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Recovery code"
 msgstr "Code de récupération"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Recovery code is incorrect"
+msgstr "Le code de récupération est incorrect"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Region"
@@ -3999,6 +4011,14 @@ msgstr "Utilisez Touch ID ou Windows Hello au lieu de saisir votre mot de passe 
 msgid "Use Touch ID, Windows Hello or a security key like a YubiKey instead of typing your master password."
 msgstr "Utilisez Touch ID, Windows Hello ou une clé de sécurité comme une YubiKey au lieu de saisir votre mot de passe principal."
 
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Use your master password instead"
+msgstr "Utiliser votre mot de passe principal à la place"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Use your recovery code instead"
+msgstr "Utiliser votre code de récupération à la place"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "username"
 msgstr "Nom d'utilisateur"
@@ -4157,6 +4177,18 @@ msgstr "Vous pouvez fermer cet onglet et utiliser la fenêtre contextuelle {0}."
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "You need a vault before you can import into it"
 msgstr "Un coffre-fort est nécessaire avant de pouvoir effectuer l'importation."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "You unlocked with your recovery code. If you've forgotten your master password, change it here."
+msgstr "Vous avez déverrouillé l'application avec votre code de récupération. Si vous avez oublié votre mot de passe principal, changez-le ici."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "You unlocked with your recovery code. You can set a master password here."
+msgstr "Vous avez déverrouillé l'application avec votre code de récupération. Vous pouvez définir un mot de passe principal ici."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "You used your recovery code. You can reset it now so the old one stops working."
+msgstr "Vous avez utilisé votre code de récupération. Vous pouvez maintenant le réinitialiser pour que l'ancien cesse de fonctionner."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "You won't be able to see this code again."

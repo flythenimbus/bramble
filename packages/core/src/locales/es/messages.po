@@ -1197,6 +1197,10 @@ msgstr "Contraseña actual"
 msgid "Current password is incorrect"
 msgstr "La contraseña actual es incorrecta"
 
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Current recovery code"
+msgstr "Código de recuperación actual"
+
 #: packages/core/src/app/entry-modes/custom-fields.tsx
 msgid "Custom fields"
 msgstr "Campos personalizados"
@@ -1445,6 +1449,10 @@ msgstr "Introduzca la contraseña maestra para desbloquear su bóveda"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Enter your Nextcloud WebDAV address, not the site you sign in to. Files, then Files settings, shows it at the bottom left; it looks like https://cloud.example.com/remote.php/dav/files/USERNAME/. Sign in with an app password, and write the backup folder below as a path, like /path/to/dir."
 msgstr "Introduzca su dirección WebDAV de Nextcloud, no el sitio en el que inicia sesión. En Archivos, luego en Configuración de Archivos, se muestra abajo a la izquierda; tiene este aspecto: https://cloud.example.com/remote.php/dav/files/USERNAME/. Inicie sesión con una contraseña de aplicación y escriba la carpeta de copia de seguridad a continuación como una ruta, como /path/to/dir."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Enter your recovery code"
+msgstr "Introducir el código de recuperación"
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
@@ -2717,6 +2725,10 @@ msgstr "Reconectar"
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Recovery code"
 msgstr "Código de recuperación"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Recovery code is incorrect"
+msgstr "El código de recuperación es incorrecto"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Region"
@@ -3999,6 +4011,14 @@ msgstr "Use Touch ID o Windows Hello en lugar de escribir su contraseña maestra
 msgid "Use Touch ID, Windows Hello or a security key like a YubiKey instead of typing your master password."
 msgstr "Use Touch ID, Windows Hello o una llave de seguridad como YubiKey en lugar de escribir su contraseña maestra."
 
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Use your master password instead"
+msgstr "Usar la contraseña maestra en su lugar"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Use your recovery code instead"
+msgstr "Usar el código de recuperación en su lugar"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "username"
 msgstr "Nombre de usuario"
@@ -4157,6 +4177,18 @@ msgstr "Puede cerrar esta pestaña y usar la ventana emergente de {0}."
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "You need a vault before you can import into it"
 msgstr "Necesita una bóveda antes de poder importar en ella."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "You unlocked with your recovery code. If you've forgotten your master password, change it here."
+msgstr "Ha desbloqueado con su código de recuperación. Si ha olvidado su contraseña maestra, cámbiela aquí."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "You unlocked with your recovery code. You can set a master password here."
+msgstr "Ha desbloqueado con su código de recuperación. Puede establecer una contraseña maestra aquí."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "You used your recovery code. You can reset it now so the old one stops working."
+msgstr "Ha usado su código de recuperación. Puede restablecerlo ahora para que el anterior deje de funcionar."
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "You won't be able to see this code again."
