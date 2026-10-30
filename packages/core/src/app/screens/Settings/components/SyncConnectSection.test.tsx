@@ -26,7 +26,7 @@ beforeAll(() => {
 	i18n.activate("en");
 });
 
-function mount() {
+function mount(opts: { group?: unknown; syncDevicePublicKey?: () => Promise<string> } = {}) {
 	const listeners: ((e: SyncEvent) => void)[] = [];
 	const approveEnrollment = vi.fn(async (_approved: boolean) => {});
 	const platform = {
@@ -40,10 +40,10 @@ function mount() {
 			getPendingEnrollApproval: async () => null,
 			approveEnrollment,
 			stopEnrollInvite: async () => {},
-			syncDevicePublicKey: async () => "me",
+			syncDevicePublicKey: opts.syncDevicePublicKey ?? (async () => "me"),
 		},
 		storage: {
-			getMeta: async () => undefined,
+			getMeta: async (k: string) => (k === "sync.group" ? opts.group : undefined),
 			setMeta: async () => {},
 			removeMeta: async () => {},
 			subscribeMeta: () => () => {},
@@ -88,5 +88,45 @@ describe("the approval prompt", () => {
 
 		emit({ kind: "enroll-expired" } as SyncEvent);
 		expect(screen.queryByText("Is this your device?")).toBeNull();
+	});
+});
+
+const device = (publicKey: string) => ({
+	id: publicKey,
+	publicKey,
+	label: publicKey,
+	addedAt: 1,
+	hlc: { wall: 1, counter: 0, node: publicKey },
+});
+const groupOf = (...keys: string[]) => ({
+	groupKey: "g",
+	roster: { devices: keys.map(device), revoked: [] },
+});
+
+// Peers check this device's key against rosters copied from its own, so a device missing from its
+// own list can neither sync nor pair. Saying "Synced" there hid a user's broken sync for 20 days.
+describe("the sync status", () => {
+	it("says synced while the group knows this device", async () => {
+		mount({ group: groupOf("me", "peer") });
+		expect(await screen.findByText("Synced · 2 devices")).toBeTruthy();
+	});
+
+	it("says not syncing when the group no longer knows this device's key", async () => {
+		mount({ group: groupOf("old-me", "peer") });
+		expect(await screen.findByText(/no longer recognize this one/)).toBeTruthy();
+		expect(screen.queryByText(/^Synced/)).toBeNull();
+		const add = screen.getByRole("button", { name: /Add another device/ }) as HTMLButtonElement;
+		expect(add.disabled).toBe(true);
+	});
+
+	it("says not syncing when this device can't read its sync key", async () => {
+		mount({
+			group: groupOf("me", "peer"),
+			syncDevicePublicKey: async () => {
+				throw new Error("this device's sync key can't be read");
+			},
+		});
+		expect(await screen.findByText(/can't read its sync key right now/)).toBeTruthy();
+		expect(screen.queryByText(/^Synced/)).toBeNull();
 	});
 });

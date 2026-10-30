@@ -102,16 +102,19 @@ export function SyncConnectSection() {
 	// while loading so we don't flash the onboarding UI over an existing group.
 	const [group, setGroup] = useState<SyncGroup | null | undefined>(undefined);
 	const [myPub, setMyPub] = useState<string | null>(null);
+	// The device's sync key failed to load, as opposed to not having loaded yet.
+	const [keyUnreadable, setKeyUnreadable] = useState(false);
 	// Epoch ms of the last successful reconcile with a peer (null = never / not loaded).
 	const [lastSynced, setLastSynced] = useState<number | null>(null);
 
 	const refreshGroup = useCallback(async () => {
 		const [g, pub] = await Promise.all([
 			storage.getMeta<SyncGroup>(syncKey("sync.group")),
-			shell.syncDevicePublicKey().catch(() => null),
+			shell.syncDevicePublicKey().catch(() => undefined),
 		]);
 		setGroup(g ?? null);
-		setMyPub(pub);
+		setMyPub(pub ?? null);
+		setKeyUnreadable(pub === undefined);
 	}, [storage, syncKey, shell]);
 
 	useEffect(() => {
@@ -265,6 +268,10 @@ export function SyncConnectSection() {
 	const others = myPub ? devices.filter((d) => d.publicKey !== myPub) : devices;
 	const inGroup = group != null;
 	const paired = others.length > 0;
+	// Peers check this device's key against rosters copied from ours, so missing here means missing
+	// everywhere: it can neither sync nor pair anyone until it joins again.
+	const unrecognized = inGroup && myPub !== null && !devices.some((d) => d.publicKey === myPub);
+	const notSyncing = inGroup && (keyUnreadable || unrecognized);
 	// Roster entries carry an Ed25519 signature since 2026-07-09, but only devices that have
 	// created, joined or invited since then have one: nothing re-signs on its own, so a device that
 	// predates it stays unsigned until Bramble is opened on it (the backfill in useSyncEnrollment).
@@ -351,11 +358,22 @@ export function SyncConnectSection() {
 				<>
 					<div className="flex items-center gap-2">
 						<span
-							className={`inline-block w-2 h-2 rounded-full ${paired ? "bg-emerald-500" : "bg-amber-500"}`}
+							className={`inline-block w-2 h-2 rounded-full ${paired && !notSyncing ? "bg-emerald-500" : "bg-amber-500"}`}
 							aria-hidden
 						/>
 						<span className="text-sm font-medium">
-							{paired ? (
+							{keyUnreadable ? (
+								<Trans>
+									Not syncing: this device can't read its sync key right now. Lock and unlock to try
+									again. If it keeps happening, disconnect and join again with a code from another
+									device.
+								</Trans>
+							) : unrecognized ? (
+								<Trans>
+									Not syncing: your other devices no longer recognize this one. Disconnect, then
+									join again with a code from another device.
+								</Trans>
+							) : paired ? (
 								<Trans>Synced · {devices.length} devices</Trans>
 							) : (
 								<Trans>Waiting for a device to join…</Trans>
@@ -433,7 +451,13 @@ export function SyncConnectSection() {
 					)}
 
 					<div className="flex flex-wrap items-center gap-2">
-						<Button variant="secondary" size="sm" onClick={beginAddDevice} className="gap-1.5">
+						<Button
+							variant="secondary"
+							size="sm"
+							onClick={beginAddDevice}
+							disabled={notSyncing}
+							className="gap-1.5"
+						>
 							<Plus className="w-3.5 h-3.5" /> <Trans>Add another device</Trans>
 						</Button>
 						<InlineConfirm
