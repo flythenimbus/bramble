@@ -462,6 +462,7 @@ dependencies = [
  "interprocess",
  "keyring",
  "log",
+ "objc2-app-kit",
  "plist",
  "reqwest",
  "serde",

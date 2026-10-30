@@ -39,9 +39,22 @@ pub const HOTKEY: &str = "CmdOrCtrl+Shift+Space";
 pub fn apply_backdrop(window: &WebviewWindow) {
     #[cfg(target_os = "macos")]
     {
+        use objc2_app_kit::{
+            NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSWindow,
+        };
         use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
-        // HudWindow is the material the system's own floating panels use, and it stays dark
-        // in both appearances rather than following the desktop tint.
+        // HudWindow follows the window's appearance, and the page is hardcoded dark, so pin this
+        // window dark. Tauri's `theme` can't: on macOS it sets the whole app's appearance.
+        match window.ns_window() {
+            Ok(ptr) => {
+                // SAFETY: the live NSWindow behind this handle, and setup runs on the main thread.
+                let ns_window = unsafe { &*ptr.cast::<NSWindow>() };
+                let dark = NSAppearance::appearanceNamed(unsafe { NSAppearanceNameDarkAqua });
+                ns_window.setAppearance(dark.as_deref());
+            }
+            Err(e) => log::warn!("spotlight appearance not pinned: {e}"),
+        }
+        // HudWindow is the material the system's own floating panels use.
         match apply_vibrancy(
             window,
             NSVisualEffectMaterial::HudWindow,

@@ -101,6 +101,8 @@ plist = "1.10"
 keyring = { version = "3.6.3", features = ["apple-native"] }
 # Writing and reading the launch agent's plist. Already in the tree via tauri.
 plist = "1.10"
+# Pinning the quick-access panel's window appearance. Already in the tree via tauri.
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSAppearance", "NSResponder", "NSWindow"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", features = ["windows-native"] }

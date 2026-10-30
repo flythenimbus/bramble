@@ -1,6 +1,7 @@
 <!doctype html>
-<!-- Forced dark: the panel sits on the macOS HudWindow material, which is dark in both
-     system appearances, so following the light theme would put dark text on a dark blur.
+<!-- Forced dark: the panel sits on the macOS HudWindow material, which spotlight.rs pins to
+     the dark appearance for this window, so following the light theme would put dark text on
+     a dark blur.
      `theme-ready` is not decoration: @vault/theme paints an opaque anti-flash background on
      html and body until it is present, and `html:not(.theme-ready)` outspecifies a plain
      `html` rule, so without it the panel stays opaque and hides the blur behind it. The
