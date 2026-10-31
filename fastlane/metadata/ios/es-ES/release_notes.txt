@@ -1,8 +1,11 @@
 Novedades de esta versión:
 
-- Adjuntar archivos a sus entradas: un escaneo del pasaporte, un contrato, una clave de recuperación. Los archivos se cifran en su dispositivo antes de salir del dispositivo, se sincronizan entre sus dispositivos y se incluyen en sus copias de seguridad.
-- La importación y exportación de KeePass ahora también incluye archivos adjuntos.
-- Un inicio de sesión importado para un sitio en su propio puerto, como un router o un servidor doméstico, ahora coincide con ese puerto exacto.
-- Actualizaciones de seguridad en las bibliotecas sobre las que está construida la aplicación.
+- ¿Olvidó su contraseña maestra? Después de desbloquear con su código de recuperación, puede establecer una contraseña nueva de inmediato, usando el código en lugar de la contraseña anterior.
+- Importar sus datos de acceso desde Dashlane y RoboForm.
+- Si la sincronización deja de funcionar en este dispositivo, la pantalla Sincronización ahora lo indica y le explica cómo solucionarlo, en lugar de mostrar «Sincronizado».
+- Agregar un dispositivo vuelve a funcionar después de que una invitación anterior haya caducado.
+- Las contraseñas reveladas se vuelven a ocultar al salir de la aplicación.
+- Después de eliminar una caja fuerte, la aplicación abre la que queda.
+- Actualizaciones de seguridad en las bibliotecas en las que se basa la aplicación.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

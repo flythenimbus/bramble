@@ -1,8 +1,11 @@
 What's new in this release:
 
-- Attach files to your entries: a passport scan, a contract, a recovery key. Files are encrypted on your device before they leave it, sync between your devices, and are included in your backups.
-- KeePass import and export now carry attachments too.
-- A login imported for a site on its own port, like a router or a home server, now matches that exact port.
+- Forgot your master password? After unlocking with your recovery code, you can set a new password right away, using the code instead of the old password.
+- Import your logins from Dashlane and RoboForm.
+- If sync stops working on this device, the Sync screen now says so and tells you how to fix it, instead of showing "Synced".
+- Adding a device works again after an earlier invite expired.
+- Revealed passwords are hidden again when you leave the app.
+- After you delete a vault, the app opens the one that's left.
 - Security updates to the libraries the app is built on.
 
 No account, no cloud. Everything stays on your devices.

@@ -1,8 +1,11 @@
 Nouveautés de cette version :
 
-- Vous pouvez joindre des fichiers à vos entrées : une copie de passeport, un contrat, une clé de récupération. Les fichiers sont chiffrés sur votre appareil avant de le quitter, synchronisés entre vos appareils et inclus dans vos sauvegardes.
-- L’import et l’export KeePass incluent désormais aussi les pièces jointes.
-- Un identifiant importé pour un site sur son propre port, comme un routeur ou un serveur domestique, correspond désormais exactement à ce port.
+- Vous avez oublié votre mot de passe principal ? Après avoir déverrouillé l’application avec votre code de récupération, vous pouvez définir un nouveau mot de passe immédiatement, en utilisant ce code au lieu de l’ancien mot de passe.
+- Import de vos identifiants depuis Dashlane et RoboForm.
+- Si la synchronisation cesse de fonctionner sur cet appareil, l’écran Synchronisation vous l’indique désormais et vous explique comment y remédier, au lieu d’afficher « Synchronisé ».
+- L’ajout d’un appareil fonctionne de nouveau après l’expiration d’une invitation précédente.
+- Les mots de passe révélés sont de nouveau masqués lorsque vous quittez l’application.
+- Après la suppression d’un coffre, l’application ouvre celui qui reste.
 - Mises à jour de sécurité des bibliothèques sur lesquelles repose l’application.
 
-Aucun compte, aucun cloud. Tout reste sur vos appareils.
+Pas de compte, pas de cloud. Tout reste sur vos appareils.

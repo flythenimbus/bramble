@@ -1,8 +1,11 @@
-Novità in questa versione:
+Novità di questa versione:
 
-- È possibile allegare file alle proprie voci: una scansione del passaporto, un contratto, una chiave di ripristino. I file vengono crittografati sul dispositivo prima di lasciarlo, si sincronizzano tra i dispositivi e sono inclusi nei backup.
-- L'importazione e l'esportazione KeePass ora includono anche gli allegati.
-- Un accesso importato per un sito su una porta specifica, come un router o un server domestico, ora corrisponde esattamente a quella porta.
-- Aggiornamenti di sicurezza alle librerie su cui si basa l'app.
+- Ha dimenticato la password principale? Dopo lo sblocco con il codice di recupero, può impostare subito una nuova password, utilizzando il codice al posto della vecchia password.
+- È possibile importare i propri accessi da Dashlane e RoboForm.
+- Se la sincronizzazione smette di funzionare su questo dispositivo, la schermata Sincronizzazione ora lo segnala e spiega come risolvere il problema, invece di mostrare "Sincronizzato".
+- L'aggiunta di un dispositivo torna a funzionare dopo la scadenza di un invito precedente.
+- Le password mostrate vengono nascoste di nuovo quando si esce dall'app.
+- Dopo aver eliminato un vault, l'app apre quello rimasto.
+- Aggiornamenti di sicurezza delle librerie su cui si basa l'app.
 
 Nessun account, nessun cloud. Tutto rimane sui propri dispositivi.
