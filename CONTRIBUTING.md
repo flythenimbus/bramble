@@ -169,5 +169,8 @@ ci:check && pnpm test`.
 
 ## Licensing
 
-Bramble is GPLv3. By contributing you agree that your contribution is licensed
-under the same terms. See [LICENSE](LICENSE).
+Bramble is GPLv3, with an additional permission for app stores (see
+[APP-STORE-EXCEPTION.md](APP-STORE-EXCEPTION.md)): Apple's App Store terms add
+restrictions the GPL alone does not allow. By contributing you agree that your
+contribution is licensed under the GPLv3 with that permission. See
+[LICENSE](LICENSE).

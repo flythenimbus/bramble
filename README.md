@@ -228,4 +228,4 @@ The desktop app's Windows installer is built by GitHub Actions from this reposit
 
 Copyright (C) 2026 Webvana Inc.
 
-Bramble is free software, released under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for the full text. In short: use it, study it, fork it, and share it. If you distribute a modified version, pass the same freedoms along and make your source available under the GPLv3 too.
+Bramble is free software, released under the GNU General Public License v3.0, with an additional permission that lets the apps ship through app stores (see [APP-STORE-EXCEPTION.md](APP-STORE-EXCEPTION.md)). See the [LICENSE](LICENSE) file for the full text. In short: use it, study it, fork it, and share it. If you distribute a modified version, pass the same freedoms along and make your source available under the GPLv3 too.
