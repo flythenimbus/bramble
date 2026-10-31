@@ -87,7 +87,7 @@ export function AppLayout() {
 								<Button
 									variant="ghost"
 									size="icon"
-									onClick={popOut}
+									onClick={() => popOut()}
 									aria-label={t`Open in window`}
 									title={t`Open in window`}
 								>
