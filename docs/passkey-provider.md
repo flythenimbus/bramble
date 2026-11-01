@@ -88,7 +88,9 @@ adds modest size; gate behind a cargo feature if needed.
 
 A discoverable passkey credential needs: `credentialId`, `rpId`, `rpName`, `userHandle`, `userName`,
 `userDisplayName`, `privateKey` (encrypted under the entry DEK like any field), `publicKeyCose`,
-`alg` (COSE, usually -7 / ES256), `signCount`, `createdAt`, `lastUsedAt`.
+`alg` (COSE, usually -7 / ES256), `signCount`, `createdAt`, `lastUsedAt`. Optional: `prf` (the
+WebAuthn PRF secrets, minted with every new passkey) and `fido2Extensions` (CXF extension data kept
+verbatim); see [passkey-prf.md](passkey-prf.md).
 
 **Decision: embed a `passkeys[]` array on the login entry (Bitwarden model) as primary, with a
 standalone `type: "passkey"` entry as fallback** for passkey-only sites with no login. Embedding
@@ -417,6 +419,11 @@ driving a rewrite.
 - **`signCount` = 0, always.** The spec permits it and synced passkeys require it: a real counter
   regresses when the same passkey is used on two synced devices, which some RPs flag as a cloned
   authenticator. Our sync makes 0 mandatory.
+- **PRF (the WebAuthn `prf` extension) is answered on every surface, only after user
+  verification.** The shared core derives the output, so a site gets the same key from Chrome,
+  Firefox, Android and iOS; iOS's no-UI fast path hands a PRF request to the unlock UI. Passkeys made
+  before PRF support never get a secret later. Design, wire formats and status:
+  [passkey-prf.md](passkey-prf.md).
 - **Attestation = `"none"`.** Standard for password managers. We ship one fixed Bramble AAGUID
   (**`4249c72f-2967-4a74-8ec5-e610036d7be1`**, in `passkey.rs`) so RPs / other managers can show the
   Bramble icon. NOTE: the strict spec reading zeroes the AAGUID for `none` attestation, and a minority

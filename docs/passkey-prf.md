@@ -10,7 +10,12 @@
 
 **Spec:** the Design section below, written from issue #169 and the investigation behind it. Background: [passkey-provider.md](passkey-provider.md), [credential-exchange.md](credential-exchange.md), [passkey-import.md](passkey-import.md).
 
-**Status:** planned 2026-11-01, not started.
+**Status:** built 2026-11-01 on all four surfaces, plus the Proton import and credential exchange.
+Verified: the Rust known-answer test; the TS, Kotlin JVM and mobile unit tests; Chrome's real
+webAuthenticationProxy end to end (`e2e/extension/passkey-prf.spec.ts`: registration and sign-in
+give the same key, `evalByCredential` wins over `eval`); Apple's CXF decoder accepting our export
+(the macOS 26.6 probe); Android and iOS compiling (Kotlin, simulator builds of both targets). Not yet
+run on a device: Android, iPhone, Firefox, and the cross-device check.
 
 ## Why
 
