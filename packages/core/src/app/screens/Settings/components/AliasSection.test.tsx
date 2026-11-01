@@ -143,6 +143,30 @@ describe("AliasSection persistence", () => {
 		vi.unstubAllGlobals();
 	});
 
+	// A Fastmail token limited to Masked Email cannot read mail, so the screen says how to make one.
+	it("tells a Fastmail user to tick only Masked Email, and connects with a stored token", async () => {
+		const reply = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (url: string | URL) =>
+				String(url).endsWith("/jmap/session")
+					? reply({
+							apiUrl: "https://phl.api.fastmail.com/jmap/api/",
+							username: "me@fastmail.com",
+							primaryAccounts: { "https://www.fastmail.com/dev/maskedemail": "u1" },
+						})
+					: reply({ methodResponses: [["MaskedEmail/get", { list: [] }, "0"]] }),
+			),
+		);
+		mount(stored({ provider: "fastmail", options: {}, apiKey: "fmu1-stored" }));
+		await waitFor(() => expect(providerSelect().value).toBe("fastmail"));
+		expect(screen.getByText(/only Masked Email ticked/i)).toBeTruthy();
+
+		fireEvent.click(screen.getByRole("button", { name: /check key/i }));
+		expect(await screen.findByText(/^Connected\./)).toBeTruthy();
+		vi.unstubAllGlobals();
+	});
+
 	// A key belongs to the provider it was typed for. Carrying it across a switch meant the next
 	// "Check key" sent one provider's secret in an Authorization header to another provider's
 	// server, and the next blur saved it as that provider's key. Found testing DuckDuckGo: a

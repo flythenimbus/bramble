@@ -3,6 +3,7 @@ import { type AddyFormat, createAddyClient } from "./addy";
 import { type CatchAllStyle, createCatchAllClient } from "./catchall";
 import type { AliasConfig } from "./config";
 import { createDuckDuckGoClient } from "./duckduckgo";
+import { createFastmailClient } from "./fastmail";
 import { createRelayClient } from "./relay";
 import { createSimpleLoginClient, type SimpleLoginMode } from "./simplelogin";
 import type { AliasClient, AliasProviderId } from "./types";
@@ -42,6 +43,7 @@ export {
 	DUCKDUCKGO_DEFAULT_BASE_URL,
 	type DuckDuckGoConfig,
 } from "./duckduckgo";
+export { createFastmailClient, FASTMAIL_DEFAULT_BASE_URL, type FastmailConfig } from "./fastmail";
 export { createRelayClient, RELAY_DEFAULT_BASE_URL, type RelayConfig } from "./relay";
 export {
 	createSimpleLoginClient,
@@ -96,6 +98,9 @@ export function createAliasClient(
 		case "duckduckgo":
 			// No options at all: the API takes no domain, no format, and no site.
 			return createDuckDuckGoClient({ baseUrl }, apiKey, transport);
+		case "fastmail":
+			// No options: Fastmail picks the address domain from the account's Masked Email setting.
+			return createFastmailClient({ baseUrl }, apiKey, transport);
 		case "relay":
 			return createRelayClient({ baseUrl }, apiKey, transport);
 		case "simplelogin":

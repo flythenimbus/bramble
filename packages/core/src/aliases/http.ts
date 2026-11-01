@@ -54,6 +54,11 @@ const FALLBACK: Record<AliasErrorKind, string> = {
 	config: "This provider needs more setup before it can create an alias.",
 };
 
+/** A failure the provider reported inside a 2xx, worded as `request` words the same kind. */
+export function providerFailure(kind: AliasErrorKind, providerMessage?: string): AliasError {
+	return new AliasError(kind, FALLBACK[kind], { providerMessage });
+}
+
 /** Not "could not reach": the request may have landed, so the user is told to check before retrying. */
 const INTERRUPTED_MESSAGE =
 	"Bramble was closed before the provider answered. Check your provider before trying again, in case the alias was made.";

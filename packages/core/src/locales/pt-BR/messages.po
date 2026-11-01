@@ -3800,6 +3800,10 @@ msgstr "Tipo"
 msgid "Umbrella"
 msgstr "Guarda-chuva"
 
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Under Connected apps & API tokens, create a token with only Masked Email ticked, so it cannot read your mail. Fastmail shows the token's name on every address it makes, so name it Bramble."
+msgstr "Em Apps conectados e tokens de API, crie um token com apenas Masked Email marcado, para que ele não possa ler seus e-mails. O Fastmail mostra o nome do token em cada endereço que ele criar, então nomeie-o como Bramble."
+
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Underscore (_)"
 msgstr "Sublinhado (_)"

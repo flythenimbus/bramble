@@ -40,7 +40,7 @@ describe("alias config storage", () => {
 	// Storage is not a trusted input: this may have been written by another build or edited.
 	it.each([
 		["not an object", null],
-		["an unknown provider", { ...VALID, provider: "fastmail" }],
+		["an unknown provider", { ...VALID, provider: "forwardemail" }],
 		["a non-string baseUrl", { ...VALID, baseUrl: 5 }],
 		["no options", { ...VALID, options: undefined }],
 		["no api key", { ...VALID, apiKey: undefined }],
@@ -61,6 +61,9 @@ describe("provider descriptors", () => {
 		expect(describeProvider("relay").fields).toEqual([]);
 		expect(missingRequiredFields("duckduckgo", {})).toEqual([]);
 		expect(missingRequiredFields("relay", {})).toEqual([]);
+		// Fastmail's address domain is the account's own Masked Email setting; the API takes none.
+		expect(describeProvider("fastmail").fields).toEqual([]);
+		expect(missingRequiredFields("fastmail", {})).toEqual([]);
 	});
 
 	// Addy's domain list is only knowable from the account, which is what this marker means.

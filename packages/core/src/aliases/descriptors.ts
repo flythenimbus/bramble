@@ -1,6 +1,7 @@
 import { ADDY_DEFAULT_BASE_URL, ADDY_FORMATS } from "./addy";
 import { CATCHALL_STYLES } from "./catchall";
 import { DUCKDUCKGO_DEFAULT_BASE_URL } from "./duckduckgo";
+import { FASTMAIL_DEFAULT_BASE_URL } from "./fastmail";
 import { RELAY_DEFAULT_BASE_URL } from "./relay";
 import { SIMPLELOGIN_DEFAULT_BASE_URL, SIMPLELOGIN_MODES } from "./simplelogin";
 import type { AliasProviderId } from "./types";
@@ -68,6 +69,18 @@ export const ALIAS_PROVIDERS: readonly AliasProviderDescriptor[] = [
 			{ key: "domain", options: "domains", required: false },
 			{ key: "mode", options: SIMPLELOGIN_MODES, required: false },
 		],
+	},
+	{
+		id: "fastmail",
+		label: "Fastmail",
+		defaultBaseUrl: FASTMAIL_DEFAULT_BASE_URL,
+		needsApiKey: true,
+		selfHostable: false,
+		// Privacy & Security, where "Connected apps & API tokens" lives. Fastmail's own help links
+		// here; there is no deeper URL for the token page.
+		keyUrl: "https://app.fastmail.com/settings/security",
+		// Nothing to configure: the address domain is the account's own Masked Email setting.
+		fields: [],
 	},
 	{
 		id: "duckduckgo",

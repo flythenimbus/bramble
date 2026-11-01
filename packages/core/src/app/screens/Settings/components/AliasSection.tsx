@@ -95,10 +95,13 @@ export function AliasSection() {
 	// DuckDuckGo publishes no API and has no user-facing credential, so the link above cannot go
 	// to a key page and the usual copy would be a lie. Said plainly rather than glossed: someone
 	// about to paste a bearer token into a password manager should know where it came from.
+	// Fastmail's token can be limited to Masked Email, and one that is cannot read mail.
 	const keyHint: string | undefined =
 		provider === "duckduckgo"
 			? t`DuckDuckGo has no API key page. Open the Autofill tab, then your browser's developer tools, click Generate Private Duck Address, and copy the token that follows authorization: Bearer in the Network tab.`
-			: undefined;
+			: provider === "fastmail"
+				? t`Under Connected apps & API tokens, create a token with only Masked Email ticked, so it cannot read your mail. Fastmail shows the token's name on every address it makes, so name it Bramble.`
+				: undefined;
 
 	// Adopt the saved provider once it loads. The key is deliberately not restored: it is wrapped
 	// under the vault key and this screen has no reason to hold the plaintext, so the field stays

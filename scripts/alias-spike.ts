@@ -235,51 +235,139 @@ async function fastmail() {
 
 	const session = await call("GET jmap/session", SESSION, { headers });
 	const s = session.body as
-		| { apiUrl?: string; primaryAccounts?: Record<string, string>; capabilities?: object }
+		| {
+				apiUrl?: string;
+				username?: string;
+				primaryAccounts?: Record<string, string>;
+				capabilities?: object;
+				accounts?: Record<
+					string,
+					{
+						name?: string;
+						isPersonal?: boolean;
+						isReadOnly?: boolean;
+						accountCapabilities?: Record<string, unknown>;
+					}
+				>;
+		  }
 		| undefined;
 	const apiUrl = s?.apiUrl;
 	const accountId = s?.primaryAccounts?.[CAPABILITY];
+	const account = accountId ? s?.accounts?.[accountId] : undefined;
 	// The scope question from the doc: a masked-email-only token should still advertise the
 	// capability while lacking urn:ietf:params:jmap:mail.
+	console.log(dim(`     username: ${s?.username}`));
 	console.log(dim(`     capabilities: ${Object.keys(s?.capabilities ?? {}).join(", ")}`));
 	console.log(dim(`     accountId for maskedemail: ${accountId ?? red("absent")}`));
+	console.log(
+		dim(
+			`     account: name=${account?.name} personal=${account?.isPersonal} readOnly=${account?.isReadOnly}`,
+		),
+	);
+	console.log(
+		dim(
+			`     accountCapabilities: ${JSON.stringify(account?.accountCapabilities ?? {}).slice(0, 400)}`,
+		),
+	);
 
-	// The pin from docs/email-aliases.md, exercised here so its cost is known before it is a
-	// requirement in shipping code: the token only ever goes to the session URL's own origin.
-	if (apiUrl) {
-		const same = new URL(apiUrl).origin === new URL(SESSION).origin;
-		console.log(`     apiUrl ${apiUrl} ${same ? green("(same origin)") : red("(CROSS ORIGIN)")}`);
-		if (!same) return console.log(red("     refusing to send the token to a foreign apiUrl"));
-	}
 	await corsMatrix("jmap/session", SESSION, headers);
 
+	// The pin from docs/email-aliases.md, exercised here so its cost is known before it is a
+	// requirement in shipping code. Measured, the session names a per-datacentre host
+	// (phl.api.fastmail.com), so same-origin is too strict: the token goes only to the session's
+	// own host or a subdomain of it, over https.
+	if (apiUrl) {
+		const api = new URL(apiUrl);
+		const sessionHost = new URL(SESSION).hostname;
+		const pinned =
+			api.protocol === "https:" &&
+			(api.hostname === sessionHost || api.hostname.endsWith(`.${sessionHost}`));
+		console.log(
+			`     apiUrl ${apiUrl} ${pinned ? green("(within session host)") : red("(FOREIGN)")}`,
+		);
+		if (!pinned) return console.log(red("     refusing to send the token to a foreign apiUrl"));
+	}
+
+	// Error shapes, all read-only. JMAP reports most failures inside a 200, so what a client has to
+	// parse is not just the HTTP status.
+	await call("GET jmap/session (bad token)", SESSION, {
+		headers: { ...headers, Authorization: "Bearer fmu1-not-a-real-token" },
+	});
+	if (!apiUrl || !accountId) return console.log(red("     no apiUrl/accountId; cannot go on"));
+	const jmap = (methodCalls: unknown[], using = ["urn:ietf:params:jmap:core", CAPABILITY]) =>
+		JSON.stringify({ using, methodCalls });
+	const unknownCap = await call("POST unknown capability", apiUrl, {
+		method: "POST",
+		headers,
+		body: jmap([["MaskedEmail/get", { accountId, ids: [] }, "0"]], ["urn:example:nope"]),
+	});
+	console.log(dim(`     body: ${unknownCap.raw.slice(0, 300)}`));
+	const badAccount = await call("POST MaskedEmail/get (bogus accountId)", apiUrl, {
+		method: "POST",
+		headers,
+		body: jmap([["MaskedEmail/get", { accountId: "u00000000", ids: [] }, "0"]]),
+	});
+	console.log(
+		dim(`     methodResponses: ${JSON.stringify(pick(badAccount.body, "methodResponses"))}`),
+	);
+	// `ids: []` asks for nothing, so this proves the method is callable without reading any address.
+	const empty = await call("POST MaskedEmail/get (ids: [])", apiUrl, {
+		method: "POST",
+		headers,
+		body: jmap([["MaskedEmail/get", { accountId, ids: [] }, "0"]]),
+	});
+	console.log(dim(`     methodResponses: ${JSON.stringify(pick(empty.body, "methodResponses"))}`));
+	// Whether the session host's own API path answers too, which would make the server-named
+	// apiUrl optional rather than something the token has to follow.
+	const direct = await call(
+		"POST api.fastmail.com/jmap/api/ (ids: [])",
+		"https://api.fastmail.com/jmap/api/",
+		{
+			method: "POST",
+			headers,
+			body: jmap([["MaskedEmail/get", { accountId, ids: [] }, "0"]]),
+		},
+	);
+	console.log(dim(`     methodResponses: ${JSON.stringify(pick(direct.body, "methodResponses"))}`));
+
 	if (!CREATE) return;
-	if (!apiUrl || !accountId) return console.log(red("     no apiUrl/accountId; cannot create"));
 	const created = await call("POST MaskedEmail/set", apiUrl, {
 		method: "POST",
 		headers,
-		body: JSON.stringify({
-			using: ["urn:ietf:params:jmap:core", CAPABILITY],
-			methodCalls: [
-				[
-					"MaskedEmail/set",
-					{
-						accountId,
-						create: {
-							bramble: { state: "enabled", forDomain: FOR_DOMAIN, description: DESCRIPTION },
+		body: jmap([
+			[
+				"MaskedEmail/set",
+				{
+					accountId,
+					create: {
+						// An origin, not a bare host: Fastmail's docs ask for protocol and domain.
+						bramble: {
+							state: "enabled",
+							forDomain: `https://${FOR_DOMAIN}`,
+							description: DESCRIPTION,
 						},
 					},
-					"0",
-				],
+				},
+				"0",
 			],
-		}),
+		]),
 	});
+	console.log(
+		dim(`     methodResponses: ${JSON.stringify(pick(created.body, "methodResponses"))}`),
+	);
 	const made = pick(created.body, "methodResponses.0.1.created.bramble") as
-		| { email?: string; state?: string }
+		| { id?: string; email?: string; state?: string }
 		| undefined;
 	console.log(`     ${bold("alias:")} ${made?.email} state=${made?.state}`);
+	if (!made?.id) return;
+	// What was actually stored, which is not always what was sent.
+	const readBack = await call("POST MaskedEmail/get (the new one)", apiUrl, {
+		method: "POST",
+		headers,
+		body: jmap([["MaskedEmail/get", { accountId, ids: [made.id] }, "0"]]),
+	});
 	console.log(
-		dim(`     notCreated: ${JSON.stringify(pick(created.body, "methodResponses.0.1.notCreated"))}`),
+		dim(`     stored: ${JSON.stringify(pick(readBack.body, "methodResponses.0.1.list"))}`),
 	);
 }
 

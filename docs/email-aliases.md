@@ -35,9 +35,10 @@ the user has to supply before the first alias can exist. **Addy and SimpleLogin
 are verified end to end against live accounts.** DuckDuckGo and Firefox Relay
 ship too, once the native transport existed to reach them; both have been
 connected with a real key, but neither has created an alias under test yet: see
-[What is unproven about these two](#what-is-unproven-about-these-two-and-why). Fastmail and Forward Email are
-researched and deferred, each for the same reason and noted in its own section:
-neither can be proven without a paid account.
+[What is unproven about these two](#what-is-unproven-about-these-two-and-why).
+**Fastmail is verified end to end too** (November 2026), once a paid account
+existed to prove it against. Forward Email is researched and deferred, because
+it cannot be proven without a paid plan and a domain of its own.
 
 ### Addy.io
 
@@ -122,20 +123,22 @@ same site collides with the first. Random entropy is therefore appended only whe
 
 ### Fastmail
 
-**Status: postponed, not cancelled.** Masked Email needs a paid Fastmail account
-and there is no account to verify against, so everything below is read from the
-docs and none of it has been seen on the wire. It stays written down because the
-research is done and the shape is unlikely to move, but a client is not written
-from a doc alone: the whole point of the spike is that Addy's quota fields and
-Forward Email's verification `401` were both things no documentation mentioned.
-Ships when an account exists to prove it against.
+| | |
+|---|---|
+| Discover | `GET https://api.fastmail.com/jmap/session`, read `apiUrl` and `primaryAccounts["https://www.fastmail.com/dev/maskedemail"]` |
+| Create | `POST {apiUrl}`, one `MaskedEmail/set` method call |
+| Headers | `Authorization: Bearer {token}`, `Content-Type: application/json` |
+| Address at | `methodResponses[0][1].created.{creationId}.email` |
+| Verify token | the session, then `MaskedEmail/get` with `ids: []` |
+| Domains | none: the account's own Masked Email setting decides |
 
-Two steps, because JMAP discovers before it acts.
+**Status: verified end to end against a live account** (November 2026, the
+spike's `--only=fastmail`). It was postponed for want of a paid account. Two of
+the decisions below were wrong as first written: the request fields, which
+Fastmail's integrator docs correct, and the `apiUrl` pin, which only the wire
+showed.
 
-1. `GET https://api.fastmail.com/jmap/session` with `Authorization: Bearer {token}`.
-   Read `apiUrl`, and the account id from
-   `primaryAccounts["https://www.fastmail.com/dev/maskedemail"]`.
-2. `POST {apiUrl}`:
+Two steps, because JMAP discovers before it acts. The create:
 
 ```json
 {
@@ -146,8 +149,8 @@ Two steps, because JMAP discovers before it acts.
       "create": {
         "bramble": {
           "state": "enabled",
-          "forDomain": "example.com",
-          "description": "Bramble"
+          "forDomain": "https://example.com",
+          "description": ""
         }
       }
     }, "0"]
@@ -155,32 +158,86 @@ Two steps, because JMAP discovers before it acts.
 }
 ```
 
-The address comes back at `methodResponses[0][1].created.bramble.email`, under
-whatever creation id was sent. `emailPrefix` is create-only and optional;
-`createdBy`, `createdAt`, `id` and `email` are server-set.
+The reply carries only the server-set properties under the creation id that was
+sent (`id`, `email`, `createdBy`, `createdAt`, `lastMessageAt`, `url`), so
+`state` and `forDomain` are not echoed; reading the address back with
+`MaskedEmail/get` showed both stored exactly as sent. The measured address was
+`last.soap4530@fastmail.com`: two words and four digits, on `fastmail.com`,
+saying nothing about the site.
 
-`state` is set explicitly to `enabled`. The default is `pending`, which is for
-integrators that mint an address speculatively and confirm it when the user
-actually uses it. Bramble's generate is already an explicit click, so the
-address should work the moment it is filled. (Confirm in the spike: a `pending`
-address that is never confirmed is understood to expire, and shipping that by
-accident would produce aliases that quietly stop working weeks later, which is
-the worst failure this feature can have.)
+**`state` is `enabled`, and has to be.** The default is `pending`, and Fastmail's
+docs say a pending address is deleted 24 hours after creation unless mail
+arrives, and is never shown in their UI. A generate that left it pending would
+fill a signup form with an address that quietly stops existing the next day if
+the site's confirmation mail is slow. Measured: an `enabled` create reads back as
+`enabled`.
 
-**The `apiUrl` pin.** The session response names the URL that the next request
-sends the bearer token to. That is a server-named destination for a credential,
-which is exactly the hazard `adapters/backup-creds.ts` pins target origins
-against. Accept `apiUrl` only when its origin matches the session URL's origin,
-and reject otherwise. Three lines, and without them a compromised or spoofed
-session response harvests the token.
+**`forDomain` is an origin, and `description` is empty.** The first draft here
+sent `"forDomain": "example.com"` and our own `"Bramble (example.com)"` note.
+Fastmail's integrator guidance asks for the site's protocol and domain with no
+path, and asks that `description` be left to the user: it is shown beside the
+address and used to tag the mail it receives, and the client's name already
+appears as `createdBy`, which the server sets from the token's own name
+(measured: `"API Token: Bramble"`). So the client sends `https://{site}` and an
+empty description, ignoring the shared `Bramble (site)` note the other providers
+get, and the settings hint asks the user to name the token Bramble.
 
-**Token scope.** Fastmail's OAuth scopes include
-`https://www.fastmail.com/dev/maskedemail` as a distinct scope alongside
-`urn:ietf:params:jmap:core`. Whether a manually created API token can be
-narrowed the same way in Settings > Privacy & Security > Manage API tokens is
-not settled by the public docs and is unproven. It matters: if it can, Fastmail
-is the only provider here whose stored key cannot read the user's mail, and that
-is worth saying in the settings copy.
+**The `apiUrl` pin, as first written.** The session response names the URL that
+the next request sends the bearer token to. That is a server-named destination
+for a credential, which is exactly the hazard `adapters/backup-creds.ts` pins
+target origins against. Accept `apiUrl` only when its origin matches the session
+URL's origin, and reject otherwise. Three lines, and without them a compromised
+or spoofed session response harvests the token.
+
+**What overturned it.** The session names a per-datacentre host,
+`https://phl.api.fastmail.com/jmap/api/`, so a same-origin rule rejects every real
+account: the spike refused to send the token on its very first run. The hazard is
+real and the rule was too narrow, so the pin is now "https, and the session's own
+host or a subdomain of it". `api.fastmail.com/jmap/api/` also answers (measured),
+so the session's host is no less valid a destination than its subdomains. A
+lookalike such as `api.fastmail.com.evil.example` fails the suffix test, which the
+tests pin.
+
+**Token scope: settled, and it can be narrowed.** A token created in Settings >
+Privacy & Security > Connected apps & API tokens with only Masked Email ticked
+gives a session whose capabilities are exactly `urn:ietf:params:jmap:core` and
+`https://www.fastmail.com/dev/maskedemail`, with no `urn:ietf:params:jmap:mail`.
+Such a token cannot read the user's mail, which makes Fastmail the only provider
+here whose stored key cannot, and the settings hint says how to make one. A token
+with no Masked Email access is caught at verify, from `primaryAccounts`, before
+any API call.
+
+**Errors arrive inside a `200`.** JMAP answers a request it could parse with a
+`200` and reports failures per method, so the status alone says nothing:
+
+| Measured | Shape | Kind |
+|---|---|---|
+| Bad token | `401`, plain text, not JSON | `auth` |
+| Unknown capability | `400` problem+json, explanation in `detail` | `provider` |
+| Wrong account | `200`, `["error", {"type":"accountNotFound","description":...}, "0"]` | `auth` |
+| Refused create | `200`, `notCreated.{creationId}: {type, description}` | by `type` |
+
+A refused create maps `rateLimit` to `rate-limit` (the only SetError Fastmail's
+docs name), `overQuota` to `quota` and `forbidden` to `auth`; anything else is the
+provider's. Fastmail's `description` is surfaced as the provider's message, as
+plain text, as every provider's is. The refused-create rows are from RFC 8620 and
+Fastmail's docs rather than the wire: provoking a rate limit means hammering a
+real account.
+
+**Verify is an empty lookup.** `MaskedEmail/get` with `ids: []` returns an empty
+list (measured), so "Check key" walks the session, the pin and the account the
+way a create does, without reading or making a single address. Its label is the
+session's `username`, the Fastmail login.
+
+**An API token, not OAuth.** Fastmail's docs say API tokens are for testing and
+personal use and that an app distributed to others should implement OAuth.
+Bitwarden takes a pasted token regardless, as every other provider here does, so
+this does too; OAuth would mean registering a client with Fastmail and a sign-in
+flow on four targets, for a key the user can already narrow to Masked Email.
+
+**Still unseen:** what a read-only token does. The session reports
+`isReadOnly: false` for the token measured; one made read-only presumably fails
+the create as `forbidden`, which maps to `auth`, but nobody has watched it.
 
 ## Transport: `fetch` for four providers, native for two
 
@@ -198,7 +255,9 @@ an `OPTIONS` preflight carrying `Access-Control-Request-Method: POST` and
 
 All three answer a cross-origin preflight, and two of them reflect whatever
 origin is asked. So for these the client is one implementation in `core`, calling
-`fetch`, shared by the extension, the desktop and both mobile apps.
+`fetch`, shared by the extension, the desktop and both mobile apps. Fastmail's
+authenticated `2xx`s, the session and the API call alike, reflected all four
+origins when it was finally measured (November 2026).
 
 **This held for the four providers measured here and broke on the two added
 later.** DuckDuckGo and Firefox Relay send no CORS headers at all, which is what
@@ -358,7 +417,7 @@ changed.
 ### What is unproven about these two, and why
 
 Neither has been exercised against a live account, so the same caveat that
-applies to Fastmail and Forward Email applies here: **the authenticated success
+applies to Forward Email applies here: **the authenticated success
 path is unverified**. What is known is measured rather than assumed.
 
 Both endpoints are reachable and both authenticate. An unauthenticated request
@@ -694,7 +753,8 @@ Its onboarding is therefore "already run your mail here, on a paid plan", not
 "paste an API key". That is a different proposition from the other two despite
 having the simplest API of the four, and it puts Forward Email in the same
 position as Fastmail: researched, reachable, unverifiable without spending money.
-Both are deferred rather than dropped.
+Both are deferred rather than dropped. (Fastmail has since been verified, November
+2026; see its section.)
 
 **`402` is its own error class, and the provider's message can contain a URL.**
 Payment-required is neither an auth failure nor quota exhaustion, and a client
@@ -711,7 +771,8 @@ link is not made clickable.
 
 ### Still open
 
-1. **Fastmail is unverified and postponed** (see the status note in its section).
+1. **Fastmail: verified, bar a read-only token**, whose create is expected to
+   fail as `forbidden` but has not been watched (see its section).
 2. **Forward Email is unverified past discovery**, and stays that way without a
    paid plan. Whether an omitted `name` really yields a random one is untested.
 3. What each provider returns at **quota exhaustion**. Addy's limit of 10 makes
@@ -752,10 +813,12 @@ link is not made clickable.
 | 4 | Firefox, mobile, release. | outstanding |
 | 5 | `HttpTransport`: the shared seam, a Tauri command, and an in-house Capacitor plugin for iOS and Android. | done, device-verified on an iPhone and a Pixel |
 | 6 | The DuckDuckGo and Firefox Relay clients, on that transport. | done, no live account to prove the success path |
+| 7 | The Fastmail client, over JMAP. | done, verified against a live account |
 
 Phases 5 and 6 were not in the original plan. They exist because the deferral
 below was re-priced once it became clear the same transport also unblocked mobile
-cloud backups, which had been waiting on the identical question.
+cloud backups, which had been waiting on the identical question. Phase 7 was
+always planned, and waited only for a paid account to prove it against.
 
 ### What running it in a browser found
 
