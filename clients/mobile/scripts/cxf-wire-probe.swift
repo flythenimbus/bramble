@@ -14,6 +14,13 @@
 import AuthenticationServices
 import Foundation
 
+// Same coders as CredentialExchange.swift: CXF dates are UNIX seconds, the default counts from 2001.
+func cxfDecoder() -> JSONDecoder {
+	let decoder = JSONDecoder()
+	decoder.dateDecodingStrategy = .secondsSince1970
+	return decoder
+}
+
 /// Decode one of our payloads and report what Apple's types actually accepted.
 func inspect(path: String) -> Never {
 	guard let data = FileManager.default.contents(atPath: path) else {
@@ -21,7 +28,7 @@ func inspect(path: String) -> Never {
 		exit(1)
 	}
 	do {
-		let payload = try JSONDecoder().decode(ASExportedCredentialData.self, from: data)
+		let payload = try cxfDecoder().decode(ASExportedCredentialData.self, from: data)
 		print("=== DECODED: \(payload.accounts.count) account(s) ===")
 		for account in payload.accounts {
 			for item in account.items {
@@ -38,7 +45,8 @@ func inspect(path: String) -> Never {
 					}
 				}
 				print("  item title=\(item.title.isEmpty ? "<EMPTY>" : item.title) " +
-					"scope=\(item.scope?.urls.map(\.absoluteString) ?? []) credentials=\(kinds)")
+					"scope=\(item.scope?.urls.map(\.absoluteString) ?? []) credentials=\(kinds) " +
+					"created=\(item.created.map { "\($0)" } ?? "nil")")
 			}
 		}
 		exit(0)
@@ -96,6 +104,7 @@ let payload = ASExportedCredentialData(
 	exporterDisplayName: "Bramble", timestamp: Date(timeIntervalSince1970: 1_760_000_000))
 
 let enc = JSONEncoder()
+enc.dateEncodingStrategy = .secondsSince1970
 enc.outputFormatting = [.prettyPrinted, .sortedKeys]
 
 do {
@@ -103,7 +112,7 @@ do {
 	print("=== ENCODED ===")
 	print(String(data: json, encoding: .utf8)!)
 
-	let back = try JSONDecoder().decode(ASExportedCredentialData.self, from: json)
+	let back = try cxfDecoder().decode(ASExportedCredentialData.self, from: json)
 	print("=== ROUND TRIP: \(back == payload ? "IDENTICAL" : "DIFFERS") ===")
 } catch {
 	print("=== FAILED: \(error) ===")

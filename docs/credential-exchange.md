@@ -73,8 +73,8 @@ via `simctl spawn`) and encoding it:
 
 ```json
 { "accounts": [ { "id": "YWNjdC0wMDAx", "username": "ada", "email": "ada@example.com",
-    "items": [ { "id": "aXRlbS0wMDAx", "title": "GitHub", "creationAt": 721692800,
-      "modifiedAt": 771692800, "favorite": true,
+    "items": [ { "id": "aXRlbS0wMDAx", "title": "GitHub", "creationAt": 1700000000,
+      "modifiedAt": 1750000000, "favorite": true,
       "scope": { "urls": ["https://github.com"], "androidApps": [] },
       "credentials": [
         { "type": "basic-auth", "username": {"fieldType":"email","value":"ada@example.com"},
@@ -91,14 +91,14 @@ Round-trip decode returns an identical value. What this pins down:
 | Swift | JSON | Note |
 |---|---|---|
 | `userName` | `username` | Apple's property names are **not** the wire names. Do not infer keys from the Swift API. |
-| `created` / `lastModified` | `creationAt` / `modifiedAt` | UNIX **seconds**, not ms, not ISO. |
+| `created` / `lastModified` | `creationAt` / `modifiedAt` | UNIX **seconds**, not ms, not ISO. Apple's types use the coder's date strategy, whose default counts from 2001, so both coders in `CredentialExchange.swift` set `.secondsSince1970`. Without it every date moves 31 years (imports land in the 1990s, exports in the 2050s); this spike read the 2001-based numbers as UNIX, and releases before the 2026-10-31 fix did exactly that. The fix is probed on macOS 26, not yet run on a device. |
 | `credentialID` / `relyingPartyIdentifier` | `credentialId` / `rpId` | |
 | `exporterRelyingPartyIdentifier` | `exporterRpId` | |
 | `formatVersion: .v1` | `"version": {"major":1,"minor":0}` | An object, not the string `"1.0"`. |
 | any `Data` | base64url, **unpadded** | `0x01020304` -> `"AQIDBA"`. Our `PasskeyCredential` docs say base64url but `AutofillBridge.swift` is fed standard base64, so pin the encoding explicitly in the mapper. |
 | `TOTP.secret: Data` | base32 string | Apple base32-**encodes** the raw bytes. Our stored value is already base32 text, so emit it as-is in the JSON and let Apple decode it. Passing ASCII bytes of a base32 string through the Swift type double-encodes it and every imported code comes out wrong. |
 
-Consequence for the design: **build CXF JSON in TS, `JSONDecoder().decode(ASExportedCredentialData.self, from:)` in Swift, and the reverse on import.** No Swift mapping layer.
+Consequence for the design: **build CXF JSON in TS, `JSONDecoder().decode(ASExportedCredentialData.self, from:)` in Swift, and the reverse on import.** No Swift mapping layer, only the date strategy above.
 
 Two caveats found while reading the interface:
 

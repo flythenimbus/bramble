@@ -7,8 +7,8 @@ import UIKit
 // out-of-process consent UI, establishes both app identities, and moves the payload without
 // anything touching the filesystem. We only supply and consume CXF JSON, which the shared
 // TS mapper in @vault/core/exchange builds and parses. Apple's ASExportedCredentialData
-// encodes CXF verbatim, so this layer is a JSONDecoder pass-through with no field mapping.
-// See docs/credential-exchange.md.
+// encodes CXF verbatim, so this layer is a JSONDecoder pass-through with no field mapping,
+// only a date strategy (cxfDecoder). See docs/credential-exchange.md.
 //
 // The whole surface is availability-gated: the deployment target stays at 15.0, and on
 // anything older `isAvailable` reports false and the UI hides the entry points.
@@ -61,6 +61,20 @@ enum CredentialExchangeInbox {
 		deposit(token)
 		return true
 	}
+}
+
+// CXF dates are UNIX seconds, but Apple's types use the coder's date strategy, whose default
+// counts from 2001: a bare JSONEncoder/JSONDecoder moves every date by 31 years.
+private func cxfDecoder() -> JSONDecoder {
+	let decoder = JSONDecoder()
+	decoder.dateDecodingStrategy = .secondsSince1970
+	return decoder
+}
+
+private func cxfEncoder() -> JSONEncoder {
+	let encoder = JSONEncoder()
+	encoder.dateEncodingStrategy = .secondsSince1970
+	return encoder
 }
 
 @objc(CredentialExchangePlugin)
@@ -159,7 +173,7 @@ public class CredentialExchangePlugin: CAPPlugin, CAPBridgedPlugin {
 			// manager would let a later call export against the wrong destination.
 			defer { self.pendingExport = nil }
 			do {
-				let payload = try JSONDecoder().decode(ASExportedCredentialData.self, from: data)
+				let payload = try cxfDecoder().decode(ASExportedCredentialData.self, from: data)
 				try await manager.exportCredentials(payload)
 				call.resolve()
 			} catch {
@@ -199,7 +213,7 @@ public class CredentialExchangePlugin: CAPPlugin, CAPBridgedPlugin {
 		Task {
 			do {
 				let data = try await ASCredentialImportManager().importCredentials(token: token)
-				let json = try JSONEncoder().encode(data)
+				let json = try cxfEncoder().encode(data)
 				call.resolve(["cxfJson": String(decoding: json, as: UTF8.self)])
 			} catch {
 				call.reject(error.localizedDescription, nil, error)
