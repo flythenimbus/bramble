@@ -115,3 +115,34 @@ describe("setIndex one-time-code identities", () => {
 		expect(JSON.stringify(sent.oneTimeCodeIdentities)).not.toContain("GEZDGNBVGY3TQOJQ");
 	});
 });
+
+describe("setIndex passkey bundle", () => {
+	// The credential provider evaluates PRF from this bundle; without the secrets it can't answer.
+	it("carries a passkey's PRF secrets into the encrypted passkey bundle", async () => {
+		const prf = { credWithUV: "S0VZVVY=", credWithoutUV: "S0VZTk9VVg==" };
+		await mobileAutofill.setIndex([
+			login({
+				passkeys: [
+					{
+						credentialId: "Q0lE",
+						rpId: "github.com",
+						userHandle: "dXNlcg==",
+						userName: "me",
+						alg: -7,
+						publicKeyCose: "UEs=",
+						privateKey: "U0s=",
+						signCount: 0,
+						createdAt: 1,
+						prf,
+					},
+				],
+			} as Partial<IndexEntry>),
+		]);
+		const sent = bridge.sync.mock.calls.at(-1)?.[0] as {
+			passkeyCiphertext: string;
+			passkeyIdentities: unknown[];
+		};
+		expect(JSON.parse(sent.passkeyCiphertext)[0]?.prf).toEqual(prf);
+		expect(JSON.stringify(sent.passkeyIdentities)).not.toContain("S0VZ");
+	});
+});

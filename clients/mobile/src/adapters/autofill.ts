@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Device } from "@capacitor/device";
+import type { PasskeyPrfSecrets } from "@core/adapters/crypto";
 import { PREF_AUTOFILL_QUICKTYPE } from "@core/hooks/usePrefs";
 import type { AutofillAdapter } from "@core/index";
 import { bytesToBase64 } from "@core/util/bytes";
@@ -64,6 +65,8 @@ interface StoredPasskey extends PasskeyIdentity {
 	privateKey: string;
 	/** COSE algorithm. Required by the signer: 32 bytes cannot say which primitive owns them. */
 	alg: number;
+	/** PRF secrets, for the provider's PRF answers (docs/passkey-prf.md). */
+	prf?: PasskeyPrfSecrets;
 }
 
 interface AutofillBridgePlugin {
@@ -151,6 +154,7 @@ export const mobileAutofill: AutofillAdapter = {
 					userHandle: p.userHandle,
 					privateKey: p.privateKey,
 					alg: p.alg,
+					prf: p.prf,
 				});
 			}
 		}

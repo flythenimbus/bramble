@@ -1,4 +1,5 @@
 import AuthenticationServices
+import CryptoKit
 import LocalAuthentication
 import Security
 import SwiftUI
@@ -45,6 +46,33 @@ private struct Passkey: Decodable {
 	/// Optional so a bundle written before imported passkeys existed still decodes; those are
 	/// all ES256, which is what the call site defaults to.
 	let alg: Int?
+	/// Absent from older bundles and from passkeys minted before PRF support.
+	let prf: PasskeyPrf?
+}
+
+// A passkey's PRF secrets as the bundle carries them (STANDARD base64). Only credWithUV is ever
+// evaluated: PRF answers only after user verification. See docs/passkey-prf.md.
+private struct PasskeyPrf: Decodable {
+	let credWithUV: String
+	let credWithoutUV: String
+}
+
+// PRF inputs the OS passed through (the site's raw values), copied into plain types so no
+// iOS 18 type becomes a stored property.
+private struct PrfSalts {
+	let first: Data
+	let second: Data?
+}
+
+// A get()'s PRF request: default inputs plus per-credential ones (STANDARD-b64 id keys).
+private struct PrfGet {
+	let salts: PrfSalts?
+	let byCredential: [String: PrfSalts]
+}
+
+// A create() that asked for PRF; nil salts means it only asked whether PRF is supported.
+private struct PrfCreate {
+	let salts: PrfSalts?
 }
 
 // A passkey sign-in (get) the OS asked us to satisfy, captured so the post-unlock path can
@@ -56,6 +84,7 @@ private struct PasskeyGet {
 	let clientDataHash: Data
 	let allowed: [String]  // STANDARD-b64 credentialIds; empty = any discoverable
 	let chosen: String?  // STANDARD-b64 credentialId already selected by the OS
+	let prf: PrfGet?
 }
 
 // A passkey registration (create) the OS asked us to satisfy. The OS supplies the user
@@ -65,6 +94,34 @@ private struct PasskeyCreate {
 	let userName: String
 	let userHandle: Data
 	let clientDataHash: Data
+	let prf: PrfCreate?
+}
+
+@available(iOS 18.0, *)
+private func prfSalts(_ v: ASAuthorizationPublicKeyCredentialPRFAssertionInput.InputValues?) -> PrfSalts? {
+	v.map { PrfSalts(first: $0.saltInput1, second: $0.saltInput2) }
+}
+
+@available(iOS 18.0, *)
+private func prfGet(_ input: ASAuthorizationPublicKeyCredentialPRFAssertionInput?) -> PrfGet? {
+	guard let input else { return nil }
+	var byCredential: [String: PrfSalts] = [:]
+	for (id, values) in input.perCredentialInputValues ?? [:] {
+		byCredential[id.base64EncodedString()] = PrfSalts(first: values.saltInput1, second: values.saltInput2)
+	}
+	return PrfGet(salts: prfSalts(input.inputValues), byCredential: byCredential)
+}
+
+// Run the core's PRF over a stored secret; nil on failure, so a PRF fault never fails the ceremony.
+private func evalPrf(_ secretB64: String, _ salts: PrfSalts) -> (first: SymmetricKey, second: SymmetricKey?)? {
+	guard
+		let out = try? passkeyPrfEval(
+			secretB64: secretB64, firstB64: salts.first.base64EncodedString(),
+			secondB64: salts.second?.base64EncodedString()),
+		let first = Data(base64Encoded: out.first)
+	else { return nil }
+	let second = out.second.flatMap { Data(base64Encoded: $0) }
+	return (SymmetricKey(data: first), second.map { SymmetricKey(data: $0) })
 }
 
 // Localized lookup from the extension's String Catalog (Localizable.xcstrings).
@@ -619,6 +676,12 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			}
 			return
 		}
+		// PRF answers only after user verification, so a PRF request always takes the unlock path:
+		// otherwise a site would get different keys depending on whether the session was live.
+		if #available(iOS 18.0, *), case .assertion(let input) = req.extensionInput, input.prf != nil {
+			cancel(.userInteractionRequired)
+			return
+		}
 		guard req.userVerificationPreference != .required,
 			let vek = loadSession(), (try? unlockWithVek(vekB64: vek)) != nil
 		else {
@@ -631,7 +694,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			cancel(.userInteractionRequired)
 			return
 		}
-		assertPasskey(pk, clientDataHash: req.clientDataHash, userVerified: false)
+		assertPasskey(pk, clientDataHash: req.clientDataHash, userVerified: false, prf: nil)
 	}
 
 	// A specific passkey was chosen from the OS sheet but UI is needed (unlock). Force a fresh
@@ -656,9 +719,13 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		pendingHosts = []
 		pendingRecordId = nil
 		pendingOneTimeCode = false
+		var prf: PrfGet?
+		if #available(iOS 18.0, *), case .assertion(let input) = req.extensionInput {
+			prf = prfGet(input.prf)
+		}
 		pendingPasskey = PasskeyGet(
 			rpId: identity.relyingPartyIdentifier, clientDataHash: req.clientDataHash,
-			allowed: [], chosen: identity.credentialID.base64EncodedString())
+			allowed: [], chosen: identity.credentialID.base64EncodedString(), prf: prf)
 		showUnlock()
 	}
 
@@ -672,11 +739,13 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		pendingHosts = []
 		pendingRecordId = nil
 		pendingOneTimeCode = false
+		var prf: PrfGet?
+		if #available(iOS 18.0, *) { prf = prfGet(requestParameters.extensionInput?.prf) }
 		pendingPasskey = PasskeyGet(
 			rpId: requestParameters.relyingPartyIdentifier,
 			clientDataHash: requestParameters.clientDataHash,
 			allowed: requestParameters.allowedCredentials.map { $0.base64EncodedString() },
-			chosen: nil)
+			chosen: nil, prf: prf)
 		showUnlock()
 	}
 
@@ -690,7 +759,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			req.chosen.map { id in all.filter { $0.credentialId == id } }
 			?? all.filter { $0.rpId == req.rpId && (req.allowed.isEmpty || req.allowed.contains($0.credentialId)) }
 		if matches.count == 1 {
-			assertPasskey(matches[0], clientDataHash: req.clientDataHash, userVerified: true)
+			assertPasskey(matches[0], clientDataHash: req.clientDataHash, userVerified: true, prf: req.prf)
 		} else if matches.isEmpty {
 			showError(
 				String(localized: "No passkey found"),
@@ -699,7 +768,9 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			host(
 				PasskeyPickerView(
 					choices: matches,
-					onSelect: { [weak self] in self?.assertPasskey($0, clientDataHash: req.clientDataHash, userVerified: true) },
+					onSelect: { [weak self] in
+						self?.assertPasskey($0, clientDataHash: req.clientDataHash, userVerified: true, prf: req.prf)
+					},
 					onCancel: { [weak self] in self?.cancel(.userCanceled) }))
 		}
 	}
@@ -707,7 +778,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	// Sign authData || clientDataHash with the stored key (native Rust core) and hand the OS a
 	// passkey assertion. The OS-provided clientDataHash is fed back verbatim.
 	@available(iOS 17.0, *)
-	private func assertPasskey(_ pk: Passkey, clientDataHash: Data, userVerified: Bool) {
+	private func assertPasskey(_ pk: Passkey, clientDataHash: Data, userVerified: Bool, prf: PrfGet?) {
 		guard let credID = Data(base64Encoded: pk.credentialId),
 			let userHandle = Data(base64Encoded: pk.userHandle),
 			let assertion = try? passkeyGetAssertion(
@@ -719,10 +790,31 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			cancel(.failed)
 			return
 		}
-		let credential = ASPasskeyAssertionCredential(
-			userHandle: userHandle, relyingParty: pk.rpId, signature: sig,
-			clientDataHash: clientDataHash, authenticatorData: authData, credentialID: credID)
+		let credential: ASPasskeyAssertionCredential
+		if #available(iOS 18.0, *), userVerified, let output = prfAssertionOutput(pk, prf) {
+			credential = ASPasskeyAssertionCredential(
+				userHandle: userHandle, relyingParty: pk.rpId, signature: sig,
+				clientDataHash: clientDataHash, authenticatorData: authData, credentialID: credID,
+				extensionOutput: ASPasskeyAssertionCredentialExtensionOutput(prf: output))
+		} else {
+			credential = ASPasskeyAssertionCredential(
+				userHandle: userHandle, relyingParty: pk.rpId, signature: sig,
+				clientDataHash: clientDataHash, authenticatorData: authData, credentialID: credID)
+		}
 		extensionContext.completeAssertionRequest(using: credential, completionHandler: nil)
+	}
+
+	// The credential's own inputs, else the default ones, evaluated with its stored secret. Nil when
+	// nothing applies: a passkey minted before PRF support simply answers without it.
+	@available(iOS 18.0, *)
+	private func prfAssertionOutput(_ pk: Passkey, _ prf: PrfGet?)
+		-> ASAuthorizationPublicKeyCredentialPRFAssertionOutput?
+	{
+		guard let secrets = pk.prf, let prf,
+			let salts = prf.byCredential[pk.credentialId] ?? prf.salts,
+			let out = evalPrf(secrets.credWithUV, salts)
+		else { return nil }
+		return ASAuthorizationPublicKeyCredentialPRFAssertionOutput(first: out.first, second: out.second)
 	}
 
 	// Registration (create): the site asked us to mint a new passkey. Always force a fresh
@@ -744,9 +836,13 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		pendingRecordId = nil
 		pendingOneTimeCode = false
 		pendingPasskey = nil
+		var prf: PrfCreate?
+		if #available(iOS 18.0, *), case .registration(let input) = req.extensionInput, let p = input.prf {
+			prf = PrfCreate(salts: prfSalts(p.inputValues))
+		}
 		pendingPasskeyCreate = PasskeyCreate(
 			rpId: identity.relyingPartyIdentifier, userName: identity.userName,
-			userHandle: identity.userHandle, clientDataHash: req.clientDataHash)
+			userHandle: identity.userHandle, clientDataHash: req.clientDataHash, prf: prf)
 		showUnlock()
 	}
 
@@ -771,9 +867,21 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		stashPendingPasskey(reg, req: req)
 		appendToPasskeyBundle(reg, req: req)
 		registerPasskeyIdentity(reg, req: req)
-		let credential = ASPasskeyRegistrationCredential(
-			relyingParty: req.rpId, clientDataHash: req.clientDataHash,
-			credentialID: credID, attestationObject: attestation)
+		let credential: ASPasskeyRegistrationCredential
+		if #available(iOS 18.0, *), let prf = req.prf {
+			// Minted with UV (the fresh unlock), so an eval answers now; a failure still says supported.
+			let output: ASAuthorizationPublicKeyCredentialPRFRegistrationOutput =
+				prf.salts.flatMap { evalPrf(reg.prf.credWithUv, $0) }
+				.map { .init(first: $0.first, second: $0.second) } ?? .supported
+			credential = ASPasskeyRegistrationCredential(
+				relyingParty: req.rpId, clientDataHash: req.clientDataHash,
+				credentialID: credID, attestationObject: attestation,
+				extensionOutput: ASPasskeyRegistrationCredentialExtensionOutput(prf: output))
+		} else {
+			credential = ASPasskeyRegistrationCredential(
+				relyingParty: req.rpId, clientDataHash: req.clientDataHash,
+				credentialID: credID, attestationObject: attestation)
+		}
 		extensionContext.completeRegistrationRequest(using: credential, completionHandler: nil)
 	}
 
@@ -792,6 +900,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			"privateKey": reg.privateKey,
 			"signCount": 0,
 			"createdAt": Int(Date().timeIntervalSince1970 * 1000),
+			"prf": ["credWithUV": reg.prf.credWithUv, "credWithoutUV": reg.prf.credWithoutUv],
 		]
 		guard let json = try? JSONSerialization.data(withJSONObject: credential),
 			let plaintext = String(data: json, encoding: .utf8),
@@ -830,6 +939,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			// We only ever mint ES256; imported EdDSA passkeys reach this bundle from the main
 			// app's setIndex rebuild, not from here.
 			"alg": -7,
+			"prf": ["credWithUV": reg.prf.credWithUv, "credWithoutUV": reg.prf.credWithoutUv],
 		])
 		guard let plain = try? JSONSerialization.data(withJSONObject: list),
 			let str = String(data: plain, encoding: .utf8),
