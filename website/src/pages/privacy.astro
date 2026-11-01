@@ -7,7 +7,7 @@ import { SITE } from "@/consts";
 	title="Privacy Policy"
 	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its network use is limited to optional, off-by-default features you control (a password breach check, peer-to-peer sync between your own devices, encrypted backups to a storage provider you choose, and email aliases from a provider you already use), plus an update check in the desktop app that you can turn off."
 	path="/privacy"
-	meta="Effective date: 10 October 2026"
+	meta="Effective date: 1 November 2026"
 >
 	<p class="lead">
 		<strong>The short version:</strong> Bramble is a local-first password manager, available as a
@@ -215,11 +215,13 @@ import { SITE } from "@/consts";
 		</li>
 		<li>
 			<strong>What is sent, and to whom.</strong> The request goes to your provider and nowhere
-			else: to Addy.io, SimpleLogin, DuckDuckGo Email Protection or Firefox Relay, or to your own
-			server if you self-host Addy.io or SimpleLogin. It carries your API key, the site the address
-			is for, and a short note naming Bramble, so the alias is recognisable in your provider's own
-			dashboard. DuckDuckGo accepts neither the site nor the note, so a request to it carries your
-			key and nothing else. Nothing from your vault is included.
+			else: to Addy.io, SimpleLogin, Fastmail, DuckDuckGo Email Protection or Firefox Relay, or to
+			your own server if you self-host Addy.io or SimpleLogin. It carries your API key, the site the
+			address is for, and a short note naming Bramble, so the alias is recognisable in your
+			provider's own dashboard. Fastmail gets the site but no note, because it asks apps to leave
+			that field to you and already shows the name you gave the API key. DuckDuckGo accepts neither
+			the site nor the note, so a request to it carries your key and nothing else. Nothing from your
+			vault is included.
 		</li>
 		<li>
 			<strong>Your API key stays encrypted on your device.</strong> It is stored under your vault's
@@ -229,9 +231,9 @@ import { SITE } from "@/consts";
 			it too.
 		</li>
 		<li>
-			<strong>The provider is a third party under its own terms.</strong> Addy.io and SimpleLogin
-			receive the requests above and handle them under their own privacy policies, and the aliases
-			you create live in your account with them, where you can disable or delete them.
+			<strong>The provider is a third party under its own terms.</strong> Your provider receives the
+			requests above and handles them under its own privacy policy, and the aliases you create live
+			in your account with it, where you can disable or delete them.
 		</li>
 	</ul>
 
