@@ -61,6 +61,16 @@ const passkeySchema = z.looseObject({
 	userDisplayName: z.string().optional(),
 	userHandle: z.string(),
 	key: z.string(),
+	// A junk value costs the extensions, never the passkey.
+	fido2Extensions: z.looseObject({}).optional().catch(undefined),
+});
+
+// `fido2Extensions.hmacCredentials`: the PRF / hmac-secret seeds, base64url. Parsed on its own so a
+// malformed one costs only the PRF secret. Apple requires both halves; we tolerate a missing one.
+export const cxfHmacCredentialsSchema = z.looseObject({
+	algorithm: z.string().optional(),
+	credWithUV: z.string(),
+	credWithoutUV: z.string().optional(),
 });
 
 const noteSchema = z.looseObject({

@@ -25,6 +25,8 @@ export interface CxfExportOptions {
 	exporterDisplayName: string;
 	/** Epoch ms; injected so tests don't depend on the clock. */
 	now: number;
+	/** False when the OS drops passkey `fido2Extensions` (iOS before 26.4). Defaults to true. */
+	passkeyExtensions?: boolean;
 }
 
 export interface CxfExportResult {
@@ -74,6 +76,19 @@ function passkeyCredential(p: PasskeyCredential): CxfCredential | null {
 	// is what "contains unsupported data" looks like from the user's end.
 	const key = pkcs8FromScalar(p.privateKey);
 	if (!key) return null;
+	// Both halves always go out: Apple rejects the whole payload when credWithoutUV is missing.
+	const fido2Extensions = {
+		...p.fido2Extensions,
+		...(p.prf
+			? {
+					hmacCredentials: {
+						algorithm: "hmac-sha256",
+						credWithUV: base64ToBase64Url(p.prf.credWithUV),
+						credWithoutUV: base64ToBase64Url(p.prf.credWithoutUV),
+					},
+				}
+			: {}),
+	};
 	return {
 		type: "passkey",
 		credentialId: base64ToBase64Url(p.credentialId),
@@ -83,7 +98,23 @@ function passkeyCredential(p: PasskeyCredential): CxfCredential | null {
 		userDisplayName: p.userDisplayName ?? p.userName ?? "",
 		userHandle: base64ToBase64Url(p.userHandle),
 		key,
+		...(Object.keys(fido2Extensions).length ? { fido2Extensions } : {}),
 	};
+}
+
+/** Drop `fido2Extensions` from every passkey credential; returns how many carried some. */
+function withholdPasskeyExtensions(items: CxfItem[]): number {
+	let withheld = 0;
+	for (const item of items) {
+		// Our own output, so each credential is an object we built.
+		for (const c of (item.credentials ?? []) as Record<string, unknown>[]) {
+			if (c.type === "passkey" && c.fido2Extensions) {
+				delete c.fido2Extensions;
+				withheld++;
+			}
+		}
+	}
+	return withheld;
 }
 
 /** Structured TOTP, or null when the stored key isn't one we can parse (HOTP, garbage). */
@@ -213,6 +244,14 @@ function itemFor(e: Entry, warnings: string[]): CxfItem {
 export function toCxf(entries: readonly Entry[], opts: CxfExportOptions): CxfExportResult {
 	const warnings: string[] = [];
 	const items = entries.map((e) => itemFor(e, warnings));
+	if (opts.passkeyExtensions === false) {
+		const n = withholdPasskeyExtensions(items);
+		if (n > 0) {
+			warnings.push(
+				`${n === 1 ? "1 passkey" : `${n} passkeys`} went without ${n === 1 ? "its" : "their"} PRF secrets or other extension data, which this iOS version can't transfer. Update to iOS 26.4 or later and transfer again to bring it.`,
+			);
+		}
+	}
 	return {
 		payload: {
 			version: { ...CXF_VERSION },

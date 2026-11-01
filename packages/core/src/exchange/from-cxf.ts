@@ -4,12 +4,18 @@
 // through the same ImportParserContext the file importers use. Everything else is a pure
 // mapping.
 
-import type { PasskeyImportResult } from "../adapters/crypto";
+import type { PasskeyImportResult, PasskeyPrfSecrets } from "../adapters/crypto";
 import type { EntryData, PasskeyCredential } from "../hooks/useVault";
-import { type ConversionTally, systemicFailureWarning } from "../import/passkey-fields";
+import {
+	type ConversionTally,
+	MAX_PRF_SECRET_BYTES,
+	prfSecretsFrom,
+	strictBase64Url,
+	systemicFailureWarning,
+} from "../import/passkey-fields";
 import { asText, type RawField, summarize, toCustomFields } from "../import/shared";
 import type { ImportParserContext, ImportResult } from "../import/types";
-import { base64UrlToBase64 } from "../util/bytes";
+import { base64UrlToBase64, base64UrlToBytes } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { buildTotpUri } from "../util/totp";
 import { normalizeTags } from "../vault/tags";
@@ -19,6 +25,7 @@ import {
 	type CxfEditableField,
 	type CxfItem,
 	cxfCredentialSchema,
+	cxfHmacCredentialsSchema,
 	cxfPayloadSchema,
 	cxfUnknownCredentialSchema,
 } from "./types";
@@ -98,6 +105,34 @@ function salvage(raw: unknown, g: Grouped): void {
 	}
 }
 
+/**
+ * Split a passkey's `fido2Extensions` into the PRF secrets we use and the members we keep verbatim
+ * for a later export. `unusable` means an hmacCredentials was there but couldn't be kept.
+ */
+function passkeyExtensions(ext: Record<string, unknown> | undefined): {
+	prf?: PasskeyPrfSecrets;
+	rest?: Record<string, unknown>;
+	unusable: boolean;
+} {
+	if (!ext) return { unusable: false };
+	const { hmacCredentials, ...others } = ext;
+	const rest = Object.keys(others).length ? others : undefined;
+	if (hmacCredentials === undefined) return { rest, unusable: false };
+	const parsed = cxfHmacCredentialsSchema.safeParse(hmacCredentials);
+	const algorithm = parsed.success ? (parsed.data.algorithm ?? "hmac-sha256") : "";
+	let prf: PasskeyPrfSecrets | undefined;
+	if (parsed.success && algorithm.toLowerCase() === "hmac-sha256") {
+		try {
+			const half = (v: string) => base64UrlToBytes(strictBase64Url(v, MAX_PRF_SECRET_BYTES));
+			const { credWithUV, credWithoutUV } = parsed.data;
+			prf = prfSecretsFrom(half(credWithUV), credWithoutUV ? half(credWithoutUV) : undefined);
+		} catch {
+			prf = undefined;
+		}
+	}
+	return { prf, rest, unusable: !prf };
+}
+
 /** CXF ships PKCS#8 DER; our SSH entries hold PEM text, and that direction is a clean wrap. */
 function derToPem(keyB64Url: string): string {
 	const b64 = base64UrlToBase64(keyB64Url);
@@ -127,6 +162,12 @@ async function toPasskeys(
 			continue;
 		}
 		tally.converted++;
+		const { prf, rest, unusable } = passkeyExtensions(p.fido2Extensions);
+		if (unusable) {
+			warnings.push(
+				`A passkey on "${title}" had a PRF secret Bramble can't use, so it was left out. Signing in works, but a site that encrypted data with it can't decrypt that data.`,
+			);
+		}
 		out.push({
 			// Stored as STANDARD base64 throughout the app; CXF is base64url.
 			credentialId: base64UrlToBase64(p.credentialId),
@@ -143,6 +184,8 @@ async function toPasskeys(
 			// CXF requires exporters to zero this, and a non-zero counter reads as a clone.
 			signCount: 0,
 			createdAt,
+			...(prf ? { prf } : {}),
+			...(rest ? { fido2Extensions: rest } : {}),
 		});
 	}
 	return out;

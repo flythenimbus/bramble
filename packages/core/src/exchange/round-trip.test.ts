@@ -120,6 +120,39 @@ describe("CXF round trip", () => {
 		expect(pk?.publicKeyCose.length).toBeGreaterThan(80);
 	});
 
+	it("preserves a passkey's PRF secrets and large blob", async () => {
+		const prf = {
+			credWithUV: bytesToBase64(new Uint8Array(32).fill(0xaa)),
+			credWithoutUV: bytesToBase64(new Uint8Array(32).fill(0xbb)),
+		};
+		const largeBlob = { uncompressedSize: 3, data: "AAAA" };
+		const { back } = await roundTrip({
+			id: "e1",
+			type: "login",
+			name: "GitHub",
+			urls: ["https://github.com"],
+			username: "octocat",
+			password: "",
+			passkeys: [
+				{
+					credentialId: bytesToBase64(new Uint8Array([1, 2, 3])),
+					rpId: "github.com",
+					userHandle: bytesToBase64(new Uint8Array([4])),
+					alg: -7,
+					publicKeyCose,
+					privateKey,
+					signCount: 0,
+					createdAt: 1_700_000_000_000,
+					prf,
+					fido2Extensions: { largeBlob },
+				},
+			],
+		});
+		if (!isLogin(back)) throw new Error("expected a login");
+		expect(back.passkeys?.[0]?.prf).toEqual(prf);
+		expect(back.passkeys?.[0]?.fido2Extensions).toEqual({ largeBlob });
+	});
+
 	it("preserves a card", async () => {
 		const { back } = await roundTrip({
 			id: "c1",

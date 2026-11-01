@@ -20,7 +20,15 @@ export async function importFromOs(
 ): Promise<ImportResult | null> {
 	const token = await exchange.claimImportToken();
 	if (!token) return null;
-	return parseCxf(await exchange.redeemImportToken(token), context);
+	const result = await parseCxf(await exchange.redeemImportToken(token), context);
+	// The OS dropped any PRF secrets before we saw the payload; we can only say so.
+	const carriesExtensions = (await exchange.availability()).passkeyExtensions !== false;
+	if (!carriesExtensions && result.imported.some((e) => e.type === "login" && e.passkeys?.length)) {
+		result.warnings.push(
+			"This iOS version doesn't pass passkey PRF secrets between apps (iOS 26.4 and later do). If a site uses one of these passkeys to encrypt data, update iOS and transfer again.",
+		);
+	}
+	return result;
 }
 
 /**
@@ -35,11 +43,13 @@ export async function exportToOs(
 	now: number = Date.now(),
 ): Promise<string[]> {
 	let warnings: string[] = [];
+	const { passkeyExtensions } = await exchange.availability();
 	await exchange.exportToApp(() => {
 		const out = toCxf(entries, {
 			exporterRpId: exchange.exporterId,
 			exporterDisplayName: appName,
 			now,
+			passkeyExtensions,
 		});
 		warnings = out.warnings;
 		return JSON.stringify(out.payload);

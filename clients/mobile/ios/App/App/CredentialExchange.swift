@@ -118,9 +118,14 @@ public class CredentialExchangePlugin: CAPPlugin, CAPBridgedPlugin {
 		// The exchange capability is declared by our credential-provider extension, so the
 		// OS only offers us once the user has enabled Bramble under AutoFill. Reported
 		// separately from `available` so the UI can say which of the two is missing.
+		// Apple's CXF types gained passkey fido2Extensions (PRF secrets, large blobs) in 26.4;
+		// earlier releases drop them without a word. See docs/passkey-prf.md.
+		var passkeyExtensions = false
+		if #available(iOS 26.4, *) { passkeyExtensions = true }
 		ASCredentialIdentityStore.shared.getState { state in
 			call.resolve([
 				"available": true, "providerEnabled": state.isEnabled, "osVersion": osVersion,
+				"passkeyExtensions": passkeyExtensions,
 			])
 		}
 	}

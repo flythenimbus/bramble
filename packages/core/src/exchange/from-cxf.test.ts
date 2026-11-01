@@ -186,6 +186,75 @@ describe("parseCxf: passkeys", () => {
 	});
 });
 
+describe("parseCxf: passkey extensions", () => {
+	const UV = new Uint8Array(32).fill(0xaa);
+	const NO_UV = new Uint8Array(32).fill(0xbb);
+	const passkeyWith = async (fido2Extensions: unknown) => {
+		const { res, entry } = await first({
+			type: "passkey",
+			credentialId: "-_--",
+			rpId: "github.com",
+			username: "octocat",
+			userHandle: "-_--",
+			key: keyB64Url,
+			fido2Extensions,
+		});
+		if (!entry || !isLogin(entry)) throw new Error("expected a login");
+		return { res, pk: entry.passkeys?.[0] };
+	};
+
+	it("keeps a passkey's PRF secrets from hmacCredentials", async () => {
+		const { res, pk } = await passkeyWith({
+			hmacCredentials: {
+				algorithm: "hmac-sha256",
+				credWithUV: bytesToBase64Url(UV),
+				credWithoutUV: bytesToBase64Url(NO_UV),
+			},
+		});
+		expect(pk?.prf).toEqual({ credWithUV: bytesToBase64(UV), credWithoutUV: bytesToBase64(NO_UV) });
+		expect(pk?.fido2Extensions).toBeUndefined();
+		expect(res.warnings).toEqual([]);
+	});
+
+	it("fills a missing credWithoutUV so the passkey can be exported again", async () => {
+		const { pk } = await passkeyWith({ hmacCredentials: { credWithUV: bytesToBase64Url(UV) } });
+		expect(pk?.prf?.credWithUV).toBe(bytesToBase64(UV));
+		expect(base64ToBytes(pk?.prf?.credWithoutUV ?? "")).toHaveLength(32);
+	});
+
+	it("leaves out a PRF secret with an unknown algorithm and says so", async () => {
+		const { res, pk } = await passkeyWith({
+			hmacCredentials: {
+				algorithm: "hmac-sha512",
+				credWithUV: bytesToBase64Url(UV),
+				credWithoutUV: bytesToBase64Url(NO_UV),
+			},
+		});
+		expect(pk).toBeDefined();
+		expect(pk?.prf).toBeUndefined();
+		expect(res.warnings).toEqual([expect.stringMatching(/had a PRF secret Bramble can't use/)]);
+	});
+
+	it("keeps other fido2Extensions members verbatim", async () => {
+		const { pk } = await passkeyWith({
+			largeBlob: { uncompressedSize: 3, data: "AAAA" },
+			credBlob: "AQ",
+		});
+		expect(pk?.fido2Extensions).toEqual({
+			largeBlob: { uncompressedSize: 3, data: "AAAA" },
+			credBlob: "AQ",
+		});
+		expect(pk?.prf).toBeUndefined();
+	});
+
+	it("imports the passkey when fido2Extensions is junk", async () => {
+		const { pk } = await passkeyWith("junk");
+		expect(pk).toBeDefined();
+		expect(pk?.prf).toBeUndefined();
+		expect(pk?.fido2Extensions).toBeUndefined();
+	});
+});
+
 describe("parseCxf: other credential types", () => {
 	it("splits a card's year-month expiry back into month and year", async () => {
 		const { entry } = await first({

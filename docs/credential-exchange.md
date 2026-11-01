@@ -97,6 +97,7 @@ Round-trip decode returns an identical value. What this pins down:
 | `formatVersion: .v1` | `"version": {"major":1,"minor":0}` | An object, not the string `"1.0"`. |
 | any `Data` | base64url, **unpadded** | `0x01020304` -> `"AQIDBA"`. Our `PasskeyCredential` docs say base64url but `AutofillBridge.swift` is fed standard base64, so pin the encoding explicitly in the mapper. |
 | `TOTP.secret: Data` | base32 string | Apple base32-**encodes** the raw bytes. Our stored value is already base32 text, so emit it as-is in the JSON and let Apple decode it. Passing ASCII bytes of a base32 string through the Swift type double-encodes it and every imported code comes out wrong. |
+| `Passkey.fido2Extensions` (iOS / macOS **26.4+**) | `fido2Extensions: { hmacCredentials: { algorithm: "hmac-sha256", credWithUV, credWithoutUV }, largeBlob: { uncompressedSize, data } }` | The passkey's PRF secrets, which Bramble stores as `prf` (see [passkey-prf.md](passkey-prf.md)), plus a large blob kept verbatim in `fido2Extensions`. **Both** `credWithUV` and `credWithoutUV` are required: one missing makes Apple reject the whole payload, so export always writes both. Apple's decoder keeps only these two members (it drops `credBlob` and `payments`). Before 26.4 the field doesn't exist and the OS drops it silently, so `isAvailable` reports `passkeyExtensions` and the export and import flows warn. Probed on macOS 26.6 with the real framework. |
 
 Consequence for the design: **build CXF JSON in TS, `JSONDecoder().decode(ASExportedCredentialData.self, from:)` in Swift, and the reverse on import.** No Swift mapping layer, only the date strategy above.
 
@@ -317,8 +318,11 @@ Verified 2026-07-29 on iPhone 17 Pro / iOS 26.4:
 - **Still device-only:** no App Store, so 1Password / Bitwarden / Chrome as counterparties. Phase 4
   interop does not move.
 - **Decoding one of OUR payloads** through Apple's types: `cxf-wire-probe.swift <file.json>` reports
-  what it accepted (titles, scope, credential kinds) or the decode error. This is the cheap way to
-  check what iOS will take before a device says "unsupported data" and names nothing.
+  what it accepted (titles, scope, credential kinds, and `passkey(prf=yes|no)`) or the decode error.
+  This is the cheap way to check what iOS will take before a device says "unsupported data" and
+  names nothing. The Mac's own framework works too, with no simulator, once macOS is 26.4 or later:
+  `xcrun swiftc -target arm64-apple-macos26.4 clients/mobile/scripts/cxf-wire-probe.swift -o
+  /tmp/cxf-probe && /tmp/cxf-probe /tmp/payload.json`.
 - **Untested:** whether a transfer actually completes in the sim. Settling it needs the Phase 2 build
   with the plist keys, plus UI taps that `simctl` cannot send. Budget for it being device-only and
   treat a working sim flow as a bonus.

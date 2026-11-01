@@ -10,6 +10,11 @@ export interface ExchangeAvailability {
 	providerEnabled: boolean;
 	/** OS version string, so an unavailable device can say why rather than hiding the feature. */
 	osVersion?: string;
+	/**
+	 * The OS carries passkey `fido2Extensions` (PRF secrets, large blobs) across a transfer. False
+	 * on iOS before 26.4, which drops them silently. Undefined reads as true.
+	 */
+	passkeyExtensions?: boolean;
 	/** Set when the native call itself failed, which is a different problem from an old OS. */
 	error?: string;
 }

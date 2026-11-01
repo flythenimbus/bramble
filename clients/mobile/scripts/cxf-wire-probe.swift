@@ -21,6 +21,14 @@ func cxfDecoder() -> JSONDecoder {
 	return decoder
 }
 
+/// Whether a passkey's PRF secrets survived Apple's decoder; the field only exists from 26.4.
+func prfCarried(_ p: ASImportableCredential.Passkey) -> String {
+	if #available(iOS 26.4, macOS 26.4, *) {
+		return p.fido2Extensions?.hmacCredentials != nil ? "yes" : "no"
+	}
+	return "unsupported"
+}
+
 /// Decode one of our payloads and report what Apple's types actually accepted.
 func inspect(path: String) -> Never {
 	guard let data = FileManager.default.contents(atPath: path) else {
@@ -35,7 +43,7 @@ func inspect(path: String) -> Never {
 				let kinds = item.credentials.map { credential -> String in
 					switch credential {
 					case .basicAuthentication: return "basic-auth"
-					case .passkey: return "passkey"
+					case .passkey(let p): return "passkey(prf=\(prfCarried(p)))"
 					case .totp: return "totp"
 					case .note: return "note"
 					case .creditCard: return "credit-card"
@@ -73,14 +81,22 @@ let totp = ASImportableCredential.totp(
 		algorithm: .sha1, issuer: "GitHub"))
 
 // Mirrors PasskeyCredential in core/src/hooks/useVault.tsx.
-let passkey = ASImportableCredential.passkey(
-	.init(
-		credentialID: Data([0x01, 0x02, 0x03, 0x04]),
-		relyingPartyIdentifier: "github.com",
-		userName: "ada",
-		userDisplayName: "Ada Lovelace",
-		userHandle: Data([0xAA, 0xBB]),
-		key: Data([0x30, 0x81, 0x87, 0x02, 0x01, 0x00]))) // PKCS#8 prefix, truncated
+var passkeyRecord = ASImportableCredential.Passkey(
+	credentialID: Data([0x01, 0x02, 0x03, 0x04]),
+	relyingPartyIdentifier: "github.com",
+	userName: "ada",
+	userDisplayName: "Ada Lovelace",
+	userHandle: Data([0xAA, 0xBB]),
+	key: Data([0x30, 0x81, 0x87, 0x02, 0x01, 0x00])) // PKCS#8 prefix, truncated
+// PRF secrets and a large blob, which Apple's types carry from 26.4 (docs/passkey-prf.md).
+if #available(iOS 26.4, macOS 26.4, *) {
+	passkeyRecord.fido2Extensions = ASImportableFIDO2Extensions(
+		hmacCredentials: ASImportableFIDO2HMACCredential(
+			algorithm: .sha256, credentialWithUV: Data(repeating: 0xAA, count: 32),
+			credentialWithoutUV: Data(repeating: 0xBB, count: 32)),
+		largeBlob: ASImportableFIDO2LargeBlob(uncompressedSize: 3, data: Data([1, 2, 3])))
+}
+let passkey = ASImportableCredential.passkey(passkeyRecord)
 
 let note = ASImportableCredential.note(.init(content: field("recovery kit in the safe")))
 

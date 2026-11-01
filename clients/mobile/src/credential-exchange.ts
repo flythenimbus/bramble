@@ -10,7 +10,12 @@ import { armFilePickGrace } from "./auto-lock";
 // app. Without arming the auto-lock grace first, "Immediately" locks the vault mid-transfer
 // and the payload is lost, the same trap the native file picker has.
 interface CredentialExchangePlugin {
-	isAvailable(): Promise<{ available: boolean; providerEnabled: boolean; osVersion?: string }>;
+	isAvailable(): Promise<{
+		available: boolean;
+		providerEnabled: boolean;
+		osVersion?: string;
+		passkeyExtensions?: boolean;
+	}>;
 	requestExport(options: { importerBundleId?: string }): Promise<{ formatVersion: string }>;
 	exportCredentials(options: { cxfJson: string }): Promise<void>;
 	hasPendingImport(): Promise<{ pending: boolean }>;
