@@ -47,6 +47,7 @@ import {
 	CryptoPasskeyGetSchema,
 	CryptoPasskeyImportPkcs8Schema,
 	CryptoPasskeyMakeSchema,
+	CryptoPasskeyPrfSchema,
 	CryptoSaveKdbxSchema,
 	CryptoSealPortableVaultSchema,
 	CryptoUnlockWithVekSchema,
@@ -676,6 +677,10 @@ async function dispatchCrypto(a: CryptoAdapter, type: string, payload: unknown):
 		case "CRYPTO_PASSKEY_IMPORT_PKCS8": {
 			const p = CryptoPasskeyImportPkcs8Schema.parse(payload);
 			return a.passkeyImportPkcs8(p.pkcs8B64);
+		}
+		case "CRYPTO_PASSKEY_PRF": {
+			const p = CryptoPasskeyPrfSchema.parse(payload);
+			return a.passkeyPrfEval(p.secretB64, p.firstB64, p.secondB64);
 		}
 
 		default:

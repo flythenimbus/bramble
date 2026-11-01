@@ -164,3 +164,48 @@ describe("entryDataSchema (discriminated union)", () => {
 		expect(result.success).toBe(false);
 	});
 });
+
+describe("passkey PRF fields", () => {
+	const loginWithPasskey = (passkey: Record<string, unknown>) => ({
+		type: "login",
+		name: "Site",
+		username: "ada",
+		password: "",
+		urls: ["https://example.com"],
+		passkeys: [
+			{
+				credentialId: "Q0lE",
+				rpId: "example.com",
+				userHandle: "dXNlcg==",
+				alg: -7,
+				publicKeyCose: "UEs=",
+				privateKey: "U0s=",
+				signCount: 0,
+				createdAt: 1,
+				...passkey,
+			},
+		],
+	});
+
+	// An older build must not strip the secrets when it re-saves a login (docs/passkey-prf.md).
+	it("keeps a passkey's PRF secrets, extension data and keys it doesn't know", () => {
+		const raw = loginWithPasskey({
+			prf: { credWithUV: "QQ==", credWithoutUV: "Qg==" },
+			fido2Extensions: { largeBlob: { uncompressedSize: 3, data: "AAAA" } },
+			futureKey: 1,
+		});
+		expect(entryDataSchema.safeParse(raw).success).toBe(true);
+		const out = normalizeEntryData(raw);
+		if (out.type !== "login") throw new Error("expected login");
+		expect(out.passkeys?.[0]).toEqual(raw.passkeys[0]);
+	});
+
+	it("rejects a passkey whose PRF secrets or extension data are malformed", () => {
+		expect(entryDataSchema.safeParse(loginWithPasskey({ prf: { credWithUV: 1 } })).success).toBe(
+			false,
+		);
+		expect(entryDataSchema.safeParse(loginWithPasskey({ fido2Extensions: "junk" })).success).toBe(
+			false,
+		);
+	});
+});

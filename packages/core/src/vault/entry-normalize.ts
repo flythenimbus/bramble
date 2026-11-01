@@ -47,6 +47,8 @@ const passkeyCredentialSchema = z.object({
 	signCount: z.number(),
 	createdAt: z.number(),
 	lastUsedAt: z.number().optional(),
+	prf: z.object({ credWithUV: z.string(), credWithoutUV: z.string() }).optional(),
+	fido2Extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 // Mirror of PasswordChange. Kept in lockstep with the interface in useVault.

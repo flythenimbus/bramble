@@ -161,6 +161,9 @@ export function buildCryptoAdapter(
 				userVerified,
 			);
 		},
+		async passkeyPrfEval(secretB64, firstB64, secondB64) {
+			return (await getWasm()).passkey_prf_eval(secretB64, firstB64, secondB64);
+		},
 
 		async openKdbx(i) {
 			const wasm = await getWasm();

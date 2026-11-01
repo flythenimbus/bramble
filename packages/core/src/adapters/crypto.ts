@@ -37,6 +37,23 @@ export interface PasskeyRegistration {
 	authenticatorData: string;
 	/** SPKI DER of the public key (base64); Chrome's proxy requires response.publicKey. */
 	publicKey: string;
+	/** Minted for every passkey; stored with the private key. */
+	prf: PasskeyPrfSecrets;
+}
+
+/**
+ * A passkey's PRF (CTAP hmac-secret) secrets, base64, 32 bytes each. Only `credWithUV` is
+ * evaluated; CXF requires both. See docs/passkey-prf.md.
+ */
+export interface PasskeyPrfSecrets {
+	credWithUV: string;
+	credWithoutUV: string;
+}
+
+/** WebAuthn PRF results for one ceremony, base64, 32 bytes each. */
+export interface PasskeyPrfOutput {
+	first: string;
+	second?: string;
 }
 
 /** PKCS#8 key material converted to Bramble's stored representation. All base64. */
@@ -218,6 +235,12 @@ export interface CryptoAdapter {
 		clientDataHashB64: string,
 		userVerified: boolean,
 	): Promise<PasskeyAssertion>;
+	/** WebAuthn PRF over a stored secret; inputs are the site's raw values, base64. */
+	passkeyPrfEval(
+		secretB64: string,
+		firstB64: string,
+		secondB64?: string,
+	): Promise<PasskeyPrfOutput>;
 
 	// Rejects with an Error whose message is a stable KDBX_* code (e.g.
 	// KDBX_WRONG_CREDENTIAL) so the UI can branch on it.

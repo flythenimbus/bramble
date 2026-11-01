@@ -5,7 +5,11 @@
 // planPasskeyPlacement). Mirrors corner-prompt's commit path: per-entry encrypt, hlc
 // stamp, re-encrypt the outer payload, write or queue. See docs/passkey-provider.md.
 
-import type { PasskeyAssertion, PasskeyRegistration } from "@core/adapters/crypto";
+import type {
+	PasskeyAssertion,
+	PasskeyPrfOutput,
+	PasskeyRegistration,
+} from "@core/adapters/crypto";
 import type { Entry, EntryData, LoginEntryData } from "@core/hooks/useVault";
 import { decodeEntriesPayload, heldVersions, nextCausal, nextVersion } from "@core/sync";
 import { normalizeEntryData } from "@core/vault/entry-normalize";
@@ -52,6 +56,19 @@ export async function passkeyGetAssertion(
 	});
 	if (!res.ok || !res.data) throw new Error(res.error ?? "passkey assertion failed");
 	return res.data as PasskeyAssertion;
+}
+
+export async function passkeyPrfEval(
+	secretB64: string,
+	firstB64: string,
+	secondB64?: string,
+): Promise<PasskeyPrfOutput> {
+	const res = await sendToOffscreen({
+		type: "CRYPTO_PASSKEY_PRF",
+		payload: { secretB64, firstB64, secondB64 },
+	});
+	if (!res.ok || !res.data) throw new Error(res.error ?? "passkey PRF failed");
+	return res.data as PasskeyPrfOutput;
 }
 
 /** Decrypt every vault entry, including login `passkeys[]`. Requires the vault unlocked. */

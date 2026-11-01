@@ -12,6 +12,7 @@ import type {
 	OpenKdbxInput,
 	PasskeyAssertion,
 	PasskeyImportResult,
+	PasskeyPrfOutput,
 	PasskeyRegistration,
 	PasswordSlotBlob,
 	SaveKdbxInput,
@@ -155,6 +156,7 @@ export const desktopCrypto: CryptoAdapter = {
 	// which is Swift calling this same core. See docs/macos-credential-provider.md.
 	passkeyMakeCredential: (): Promise<PasskeyRegistration> => notWired("Passkey provider"),
 	passkeyGetAssertion: (): Promise<PasskeyAssertion> => notWired("Passkey assertion"),
+	passkeyPrfEval: (): Promise<PasskeyPrfOutput> => notWired("Passkey PRF"),
 
 	// Importing them is a different question, and the answer is yes: desktop is a full sync
 	// peer, so a passkey dropped here never reaches the user's phone or browser either.

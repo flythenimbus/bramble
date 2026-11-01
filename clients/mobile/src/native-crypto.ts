@@ -357,6 +357,9 @@ const nativeModule: VaultCrypto = {
 	passkey_get_assertion: (rpId, privateKeyB64, alg, clientDataHashB64, userVerified) =>
 		Native.passkeyGetAssertion({ rpId, privateKeyB64, alg, clientDataHashB64, userVerified }),
 	passkey_import_pkcs8: (pkcs8B64) => Native.passkeyImportPkcs8({ pkcs8B64 }),
+	// The webview never acts as the provider; the native credential providers call uniffi directly.
+	passkey_prf_eval: () =>
+		Promise.reject(new Error("passkey PRF runs in the native credential provider")),
 
 	open_kdbx4: async (file, password, keyfile) => {
 		const folder = await newKdbxFolder();

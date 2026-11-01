@@ -8,6 +8,7 @@ import type {
 	OpenPortableVaultInput,
 	PasskeyAssertion,
 	PasskeyImportResult,
+	PasskeyPrfOutput,
 	PasskeyRegistration,
 	PasswordSlotBlob,
 	SaveKdbxInput,
@@ -36,6 +37,7 @@ import type {
 	CryptoPasskeyGet,
 	CryptoPasskeyImportPkcs8,
 	CryptoPasskeyMake,
+	CryptoPasskeyPrf,
 	CryptoUnlockWithVek,
 	CryptoUnwrapPasswordSlot,
 	CryptoUnwrapWebauthnSlot,
@@ -299,6 +301,12 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 			send<PasskeyImportResult>("CRYPTO_PASSKEY_IMPORT_PKCS8", {
 				pkcs8B64,
 			} satisfies CryptoPasskeyImportPkcs8),
+		passkeyPrfEval: (secretB64, firstB64, secondB64) =>
+			send<PasskeyPrfOutput>("CRYPTO_PASSKEY_PRF", {
+				secretB64,
+				firstB64,
+				secondB64,
+			} satisfies CryptoPasskeyPrf),
 	};
 }
 

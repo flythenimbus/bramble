@@ -36,9 +36,11 @@ function fakeWasm() {
 			attestationObject: "att",
 			authenticatorData: "ad",
 			publicKey: "spki",
+			prf: { credWithUV: "uv", credWithoutUV: "nouv" },
 		})),
 		passkey_import_pkcs8: vi.fn(() => ({ privateKey: "sk", publicKeyCose: "pk" })),
 		passkey_get_assertion: vi.fn(() => ({ authenticatorData: "ad", signature: "sig" })),
+		passkey_prf_eval: vi.fn(() => ({ first: "b3V0" })),
 		open_kdbx4: vi.fn((_file: Uint8Array, _password: string, _keyfile?: Uint8Array) => ({
 			entries: [{ strings: [], binaries: [{ name: "scan.pdf", index: 0 }] }],
 			attachments: [new Uint8Array([7, 8, 9])],
@@ -106,6 +108,13 @@ describe("buildCryptoAdapter", () => {
 		expect(wasm.passkey_import_pkcs8).toHaveBeenCalledWith("pkcs8");
 		await a.passkeyGetAssertion("github.com", "sk", -7, "hash", false);
 		expect(wasm.passkey_get_assertion).toHaveBeenCalledWith("github.com", "sk", -7, "hash", false);
+	});
+
+	it("maps passkeyPrfEval to the core positionally, with no second input", async () => {
+		const wasm = fakeWasm();
+		const a = buildCryptoAdapter(asWasm(wasm));
+		expect(await a.passkeyPrfEval("c2Vj", "Zmlyc3Q=")).toEqual({ first: "b3V0" });
+		expect(wasm.passkey_prf_eval).toHaveBeenCalledWith("c2Vj", "Zmlyc3Q=", undefined);
 	});
 
 	it("decryptEntries falls back to a per-entry loop when the module has no batch", async () => {

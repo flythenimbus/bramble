@@ -8,6 +8,7 @@ import type {
 	EncryptedPayload,
 	PasskeyAssertion,
 	PasskeyImportResult,
+	PasskeyPrfOutput,
 	PasskeyRegistration,
 	PasswordSlotBlob,
 	VekEncrypted,
@@ -101,6 +102,11 @@ export interface VaultCrypto {
 		clientDataHashB64: string,
 		userVerified: boolean,
 	): Awaitable<PasskeyAssertion>;
+	passkey_prf_eval(
+		secretB64: string,
+		firstB64: string,
+		secondB64?: string,
+	): Awaitable<PasskeyPrfOutput>;
 
 	/**
 	 * Open a KeePass database: its entries, and its attachments, which the entries name by

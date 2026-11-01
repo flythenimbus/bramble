@@ -137,6 +137,11 @@ export const CryptoPasskeyGetSchema = z.object({
 export const CryptoPasskeyImportPkcs8Schema = z.object({
 	pkcs8B64: z.string(),
 });
+export const CryptoPasskeyPrfSchema = z.object({
+	secretB64: z.string(),
+	firstB64: z.string(),
+	secondB64: z.string().optional(),
+});
 
 // File attachments. The bytes never ride these messages: they move through IndexedDB
 // (files/idb.ts), and only a handoff key or a blob's address travels here. The vek and the vault
@@ -208,3 +213,4 @@ export type CryptoMailboxOpen = z.infer<typeof CryptoMailboxOpenSchema>;
 export type CryptoPasskeyMake = z.infer<typeof CryptoPasskeyMakeSchema>;
 export type CryptoPasskeyGet = z.infer<typeof CryptoPasskeyGetSchema>;
 export type CryptoPasskeyImportPkcs8 = z.infer<typeof CryptoPasskeyImportPkcs8Schema>;
+export type CryptoPasskeyPrf = z.infer<typeof CryptoPasskeyPrfSchema>;

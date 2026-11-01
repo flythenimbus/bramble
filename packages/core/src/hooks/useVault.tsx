@@ -11,7 +11,7 @@ import {
 } from "react";
 import type { IndexEntry, SubdomainMatchMode } from "../adapters/autofill";
 import type { BiometryType } from "../adapters/biometric";
-import { VAULT_OPEN_FAILED } from "../adapters/crypto";
+import { type PasskeyPrfSecrets, VAULT_OPEN_FAILED } from "../adapters/crypto";
 import type { PickedAttachment } from "../adapters/files";
 import { buildBackup } from "../backup/archive";
 import { usePlatform } from "../context/PlatformContext";
@@ -75,6 +75,10 @@ export interface PasskeyCredential {
 	signCount: number;
 	createdAt: number;
 	lastUsedAt?: number;
+	/** PRF secrets. Absent on passkeys made before PRF support; never minted later. */
+	prf?: PasskeyPrfSecrets;
+	/** CXF `fido2Extensions` members Bramble can't use (largeBlob, ...), kept verbatim (base64url). */
+	fido2Extensions?: Record<string, unknown>;
 }
 
 /**
