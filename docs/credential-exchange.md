@@ -279,6 +279,9 @@ against the same counterparty.
 macOS 26), and so does `parseCxf`, so the loss is most likely in Passwords' exporter. Unconfirmed:
 transferring the same entry to another manager would settle it.
 
+Passwords names the destination app by `CFBundleName`, not `CFBundleDisplayName`, so the app's
+Info.plist sets it to "Bramble" (it was `$(PRODUCT_NAME)`, which shows as "App").
+
 Two defects that only a device could have found, both now fixed and both silent by nature:
 a local Capacitor plugin that compiles and ships but is never registered (quirk 10), and a passkey
 key sent in the wrong format, which decodes cleanly and fails only on use.
