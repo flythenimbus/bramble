@@ -141,7 +141,7 @@ Two decisions worth knowing before Phase 3 wires the UI:
 | Bramble | CXF | Notes |
 |---|---|---|
 | `login.username` / `.password` | `BasicAuth{username, password}` | Values wrap in `EditableField`, not bare strings. |
-| `login.urls` | `Item.scope.urls` | Absolute URLs only (the decoder drops what `Foundation.URL` rejects), so a bare host is promoted to https. |
+| `login.urls` | `Item.scope.urls` | Absolute URLs only (the decoder drops what `Foundation.URL` rejects), so a bare host is promoted to https. On import, a passkey item with no scope gets `https://<rpId>`, as a login we mint does. |
 | `login.totp` | `TOTP{secret, period, digits, algorithm, issuer}` | `parseTotp` out, `buildTotpUri` back. An unreadable key becomes a custom field plus a warning, never a drop. |
 | `login.passkeys[]` | `Passkey{credentialId, rpId, username, userDisplayName, userHandle, key}` | Ids convert from our standard base64 to unpadded base64url. **`key` is a format change, not just an encoding one**: we store the raw 32-byte P-256 scalar, CXF holds PKCS#8 DER. `username`/`userDisplayName` are required in CXF and optional for us, so they default to `""`. |
 | `card` | `CreditCard{number, fullName, cardType, verificationNumber, expiryDate}` | `expMonth`/`expYear` -> one `year-month` field. `brand` -> `cardType`. |
@@ -273,6 +273,11 @@ only a successful assertion proves the key material survived.
 
 **Import is done too.** Apple Passwords -> Bramble works on device, so both directions are verified
 against the same counterparty.
+
+**Open: a Passwords website with a port arrives with no URL** (user report, iOS 27.2, 2026-10-31:
+`https://example.com:1234` imports empty). Apple's decoder and encoder keep port URLs (probed on
+macOS 26), and so does `parseCxf`, so the loss is most likely in Passwords' exporter. Unconfirmed:
+transferring the same entry to another manager would settle it.
 
 Two defects that only a device could have found, both now fixed and both silent by nature:
 a local Capacitor plugin that compiles and ships but is never registered (quirk 10), and a passkey

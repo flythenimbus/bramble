@@ -204,12 +204,14 @@ async function entryFor(
 			context,
 			tally,
 		);
+		const scoped = item.scope?.urls ?? [];
 		return {
 			type: "login",
 			name,
 			notes,
 			...common,
-			urls: item.scope?.urls ?? [],
+			// No scope: the passkey's rpId is the site, as on a login we mint (newPasskeyLogin).
+			urls: scoped.length ? scoped : [...new Set(g.passkeys.map((p) => `https://${p.rpId}`))],
 			username: value(g.basicAuth?.username) || g.totp?.username || g.passkeys[0]?.username || "",
 			password: value(g.basicAuth?.password),
 			...(totp ? { totp } : {}),

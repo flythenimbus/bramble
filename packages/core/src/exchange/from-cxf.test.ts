@@ -155,6 +155,22 @@ describe("parseCxf: passkeys", () => {
 		]);
 	});
 
+	it("gives a passkey item with no scope its rpId as the website", async () => {
+		const unscoped = JSON.parse(
+			payload({
+				type: "passkey",
+				credentialId: "-_--",
+				rpId: "github.com",
+				username: "octocat",
+				userHandle: "-_--",
+				key: keyB64Url,
+			}),
+		);
+		delete unscoped.accounts[0].items[0].scope;
+		const res = await parseCxf(JSON.stringify(unscoped), testParserContext);
+		expect(res.imported[0]).toMatchObject({ urls: ["https://github.com"] });
+	});
+
 	it("skips a passkey whose key we can't read, keeping the rest of the item", async () => {
 		const { res, entry } = await first(basicAuth, {
 			type: "passkey",
