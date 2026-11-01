@@ -274,10 +274,11 @@ only a successful assertion proves the key material survived.
 **Import is done too.** Apple Passwords -> Bramble works on device, so both directions are verified
 against the same counterparty.
 
-**Open: a Passwords website with a port arrives with no URL** (user report, iOS 27.2, 2026-10-31:
-`https://example.com:1234` imports empty). Apple's decoder and encoder keep port URLs (probed on
-macOS 26), and so does `parseCxf`, so the loss is most likely in Passwords' exporter. Unconfirmed:
-transferring the same entry to another manager would settle it.
+**Apple drops a Passwords website that has a port** (user report, iOS 27.2, 2026-10-31). Captured
+on device (iOS 26.6.2): an entry with `https://example.com:1234` reaches `importCredentials` with
+`scope.urls` empty and the website nowhere else in the item, while a portless control arrives
+intact. Apple's macOS 26 decoder keeps port URLs, so Passwords' exporter is the likely culprit.
+Nothing in the payload lets us recover it.
 
 Passwords names the destination app by `CFBundleName`, not `CFBundleDisplayName`, so the app's
 Info.plist sets it to "Bramble" (it was `$(PRODUCT_NAME)`, which shows as "App").
