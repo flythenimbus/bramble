@@ -8,7 +8,7 @@ says otherwise.
 
 ## Credentials in this directory are deliberate, disposable, and worth understanding
 
-Three files contain real private keys. That is the point of them: a passkey importer cannot be
+Four files contain real private keys. That is the point of them: a passkey importer cannot be
 tested against a key that is not a key, and a fabricated one would not prove we read what the
 source application actually writes.
 
@@ -17,6 +17,7 @@ source application actually writes.
 | `bitwarden-passkeys.json` | P-256 | Generated for the tests, never registered anywhere |
 | `keepass-passkeys.xml` / `.kdbx` | Ed25519 | Generated for the tests, never registered anywhere |
 | `keepass-passkeys-real.kdbx` | Ed25519 | **Registered, but only to webauthn.io**, a public demo site, under a throwaway account |
+| `protonpass-passkeys.zip` | P-256 | **Registered, but only to webauthn.io**, under a throwaway account (`testing`) |
 
 **`keepass-passkeys-real.kdbx` is the one to read twice before touching.** It is a genuine KeePassXC 2.7.12
 database, password `qwerty`, holding a passkey that really does authenticate to webauthn.io as
@@ -46,6 +47,11 @@ password, covering issue #79.
 
 `roboform.csv` is invented data in the exact shape of a real RoboForm extension export: a BOM, the
 fields column spilling over into one cell per field, and a safenote row shorter than the header.
+
+`protonpass-passkeys.zip` is a real Proton Pass 1.43.0 export, cut down to two test logins: the
+webauthn.io passkey, and a login with three URLs (one with no scheme and a port). The user id,
+item and share ids were replaced with fake ones and every other item was removed. The passkey
+`content` is exactly as Proton wrote it.
 
 `dashlane.zip` is invented data in the layout of a real Dashlane CSV export: five CSVs, one per
 kind of item, with the headers and CRLF line endings Dashlane writes today.

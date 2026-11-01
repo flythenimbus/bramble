@@ -2,8 +2,10 @@ import { z } from "zod";
 import type { EntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
 import { normalizeTags } from "../vault/tags";
+import { type ConversionTally, systemicFailureWarning } from "./passkey-fields";
+import { importProtonPasskeys } from "./protonpass-passkey";
 import { type RawField, readZippedJson, summarize, toCustomFields } from "./shared";
-import type { ImportResult } from "./types";
+import type { ImportParserContext, ImportResult } from "./types";
 
 // Proton Pass export: a zip holding data.json with a `vaults` map. Schema lenient except `vaults`.
 // `content` is loose so the identity/unknown fold keeps unmodelled keys. State: 1 active, 2 trashed.
@@ -28,6 +30,7 @@ const contentSchema = z.looseObject({
 });
 const itemSchema = z.object({
 	state: z.number().nullish(),
+	createTime: z.number().nullish(),
 	aliasEmail: z.string().nullish(),
 	data: z
 		.object({
@@ -70,7 +73,10 @@ function splitExpiry(raw: string | null | undefined): { expMonth: string; expYea
 }
 
 /** Parse a Proton Pass zip export into Bramble entries. Throws on non-Proton input. */
-export function parseProtonPass(raw: string | Uint8Array): ImportResult {
+export async function parseProtonPass(
+	raw: string | Uint8Array,
+	context: ImportParserContext,
+): Promise<ImportResult> {
 	const parsed = readZippedJson(raw, {
 		findData: (files) => Object.entries(files).find(([p]) => p.endsWith("data.json"))?.[1],
 		schema: exportSchema,
@@ -80,6 +86,8 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 
 	const imported: EntryData[] = [];
 	const warnings: string[] = [];
+	const importedAt = Date.now();
+	const tally: ConversionTally = { converted: 0, failed: 0 };
 
 	for (const vault of Object.values(parsed.vaults)) {
 		// Proton organises by vault, which is the closest thing its export has to a tag.
@@ -96,9 +104,16 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 			switch (d.type) {
 				case "login":
 				case "alias": {
-					if (content.passkeys?.length) {
-						warnings.push(`"${name}" has a passkey, which can't be imported yet.`);
-					}
+					const createdAt = item.createTime ? item.createTime * 1000 : undefined;
+					const passkeys = await importProtonPasskeys(
+						content.passkeys,
+						name,
+						createdAt,
+						importedAt,
+						context,
+						warnings,
+						tally,
+					);
 					const username =
 						content.itemUsername || content.username || content.itemEmail || item.aliasEmail || "";
 					// Keep the email only when distinct from the chosen username.
@@ -122,6 +137,7 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 							...emailField,
 							...extra.filter((f) => f.value !== (content.totpUri || totpExtra)),
 						]),
+						passkeys,
 					});
 					break;
 				}
@@ -173,6 +189,9 @@ export function parseProtonPass(raw: string | Uint8Array): ImportResult {
 			}
 		}
 	}
+
+	const systemic = systemicFailureWarning(tally, "export");
+	if (systemic) warnings.push(systemic);
 
 	return summarize(imported, 0, warnings);
 }

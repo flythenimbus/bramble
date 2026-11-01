@@ -4,7 +4,8 @@ Two paths bring passkeys in from a *foreign* format, and both can drop a single 
 importing everything around it. A dropped passkey is always reported in the preview, never
 silent, so a bug report that quotes the warning is usually diagnosable without a device.
 
-- **A file** (Bitwarden JSON today): `core/src/import/bitwarden.ts`.
+- **A file**: Bitwarden JSON (`core/src/import/bitwarden.ts`), KeePassXC (see [below](#keepassxc))
+  and Proton Pass (see [below](#proton-pass)).
 - **An OS transfer** (FIDO credential exchange, iOS 26+): `core/src/exchange/from-cxf.ts`. See
   [credential-exchange.md](credential-exchange.md).
 
@@ -21,7 +22,7 @@ need. See [encrypted-import.md](encrypted-import.md).
 
 | | On the wire | In the vault |
 |---|---|---|
-| Private key | PKCS#8 DER | raw 32-byte P-256 scalar |
+| Private key | PKCS#8 DER (Proton: a COSE key, see below) | raw 32-byte P-256 scalar |
 | Public key | absent | COSE_Key, re-derived from the scalar |
 | `credentialId`, `userHandle` | base64url (CXF) or UUID / `b64.`-prefixed (Bitwarden) | standard base64 |
 | `signCount` | whatever the exporter wrote | always 0 |
@@ -129,6 +130,52 @@ not dedupe against each other.
 | is in SEC1 form rather than PKCS#8 | `BEGIN EC PRIVATE KEY`, a real key in the wrong container |
 | is longer than the 4096-character maximum | the PEM is over the cap, checked before any decode |
 | has key material we can't read | the core refused it; its own error is suppressed because it can name key bytes |
+
+## Proton Pass
+
+Proton keeps each passkey on its login as `content.passkeys[]`. Most fields sit in plain JSON, but
+the key is only inside `content`: standard base64 of MessagePack `{c, v}`, where `v` is 1 and `c`
+is a second MessagePack record, Proton's `ProtonPassKey` (`proton-pass-common`,
+`src/passkey/protonpasskey.rs`, written with `rmp_serde`). `import/protonpass-passkey.ts` decodes
+it with the small reader in `util/msgpack.ts`.
+
+| Record field | What it is | We use |
+|---|---|---|
+| `cid` | credential ID | yes; the JSON `credentialId` is the same bytes |
+| `rid` | rpId | yes |
+| `uhd` | user handle | yes, required |
+| `un` / `udn` | user name / display name | only when the JSON `userName` / `userDisplayName` are empty |
+| `cnt` | signature counter | no, zeroed with a warning if it was not 0 |
+| `ext.hmac_secret` | the PRF / hmac-secret seed | no, Bramble has nowhere to keep it, so it is a warning |
+| `key` | a COSE key in Proton's own serde shape | the scalar, `par` label -4 |
+
+Byte strings arrive as MessagePack arrays of small ints rather than `bin`, because the Rust
+`Vec<u8>` fields carry no `serde_bytes`. Enums are `{t, c}` maps (`{t: "assign", c: "EC2"}`), and
+the curve is a `ProtonInteger`: an i128 as 16 little-endian bytes.
+
+We accept EC2 with curve 1 (P-256) and alg ES256, wrap the scalar with `pkcs8FromScalar`, and the
+crypto core rebuilds the public key from it. The x and y Proton stores are not read: the scalar
+alone defines the key. The unit test pins the COSE key the core derives against the x and y in a
+real Proton file, which is what shows we read the right parameter.
+
+| Warning says | Cause |
+|---|---|
+| had an unexpected shape | `content` is missing or not a string |
+| is larger than any Proton Pass passkey | `content` over 8192 characters, checked before decoding |
+| is in a newer Proton Pass format we can't read yet | the outer `v` is not 1 |
+| couldn't be read | not base64, not MessagePack, or `c` is not bytes; the decoder's own error is never shown |
+| has an invalid relying-party ID | `rid` fails DNS-label validation |
+| has no credential ID / user handle | `cid` / `uhd` absent or empty |
+| uses a key type other than P-256 | not EC2, an `alg` other than ES256, or a curve other than 1 |
+| has no private key | no 32-byte -4 parameter |
+| has invalid private-key material | the core refused the key |
+
+The counter, PRF and creation-date warnings import the passkey anyway. A dropped PRF secret
+leaves sign-in working, but a site that used PRF to encrypt data cannot decrypt it again.
+
+**Status:** checked against a real Proton Pass 1.43.0 export (fixture
+`protonpass-passkeys.zip`, a webauthn.io passkey). Signing in to webauthn.io with the imported
+passkey has not been tried yet.
 
 ## Where these limits come from, and which are ours to relax
 
