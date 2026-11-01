@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { usePlatform } from "../../context/PlatformContext";
 
 const STORAGE_KEY = "vault-theme";
 
@@ -33,13 +34,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	const darkMode = themeMode === "system" ? systemDark : themeMode === "dark";
+	const { shell } = usePlatform();
 
 	useEffect(() => {
 		const root = document.documentElement;
 		root.classList.toggle("dark", darkMode);
 		// Disarm the pre-mount OS-scheme background (theme.css); the .dark class now owns it.
 		root.classList.add("theme-ready");
-	}, [darkMode]);
+		shell.setSystemBarsDark?.(darkMode);
+	}, [darkMode, shell]);
 
 	const setThemeMode = (mode: ThemeMode) => {
 		setThemeModeState(mode);

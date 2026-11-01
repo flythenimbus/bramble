@@ -1,5 +1,5 @@
 import { App } from "@capacitor/app";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import type { OptionsScreen, ShellAdapter, Target } from "@core/index";
@@ -90,6 +90,12 @@ export const mobileShell: ShellAdapter = {
 	// A native file picker backgrounds the app; without this the "Immediately" auto-lock
 	// would fire and drop the in-progress import. See ./auto-lock.ts.
 	notifyFilePickerOpening: armFilePickGrace,
+	// Capacitor's default follows the OS scheme, not Settings > Appearance. Dark = light icons.
+	setSystemBarsDark(dark) {
+		void SystemBars.setStyle({
+			style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light,
+		}).catch(() => {});
+	},
 	// didBecomeActive, not `resume` (willEnterForeground): the unlock screen asks for the
 	// biometric gate here, and iOS refuses one until the app is genuinely active.
 	onAppStateChange(cb) {

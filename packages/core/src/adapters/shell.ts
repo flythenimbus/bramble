@@ -94,6 +94,12 @@ export interface ShellAdapter {
 	 */
 	notifyFilePickerOpening?(): void;
 	/**
+	 * Match the OS status and navigation bar icons to the app's resolved theme, which the user
+	 * can set apart from the OS's. Absent where the app draws under no system bars (extension,
+	 * desktop).
+	 */
+	setSystemBarsDark?(dark: boolean): void;
+	/**
 	 * Subscribe to foreground-active transitions, reporting the current state immediately.
 	 * "Active" is the OS's own notion (iOS didBecomeActive, Android onResume), which is later
 	 * than the webview painting and later than Capacitor's `resume` (willEnterForeground): iOS
