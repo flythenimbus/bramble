@@ -129,6 +129,12 @@ describe("planPasskeyPlacement", () => {
 		expect(plan.kind).toBe("attach");
 	});
 
+	it("matches a login stored as a bare host with a port", () => {
+		const entries: Entry[] = [{ ...githubLogin, urls: ["github.com:8443"] } as Entry];
+		const plan = planPasskeyPlacement(entries, "github.com", undefined, passkey());
+		expect(plan.kind).toBe("attach");
+	});
+
 	it("fabricates a standalone login when no entry covers the rpId", () => {
 		const plan = planPasskeyPlacement(
 			[],

@@ -5,6 +5,7 @@
 // See docs/passkey-provider.md.
 
 import type { Entry, LoginEntryData, PasskeyCredential } from "../hooks/useVault";
+import { extractHostname } from "./autofill-index";
 
 /** COSE algorithm identifier for ES256, the only algorithm Bramble MINTS. */
 export const COSE_ES256 = -7;
@@ -49,13 +50,7 @@ function loginCoversRpId(urls: string[], rpId: string): boolean {
 	const id = rpId.toLowerCase();
 	for (const u of urls) {
 		if (!u) continue;
-		let host = u;
-		try {
-			host = new URL(u).hostname;
-		} catch {
-			// bare hostname stored without a scheme
-		}
-		host = host.toLowerCase();
+		const host = extractHostname(u).toLowerCase();
 		if (host === id || host.endsWith(`.${id}`)) return true;
 	}
 	return false;

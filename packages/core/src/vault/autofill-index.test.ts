@@ -24,6 +24,13 @@ describe("loginHosts", () => {
 		});
 	});
 
+	it("reads a bare host with a port as https", () => {
+		expect(loginHosts(["example.com:1234", "localhost:8080/admin", "192.168.1.10:5000"])).toEqual({
+			hostnames: ["example.com", "localhost", "192.168.1.10"],
+			ports: ["1234", "8080", "5000"],
+		});
+	});
+
 	it("reads a scheme's own default port as none", () => {
 		expect(loginHosts(["https://nas.local:443", "http://nas.local:80"])).toEqual({
 			hostnames: ["nas.local", "nas.local"],

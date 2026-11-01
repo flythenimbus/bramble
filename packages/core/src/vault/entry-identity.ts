@@ -16,6 +16,7 @@
 // are held back for the user to confirm rather than dropped. See docs/encrypted-import.md.
 
 import type { EntryData } from "../hooks/useVault";
+import { withScheme } from "../util/url";
 import { PART_STAMP_FIELDS } from "./parts";
 
 /**
@@ -67,7 +68,7 @@ function siteKey(url: string): string {
 	const raw = url.trim();
 	if (!raw) return "";
 	try {
-		const parsed = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+		const parsed = new URL(withScheme(raw));
 		if (parsed.protocol === "http:" || parsed.protocol === "https:") {
 			return parsed.hostname.toLowerCase().replace(/^www\./, "");
 		}

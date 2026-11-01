@@ -8,6 +8,7 @@
 import type { CardEntryData, Entry, LoginEntryData, PasskeyCredential } from "../hooks/useVault";
 import { base64ToBase64Url, bytesToBase64Url } from "../util/bytes";
 import { parseTotp } from "../util/totp";
+import { withScheme } from "../util/url";
 import { COSE_ES256 } from "../vault/passkey";
 import { pkcs8FromScalar } from "./passkey-key";
 import {
@@ -57,9 +58,7 @@ function toUrls(urls: readonly string[]): string[] {
 	const out: string[] = [];
 	for (const raw of urls) {
 		const u = raw.trim();
-		if (!u) continue;
-		if (/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) out.push(u);
-		else out.push(`https://${u}`);
+		if (u) out.push(withScheme(u));
 	}
 	return out;
 }

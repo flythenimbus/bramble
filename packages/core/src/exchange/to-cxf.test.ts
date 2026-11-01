@@ -77,9 +77,13 @@ describe("toCxf: logins", () => {
 	});
 
 	it("carries every url in scope, promoting a bare host to https", () => {
-		const item = run(login({ urls: ["https://github.com", "gist.github.com"] })).payload
-			.accounts?.[0]?.items?.[0];
-		expect(item?.scope?.urls).toEqual(["https://github.com", "https://gist.github.com"]);
+		const item = run(login({ urls: ["https://github.com", "gist.github.com", "nas.local:5000"] }))
+			.payload.accounts?.[0]?.items?.[0];
+		expect(item?.scope?.urls).toEqual([
+			"https://github.com",
+			"https://gist.github.com",
+			"https://nas.local:5000",
+		]);
 	});
 
 	it("splits a stored otpauth uri into the structured TOTP fields", () => {

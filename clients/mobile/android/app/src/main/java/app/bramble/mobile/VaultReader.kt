@@ -274,8 +274,8 @@ object VaultReader {
         return (0 until urls.length()).map { urls.optString(it, "") }
     }
 
-    // entry-normalize derives hostnames as new URL(url).hostname, falling back to the raw
-    // string when it doesn't parse (a bare "github.com").
+    // Same rule as core's extractHostname: no "://" reads as https, so a bare "github.com"
+    // or "nas.local:5000" yields its host.
     private fun extractHostname(url: String): String {
         val raw = url.trim()
         if (raw.isEmpty()) return ""

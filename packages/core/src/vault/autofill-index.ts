@@ -5,6 +5,7 @@
 
 import type { IndexEntry } from "../adapters/autofill";
 import type { CardEntry, CustomField, Entry, LoginEntry } from "../hooks/useVault";
+import { withScheme } from "../util/url";
 
 // Schemes that identify a mobile app, not a website. Bramble never writes these,
 // but importers carry them straight through: `androidapp://` is Bitwarden's
@@ -39,14 +40,14 @@ export function appIdFromUri(url: string): string | null {
 }
 
 /**
- * Hostname of a web URL; the raw string for a bare hostname stored without a
- * scheme. Empty for app URIs, so they stay out of the web match index.
+ * Hostname of a web URL, reading one stored without a scheme as https; the raw
+ * string if even that fails. Empty for app URIs, so they stay out of the web
+ * match index.
  */
 export function extractHostname(url: string): string {
+	if (isAppUri(url)) return "";
 	try {
-		const parsed = new URL(url);
-		if (APP_URI_SCHEMES.has(parsed.protocol.toLowerCase())) return "";
-		return parsed.hostname;
+		return new URL(withScheme(url)).hostname;
 	} catch {
 		return url;
 	}
@@ -71,7 +72,7 @@ export function loginHosts(urls: readonly string[]): { hostnames: string[]; port
 
 function urlPort(url: string): string {
 	try {
-		return new URL(url).port;
+		return new URL(withScheme(url)).port;
 	} catch {
 		return "";
 	}

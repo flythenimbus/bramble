@@ -87,6 +87,15 @@ describe("parseCxf: logins", () => {
 		});
 	});
 
+	it("matches a bare host with a port exactly too", async () => {
+		const bare = payload(basicAuth).replace("https://github.com", "nas.local:5000");
+		const res = await parseCxf(bare, testParserContext);
+		expect(res.imported[0]).toMatchObject({
+			urls: ["nas.local:5000"],
+			subdomainMatch: "exact",
+		});
+	});
+
 	it("rebuilds an otpauth uri from the structured TOTP fields", async () => {
 		const { entry } = await first(basicAuth, {
 			type: "totp",

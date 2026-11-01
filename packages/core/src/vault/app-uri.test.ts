@@ -49,6 +49,14 @@ describe("extractHostname", () => {
 		expect(extractHostname("skanetrafiken.se")).toBe("skanetrafiken.se");
 	});
 
+	it("reads a bare host with a port, which the URL constructor takes for a scheme", () => {
+		expect(extractHostname("example.com:8443/login")).toBe("example.com");
+	});
+
+	it("drops an app URI written without slashes", () => {
+		expect(extractHostname("appid:com.example.app")).toBe("");
+	});
+
 	it("still resolves a non-app scheme to its host", () => {
 		// Only app schemes are excluded, so an odd-but-real URL keeps matching.
 		expect(extractHostname("ftp://files.example.com/pub")).toBe("files.example.com");

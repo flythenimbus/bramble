@@ -100,8 +100,9 @@ There is no separate mode for it on purpose: `subdomainMatch` is persisted and
 synced, so a new enum value would be a format change that released clients reject.
 The port rides the index instead (`LoginIndexEntry.ports`, lined up with
 `hostnames` by `loginHosts`), which the extension holds in memory only. A URL
-saved without a scheme (`nas.local:5000`) is not read as a host and port, so it
-matches nothing, as before.
+saved without a scheme (`nas.local:5000`) is read as https (`withScheme` in
+`util/url.ts`), so it gets its host and port like any other; `URL` alone takes
+`nas.local` for the scheme and finds no host at all.
 
 Every page-side caller passes the page's port: the content-script query and fill
 authorization, the corner prompt's dedupe and update check (the port is stashed
