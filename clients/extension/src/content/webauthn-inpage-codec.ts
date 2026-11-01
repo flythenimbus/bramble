@@ -42,6 +42,66 @@ function mapCredDescriptors(list: readonly PublicKeyCredentialDescriptor[] | und
 	}));
 }
 
+// ---- PRF, the one extension carried (page-supplied: malformed values are dropped, never thrown) ----
+
+type PrfValuesJson = { first: string; second?: string };
+
+function isBuffer(v: unknown): v is ArrayBuffer | ArrayBufferView {
+	return v instanceof ArrayBuffer || ArrayBuffer.isView(v);
+}
+
+function prfValuesJson(v: unknown): PrfValuesJson | undefined {
+	if (typeof v !== "object" || v === null) return undefined;
+	const { first, second } = v as { first?: unknown; second?: unknown };
+	if (!isBuffer(first)) return undefined;
+	if (second === undefined) return { first: bufToB64Url(first) };
+	return isBuffer(second) ? { first: bufToB64Url(first), second: bufToB64Url(second) } : undefined;
+}
+
+function serializeExtensions(
+	extensions: AuthenticationExtensionsClientInputs | undefined,
+	withByCredential: boolean,
+): unknown {
+	const prf = (extensions as { prf?: unknown } | undefined)?.prf;
+	if (typeof prf !== "object" || prf === null) return undefined;
+	const { eval: fallback, evalByCredential } = prf as {
+		eval?: unknown;
+		evalByCredential?: unknown;
+	};
+	const out: Record<string, unknown> = {};
+	const values = prfValuesJson(fallback);
+	if (values) out.eval = values;
+	if (withByCredential && typeof evalByCredential === "object" && evalByCredential !== null) {
+		out.evalByCredential = Object.fromEntries(
+			Object.entries(evalByCredential).flatMap(([id, v]) => {
+				const own = prfValuesJson(v);
+				return own ? [[id, own] as const] : [];
+			}),
+		);
+	}
+	return { prf: out };
+}
+
+/** Client extension results with PRF outputs turned back into page-realm ArrayBuffers. */
+function extensionResults(json: {
+	clientExtensionResults?: Record<string, unknown>;
+}): Record<string, unknown> {
+	const results = { ...json.clientExtensionResults };
+	const prf = results.prf as { results?: { first?: unknown; second?: unknown } } | undefined;
+	const first = prf?.results?.first;
+	if (typeof first === "string") {
+		const second = prf?.results?.second;
+		results.prf = {
+			...prf,
+			results: {
+				first: b64UrlToBuf(first),
+				...(typeof second === "string" ? { second: b64UrlToBuf(second) } : {}),
+			},
+		};
+	}
+	return results;
+}
+
 export function serializeCreateOptions(pk: PublicKeyCredentialCreationOptions): unknown {
 	return {
 		rp: { id: pk.rp?.id, name: pk.rp?.name },
@@ -56,6 +116,7 @@ export function serializeCreateOptions(pk: PublicKeyCredentialCreationOptions): 
 		authenticatorSelection: pk.authenticatorSelection,
 		attestation: pk.attestation,
 		timeout: pk.timeout,
+		extensions: serializeExtensions(pk.extensions, false),
 	};
 }
 
@@ -66,6 +127,7 @@ export function serializeGetOptions(pk: PublicKeyCredentialRequestOptions): unkn
 		allowCredentials: mapCredDescriptors(pk.allowCredentials),
 		userVerification: pk.userVerification,
 		timeout: pk.timeout,
+		extensions: serializeExtensions(pk.extensions, true),
 	};
 }
 
@@ -132,7 +194,7 @@ export function buildCreateCredential(json: RegistrationResponseJSON): PublicKey
 		type: json.type,
 		authenticatorAttachment: json.authenticatorAttachment ?? "platform",
 		response,
-		getClientExtensionResults: () => json.clientExtensionResults ?? {},
+		getClientExtensionResults: () => extensionResults(json),
 		toJSON: () => json,
 	};
 	adoptPrototype(cred, "PublicKeyCredential");
@@ -154,7 +216,7 @@ export function buildGetCredential(json: AuthenticationResponseJSON): PublicKeyC
 		type: json.type,
 		authenticatorAttachment: json.authenticatorAttachment ?? "platform",
 		response,
-		getClientExtensionResults: () => json.clientExtensionResults ?? {},
+		getClientExtensionResults: () => extensionResults(json),
 		toJSON: () => json,
 	};
 	adoptPrototype(cred, "PublicKeyCredential");

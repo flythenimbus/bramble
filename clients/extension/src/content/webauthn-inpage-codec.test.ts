@@ -130,3 +130,92 @@ describe("buildGetCredential (AuthenticationResponseJSON -> synthetic PublicKeyC
 		expect(bufBytes(r.userHandle as ArrayBuffer)).toEqual([...userHandle]);
 	});
 });
+
+describe("PRF extension", () => {
+	const createOpts = (extensions: unknown) =>
+		({
+			rp: { id: "example.com" },
+			user: { id: u8(1), name: "ada", displayName: "Ada" },
+			challenge: u8(9),
+			pubKeyCredParams: [{ type: "public-key", alg: COSE_ES256 }],
+			extensions,
+		}) as unknown as PublicKeyCredentialCreationOptions;
+
+	it("serializes PRF eval on create so the background sees it", () => {
+		const opts = createOpts({ prf: { eval: { first: u8(1, 2, 3) } } });
+		const parsed = parseCreationOptions(JSON.stringify(serializeCreateOptions(opts)));
+		expect(parsed.prf).toEqual({ eval: { first: bytesToBase64Url(u8(1, 2, 3)) } });
+	});
+
+	it("serializes eval and evalByCredential on get", () => {
+		const opts = {
+			challenge: u8(5),
+			allowCredentials: [{ type: "public-key", id: u8(7, 7) }],
+			extensions: {
+				prf: {
+					eval: { first: u8(4).buffer },
+					evalByCredential: { Q0lE: { first: u8(1), second: u8(2) } },
+				},
+			},
+		} as unknown as PublicKeyCredentialRequestOptions;
+		const parsed = parseRequestOptions(JSON.stringify(serializeGetOptions(opts)));
+		expect(parsed.prf).toEqual({
+			eval: { first: bytesToBase64Url(u8(4)) },
+			evalByCredential: {
+				Q0lE: { first: bytesToBase64Url(u8(1)), second: bytesToBase64Url(u8(2)) },
+			},
+		});
+	});
+
+	it("leaves extensions out when the page asked for none", () => {
+		const parsed = parseCreationOptions(
+			JSON.stringify(serializeCreateOptions(createOpts(undefined))),
+		);
+		expect(parsed.prf).toBeUndefined();
+	});
+
+	it("skips PRF values that aren't buffers instead of throwing", () => {
+		const opts = createOpts({ prf: { eval: { first: "nope" } } });
+		const parsed = parseCreationOptions(JSON.stringify(serializeCreateOptions(opts)));
+		expect(parsed.prf).toEqual({});
+	});
+
+	it("materializes PRF results as ArrayBuffers", () => {
+		const got = buildGetCredential(
+			JSON.parse(
+				authenticationResponseJSON({
+					credentialIdStdB64: bytesToBase64(u8(1)),
+					authenticatorDataStdB64: bytesToBase64(u8(3)),
+					signatureStdB64: bytesToBase64(u8(4)),
+					clientDataB64Url: bytesToBase64Url(u8(123, 125)),
+					prf: { results: { first: "AQID" } },
+				}),
+			),
+		);
+		const gotPrf = (got.getClientExtensionResults() as { prf: { results: { first: ArrayBuffer } } })
+			.prf;
+		expect(gotPrf.results.first).toBeInstanceOf(ArrayBuffer);
+		expect(bufBytes(gotPrf.results.first)).toEqual([1, 2, 3]);
+
+		const created = buildCreateCredential(
+			JSON.parse(
+				registrationResponseJSON({
+					credentialIdStdB64: bytesToBase64(u8(1)),
+					attestationObjectStdB64: bytesToBase64(u8(2)),
+					authenticatorDataStdB64: bytesToBase64(u8(3)),
+					publicKeyStdB64: bytesToBase64(u8(4)),
+					clientDataB64Url: bytesToBase64Url(u8(123, 125)),
+					prf: { enabled: true, results: { first: "AQID", second: "BAU" } },
+				}),
+			),
+		);
+		const createdPrf = (
+			created.getClientExtensionResults() as {
+				prf: { enabled: boolean; results: { first: ArrayBuffer; second: ArrayBuffer } };
+			}
+		).prf;
+		expect(createdPrf.enabled).toBe(true);
+		expect(bufBytes(createdPrf.results.first)).toEqual([1, 2, 3]);
+		expect(bufBytes(createdPrf.results.second)).toEqual([4, 5]);
+	});
+});
