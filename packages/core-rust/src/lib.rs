@@ -47,7 +47,9 @@ pub use kdbx::{open_kdbx4, OutBinary, OutEntry, OutString};
 #[cfg(any(feature = "ffi", feature = "native"))]
 pub use kdbx::{save_to_path, KdbxAttachmentFile, KdbxExportFile, OpenedKdbx, SaveEntry};
 #[cfg(any(feature = "ffi", feature = "native"))]
-pub use passkey::{PasskeyAssertion, PasskeyImportResult, PasskeyRegistration};
+pub use passkey::{
+    PasskeyAssertion, PasskeyImportResult, PasskeyPrfOutput, PasskeyPrfSecrets, PasskeyRegistration,
+};
 // Chunked content encryption for file attachments. Pure and VEK-free (it takes a FEK as a
 // parameter), so it is declared unconditionally and `cargo test` covers it in every feature set.
 // Nothing references it yet: the binding layers land with the attachment feature and will be
@@ -1013,6 +1015,18 @@ mod wasm_exports {
         serde_wasm_bindgen::to_value(&a).map_err(|e| err(format!("serialize: {e}")))
     }
 
+    /// WebAuthn PRF over a passkey's stored secret (see docs/passkey-prf.md).
+    #[wasm_bindgen]
+    pub fn passkey_prf_eval(
+        secret_b64: String,
+        first_b64: String,
+        second_b64: Option<String>,
+    ) -> Result<JsValue, CryptoError> {
+        let out =
+            crate::passkey::passkey_prf_eval_core(&secret_b64, &first_b64, second_b64.as_deref())?;
+        serde_wasm_bindgen::to_value(&out).map_err(|e| err(format!("serialize: {e}")))
+    }
+
     // --- file attachments ---
     // The extension has no filesystem, so its files are sealed and opened in memory, one chunk
     // at a time, between IndexedDB reads and writes. Each stream takes the VEK only in its
@@ -1238,6 +1252,16 @@ mod ffi_exports {
             &client_data_hash_b64,
             user_verified,
         )
+    }
+
+    /// WebAuthn PRF over a passkey's stored secret (see docs/passkey-prf.md).
+    #[cfg_attr(feature = "ffi", uniffi::export)]
+    pub fn passkey_prf_eval(
+        secret_b64: String,
+        first_b64: String,
+        second_b64: Option<String>,
+    ) -> Result<crate::passkey::PasskeyPrfOutput, CryptoError> {
+        crate::passkey::passkey_prf_eval_core(&secret_b64, &first_b64, second_b64.as_deref())
     }
 
     // --- file attachments (see docs/file-attachments.md) ---

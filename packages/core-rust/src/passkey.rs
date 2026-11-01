@@ -11,6 +11,7 @@
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use ciborium::Value;
 use coset::{iana, CborSerializable, CoseKeyBuilder};
+use hmac::Mac;
 use p256::ecdsa::{signature::Signer, Signature, SigningKey};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::pkcs8::{der::Decode, DecodePrivateKey, EncodePublicKey, PrivateKeyInfo};
@@ -18,9 +19,14 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
-use crate::{b64_decode, err, random_bytes, CryptoError};
+use crate::{b64_decode, err, random_bytes, CryptoError, HmacSha256};
 
 const CREDENTIAL_ID_LEN: usize = 16;
+
+// CTAP hmac-secret CredRandom size.
+const PRF_SECRET_LEN: usize = 32;
+// WebAuthn's salt for a PRF input: SHA-256("WebAuthn PRF" || 0x00 || input).
+const PRF_SALT_PREFIX: &[u8] = b"WebAuthn PRF\x00";
 
 // authenticatorData flag bits (WebAuthn L3 6.1).
 const FLAG_UP: u8 = 0x01; // user present
@@ -62,6 +68,29 @@ pub struct PasskeyRegistration {
     /// base64 SPKI DER of the public key. Chrome's webAuthenticationProxy requires
     /// RegistrationResponseJSON.response.publicKey (the spec marks it optional).
     pub public_key: String,
+    /// PRF secrets, minted for every passkey. Store inside the entry with the private key.
+    pub prf: PasskeyPrfSecrets,
+}
+
+/// A passkey's PRF (CTAP hmac-secret) secrets, base64, 32 bytes each. Only `cred_with_uv` is
+/// evaluated (Bramble answers PRF only after user verification); CXF requires both. See
+/// docs/passkey-prf.md.
+#[derive(Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct PasskeyPrfSecrets {
+    #[serde(rename = "credWithUV")]
+    pub cred_with_uv: String,
+    #[serde(rename = "credWithoutUV")]
+    pub cred_without_uv: String,
+}
+
+/// WebAuthn PRF results for one ceremony, base64, 32 bytes each.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ffi", derive(uniffi::Record))]
+pub struct PasskeyPrfOutput {
+    pub first: String,
+    pub second: Option<String>,
 }
 
 /// Bramble key material converted from a P-256 PKCS#8 key, in standard base64.
@@ -246,6 +275,47 @@ pub fn passkey_make_credential_core(
                 .map_err(|e| err(format!("spki encode: {e}")))?
                 .as_bytes(),
         ),
+        prf: PasskeyPrfSecrets {
+            cred_with_uv: prf_secret()?,
+            cred_without_uv: prf_secret()?,
+        },
+    })
+}
+
+fn prf_secret() -> Result<String, CryptoError> {
+    let mut bytes = Zeroizing::new([0u8; PRF_SECRET_LEN]);
+    random_bytes(bytes.as_mut_slice())?;
+    Ok(B64.encode(bytes.as_slice()))
+}
+
+/// WebAuthn PRF: HMAC-SHA256(secret, SHA-256("WebAuthn PRF" || 0x00 || input)) for `first` and an
+/// optional `second`. Inputs are the site's raw values; this is the mapping a browser applies before
+/// CTAP hmac-secret, so imported secrets keep producing the outputs a site already relies on.
+pub fn passkey_prf_eval_core(
+    secret_b64: &str,
+    first_b64: &str,
+    second_b64: Option<&str>,
+) -> Result<PasskeyPrfOutput, CryptoError> {
+    // Fixed messages, as in the import path: a decode error names an input byte.
+    let secret =
+        Zeroizing::new(b64_decode(secret_b64).map_err(|_| err("invalid passkey PRF secret"))?);
+    if secret.is_empty() {
+        return Err(err("invalid passkey PRF secret"));
+    }
+    let eval = |input_b64: &str| -> Result<String, CryptoError> {
+        let input = b64_decode(input_b64).map_err(|_| err("invalid passkey PRF input"))?;
+        let salt = Sha256::new()
+            .chain_update(PRF_SALT_PREFIX)
+            .chain_update(&input)
+            .finalize();
+        let mut mac =
+            <HmacSha256 as Mac>::new_from_slice(&secret).expect("hmac accepts any key length");
+        mac.update(&salt);
+        Ok(B64.encode(mac.finalize().into_bytes()))
+    };
+    Ok(PasskeyPrfOutput {
+        first: eval(first_b64)?,
+        second: second_b64.map(eval).transpose()?,
     })
 }
 
@@ -684,5 +754,47 @@ mod tests {
         let b = passkey_make_credential_core("a.com", true).unwrap();
         assert_ne!(a.credential_id, b.credential_id);
         assert_ne!(a.private_key, b.private_key);
+    }
+
+    // Expected outputs computed independently (Python hashlib/hmac), not with this code.
+    const PRF_SECRET: &str = "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI="; // [0x42; 32]
+    const PRF_FIRST: &str = "YnJhbWJsZSBwcmYgZmlyc3Q="; // b"bramble prf first"
+    const PRF_SECOND: &str = "YnJhbWJsZSBwcmYgc2Vjb25k"; // b"bramble prf second"
+
+    #[test]
+    fn prf_eval_matches_the_webauthn_prf_known_answer() {
+        let out = passkey_prf_eval_core(PRF_SECRET, PRF_FIRST, Some(PRF_SECOND)).unwrap();
+        assert_eq!(out.first, "l17eP4YXVSoOkA30zevkt0OoDFa6lS0bFCcFIPovvvA=");
+        assert_eq!(
+            out.second.as_deref(),
+            Some("EL5WJd9tQR3B5TfbtQ+paoqLEyi9uNnzLO3mnZRujMs=")
+        );
+    }
+
+    #[test]
+    fn prf_eval_without_a_second_input_returns_no_second_output() {
+        let out = passkey_prf_eval_core(PRF_SECRET, PRF_FIRST, None).unwrap();
+        assert_eq!(out.first, "l17eP4YXVSoOkA30zevkt0OoDFa6lS0bFCcFIPovvvA=");
+        assert!(out.second.is_none());
+    }
+
+    #[test]
+    fn prf_eval_refuses_a_bad_secret_without_echoing_it() {
+        for bad in ["", "AAAA!AAA"] {
+            let Err(e) = passkey_prf_eval_core(bad, PRF_FIRST, None) else {
+                panic!("{bad:?} must be refused");
+            };
+            assert_eq!(format!("{e}"), "invalid passkey PRF secret");
+        }
+    }
+
+    #[test]
+    fn make_credential_mints_two_distinct_32_byte_prf_secrets() {
+        let a = passkey_make_credential_core("rp.example", true).unwrap();
+        let b = passkey_make_credential_core("rp.example", true).unwrap();
+        assert_eq!(B64.decode(&a.prf.cred_with_uv).unwrap().len(), 32);
+        assert_eq!(B64.decode(&a.prf.cred_without_uv).unwrap().len(), 32);
+        assert_ne!(a.prf.cred_with_uv, a.prf.cred_without_uv);
+        assert_ne!(a.prf.cred_with_uv, b.prf.cred_with_uv);
     }
 }
