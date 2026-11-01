@@ -24,8 +24,8 @@ class AutofillLogin(
 )
 
 // One stored passkey (provider role) extracted from a login entry's `passkeys[]`. All base64
-// fields are STANDARD base64 (as stored): credentialId/userHandle/privateKey. privateKey is the
-// only secret; the Rust core signs with it. Mirrors core's PasskeyCredential.
+// fields are STANDARD base64 (as stored): credentialId/userHandle/privateKey/prf. privateKey and
+// prf are the secrets; the Rust core signs and evaluates with them. Mirrors core's PasskeyCredential.
 class StoredPasskey(
     val entryId: String,
     val credentialId: String,
@@ -35,6 +35,8 @@ class StoredPasskey(
     val privateKey: String,
     /** COSE algorithm. Defaulted to ES256 for records written before imports could be EdDSA. */
     val alg: Int,
+    /** Null for a passkey minted before PRF support; one is never minted later. */
+    val prf: StoredPrf?,
 )
 
 // Reads and decrypts the real VLT1 vault the webview manages. The service runs in our own
@@ -160,25 +162,32 @@ object VaultReader {
             val passkeys = data.optJSONArray("passkeys") ?: continue
             val entryId = enc.getString("id")
             for (j in 0 until passkeys.length()) {
-                val pk = passkeys.optJSONObject(j) ?: continue
-                val credentialId = pk.optString("credentialId", "")
-                val rpId = pk.optString("rpId", "")
-                val privateKey = pk.optString("privateKey", "")
-                if (credentialId.isEmpty() || rpId.isEmpty() || privateKey.isEmpty()) continue
-                out.add(
-                    StoredPasskey(
-                        entryId = entryId,
-                        credentialId = credentialId,
-                        rpId = rpId,
-                        userName = pk.optString("userName", ""),
-                        userHandle = pk.optString("userHandle", ""),
-                        privateKey = privateKey,
-                        alg = pk.optInt("alg", -7),
-                    )
-                )
+                storedPasskey(passkeys.optJSONObject(j) ?: continue, entryId)?.let { out.add(it) }
             }
         }
         return out
+    }
+
+    // One passkey record (a vault entry's, or a pending handoff's) as a StoredPasskey; null when it
+    // lacks what signing needs.
+    private fun storedPasskey(pk: JSONObject, entryId: String): StoredPasskey? {
+        val credentialId = pk.optString("credentialId", "")
+        val rpId = pk.optString("rpId", "")
+        val privateKey = pk.optString("privateKey", "")
+        if (credentialId.isEmpty() || rpId.isEmpty() || privateKey.isEmpty()) return null
+        val prf = pk.optJSONObject("prf")
+        val withUV = prf?.optString("credWithUV", "").orEmpty()
+        val withoutUV = prf?.optString("credWithoutUV", "").orEmpty()
+        return StoredPasskey(
+            entryId = entryId,
+            credentialId = credentialId,
+            rpId = rpId,
+            userName = pk.optString("userName", ""),
+            userHandle = pk.optString("userHandle", ""),
+            privateKey = privateKey,
+            alg = pk.optInt("alg", -7),
+            prf = if (withUV.isEmpty() || withoutUV.isEmpty()) null else StoredPrf(withUV, withoutUV),
+        )
     }
 
     /**
@@ -198,22 +207,7 @@ object VaultReader {
             val ct = e.optString("ciphertext")
             if (iv.isEmpty() || ct.isEmpty()) continue
             try {
-                val pk = JSONObject(decryptWithVek(iv, ct))
-                val credentialId = pk.optString("credentialId", "")
-                val rpId = pk.optString("rpId", "")
-                val privateKey = pk.optString("privateKey", "")
-                if (credentialId.isEmpty() || rpId.isEmpty() || privateKey.isEmpty()) continue
-                out.add(
-                    StoredPasskey(
-                        entryId = "",
-                        credentialId = credentialId,
-                        rpId = rpId,
-                        userName = pk.optString("userName", ""),
-                        userHandle = pk.optString("userHandle", ""),
-                        privateKey = privateKey,
-                        alg = pk.optInt("alg", -7),
-                    )
-                )
+                storedPasskey(JSONObject(decryptWithVek(iv, ct)), "")?.let { out.add(it) }
             } catch (e: Exception) {
                 // Skip an entry we can't decrypt/parse.
             }

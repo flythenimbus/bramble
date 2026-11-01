@@ -3,6 +3,7 @@ package app.bramble.mobile
 import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
+import uniffi.vault_crypto.PasskeyPrfOutput
 import java.security.MessageDigest
 
 // Builds the W3C WebAuthn response JSON the Android Credential Manager expects from a passkey
@@ -24,6 +25,50 @@ object WebauthnJson {
     private fun bytesToUrl(bytes: ByteArray): String = Base64.encodeToString(bytes, URL_FLAGS)
 
     fun sha256(bytes: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(bytes)
+
+    // ---- PRF (page-supplied, so anything malformed is treated as absent; docs/passkey-prf.md) ----
+
+    private fun prfJson(opts: JSONObject): JSONObject? =
+        opts.optJSONObject("extensions")?.optJSONObject("prf")
+
+    // One base64url {first, second?} pair as STANDARD base64; null when malformed.
+    private fun salts(v: JSONObject?): PrfSalts? {
+        val first = v?.opt("first") as? String ?: return null
+        val second = v.opt("second")
+        if (second != null && second !is String) return null
+        return runCatching { PrfSalts(urlToStd(first), (second as String?)?.let { urlToStd(it) }) }.getOrNull()
+    }
+
+    /** create(): null when the site didn't ask for PRF. */
+    fun prfRequest(opts: JSONObject): PrfCreate? =
+        prfJson(opts)?.let { PrfCreate(salts(it.optJSONObject("eval"))) }
+
+    /** get(): the inputs for this credential (STANDARD base64 id), or null when none apply. */
+    fun prfSaltsFor(opts: JSONObject, credentialIdStd: String): PrfSalts? {
+        val prf = prfJson(opts) ?: return null
+        val byCredential = HashMap<String, PrfSalts>()
+        prf.optJSONObject("evalByCredential")?.let { map ->
+            for (key in map.keys()) salts(map.optJSONObject(key))?.let { byCredential[key] = it }
+        }
+        return PasskeyPrf.select(salts(prf.optJSONObject("eval")), byCredential, stdToUrl(credentialIdStd))
+    }
+
+    /** clientExtensionResults.prf for a create: enabled, with results when evaluated. */
+    fun prfCreateResult(out: PasskeyPrfOutput?): JSONObject = JSONObject().apply {
+        put("enabled", true)
+        if (out != null) put("results", prfResults(out))
+    }
+
+    /** clientExtensionResults.prf for a get. */
+    fun prfGetResult(out: PasskeyPrfOutput): JSONObject = JSONObject().put("results", prfResults(out))
+
+    private fun prfResults(out: PasskeyPrfOutput): JSONObject = JSONObject().apply {
+        put("first", stdToUrl(out.first))
+        out.second?.let { put("second", stdToUrl(it)) }
+    }
+
+    private fun extensionResults(prf: JSONObject?): JSONObject =
+        if (prf != null) JSONObject().put("prf", prf) else JSONObject()
 
     /**
      * Canonical clientDataJSON for a ceremony. `challengeB64Url` is the RP's challenge verbatim
@@ -50,6 +95,7 @@ object WebauthnJson {
         signatureStdB64: String,
         userHandleStdB64: String?,
         clientDataJson: String,
+        prf: JSONObject? = null,
     ): String {
         val id = stdToUrl(credentialIdStdB64)
         val response = JSONObject().apply {
@@ -67,7 +113,7 @@ object WebauthnJson {
             put("type", "public-key")
             put("authenticatorAttachment", "platform")
             put("response", response)
-            put("clientExtensionResults", JSONObject())
+            put("clientExtensionResults", extensionResults(prf))
         }.toString()
     }
 
@@ -83,6 +129,7 @@ object WebauthnJson {
         authenticatorDataStdB64: String,
         publicKeyStdB64: String,
         clientDataJson: String,
+        prf: JSONObject? = null,
     ): String {
         val id = stdToUrl(credentialIdStdB64)
         val response = JSONObject().apply {
@@ -99,7 +146,7 @@ object WebauthnJson {
             put("type", "public-key")
             put("authenticatorAttachment", "platform")
             put("response", response)
-            put("clientExtensionResults", JSONObject())
+            put("clientExtensionResults", extensionResults(prf))
         }.toString()
     }
 }

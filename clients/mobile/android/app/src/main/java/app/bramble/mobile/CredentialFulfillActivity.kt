@@ -24,6 +24,7 @@ import androidx.credentials.provider.PublicKeyCredentialEntry
 import org.json.JSONObject
 import uniffi.vault_crypto.passkeyGetAssertion
 import uniffi.vault_crypto.passkeyMakeCredential
+import uniffi.vault_crypto.passkeyPrfEval
 
 // Fulfills a Credential Manager passkey GET, launched by BrambleCredentialService via a
 // PendingIntent. Two modes after the shared unlock (BrambleUnlockActivity):
@@ -175,8 +176,15 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         }
         // userVerified=true: the unlock just performed (biometric / master password) is a UV.
         val assertion = passkeyGetAssertion(pk.rpId, pk.privateKey, pk.alg, clientDataHashStdB64, true)
+        // PRF answers only after UV (true here) and only with a stored secret; a failure answers without it.
+        val prf = pk.prf?.let { secrets ->
+            WebauthnJson.prfSaltsFor(JSONObject(option.requestJson), pk.credentialId)?.let { s ->
+                runCatching { passkeyPrfEval(secrets.credWithUV, s.firstStd, s.secondStd) }.getOrNull()
+            }
+        }
         val json = WebauthnJson.authenticationResponseJson(
             pk.credentialId, assertion.authenticatorData, assertion.signature, pk.userHandle, clientDataJson,
+            prf?.let { WebauthnJson.prfGetResult(it) },
         )
         PendingIntentHandler.setGetCredentialResponse(resultIntent, GetCredentialResponse(PublicKeyCredential(json)))
         return true
@@ -207,6 +215,10 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         }
 
         val reg = passkeyMakeCredential(rpId, true)
+        val prfRequest = WebauthnJson.prfRequest(opts)
+        val prfOut = prfRequest?.salts?.let { s ->
+            runCatching { passkeyPrfEval(reg.prf.credWithUv, s.firstStd, s.secondStd) }.getOrNull()
+        }
         // Same trust rule as the assertion: only a verified privileged browser's clientDataHash is
         // honoured (placeholder clientDataJSON here); every other caller gets a clientDataJSON we
         // build from its apk-key-hash origin. "none" attestation doesn't sign it regardless.
@@ -220,6 +232,7 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
             }
         val json = WebauthnJson.registrationResponseJson(
             reg.credentialId, reg.attestationObject, reg.authenticatorData, reg.publicKey, clientDataJson,
+            prfRequest?.let { WebauthnJson.prfCreateResult(prfOut) },
         )
         // user.id is base64url in the request; we store userHandle as STANDARD base64 like the rest.
         val userHandleStd = user.optString("id").takeIf { it.isNotEmpty() }?.let { WebauthnJson.urlToStd(it) }.orEmpty()
@@ -244,6 +257,7 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         put("privateKey", reg.privateKey)
         put("signCount", 0)
         put("createdAt", System.currentTimeMillis())
+        put("prf", JSONObject().put("credWithUV", reg.prf.credWithUv).put("credWithoutUV", reg.prf.credWithoutUv))
     }.toString()
 
     // The caller's web origin IFF it is an allow-listed privileged browser that set the request
