@@ -15,6 +15,12 @@ import { etld1 } from "../etld1";
 
 type UserVerification = "required" | "preferred" | "discouraged";
 
+/** WebAuthn PRF inputs or results, base64url as on the wire. See docs/passkey-prf.md. */
+export interface PrfValues {
+	first: string;
+	second?: string;
+}
+
 export interface ParsedCreationOptions {
 	rpId?: string;
 	rpName?: string;
@@ -26,6 +32,8 @@ export interface ParsedCreationOptions {
 	algs: number[];
 	excludeCredentialsB64Url: string[];
 	userVerification: UserVerification;
+	/** Present when the site asked for PRF. */
+	prf?: { eval?: PrfValues };
 }
 
 export interface ParsedRequestOptions {
@@ -33,6 +41,8 @@ export interface ParsedRequestOptions {
 	challenge: string;
 	allowCredentialsB64Url: string[];
 	userVerification: UserVerification;
+	/** `evalByCredential` keys are base64url credential ids. */
+	prf?: { eval?: PrfValues; evalByCredential?: Record<string, PrfValues> };
 }
 
 // Chrome's requestDetailsJson is the W3C options object (no origin: that is not part of
@@ -60,6 +70,7 @@ export function parseCreationOptions(json: string): ParsedCreationOptions {
 		algs: params.map((p) => p.alg).filter((a): a is number => typeof a === "number"),
 		excludeCredentialsB64Url: exclude.map((c) => c.id).filter((id): id is string => !!id),
 		userVerification: sel.userVerification ?? "preferred",
+		prf: creationPrf(opts),
 	};
 }
 
@@ -71,7 +82,62 @@ export function parseRequestOptions(json: string): ParsedRequestOptions {
 		challenge: (opts.challenge as string) ?? "",
 		allowCredentialsB64Url: allow.map((c) => c.id).filter((id): id is string => !!id),
 		userVerification: (opts.userVerification as UserVerification) ?? "preferred",
+		prf: requestPrf(opts),
 	};
+}
+
+// ---- PRF (page-supplied, so anything malformed is treated as absent rather than thrown) ----
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+	typeof v === "object" && v !== null && !Array.isArray(v);
+
+function prfValues(v: unknown): PrfValues | undefined {
+	if (!isRecord(v) || typeof v.first !== "string") return undefined;
+	if (v.second === undefined) return { first: v.first };
+	return typeof v.second === "string" ? { first: v.first, second: v.second } : undefined;
+}
+
+function prfExtension(opts: Record<string, unknown>): Record<string, unknown> | undefined {
+	const ext = opts.extensions;
+	return isRecord(ext) && isRecord(ext.prf) ? ext.prf : undefined;
+}
+
+function creationPrf(opts: Record<string, unknown>): ParsedCreationOptions["prf"] {
+	const prf = prfExtension(opts);
+	if (!prf) return undefined;
+	const first = prfValues(prf.eval);
+	return first ? { eval: first } : {};
+}
+
+function requestPrf(opts: Record<string, unknown>): ParsedRequestOptions["prf"] {
+	const prf = prfExtension(opts);
+	if (!prf) return undefined;
+	const out: NonNullable<ParsedRequestOptions["prf"]> = {};
+	const fallback = prfValues(prf.eval);
+	if (fallback) out.eval = fallback;
+	if (isRecord(prf.evalByCredential)) {
+		// fromEntries defines own properties, so a "__proto__" key can't rewire the lookup table.
+		const byCredential = Object.fromEntries(
+			Object.entries(prf.evalByCredential).flatMap(([id, v]) => {
+				const values = prfValues(v);
+				return values ? [[id, values] as const] : [];
+			}),
+		);
+		if (Object.keys(byCredential).length) out.evalByCredential = byCredential;
+	}
+	return out;
+}
+
+/** The inputs for one credential: its own `evalByCredential` entry, else `eval`. */
+export function prfInputsFor(
+	prf: ParsedRequestOptions["prf"],
+	credentialIdB64Url: string,
+): PrfValues | undefined {
+	const byCredential = prf?.evalByCredential;
+	if (byCredential && Object.hasOwn(byCredential, credentialIdB64Url)) {
+		return byCredential[credentialIdB64Url];
+	}
+	return prf?.eval;
 }
 
 // ---- origin -> rpId (phishing resistance, the highest-risk check in the feature) ----
@@ -130,6 +196,7 @@ export function registrationResponseJSON(p: {
 	publicKeyStdB64: string;
 	clientDataB64Url: string;
 	transports?: string[];
+	prf?: { enabled: boolean; results?: PrfValues };
 }): string {
 	const id = base64ToBase64Url(p.credentialIdStdB64);
 	return JSON.stringify({
@@ -145,7 +212,7 @@ export function registrationResponseJSON(p: {
 			publicKeyAlgorithm: COSE_ES256,
 			publicKey: base64ToBase64Url(p.publicKeyStdB64),
 		},
-		clientExtensionResults: {},
+		clientExtensionResults: p.prf ? { prf: p.prf } : {},
 	});
 }
 
@@ -156,6 +223,7 @@ export function authenticationResponseJSON(p: {
 	signatureStdB64: string;
 	clientDataB64Url: string;
 	userHandleStdB64?: string;
+	prf?: { results: PrfValues };
 }): string {
 	const id = base64ToBase64Url(p.credentialIdStdB64);
 	return JSON.stringify({
@@ -169,7 +237,7 @@ export function authenticationResponseJSON(p: {
 			signature: base64ToBase64Url(p.signatureStdB64),
 			userHandle: p.userHandleStdB64 ? base64ToBase64Url(p.userHandleStdB64) : null,
 		},
-		clientExtensionResults: {},
+		clientExtensionResults: p.prf ? { prf: p.prf } : {},
 	});
 }
 

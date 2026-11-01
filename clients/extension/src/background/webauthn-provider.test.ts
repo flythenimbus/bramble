@@ -43,6 +43,7 @@ vi.mock("./passkey-store", () => ({
 	loadDecryptedEntries: async () => [],
 	passkeyGetAssertion: async () => ({ authenticatorData: "", signature: "" }),
 	passkeyMakeCredential: async () => ({}),
+	passkeyPrfEval: async () => ({ first: "" }),
 	savePlacement: async () => {},
 }));
 

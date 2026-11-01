@@ -14,6 +14,7 @@ import {
 	originHostname,
 	parseCreationOptions,
 	parseRequestOptions,
+	prfInputsFor,
 	registrationResponseJSON,
 } from "./webauthn-json";
 
@@ -160,6 +161,90 @@ describe("option parsing", () => {
 		expect(r.rpId).toBe("github.com");
 		expect(r.allowCredentialsB64Url).toEqual(["Y3JlZA"]);
 		expect(r.userVerification).toBe("preferred");
+	});
+});
+
+describe("PRF extension", () => {
+	const creation = (extensions?: unknown) =>
+		parseCreationOptions(
+			JSON.stringify({
+				rp: { id: "github.com" },
+				user: { id: "dXNlcg", name: "octocat" },
+				challenge: "Y2hhbA",
+				pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+				...(extensions === undefined ? {} : { extensions }),
+			}),
+		);
+
+	it("parses PRF inputs on creation", () => {
+		expect(creation({ prf: { eval: { first: "AQ" } } }).prf).toEqual({ eval: { first: "AQ" } });
+		expect(creation({ prf: {} }).prf).toEqual({});
+		expect(creation().prf).toBeUndefined();
+		expect(creation({ prf: true }).prf).toBeUndefined();
+	});
+
+	it("parses PRF inputs on request and drops malformed ones", () => {
+		const r = parseRequestOptions(
+			JSON.stringify({
+				challenge: "Y2hhbA",
+				extensions: {
+					prf: {
+						eval: { first: "Ag" },
+						evalByCredential: { Q0lE: { first: "AQ", second: "Aw" }, bad: { first: 5 } },
+					},
+				},
+			}),
+		);
+		expect(r.prf).toEqual({
+			eval: { first: "Ag" },
+			evalByCredential: { Q0lE: { first: "AQ", second: "Aw" } },
+		});
+	});
+
+	it("treats PRF values without a string first as absent", () => {
+		const r = parseRequestOptions(
+			JSON.stringify({ challenge: "Y2hhbA", extensions: { prf: { eval: {} } } }),
+		);
+		expect(r.prf).toEqual({});
+	});
+
+	it("prfInputsFor prefers the credential's own inputs over eval", () => {
+		const prf = { eval: { first: "Ag" }, evalByCredential: { Q0lE: { first: "AQ" } } };
+		expect(prfInputsFor(prf, "Q0lE")).toEqual({ first: "AQ" });
+		expect(prfInputsFor(prf, "WFla")).toEqual({ first: "Ag" });
+		expect(prfInputsFor({ evalByCredential: { Q0lE: { first: "AQ" } } }, "WFla")).toBeUndefined();
+		expect(prfInputsFor(undefined, "Q0lE")).toBeUndefined();
+	});
+
+	it("response builders carry prf only when given", () => {
+		const reg = (prf?: { enabled: boolean; results?: { first: string } }) =>
+			JSON.parse(
+				registrationResponseJSON({
+					credentialIdStdB64: "Q0lE",
+					attestationObjectStdB64: "QVRU",
+					authenticatorDataStdB64: "QUQ=",
+					publicKeyStdB64: "UEs=",
+					clientDataB64Url: "Y2Q",
+					prf,
+				}),
+			).clientExtensionResults;
+		expect(reg({ enabled: true, results: { first: "AQ" } })).toEqual({
+			prf: { enabled: true, results: { first: "AQ" } },
+		});
+		expect(reg()).toEqual({});
+
+		const auth = (prf?: { results: { first: string } }) =>
+			JSON.parse(
+				authenticationResponseJSON({
+					credentialIdStdB64: "Q0lE",
+					authenticatorDataStdB64: "QUQ=",
+					signatureStdB64: "U0lH",
+					clientDataB64Url: "Y2Q",
+					prf,
+				}),
+			).clientExtensionResults;
+		expect(auth({ results: { first: "AQ" } })).toEqual({ prf: { results: { first: "AQ" } } });
+		expect(auth()).toEqual({});
 	});
 });
 

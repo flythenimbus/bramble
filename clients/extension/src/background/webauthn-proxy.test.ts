@@ -27,6 +27,7 @@ function deps(over: Partial<PasskeyProxyDeps> = {}): PasskeyProxyDeps {
 				authenticatorData: "QUQ",
 				signature: "U0lH",
 			})),
+			passkeyPrfEval: vi.fn(async () => ({ first: "+/8=" })),
 		},
 		loadEntries: vi.fn(async () => []),
 		savePlacement: vi.fn(async () => {}),
@@ -245,6 +246,151 @@ describe("handleGet", () => {
 	it("rejects a cross-origin rpId with SecurityError", async () => {
 		const res = await handleGet(deps(), 1, getJson(), "https://evil.com");
 		expect(res.error?.name).toBe("SecurityError");
+	});
+});
+
+describe("PRF", () => {
+	const extensionResults = (res: { responseJson?: string }) =>
+		JSON.parse(res.responseJson as string).clientExtensionResults;
+	const prfCreate = (prf: unknown) => createJson({ extensions: { prf } });
+
+	it("create stores the minted PRF secrets on the credential", async () => {
+		const d = deps();
+		await handleCreate(d, 1, createJson(), "https://github.com");
+		const plan = vi.mocked(d.savePlacement).mock.calls[0]?.[0];
+		if (plan?.kind !== "create") throw new Error("expected a new login");
+		expect(plan.data.passkeys?.[0]?.prf).toEqual({ credWithUV: "V1VW", credWithoutUV: "Tk9VVg==" });
+	});
+
+	it("create answers a PRF request with enabled and the eval output", async () => {
+		const d = deps();
+		const res = await handleCreate(
+			d,
+			1,
+			prfCreate({ eval: { first: "-_8" } }),
+			"https://github.com",
+		);
+		// base64url in, standard base64 to the core: raw input, never pre-hashed.
+		expect(d.crypto.passkeyPrfEval).toHaveBeenCalledWith("V1VW", "+/8=", undefined);
+		expect(extensionResults(res)).toEqual({ prf: { enabled: true, results: { first: "-_8" } } });
+	});
+
+	it("create answers a bare PRF request with enabled and no results", async () => {
+		const d = deps();
+		const res = await handleCreate(d, 1, prfCreate({}), "https://github.com");
+		expect(extensionResults(res)).toEqual({ prf: { enabled: true } });
+		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
+	});
+
+	it("create without a PRF request returns no extension results", async () => {
+		const res = await handleCreate(deps(), 1, createJson(), "https://github.com");
+		expect(extensionResults(res)).toEqual({});
+	});
+
+	it("create gives enabled but no results without user verification", async () => {
+		const d = deps({
+			ceremony: vi.fn(async () => ({
+				approved: true,
+				userVerified: false,
+			})) as unknown as CeremonyFn,
+		});
+		const res = await handleCreate(
+			d,
+			1,
+			prfCreate({ eval: { first: "AQ" } }),
+			"https://github.com",
+		);
+		expect(extensionResults(res)).toEqual({ prf: { enabled: true } });
+		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
+	});
+
+	const FIXTURE_PRF = { credWithUV: "S0VZVVY=", credWithoutUV: "S0VZTk9VVg==" };
+	const login = githubEntries[0] as Extract<Entry, { type: "login" }>;
+	const prfEntries: Entry[] = [
+		{ ...login, passkeys: [{ ...login.passkeys![0]!, prf: FIXTURE_PRF }] } as Entry,
+	];
+	const prfGet = (prf: unknown) =>
+		JSON.stringify({
+			rpId: "github.com",
+			challenge: "Y2hhbA",
+			allowCredentials: [],
+			extensions: { prf },
+		});
+	const getDeps = (entries: Entry[], over: Partial<PasskeyProxyDeps> = {}) =>
+		deps({
+			loadEntries: vi.fn(async () => entries),
+			ceremony: vi.fn(async () => ({
+				approved: true,
+				userVerified: true,
+				credentialId: "Q0lE",
+			})) as unknown as CeremonyFn,
+			...over,
+		});
+
+	it("get evaluates PRF with the chosen credential's own inputs", async () => {
+		const d = getDeps(prfEntries);
+		const res = await handleGet(
+			d,
+			1,
+			prfGet({ eval: { first: "Ag" }, evalByCredential: { Q0lE: { first: "AQ" } } }),
+			"https://github.com",
+		);
+		expect(d.crypto.passkeyPrfEval).toHaveBeenCalledWith("S0VZVVY=", "AQ==", undefined);
+		expect(extensionResults(res)).toEqual({ prf: { results: { first: "-_8" } } });
+	});
+
+	it("get falls back to eval when the credential has no own inputs", async () => {
+		const d = getDeps(prfEntries);
+		await handleGet(
+			d,
+			1,
+			prfGet({ eval: { first: "Ag" }, evalByCredential: { WFla: { first: "AQ" } } }),
+			"https://github.com",
+		);
+		expect(d.crypto.passkeyPrfEval).toHaveBeenCalledWith("S0VZVVY=", "Ag==", undefined);
+	});
+
+	it("get signs in without PRF output for a passkey minted before PRF", async () => {
+		const d = getDeps(githubEntries);
+		const res = await handleGet(d, 1, prfGet({ eval: { first: "Ag" } }), "https://github.com");
+		expect(res.error).toBeUndefined();
+		expect(extensionResults(res)).toEqual({});
+		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
+	});
+
+	it("get gives no PRF output without user verification", async () => {
+		const d = getDeps(prfEntries, {
+			ceremony: vi.fn(async () => ({
+				approved: true,
+				userVerified: false,
+				credentialId: "Q0lE",
+			})) as unknown as CeremonyFn,
+		});
+		const res = await handleGet(d, 1, prfGet({ eval: { first: "Ag" } }), "https://github.com");
+		expect(extensionResults(res)).toEqual({});
+		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
+	});
+
+	it("a failed PRF evaluation still completes the ceremony", async () => {
+		const failing = vi.fn(async () => {
+			throw new Error("offscreen gone");
+		});
+		const c = deps();
+		c.crypto.passkeyPrfEval = failing;
+		const created = await handleCreate(
+			c,
+			1,
+			prfCreate({ eval: { first: "AQ" } }),
+			"https://github.com",
+		);
+		expect(created.error).toBeUndefined();
+		expect(extensionResults(created)).toEqual({ prf: { enabled: true } });
+
+		const g = getDeps(prfEntries);
+		g.crypto.passkeyPrfEval = failing;
+		const got = await handleGet(g, 1, prfGet({ eval: { first: "Ag" } }), "https://github.com");
+		expect(got.error).toBeUndefined();
+		expect(extensionResults(got)).toEqual({});
 	});
 });
 

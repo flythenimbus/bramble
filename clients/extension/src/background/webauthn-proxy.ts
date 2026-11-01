@@ -14,7 +14,7 @@
 
 import type { CryptoAdapter } from "@core/adapters/crypto";
 import type { Entry, PasskeyCredential } from "@core/hooks/useVault";
-import { base64UrlToBase64 } from "@core/util/bytes";
+import { base64ToBase64Url, base64UrlToBase64 } from "@core/util/bytes";
 import {
 	attachPasskeyTo,
 	findPasskeys,
@@ -31,8 +31,10 @@ import {
 	defaultRpId,
 	isRegistrableSuffix,
 	originHostname,
+	type PrfValues,
 	parseCreationOptions,
 	parseRequestOptions,
+	prfInputsFor,
 	registrationResponseJSON,
 } from "./webauthn-json";
 
@@ -208,7 +210,7 @@ export async function runCreateCeremony(
 }
 
 export interface PasskeyProxyDeps {
-	crypto: Pick<CryptoAdapter, "passkeyMakeCredential" | "passkeyGetAssertion">;
+	crypto: Pick<CryptoAdapter, "passkeyMakeCredential" | "passkeyGetAssertion" | "passkeyPrfEval">;
 	/** Decrypt and return all vault entries. Caller guarantees the vault is unlocked first. */
 	loadEntries: () => Promise<Entry[]>;
 	/** Persist a freshly minted passkey (attach to / create a login). */
@@ -234,6 +236,28 @@ function resolveRpId(
 		throw new WebAuthnError("SecurityError", `rpId ${rpId} is not valid for origin ${origin}`);
 	}
 	return { rpId, host };
+}
+
+/**
+ * PRF output for the site's raw `inputs` (base64url), or undefined when evaluation fails: a PRF
+ * failure answers without results instead of failing the ceremony. See docs/passkey-prf.md.
+ */
+async function evalPrf(
+	deps: PasskeyProxyDeps,
+	secretB64: string,
+	inputs: PrfValues,
+): Promise<PrfValues | undefined> {
+	try {
+		const out = await deps.crypto.passkeyPrfEval(
+			secretB64,
+			base64UrlToBase64(inputs.first),
+			inputs.second === undefined ? undefined : base64UrlToBase64(inputs.second),
+		);
+		const first = base64ToBase64Url(out.first);
+		return out.second === undefined ? { first } : { first, second: base64ToBase64Url(out.second) };
+	} catch {
+		return undefined;
+	}
 }
 
 /** Apply the ceremony's create placement choice ("new" / a chosen login), else auto. */
@@ -309,6 +333,7 @@ export async function handleCreate(
 			privateKey: reg.privateKey,
 			signCount: 0,
 			createdAt: deps.now(),
+			prf: reg.prf,
 		};
 		const plan = resolveCreatePlan(decision, entries, rpId, opts.rpName, credential);
 		await deps.savePlacement(plan);
@@ -321,6 +346,11 @@ export async function handleCreate(
 					: (entries.find((e) => e.id === plan.entryId)?.name ?? rpId),
 		});
 
+		// PRF output only after user verification, so a site always gets the same key.
+		const prfResults =
+			opts.prf?.eval && decision.userVerified
+				? await evalPrf(deps, reg.prf.credWithUV, opts.prf.eval)
+				: undefined;
 		const clientData = buildClientData("webauthn.create", opts.challenge, origin);
 		return {
 			requestId,
@@ -330,6 +360,7 @@ export async function handleCreate(
 				authenticatorDataStdB64: reg.authenticatorData,
 				publicKeyStdB64: reg.publicKey,
 				clientDataB64Url: clientData.b64Url,
+				prf: opts.prf ? { enabled: true, results: prfResults } : undefined,
 			}),
 		};
 	} catch (e) {
@@ -382,6 +413,12 @@ export async function handleGet(
 			clientDataHash,
 			decision.userVerified,
 		);
+		// A passkey minted before PRF support has no secret and simply answers without output.
+		const prfInputs = prfInputsFor(opts.prf, base64ToBase64Url(chosen.passkey.credentialId));
+		const prfResults =
+			prfInputs && chosen.passkey.prf && decision.userVerified
+				? await evalPrf(deps, chosen.passkey.prf.credWithUV, prfInputs)
+				: undefined;
 		return {
 			requestId,
 			responseJson: authenticationResponseJSON({
@@ -390,6 +427,7 @@ export async function handleGet(
 				signatureStdB64: assertion.signature,
 				clientDataB64Url: clientData.b64Url,
 				userHandleStdB64: chosen.passkey.userHandle || undefined,
+				prf: prfResults ? { results: prfResults } : undefined,
 			}),
 		};
 	} catch (e) {

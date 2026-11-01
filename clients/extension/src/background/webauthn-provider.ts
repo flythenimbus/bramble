@@ -18,6 +18,7 @@ import {
 	loadDecryptedEntries,
 	passkeyGetAssertion,
 	passkeyMakeCredential,
+	passkeyPrfEval,
 	savePlacement,
 } from "./passkey-store";
 import { openUnlockView } from "./popout";
@@ -136,7 +137,7 @@ async function sha256Base64(bytes: Uint8Array): Promise<string> {
 /** Deps for the pure handlers, with the ceremony bound to a known tab (Firefox) or the active tab. */
 export function depsForTab(tabId?: number): PasskeyProxyDeps {
 	return {
-		crypto: { passkeyMakeCredential, passkeyGetAssertion },
+		crypto: { passkeyMakeCredential, passkeyGetAssertion, passkeyPrfEval },
 		loadEntries: loadDecryptedEntries,
 		savePlacement,
 		ceremony: cornerCeremonyForTab(tabId),
