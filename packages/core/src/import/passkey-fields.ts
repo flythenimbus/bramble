@@ -7,6 +7,7 @@
 // value: the reason names the field and what was wrong with it, never what it contained.
 // See docs/passkey-import.md.
 
+import type { PasskeyPrfSecrets } from "../adapters/crypto";
 import { base64UrlToBase64, base64UrlToBytes, bytesToBase64 } from "../util/bytes";
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
@@ -24,6 +25,27 @@ const MAX_PEM_CHARS = 4096;
 
 export function maxBase64UrlLength(decodedBytes: number): number {
 	return Math.ceil((decodedBytes * 4) / 3);
+}
+
+// CTAP CredRandom is 32 bytes; the cap only bounds what a hostile export can make us store.
+const PRF_SECRET_BYTES = 32;
+export const MAX_PRF_SECRET_BYTES = 1024;
+
+/**
+ * A passkey's PRF secrets in stored form, or undefined when a half is empty or oversized. A missing
+ * without-UV half gets fresh random bytes: the source never produced a without-UV output (Bramble
+ * evaluates only with UV), and CXF export needs both halves. See docs/passkey-prf.md.
+ */
+export function prfSecretsFrom(
+	withUV: Uint8Array,
+	withoutUV?: Uint8Array | null,
+): PasskeyPrfSecrets | undefined {
+	const fits = (b: Uint8Array) => b.length > 0 && b.length <= MAX_PRF_SECRET_BYTES;
+	if (!fits(withUV) || (withoutUV?.length && !fits(withoutUV))) return undefined;
+	const second = withoutUV?.length
+		? withoutUV
+		: crypto.getRandomValues(new Uint8Array(PRF_SECRET_BYTES));
+	return { credWithUV: bytesToBase64(withUV), credWithoutUV: bytesToBase64(second) };
 }
 
 /**

@@ -12,6 +12,7 @@ import {
 	type ConversionTally,
 	MAX_CREDENTIAL_ID_BYTES,
 	MAX_USER_HANDLE_BYTES,
+	prfSecretsFrom,
 	reject,
 	rejectionReason,
 	validRpId,
@@ -156,6 +157,11 @@ export async function importProtonPasskeys(
 
 		const ownCreatedAt =
 			passkey.createTime != null && passkey.createTime > 0 ? passkey.createTime * 1000 : undefined;
+		const hmacSecret = get(get(record, "ext"), "hmac_secret");
+		const withUV = hmacSecret != null ? bytesOf(get(hmacSecret, "cred_with_uv")) : null;
+		const prf = withUV
+			? prfSecretsFrom(withUV, bytesOf(get(hmacSecret, "cred_without_uv")))
+			: undefined;
 		tally.converted++;
 		imported.push({
 			credentialId: bytesToBase64(fields.credentialId),
@@ -170,15 +176,16 @@ export async function importProtonPasskeys(
 			// A counter that goes backwards across synced devices reads as a cloned authenticator.
 			signCount: 0,
 			createdAt: ownCreatedAt ?? parentCreatedAt ?? importedAt,
+			...(prf ? { prf } : {}),
 		});
 
 		const counter = get(record, "cnt");
 		if (typeof counter === "number" && counter !== 0) {
 			warnings.push(`${label} had its signature counter reset to zero.`);
 		}
-		if (get(get(record, "ext"), "hmac_secret") != null) {
+		if (hmacSecret != null && !prf) {
 			warnings.push(
-				`${label} had a PRF secret, which Bramble can't keep. Signing in works, but a site that encrypted data with it can't decrypt that data.`,
+				`${label} had a PRF secret Bramble couldn't read, so it was left out. Signing in works, but a site that encrypted data with it can't decrypt that data.`,
 			);
 		}
 		if (ownCreatedAt === undefined) {

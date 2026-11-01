@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { testParserContext } from "../exchange/test-crypto";
-import { bytesToBase64 } from "../util/bytes";
+import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { parseProtonPass } from "./protonpass";
 
 const ppx = (data: unknown): Uint8Array =>
@@ -301,27 +301,51 @@ describe("parseProtonPass passkeys", () => {
 		}
 	});
 
-	it("imports but says so when the counter is reset or a PRF secret is left behind", async () => {
+	const importOne = async (over: Record<string, unknown>) => {
 		const res = await parseProtonPass(
-			loginWithPasskeys([
-				{
-					createTime: 1793504897,
-					content: protonContent(
-						protonRecord({
-							cnt: 5,
-							ext: { hmac_secret: { cred_with_uv: SCALAR, cred_without_uv: null } },
-						}),
-					),
-				},
-			]),
+			loginWithPasskeys([{ createTime: 1793504897, content: protonContent(protonRecord(over)) }]),
 			testParserContext,
 		);
 		const login = res.imported[0];
-		expect(login?.type === "login" && login.passkeys).toHaveLength(1);
+		return { res, passkey: login?.type === "login" ? login.passkeys?.[0] : undefined };
+	};
+
+	it("keeps the PRF secret and warns only about the counter", async () => {
+		const { res, passkey } = await importOne({
+			cnt: 5,
+			ext: { hmac_secret: { cred_with_uv: SCALAR, cred_without_uv: null } },
+		});
+		expect(passkey?.prf?.credWithUV).toBe(bytesToBase64(SCALAR));
+		// Proton never produced a without-UV output, so a fresh half loses nothing; CXF needs both.
+		expect(base64ToBytes(passkey?.prf?.credWithoutUV ?? "")).toHaveLength(32);
+		expect(passkey?.prf?.credWithoutUV).not.toBe(passkey?.prf?.credWithUV);
+		expect(res.warnings).toEqual(['"Site" passkey 1 had its signature counter reset to zero.']);
+	});
+
+	it("keeps both halves when Proton has both", async () => {
+		const withoutUV = new Uint8Array(32).fill(0x22);
+		const { passkey } = await importOne({
+			ext: { hmac_secret: { cred_with_uv: SCALAR, cred_without_uv: withoutUV } },
+		});
+		expect(passkey?.prf).toEqual({
+			credWithUV: bytesToBase64(SCALAR),
+			credWithoutUV: bytesToBase64(withoutUV),
+		});
+	});
+
+	it("warns and leaves the PRF secret out when it can't be read", async () => {
+		const { res, passkey } = await importOne({ ext: { hmac_secret: "junk" } });
+		expect(passkey).toBeDefined();
+		expect(passkey?.prf).toBeUndefined();
 		expect(res.warnings).toEqual([
-			'"Site" passkey 1 had its signature counter reset to zero.',
-			expect.stringMatching(/^"Site" passkey 1 had a PRF secret/),
+			expect.stringMatching(/^"Site" passkey 1 had a PRF secret Bramble couldn't read/),
 		]);
+	});
+
+	it("imports no PRF secret when Proton has none", async () => {
+		const { res, passkey } = await importOne({});
+		expect(passkey?.prf).toBeUndefined();
+		expect(res.warnings).toEqual([]);
 	});
 
 	it("blames the crypto module, not the file, when no passkey converts", async () => {

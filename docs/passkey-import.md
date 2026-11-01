@@ -146,7 +146,7 @@ it with the small reader in `util/msgpack.ts`.
 | `uhd` | user handle | yes, required |
 | `un` / `udn` | user name / display name | only when the JSON `userName` / `userDisplayName` are empty |
 | `cnt` | signature counter | no, zeroed with a warning if it was not 0 |
-| `ext.hmac_secret` | the PRF / hmac-secret seed | no, Bramble has nowhere to keep it, so it is a warning |
+| `ext.hmac_secret` | the PRF / hmac-secret seeds, `cred_with_uv` and `cred_without_uv` | yes, as the passkey's `prf`; a missing `cred_without_uv` is minted (see [passkey-prf.md](passkey-prf.md)) |
 | `key` | a COSE key in Proton's own serde shape | the scalar, `par` label -4 |
 
 Byte strings arrive as MessagePack arrays of small ints rather than `bin`, because the Rust
@@ -169,6 +169,7 @@ real Proton file, which is what shows we read the right parameter.
 | uses a key type other than P-256 | not EC2, an `alg` other than ES256, or a curve other than 1 |
 | has no private key | no 32-byte -4 parameter |
 | has invalid private-key material | the core refused the key |
+| had a PRF secret Bramble couldn't read | `hmac_secret` is present but its `cred_with_uv` is not bytes, or a half is empty or over 1 KiB |
 
 The counter, PRF and creation-date warnings import the passkey anyway. A dropped PRF secret
 leaves sign-in working, but a site that used PRF to encrypt data cannot decrypt it again.
