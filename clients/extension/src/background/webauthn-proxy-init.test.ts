@@ -110,6 +110,7 @@ const answer = (requestId: number) => {
 };
 
 vi.mock("./webauthn-proxy", () => ({
+	NOT_ALLOWED: { name: "NotAllowedError", message: "not allowed" },
 	handleCreate: vi.fn((_deps: unknown, requestId: number) => answer(requestId)),
 	handleGet: vi.fn((_deps: unknown, requestId: number) => answer(requestId)),
 }));

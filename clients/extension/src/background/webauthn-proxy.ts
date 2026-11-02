@@ -435,8 +435,12 @@ export async function handleGet(
 	}
 }
 
+/** The spec's catch-all failure, carrying nothing about why: internal errors stay internal. */
+export const NOT_ALLOWED: chrome.webAuthenticationProxy.DOMExceptionDetails = {
+	name: "NotAllowedError",
+	message: "The operation either timed out or was not allowed.",
+};
+
 function toDomException(e: unknown): chrome.webAuthenticationProxy.DOMExceptionDetails {
-	if (e instanceof WebAuthnError) return { name: e.domName, message: e.message };
-	// Unknown failure: NotAllowedError is the spec's catch-all so we never leak internals.
-	return { name: "NotAllowedError", message: e instanceof Error ? e.message : String(e) };
+	return e instanceof WebAuthnError ? { name: e.domName, message: e.message } : NOT_ALLOWED;
 }

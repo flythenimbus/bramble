@@ -34,8 +34,9 @@ import {
 	runGetCeremony,
 } from "./webauthn-proxy";
 
-const CEREMONY_TIMEOUT_MS = 120_000;
-const UNLOCK_TIMEOUT_MS = 90_000;
+// One budget for a whole ceremony (cards and unlock together), under the Firefox page's 180 s
+// backstop: the page must never give up while a ceremony could still save a passkey.
+const CEREMONY_DEADLINE_MS = 150_000;
 
 type PromptReply = { approved: boolean; choice?: string };
 // In-flight passkey cards keyed by promptId; resolved by PASSKEY_PROMPT_RESPONSE.
@@ -52,7 +53,11 @@ async function waitForUnlock(timeoutMs: number): Promise<boolean> {
 
 // Show one corner card (same placement as save-login) and await the reply; teardown or
 // timeout counts as declined.
-function showCard(tabId: number, payload: SavePasskeyPrompt): Promise<PromptReply> {
+function showCard(
+	tabId: number,
+	payload: SavePasskeyPrompt,
+	timeoutMs: number,
+): Promise<PromptReply> {
 	return new Promise((resolve) => {
 		pendingPrompts.set(payload.promptId, resolve);
 		// Top frame only (where the corner card renders), matching the save-login prompt.
@@ -63,7 +68,7 @@ function showCard(tabId: number, payload: SavePasskeyPrompt): Promise<PromptRepl
 			});
 		setTimeout(() => {
 			if (pendingPrompts.delete(payload.promptId)) resolve({ approved: false });
-		}, CEREMONY_TIMEOUT_MS);
+		}, timeoutMs);
 	});
 }
 
@@ -86,10 +91,10 @@ function cardPayload(
 }
 
 // Open the popup so a user gesture can unlock the vault, then wait until it is unlocked.
-async function ensureUnlocked(): Promise<boolean> {
+async function ensureUnlocked(timeoutMs: number): Promise<boolean> {
 	if (!vaultLocked()) return true;
 	const unlockWindowId = await openUnlockView();
-	const ok = await waitForUnlock(UNLOCK_TIMEOUT_MS);
+	const ok = await waitForUnlock(timeoutMs);
 	// Close the unlock window once we're in, so it doesn't sit on top of the page's corner
 	// prompt (the passkey picker / confirmation that runs next).
 	if (ok && unlockWindowId !== undefined) {
@@ -99,18 +104,32 @@ async function ensureUnlocked(): Promise<boolean> {
 }
 
 /** The corner-card ceremony, shown in `tabId`: the tab its transport bound the request to. */
+// The corner card has one slot, so a second concurrent ceremony is declined rather than allowed
+// to replace the first's card (which then could only auto-decline at its deadline).
+let ceremonyInProgress = false;
+
 function cornerCeremonyForTab(tabId: number): CeremonyFn {
 	return async (req) => {
-		// Snapshot the lock state up front so the ceremony's locked-branch UX (confirm card
-		// then unlock) is decided once, not re-read mid-flow.
-		const startedLocked = vaultLocked();
-		const host: CeremonyHost = {
-			isLocked: () => startedLocked,
-			ensureUnlocked,
-			loadEntries: loadDecryptedEntries,
-			showCard: (opts) => showCard(tabId, cardPayload(req, opts)),
-		};
-		return req.kind === "create" ? runCreateCeremony(req, host) : runGetCeremony(req, host);
+		if (ceremonyInProgress) return { approved: false };
+		ceremonyInProgress = true;
+		try {
+			const deadline = Date.now() + CEREMONY_DEADLINE_MS;
+			const remaining = () => Math.max(0, deadline - Date.now());
+			// Snapshot the lock state up front so the ceremony's locked-branch UX (confirm card
+			// then unlock) is decided once, not re-read mid-flow.
+			const startedLocked = vaultLocked();
+			const host: CeremonyHost = {
+				isLocked: () => startedLocked,
+				ensureUnlocked: () => ensureUnlocked(remaining()),
+				loadEntries: loadDecryptedEntries,
+				showCard: (opts) => showCard(tabId, cardPayload(req, opts), remaining()),
+			};
+			return await (req.kind === "create"
+				? runCreateCeremony(req, host)
+				: runGetCeremony(req, host));
+		} finally {
+			ceremonyInProgress = false;
+		}
 	};
 }
 

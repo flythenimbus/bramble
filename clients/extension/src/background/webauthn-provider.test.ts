@@ -17,6 +17,8 @@ const h = vi.hoisted(() => ({
 	applied: [] as boolean[],
 	/** Whether the apply hook throws, as a failing attach() does. */
 	hookThrows: false,
+	/** Settles the running ceremony, so a test can hold one mid-flight. */
+	releaseCeremony: undefined as (() => void) | undefined,
 }));
 
 vi.mock("./prefs", () => ({
@@ -51,7 +53,10 @@ vi.mock("./session", () => ({ vaultLocked: () => false }));
 
 vi.mock("./webauthn-proxy", () => ({
 	runCreateCeremony: async () => ({ approved: false }),
-	runGetCeremony: async () => ({ approved: false }),
+	runGetCeremony: () =>
+		new Promise((resolve) => {
+			h.releaseCeremony = () => resolve({ approved: true, userVerified: true });
+		}),
 }));
 
 async function load() {
@@ -128,5 +133,26 @@ describe("the provider enabled flag", () => {
 		h.hookThrows = true;
 		await expect(setEnabled(false)).rejects.toThrow();
 		expect(m.isProviderEnabled()).toBe(true);
+	});
+});
+
+describe("one ceremony at a time", () => {
+	const req = { kind: "get" as const, rpId: "example.com", origin: "https://example.com" };
+
+	// The corner card has one slot: a second ceremony used to replace the first's card, leaving the
+	// first to auto-decline minutes later.
+	it("declines a second ceremony while one is in progress, then serves the next", async () => {
+		const m = await load();
+		const first = m.depsForTab(1).ceremony(req);
+		await Promise.resolve();
+		expect(await m.depsForTab(2).ceremony(req)).toEqual({ approved: false });
+
+		h.releaseCeremony?.();
+		expect(await first).toEqual({ approved: true, userVerified: true });
+
+		const next = m.depsForTab(1).ceremony(req);
+		await Promise.resolve();
+		h.releaseCeremony?.();
+		expect(await next).toEqual({ approved: true, userVerified: true });
 	});
 });

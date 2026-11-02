@@ -403,6 +403,22 @@ describe("PRF", () => {
 		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
 	});
 
+	it("an internal failure reaches the page only as a generic NotAllowedError", async () => {
+		const d = getDeps(prfEntries, {
+			loadEntries: vi.fn(async () => {
+				throw new Error("outer decrypt failed: vault blob 7");
+			}),
+		});
+		const res = await handleGet(
+			d,
+			1,
+			prfGet({ eval: { first: "Ag" } }),
+			caller("https://github.com"),
+		);
+		expect(res.error?.name).toBe("NotAllowedError");
+		expect(res.error?.message).not.toMatch(/decrypt|vault/);
+	});
+
 	it("a failed PRF evaluation still completes the ceremony", async () => {
 		const failing = vi.fn(async () => {
 			throw new Error("offscreen gone");

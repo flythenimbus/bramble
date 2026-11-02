@@ -326,21 +326,21 @@ export async function actOnPasskeyCard<T>(
 	run: () => Promise<T>,
 ): Promise<T> {
 	const result = run();
+	const card = page.locator("#bramble-corner-prompt");
+	// The card ignores consent clicks in its first moments (anti-clickjacking), so retry until one
+	// lands and closes it; a closed card also can't be mistaken for the next ceremony's.
 	await expect
 		.poll(
 			async () => {
 				try {
 					await clickCornerAction(page, action);
-					return true;
 				} catch {
 					return false;
 				}
+				return (await card.count()) === 0;
 			},
 			{ timeout: 15_000 },
 		)
 		.toBe(true);
-	const value = await result;
-	// The next ceremony's card must not be mistaken for this one.
-	await expect(page.locator("#bramble-corner-prompt")).toHaveCount(0, { timeout: 10_000 });
-	return value;
+	return result;
 }

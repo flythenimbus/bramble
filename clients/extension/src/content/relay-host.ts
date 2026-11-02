@@ -16,6 +16,7 @@ import { api } from "./content-api";
 import { isExtensionOrigin } from "./ext-origin";
 import type { RelayedAnchor, RelayRect } from "./frame-relay";
 import { hostOffset } from "./host-offset";
+import { isLegible } from "./legibility";
 import { onTeardown } from "./lifecycle";
 
 const AUTOFILL_UI_URL = api.runtime.getURL("autofill-ui.html");
@@ -34,27 +35,6 @@ type Hosted = {
 
 let hosted: Hosted | null = null;
 let watchdog: number | null = null;
-
-/** Legibility guard, mirroring picker.ts pickIsTrustworthy but run continuously. */
-function isTrustworthy(host: HTMLElement): boolean {
-	const rect = host.getBoundingClientRect();
-	if (rect.width < 60 || rect.height < 20) return false;
-	if (
-		rect.bottom <= 0 ||
-		rect.right <= 0 ||
-		rect.top >= window.innerHeight ||
-		rect.left >= window.innerWidth
-	) {
-		return false;
-	}
-	const cs = getComputedStyle(host);
-	if (cs.visibility !== "visible" || cs.display === "none") return false;
-	if (Number.parseFloat(cs.opacity) < 0.9) return false;
-	if (cs.filter !== "none" || cs.mixBlendMode !== "normal" || cs.clipPath !== "none") return false;
-	const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-	if (!top) return false;
-	return top === host || host.contains(top) || top.contains(host);
-}
 
 /**
  * A relayed rect is in this frame's VIEWPORT coordinates, but the host is
@@ -102,7 +82,7 @@ function startWatchdog(): void {
 		watchdog = null;
 		if (!hosted) return;
 		const measurable = hosted.frame.getBoundingClientRect().height >= 20;
-		if (measurable && !isTrustworthy(hosted.host)) {
+		if (measurable && !isLegible(hosted.host)) {
 			destroyRelayHost();
 			return;
 		}

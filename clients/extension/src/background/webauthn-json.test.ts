@@ -245,6 +245,31 @@ describe("PRF extension", () => {
 		expect(r.prf).toEqual({});
 	});
 
+	// Every platform must derive the same key from the same request, so a salt that only some
+	// decoders would accept (padding, the + / alphabet, stray trailing bits) counts as absent.
+	it("treats a salt that isn't canonical base64url as absent", () => {
+		const prfOf = (first: string) =>
+			parseRequestOptions(
+				JSON.stringify({ challenge: "Y2hhbA", extensions: { prf: { eval: { first } } } }),
+			).prf;
+		expect(prfOf("AQI")).toEqual({ eval: { first: "AQI" } });
+		expect(prfOf("")).toEqual({ eval: { first: "" } });
+		for (const odd of ["AQI=", "+/8", "AR", "A Q"]) expect(prfOf(odd)).toEqual({});
+	});
+
+	it("matches evalByCredential keys by the id's bytes, not its spelling", () => {
+		const r = parseRequestOptions(
+			JSON.stringify({
+				challenge: "Y2hhbA",
+				extensions: {
+					prf: { evalByCredential: { "AQI=": { first: "AQ" }, "!!": { first: "Ag" } } },
+				},
+			}),
+		);
+		expect(r.prf).toEqual({ evalByCredential: { AQI: { first: "AQ" } } });
+		expect(prfInputsFor(r.prf, "AQI")).toEqual({ first: "AQ" });
+	});
+
 	it("prfInputsFor prefers the credential's own inputs over eval", () => {
 		const prf = { eval: { first: "Ag" }, evalByCredential: { Q0lE: { first: "AQ" } } };
 		expect(prfInputsFor(prf, "Q0lE")).toEqual({ first: "AQ" });

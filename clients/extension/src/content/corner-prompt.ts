@@ -6,6 +6,7 @@ import { saveLoginBody } from "./html/save-login-body";
 import { savePasskeyBody } from "./html/save-passkey-body";
 import { updateLoginBody } from "./html/update-login-body";
 import { t } from "./i18n";
+import { EARLY_CLICK_MS, isLegible } from "./legibility";
 import { isExtensionAlive, markExtensionDead, onTeardown, safeSendMessage } from "./lifecycle";
 import { html } from "./template";
 import type { CornerPromptPayload } from "./types";
@@ -21,6 +22,16 @@ let cornerPromptEl: HTMLElement | null = null;
 // Closed shadow root of the corner prompt; in-card DOM queries go through this.
 let cornerShadow: ShadowRoot | null = null;
 let currentPrompt: CornerPromptPayload | null = null;
+let cornerShownAt = 0;
+
+// Passkey consent counts only on a card the user can see, and not in its first moments (a click
+// aimed at whatever sat there before): a page could otherwise fade or cover it under the cursor.
+const PASSKEY_CONSENT = new Set(["passkey-approve", "passkey-pick"]);
+
+function consentClickCounts(): boolean {
+	if (!cornerPromptEl || !isLegible(cornerPromptEl)) return false;
+	return Date.now() - cornerShownAt >= EARLY_CLICK_MS;
+}
 
 function removeCornerPrompt(): void {
 	if (cornerPromptEl) {
@@ -120,6 +131,7 @@ function handleCornerCardClick(e: Event): void {
 	if (!actionEl || !cornerShadow?.contains(actionEl)) return;
 	const action = actionEl.dataset.tpAction;
 	if (!action || !currentPrompt) return;
+	if (PASSKEY_CONSENT.has(action) && !consentClickCounts()) return;
 
 	if (action === "toggle-password") {
 		const pw = cornerShadow.querySelector<HTMLInputElement>("#tp-password");
@@ -254,6 +266,7 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 
 	cornerPromptEl = root;
 	cornerShadow = shadow;
+	cornerShownAt = Date.now();
 	document.body.appendChild(root);
 }
 

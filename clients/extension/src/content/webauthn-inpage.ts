@@ -20,7 +20,7 @@ type TransportResult =
 	| { error: { name: string; message: string } }
 	| { responseJson: string };
 
-// Safety only: the background bounds the ceremony (120s) and unlock (90s); this is the
+// Safety only: the background bounds a whole ceremony to 150 s (webauthn-provider.ts); this is the
 // backstop for a wedged bridge so create()/get() never hangs forever.
 const ROUNDTRIP_TIMEOUT_MS = 180_000;
 
@@ -75,9 +75,12 @@ function install(): void {
 		try {
 			result = await roundtrip("create", serializeCreateOptions(options.publicKey));
 		} catch {
-			// Bridge/background never answered: nothing was minted, so let the native
-			// authenticator handle it rather than failing the page.
-			return nativeCreate(options);
+			// No answer within the backstop. The background may still be saving a passkey, so a
+			// native fallback could leave one the site never registered: fail instead.
+			throw new DOMException(
+				"The operation either timed out or was not allowed.",
+				"NotAllowedError",
+			);
 		}
 		if ("passthrough" in result) return nativeCreate(options);
 		if ("error" in result) throw new DOMException(result.error.message, result.error.name);

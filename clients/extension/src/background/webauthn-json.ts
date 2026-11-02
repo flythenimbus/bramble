@@ -5,7 +5,7 @@
 // security-critical origin -> rpId check, so the background handler stays thin and the
 // error-prone encoding is unit-tested. See docs/passkey-provider.md.
 
-import { base64ToBase64Url, bytesToBase64Url } from "@core/util/bytes";
+import { base64ToBase64Url, base64UrlToBytes, bytesToBase64Url } from "@core/util/bytes";
 import { etld1 } from "../etld1";
 
 // base64 <-> base64url conversions live in @core/util/bytes (the single home for byte
@@ -115,10 +115,25 @@ export function parseRequestOptions(json: string): ParsedRequestOptions {
 const isRecord = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v);
 
+/** `s` decoded leniently (padding, the + / alphabet) and re-encoded canonically; null if not base64. */
+function canonicalB64Url(s: string): string | null {
+	try {
+		const url = s.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+		return bytesToBase64Url(base64UrlToBytes(url));
+	} catch {
+		return null;
+	}
+}
+
+// A salt must already be canonical: every platform then decodes it to the same bytes, where a
+// lenient decoder on one and a strict one on another would derive different keys (or none).
+const isCanonicalSalt = (v: unknown): v is string =>
+	typeof v === "string" && canonicalB64Url(v) === v;
+
 function prfValues(v: unknown): PrfValues | undefined {
-	if (!isRecord(v) || typeof v.first !== "string") return undefined;
+	if (!isRecord(v) || !isCanonicalSalt(v.first)) return undefined;
 	if (v.second === undefined) return { first: v.first };
-	return typeof v.second === "string" ? { first: v.first, second: v.second } : undefined;
+	return isCanonicalSalt(v.second) ? { first: v.first, second: v.second } : undefined;
 }
 
 function prfExtension(opts: Record<string, unknown>): Record<string, unknown> | undefined {
@@ -140,11 +155,13 @@ function requestPrf(opts: Record<string, unknown>): ParsedRequestOptions["prf"] 
 	const fallback = prfValues(prf.eval);
 	if (fallback) out.eval = fallback;
 	if (isRecord(prf.evalByCredential)) {
+		// Keyed by the id's canonical spelling, so a padded or + / key still matches its credential.
 		// fromEntries defines own properties, so a "__proto__" key can't rewire the lookup table.
 		const byCredential = Object.fromEntries(
 			Object.entries(prf.evalByCredential).flatMap(([id, v]) => {
+				const key = canonicalB64Url(id);
 				const values = prfValues(v);
-				return values ? [[id, values] as const] : [];
+				return key && values ? [[key, values] as const] : [];
 			}),
 		);
 		if (Object.keys(byCredential).length) out.evalByCredential = byCredential;

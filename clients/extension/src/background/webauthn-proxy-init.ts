@@ -10,10 +10,7 @@ import { api } from "../platform-api";
 import { on, whenReady } from "./router";
 import { proxyCaller, type RequestCaller } from "./webauthn-json";
 import { depsForTab, isProviderEnabled, setProviderApplyHook } from "./webauthn-provider";
-import { handleCreate, handleGet } from "./webauthn-proxy";
-
-// The spec's catch-all, so a refusal tells the page nothing about why.
-const REFUSED = { name: "NotAllowedError", message: "The operation was not allowed." };
+import { handleCreate, handleGet, NOT_ALLOWED } from "./webauthn-proxy";
 
 /** The tab the user is looking at: where the card shows, and its origin when readable. */
 async function focusedTab(): Promise<{ id: number; origin: string | null } | null> {
@@ -134,7 +131,7 @@ function registerListeners(): void {
 						req.requestDetailsJson,
 						bound.caller,
 					)
-				: { requestId: req.requestId, error: REFUSED };
+				: { requestId: req.requestId, error: NOT_ALLOWED };
 			// Gone means a pause already failed it; completing again throws "Invalid sender".
 			if (!inFlight.delete(req.requestId)) return;
 			try {
@@ -146,7 +143,7 @@ function registerListeners(): void {
 				await api.webAuthenticationProxy
 					.completeCreateRequest({
 						requestId: req.requestId,
-						error: { name: "UnknownError", message: String(e).slice(0, 200) },
+						error: NOT_ALLOWED,
 					})
 					.catch(() => {});
 			}
@@ -164,7 +161,7 @@ function registerListeners(): void {
 						req.requestDetailsJson,
 						bound.caller,
 					)
-				: { requestId: req.requestId, error: REFUSED };
+				: { requestId: req.requestId, error: NOT_ALLOWED };
 			if (!inFlight.delete(req.requestId)) return; // as in onCreateRequest
 			try {
 				await api.webAuthenticationProxy.completeGetRequest(details);
@@ -173,7 +170,7 @@ function registerListeners(): void {
 				await api.webAuthenticationProxy
 					.completeGetRequest({
 						requestId: req.requestId,
-						error: { name: "UnknownError", message: String(e).slice(0, 200) },
+						error: NOT_ALLOWED,
 					})
 					.catch(() => {});
 			}
