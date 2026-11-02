@@ -15,7 +15,9 @@ Verified: the Rust known-answer test; the TS, Kotlin JVM and mobile unit tests; 
 webAuthenticationProxy end to end (`e2e/extension/passkey-prf.spec.ts`: registration and sign-in
 give the same key, `evalByCredential` wins over `eval`); Apple's CXF decoder accepting our export
 (the macOS 26.6 probe); Android and iOS compiling (Kotlin, simulator builds of both targets). Not yet
-run on a device: Android, iPhone, Firefox, and the cross-device check.
+run on a device: Android, iPhone, Firefox, and the cross-device check. An adversarial review of the
+provider followed the same day; its findings and fixes are in
+[passkey-security-review.md](passkey-security-review.md).
 
 ## Why
 
@@ -35,7 +37,7 @@ Decisions:
 1. **Stored shape.** `PasskeyCredential.prf?: { credWithUV: string; credWithoutUV: string }`, standard base64. Both halves are required inside `prf` because CXF (and Apple) require both. The field is optional on the passkey, since passkeys created before this change have none. The change is additive, so there is no migration: older builds keep unknown keys on read and write (`normalizeEntryData`, the mutation `validate` gate), and sync merges passkeys whole by `credentialId`.
 2. **Minting.** `passkey_make_credential` returns both secrets (32 random bytes each) for every new passkey, whether or not the site asked for PRF.
 3. **Never mint a secret later.** A passkey without `prf` answers PRF requests with no output. If two devices each minted one lazily before syncing, whatever the site encrypted under the losing secret would be unrecoverable.
-4. **PRF only with user verification, and always `credWithUV`.** Every ceremony that answers PRF reports UV. The extension and Android already always do. iOS's no-UI fast path (`provideCredentialWithoutUserInteraction`, UV=0) must send a PRF request to the UI path (`.userInteractionRequired`) instead of answering it. So a site always gets the same output for the same input. `credWithoutUV` is stored and exported for fidelity; Bramble never evaluates it.
+4. **PRF only with user verification, and always `credWithUV`.** A PRF request always gets a real verification in its own ceremony, and the ceremony reports UV: the extension opens a confirm-it's-you window when the vault is already unlocked, Android skips its keep-unlocked session, and iOS's no-UI fast path sends the request to the UI path (`.userInteractionRequired`). So a site always gets the same output for the same input. `credWithoutUV` is stored and exported for fidelity; Bramble never evaluates it. (As first built, the extension and Android reported UV on a card click or a live session; the review in [passkey-security-review.md](passkey-security-review.md) fixed that.)
 5. **Formula.** `salt = SHA-256("WebAuthn PRF" || 0x00 || input)`, then `output = HMAC-SHA256(credWithUV, salt)`, for `first` and the optional `second`. This is WebAuthn's PRF-to-hmac-secret mapping, so secrets imported from Proton or Apple keep producing the outputs sites already rely on. The core accepts any non-empty secret length, because CXF doesn't pin it to 32.
 6. **Input selection.** On get: `evalByCredential[base64url(credentialId)]` if present, else `eval`. On create only `eval` applies. A `prf` object with no usable `eval` still counts as "requested".
 7. **Responses.** Create, when requested: `clientExtensionResults.prf = { enabled: true, results? }`. Get, when inputs exist and the passkey has secrets: `{ prf: { results } }`. Otherwise there is no `prf` key at all. A failed evaluation never blocks the ceremony: it answers without results.

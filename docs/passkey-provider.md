@@ -454,7 +454,12 @@ local "which provider made this passkey" UIs. Worth doing for attribution, not l
   may nag the user to add another. (Set in `passkey.rs`.)
 - **User verification.** Honor `userVerification: "required"` with a real biometric tap *even inside
   a keep-unlocked session*. Do not let the convenience session silently satisfy UV; that is a
-  passkey-specific security regression.
+  passkey-specific security regression. Done on every surface since 2026-11-01: UV "required" and
+  PRF force a verification in the ceremony, and a ceremony without one reports UV=0
+  ([passkey-security-review.md](passkey-security-review.md)).
+- **Caller binding.** Android binds every rpId to its caller: a verified privileged browser's origin
+  must be that site, and an app needs the rpId's `assetlinks.json` to vouch for it. Chrome takes the
+  origin from its own stamp on the proxied request, Firefox from the message sender.
 - **Response JSON completeness (device-verified against webauthn.io).** Chrome validates
   `completeCreateRequest` against the W3C `RegistrationResponseJSON` and rejects a partial one with
   `Invalid responseJson: field missing or invalid: <field>` (which makes `create()` hang, so the RP
