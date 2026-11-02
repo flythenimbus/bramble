@@ -1,5 +1,6 @@
 // A body too large to cross the bridge in one call, written to a file a chunk at a time, for the
-// native side to read from: a large backup's upload body, or an exported backup to share.
+// native side to read from: a large backup's upload body, an exported backup to share, or a picked
+// attachment to seal. The cache dir, because no device backup includes it.
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import type { HttpBodySource } from "@core/adapters/http";
@@ -9,12 +10,12 @@ import { pathFromUri } from "./paths";
 /** How much of a body crosses the bridge per append. */
 const SPOOL_CHUNK = 4 * 1024 * 1024;
 
-/** Write `body` to `name` in the cache dir. Returns its file:// URI and its plain path. */
+/** Write `body` to `name` in the cache dir (folders made as needed). Returns its file:// URI and its plain path. */
 export async function spoolToCache(
 	name: string,
 	body: HttpBodySource,
 ): Promise<{ uri: string; path: string }> {
-	await Filesystem.writeFile({ path: name, data: "", directory: Directory.Cache });
+	await Filesystem.writeFile({ path: name, data: "", directory: Directory.Cache, recursive: true });
 	for (let at = 0; at < body.size; at += SPOOL_CHUNK) {
 		const chunk = await body.read(at, Math.min(SPOOL_CHUNK, body.size - at));
 		await Filesystem.appendFile({

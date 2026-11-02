@@ -62,14 +62,17 @@ Not yet run on a device: Android, iPhone, Firefox.
 - **Duplicate credential ids.** Rather than de-duplicating ids across the vault on import, every
   lookup is keyed by rpId and id, so a duplicate can only ever answer for its own site.
 
+## Found alongside
+
+- **Attachment spool.** Sealing an attachment on mobile spooled its plaintext to `blobs/.spool-*` in
+  the data dir, which Android Auto Backup and iCloud backup both include, and nothing swept a spool
+  that a crash left behind. It now spools to the cache dir (in no backup) through the shared
+  `spool.ts`, and a startup sweep clears leftovers in both places. Found while doing #14.
+
 ## Open
 
 - **Device checks.** Android, iPhone and Firefox, on the Corbado PRF demo and AliasVault, plus an
   app sign-in on Android to exercise the asset-links check.
-- **Attachment spool.** Sealing an attachment spools its plaintext to `blobs/.spool-*` in the app's
-  data directory, which device backups include. Backup rules can't match a wildcard, so the fix is a
-  dedicated spool directory excluded on Android and marked `isExcludedFromBackup` on iOS. Not a
-  passkey issue; found while doing #14.
 - **The iOS passkey bundle** append is now under the App Group lock, but it still lives in
   `UserDefaults`, whose per-process cache can serve a stale read. The bundle is rebuilt from the
   vault on the app's next index refresh, so a lost append heals itself there.

@@ -5,11 +5,15 @@
 //
 // There IS one copy, and it is worth being honest about. A file picked with `<input type=file>`
 // arrives as a Blob, because no plugin here can pick a file BY PATH: the webview holds the
-// bytes and native does not. So a Blob is spooled to a temp path first, in bounded slices. A
+// bytes and native does not. So a Blob is spooled to a temp file first, in bounded slices. A
 // native picker returning a content URI would remove that copy entirely and is the follow-up;
 // until then the cost is one pass over the file, not one per chunk.
+//
+// That copy is plaintext, so it lives in the cache dir, which no device backup includes, and is
+// deleted as soon as the seal returns, and at startup if a crash left it behind.
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
+import { fileSource } from "@core/backup/restore";
 import {
 	type BlobStore,
 	decodeFileMeta,
@@ -20,14 +24,14 @@ import {
 	type FileSource,
 	type SealedFile,
 } from "@core/index";
-import { bytesToBase64 } from "@core/util/bytes";
 import { type NativeFileCrypto, nativeFileCrypto } from "../native-crypto";
-import { pathFromUri } from "./paths";
+import { dropSpooled, spoolToCache } from "./spool";
 
-/** Slice size when spooling a picked Blob to disk: steady memory, not one huge base64 string. */
-const SPOOL_SLICE = 256 * 1024;
-/** Spooled originals sit beside the blobs, and are deleted as soon as the seal returns. */
-const SPOOL_DIR = "blobs";
+/** Spooled originals, one file per seal, in the cache dir. */
+const SPOOL_DIR = "seal";
+/** Where builds before the cache spool left theirs: beside the blobs, in the backed-up data dir. */
+const LEGACY_SPOOL_DIR = "blobs";
+const LEGACY_SPOOL_PREFIX = ".spool-";
 
 export interface MobileFileSealerDeps {
 	blobs: BlobStore;
@@ -36,26 +40,25 @@ export interface MobileFileSealerDeps {
 }
 
 /**
- * Write a Blob to a temp file slice by slice. Returns the absolute path (what Rust opens) and
- * the relative one (what Capacitor deletes by).
+ * Delete every spooled original, including those older builds left in the data dir. Run at
+ * startup, when no seal can be in flight; never on lock, since deleting a spool still being
+ * written would seal a truncated file.
  */
-async function spoolToPath(blob: Blob): Promise<{ path: string; rel: string }> {
-	const rel = `${SPOOL_DIR}/.spool-${globalThis.crypto.randomUUID()}`;
-	await Filesystem.mkdir({ path: SPOOL_DIR, directory: Directory.Data, recursive: true }).catch(
+export async function sweepSealSpools(): Promise<void> {
+	await Filesystem.rmdir({ path: SPOOL_DIR, directory: Directory.Cache, recursive: true }).catch(
 		() => {},
 	);
-	// Create (or truncate) first, so a leftover file can never be appended to.
-	await Filesystem.writeFile({ path: rel, directory: Directory.Data, data: "" });
-	for (let at = 0; at < blob.size; at += SPOOL_SLICE) {
-		const slice = new Uint8Array(await blob.slice(at, at + SPOOL_SLICE).arrayBuffer());
-		await Filesystem.appendFile({
-			path: rel,
+	const legacy = await Filesystem.readdir({
+		path: LEGACY_SPOOL_DIR,
+		directory: Directory.Data,
+	}).catch(() => null);
+	for (const { name } of legacy?.files ?? []) {
+		if (!name.startsWith(LEGACY_SPOOL_PREFIX)) continue;
+		await Filesystem.deleteFile({
+			path: `${LEGACY_SPOOL_DIR}/${name}`,
 			directory: Directory.Data,
-			data: bytesToBase64(slice),
-		});
+		}).catch(() => {});
 	}
-	const { uri } = await Filesystem.getUri({ path: rel, directory: Directory.Data });
-	return { path: pathFromUri(uri), rel };
 }
 
 export function createMobileFileSealer({
@@ -86,15 +89,14 @@ export function createMobileFileSealer({
 	return {
 		async seal(source: FileSource, meta): Promise<SealedFile> {
 			if (source.kind === "blob") {
-				const spooled = await spoolToPath(source.blob);
+				const name = `${SPOOL_DIR}/${globalThis.crypto.randomUUID()}`;
 				try {
-					return await sealFromPath(spooled.path, meta);
+					const { path } = await spoolToCache(name, fileSource(source.blob));
+					return await sealFromPath(path, meta);
 				} finally {
 					// The spooled original is PLAINTEXT on disk, so it goes as soon as the seal
-					// returns, whether or not it succeeded. Hence `finally`, not the happy path.
-					await Filesystem.deleteFile({ path: spooled.rel, directory: Directory.Data }).catch(
-						() => {},
-					);
+					// returns or spooling fails. Hence `finally`, not the happy path.
+					await dropSpooled(name);
 				}
 			}
 			if (source.kind !== "path") {

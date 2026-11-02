@@ -1,6 +1,41 @@
 import type { BlobStore, FileRecord } from "@core/index";
-import { describe, expect, it } from "vitest";
-import { createMobileFileSealer } from "./file-sealer";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// The app's files, in memory: "<directory>:<path>" -> base64 appends.
+const fs = vi.hoisted(() => new Map<string, string[]>());
+vi.mock("@capacitor/filesystem", () => {
+	const key = (directory: string, path: string) => `${directory}:${path}`;
+	const under = (directory: string, path: string) =>
+		[...fs.keys()].filter((k) => k.startsWith(`${key(directory, path)}/`));
+	return {
+		Directory: { Cache: "CACHE", Data: "DATA" },
+		Filesystem: {
+			writeFile: async ({ path, directory }: { path: string; directory: string }) =>
+				void fs.set(key(directory, path), []),
+			appendFile: async (o: { path: string; directory: string; data: string }) =>
+				void fs.get(key(o.directory, o.path))?.push(o.data),
+			getUri: async ({ path, directory }: { path: string; directory: string }) => ({
+				uri: `file:///${directory.toLowerCase()}/${path}`,
+			}),
+			deleteFile: async ({ path, directory }: { path: string; directory: string }) =>
+				void fs.delete(key(directory, path)),
+			rmdir: async ({ path, directory }: { path: string; directory: string }) => {
+				for (const k of under(directory, path)) fs.delete(k);
+			},
+			readdir: async ({ path, directory }: { path: string; directory: string }) => {
+				const prefix = `${key(directory, path)}/`;
+				const names = new Set(
+					under(directory, path).map((k) => k.slice(prefix.length).split("/")[0]),
+				);
+				return { files: [...names].map((name) => ({ name })) };
+			},
+		},
+	};
+});
+
+const { createMobileFileSealer, sweepSealSpools } = await import("./file-sealer");
+
+beforeEach(() => fs.clear());
 
 /** Records what the sealer asks of the store; the real one is exercised on device. */
 function fakeBlobs() {
@@ -94,6 +129,36 @@ describe("createMobileFileSealer", () => {
 		expect(calls.filter((c) => c.startsWith("discard:"))).toHaveLength(1);
 	});
 
+	// The picked file is plaintext. The cache is in no device backup (Android Auto Backup and
+	// iCloud both skip it), where the data dir is in every one.
+	it("spools a picked file to the cache, and deletes it however the seal ends", async () => {
+		const { blobs } = fakeBlobs();
+		let sawSrc = "";
+		let fail = false;
+		const sealer = createMobileFileSealer({
+			blobs,
+			native: {
+				sealFile: async ({ srcPath }) => {
+					sawSrc = srcPath;
+					if (fail) throw new Error("disk full");
+					return sealed;
+				},
+				resealFileMeta: async () => ({ iv: "i", ciphertext: "c" }),
+				openFileMeta: async () => ({ value: "{}" }),
+			},
+		});
+		const source = { kind: "blob" as const, blob: new Blob(["passport bytes"]) };
+		const meta = { name: "passport.pdf", mime: "application/pdf" };
+
+		await sealer.seal(source, meta);
+		expect(sawSrc).toMatch(/^\/cache\/seal\//);
+		expect([...fs.keys()]).toEqual([]);
+
+		fail = true;
+		await expect(sealer.seal(source, meta)).rejects.toThrow("disk full");
+		expect([...fs.keys()]).toEqual([]);
+	});
+
 	it("refuses a source it cannot seal from, before reserving anything", async () => {
 		const { blobs, calls } = fakeBlobs();
 		const sealer = createMobileFileSealer({
@@ -152,5 +217,20 @@ describe("createMobileFileSealer", () => {
 		// flowing into the UI as a filename.
 		await expect(make('{"name":"a.pdf"}').describe(record())).rejects.toThrow(/malformed/);
 		await expect(make("not json").describe(record())).rejects.toThrow();
+	});
+});
+
+// Run at startup, when no seal can be in flight: a crash mid-seal leaves the spool behind.
+describe("sweepSealSpools", () => {
+	it("clears the cache spools and any an older build left beside the blobs", async () => {
+		fs.set("CACHE:seal/a", ["cGxhaW4="]);
+		fs.set("DATA:blobs/.spool-old", ["cGxhaW4="]);
+		fs.set("DATA:blobs/vault-1/hash", ["c2VhbGVk"]);
+		await sweepSealSpools();
+		expect([...fs.keys()]).toEqual(["DATA:blobs/vault-1/hash"]);
+	});
+
+	it("is a no-op when there is nothing to sweep", async () => {
+		await expect(sweepSealSpools()).resolves.toBeUndefined();
 	});
 });

@@ -435,7 +435,11 @@ Where `<input type=file>` would force the bytes into the webview, a platform can
 supply `VaultFiles.pick`, and the attach button uses it instead. Desktop does: the
 native dialog runs in the shell and returns a path (with its size, so the size limit
 still applies before sealing), and `files_seal` seals from that path with the VEK the
-shell holds. Mobile keeps the input, whose Blob it spools to a path.
+shell holds. Mobile keeps the input, whose Blob it spools to a path: `Cache/seal/<uuid>`.
+That copy is plaintext, so it lives in the cache dir, which neither Android Auto Backup
+nor iCloud backup includes, and it is deleted as soon as the seal returns and at startup
+for anything a crash left. Builds before 2026-11-01 spooled into `blobs/` in the data
+dir, which backups do include; the startup sweep removes those leftovers too.
 
 ### The size limit
 

@@ -20,6 +20,7 @@ import { mobileClipboard } from "./adapters/clipboard";
 import { mobileCrypto } from "./adapters/crypto";
 import { resolveExchange } from "./adapters/exchange";
 import { startOpenedCopySweeps } from "./adapters/file-presenter";
+import { sweepSealSpools } from "./adapters/file-sealer";
 import { mobileFiles } from "./adapters/files";
 import { mobileHttp } from "./adapters/http";
 import { mobileShell, mobileTarget, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
@@ -39,6 +40,8 @@ installNativeWebRtc();
 // Decrypted attachment copies (opened into another app) are deleted at startup and on every
 // lock, so none outlives the session it was opened in. See ./adapters/file-presenter.ts.
 startOpenedCopySweeps();
+// Plaintext a crash left spooled mid-attach. See ./adapters/file-sealer.ts.
+void sweepSealSpools();
 
 const platform: Platform = {
 	target: mobileTarget,
