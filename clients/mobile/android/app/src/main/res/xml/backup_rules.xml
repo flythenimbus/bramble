@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Android 11-and-older twin of data_extraction_rules.xml. -->
+<full-backup-content>
+    <exclude domain="file" path="autofill_pending_save.json" />
+    <exclude domain="file" path="autofill_pending_passkeys.json" />
+    <exclude domain="file" path="autofill_pending_passkeys.json.lock" />
+    <exclude domain="file" path="autofill_pending_passkeys.json.tmp" />
+    <exclude domain="file" path="autofill_pending_assoc.json" />
+    <exclude domain="file" path="autofill_pending_assoc.json.lock" />
+    <exclude domain="file" path="autofill_pending_assoc.json.tmp" />
+</full-backup-content>

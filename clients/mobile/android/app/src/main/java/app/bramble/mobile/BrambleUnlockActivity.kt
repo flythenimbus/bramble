@@ -37,6 +37,10 @@ abstract class BrambleUnlockActivity : AppCompatActivity() {
     protected var coreWasLocked = true
         private set
 
+    /** The VEK came from an unlock the user just performed (biometric or password): a user verification. */
+    protected var unlockedNow = false
+        private set
+
     private lateinit var root: FrameLayout
     private var passwordField: EditText? = null
     private var errorView: TextView? = null
@@ -50,6 +54,9 @@ abstract class BrambleUnlockActivity : AppCompatActivity() {
 
     /** User cancelled / backed out. Set the provider-specific cancel result before finish. */
     protected abstract fun onUnlockCancelled()
+
+    /** The user must be verified now, so a live keep-unlocked session doesn't count. Read after onPrepare. */
+    protected open fun requiresFreshUnlock(): Boolean = false
 
     final override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,8 +74,8 @@ abstract class BrambleUnlockActivity : AppCompatActivity() {
         onPrepare()
         // A bridged one-shot VEK (e.g. the passkey list->sign handoff) or a live keep-unlocked
         // session skips the unlock screen entirely.
-        val session = bridgeSessionVek() ?: KeepUnlockedStore.load(this)
-        if (session != null) proceedWithVek(session) else showUnlock()
+        val session = bridgeSessionVek() ?: if (requiresFreshUnlock()) null else KeepUnlockedStore.load(this)
+        if (session != null) proceedWithVek(session, unlocked = false) else showUnlock()
     }
 
     /**
@@ -149,7 +156,7 @@ abstract class BrambleUnlockActivity : AppCompatActivity() {
         setError(null)
         BiometricUnlock.unlock(this, getString(R.string.af_biometric_prompt_title)) { result ->
             when (result) {
-                is BiometricUnlock.Result.Ok -> proceedWithVek(result.vekB64)
+                is BiometricUnlock.Result.Ok -> proceedWithVek(result.vekB64, unlocked = true)
                 BiometricUnlock.Result.NoSecret -> setError(getString(R.string.af_err_enter_password))
                 BiometricUnlock.Result.Invalidated -> setError(getString(R.string.af_err_biometrics_changed))
                 BiometricUnlock.Result.Cancelled -> { /* stay on the password screen */ }
@@ -181,7 +188,7 @@ abstract class BrambleUnlockActivity : AppCompatActivity() {
             runOnUiThread {
                 busy = false
                 outcome.onSuccess { vek ->
-                    if (vek != null) proceedWithVek(vek) else setError(getString(R.string.af_err_incorrect_password))
+                    if (vek != null) proceedWithVek(vek, unlocked = true) else setError(getString(R.string.af_err_incorrect_password))
                 }
                 outcome.onFailure { setError(it.message ?: getString(R.string.af_err_unlock_failed)) }
             }
@@ -190,7 +197,8 @@ abstract class BrambleUnlockActivity : AppCompatActivity() {
 
     // VEK in hand: load it into the core + slide the keep-unlocked window (off the main thread),
     // then hand off to the subclass. The subclass does its own reads on its own thread.
-    private fun proceedWithVek(vekB64: String) {
+    private fun proceedWithVek(vekB64: String, unlocked: Boolean) {
+        unlockedNow = unlocked
         showSpinner()
         Thread {
             val ok = try {

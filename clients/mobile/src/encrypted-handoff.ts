@@ -1,69 +1,43 @@
-import { Capacitor } from "@capacitor/core";
-import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
+import { mobileCrypto } from "./adapters/crypto";
 
 export interface EncryptedRecord {
 	iv: string;
 	ciphertext: string;
 }
 
-export async function drainHandoff(
-	file: string,
-	iosBridge: {
-		consume(): Promise<{ pending: EncryptedRecord[] }>;
-		restore(o: { keep: EncryptedRecord[] }): Promise<void>;
-	},
-): Promise<{
-	records: EncryptedRecord[];
-	reclaim: (leftovers: EncryptedRecord[]) => Promise<void>;
-}> {
-	if (Capacitor.getPlatform() === "ios") {
-		const pending =
-			(await iosBridge.consume().catch(() => ({ pending: [] as EncryptedRecord[] })))?.pending ??
-			[];
-		return {
-			records: pending,
-			reclaim: async (keep) => {
-				if (keep.length) await iosBridge.restore({ keep }).catch(() => {});
-			},
-		};
+/** The native side of a provider handoff: AutofillBridge, on both platforms. */
+export interface HandoffBridge {
+	consume(): Promise<{ pending: EncryptedRecord[] }>;
+	restore(o: { keep: EncryptedRecord[] }): Promise<void>;
+}
+
+/**
+ * Drain a provider -> app handoff: each pending record decrypted with the active vault's VEK and
+ * passed to `read` (null drops it). A record another vault sealed goes back for that vault. The
+ * native side clears and restores under the provider's own lock, so an append meanwhile survives.
+ */
+export async function drainHandoff<T>(
+	bridge: HandoffBridge,
+	read: (json: unknown) => T | null,
+): Promise<T[]> {
+	const pending = (await bridge.consume().catch(() => null))?.pending ?? [];
+	const out: T[] = [];
+	const keep: EncryptedRecord[] = [];
+	for (const record of pending) {
+		let plaintext: string;
+		try {
+			plaintext = await mobileCrypto.decryptWithVek(record.iv, record.ciphertext);
+		} catch {
+			keep.push(record);
+			continue;
+		}
+		try {
+			const item = read(JSON.parse(plaintext));
+			if (item !== null) out.push(item);
+		} catch {
+			// Decrypted but unreadable: no vault could use it, so it isn't put back.
+		}
 	}
-	try {
-		await Filesystem.stat({ path: file, directory: Directory.Data });
-	} catch {
-		return { records: [], reclaim: async () => {} };
-	}
-	try {
-		const r = await Filesystem.readFile({
-			path: file,
-			directory: Directory.Data,
-			encoding: Encoding.UTF8,
-		});
-		await Filesystem.deleteFile({ path: file, directory: Directory.Data }).catch(() => {});
-		const records = JSON.parse(r.data as string);
-		return {
-			records: Array.isArray(records) ? records : [],
-			reclaim: async (keep) => {
-				if (!keep.length) return;
-				const current = await Filesystem.readFile({
-					path: file,
-					directory: Directory.Data,
-					encoding: Encoding.UTF8,
-				})
-					.then((res) =>
-						Array.isArray(JSON.parse(res.data as string)) ? JSON.parse(res.data as string) : [],
-					)
-					.catch(() => []);
-				const merged = [...keep, ...(current as EncryptedRecord[])];
-				await Filesystem.writeFile({
-					path: file,
-					directory: Directory.Data,
-					data: JSON.stringify(merged),
-					encoding: Encoding.UTF8,
-				}).catch(() => {});
-			},
-		};
-	} catch {
-		await Filesystem.deleteFile({ path: file, directory: Directory.Data }).catch(() => {});
-		return { records: [], reclaim: async () => {} };
-	}
+	if (keep.length) await bridge.restore({ keep }).catch(() => {});
+	return out;
 }

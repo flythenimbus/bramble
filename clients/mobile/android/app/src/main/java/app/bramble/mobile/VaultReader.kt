@@ -197,7 +197,8 @@ object VaultReader {
      * Callers merge with readPasskeys (dedup by credentialId).
      */
     fun readPendingPasskeys(context: Context): List<StoredPasskey> {
-        val file = File(context.filesDir, PendingPasskey.FILE)
+        // A plain read: EncryptedHandoff writes by rename, so this never sees half a file.
+        val file = EncryptedHandoff.file(context, PendingPasskey.FILE)
         if (!file.exists()) return emptyList()
         val arr = try { JSONArray(file.readText()) } catch (e: Exception) { return emptyList() }
         val out = ArrayList<StoredPasskey>(arr.length())

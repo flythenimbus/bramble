@@ -225,8 +225,9 @@ export const mobileAutofill: AutofillAdapter = {
 	async clearProviderData() {
 		// The vault is gone, so the mirror clearIndex preserves must go with it: bundle,
 		// slot, passkeys and the OS identities are otherwise an openable copy of a vault
-		// the user deleted. iOS-only: Android has no AutofillBridge plugin, and its service
-		// reads the vault file directly, so deleting the blob takes the entry data with it.
+		// the user deleted. iOS-only: Android's AutofillBridge carries only the handoff drains,
+		// and its service reads the vault file directly, so deleting the blob takes the entry
+		// data with it.
 		// NOT covered on Android: KeepUnlockedStore's on-disk wrapped VEK cache outlives the
 		// delete (BiometricVaultPlugin.deleteSecret only clears that vault's Keystore alias).
 		if (!isIos) return;

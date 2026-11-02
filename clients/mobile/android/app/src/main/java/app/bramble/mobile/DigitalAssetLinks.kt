@@ -19,10 +19,12 @@ import org.json.JSONArray
 //
 // The check is I/O, so verifiedDomainsFor() never blocks the autofill request: it serves a cached
 // result and refreshes in the background. The first request for a new app therefore shows the
-// searchable list; once the cache warms, later requests auto-fill.
+// searchable list; once the cache warms, later requests auto-fill. Passkeys use appMayUseRpId(),
+// which blocks instead: the request names its own rpId, and there is no list to fall back to.
 object DigitalAssetLinks {
 
     private const val PREFS = "bramble_dal_cache"
+    private const val RP_PREFS = "bramble_dal_rp_cache"
     private val TTL_MS = TimeUnit.DAYS.toMillis(7)
     private const val CONNECT_TIMEOUT_MS = 4000
     private const val READ_TIMEOUT_MS = 4000
@@ -51,6 +53,23 @@ object DigitalAssetLinks {
         val cached = readCache(context, pkg)
         if (cached == null || cached.expiresAt <= nowMillis()) refreshAsync(context, pkg)
         return cached?.domains ?: emptyList()
+    }
+
+    /**
+     * Whether `rpId`'s assetlinks.json grants this app (package + one of `fingerprints`) its
+     * credentials, so the app may use that site's passkeys. BLOCKING on a cache miss (one fetch),
+     * so call it off the main thread. Only a grant is cached: a failed fetch must not lock an app
+     * out for a week, and the certs are in the key so a re-signed package can't reuse one.
+     */
+    fun appMayUseRpId(context: Context, pkg: String, fingerprints: Set<String>, rpId: String): Boolean {
+        if (fingerprints.isEmpty()) return false
+        val domain = rpId.lowercase()
+        val prefs = context.getSharedPreferences(RP_PREFS, Context.MODE_PRIVATE)
+        val key = "$pkg|$domain|${fingerprints.map { normalizeFingerprint(it) }.sorted().joinToString(",")}"
+        if (prefs.getLong(key, 0L) > nowMillis()) return true
+        if (!verifyAssociation(domain, pkg, fingerprints)) return false
+        prefs.edit().putLong(key, nowMillis() + TTL_MS).apply()
+        return true
     }
 
     /** Reverse-DNS candidate domain(s) for a package (com.github.android -> github.com). Only a

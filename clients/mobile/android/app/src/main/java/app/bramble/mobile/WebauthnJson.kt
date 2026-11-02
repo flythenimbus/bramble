@@ -1,6 +1,8 @@
 package app.bramble.mobile
 
+import android.os.Build
 import android.util.Base64
+import androidx.annotation.RequiresApi
 import org.json.JSONArray
 import org.json.JSONObject
 import uniffi.vault_crypto.PasskeyPrfOutput
@@ -10,6 +12,7 @@ import java.security.MessageDigest
 // provider - the same shape the Chromium extension produces in webauthn-json.ts. The Rust core
 // emits STANDARD base64; WebAuthn JSON uses base64url, so fields are converted here. Used only
 // by the credential provider (API 34+). See docs/passkey-provider.md.
+@RequiresApi(Build.VERSION_CODES.O)
 object WebauthnJson {
 
     private const val URL_FLAGS = Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
@@ -36,7 +39,7 @@ object WebauthnJson {
         val first = v?.opt("first") as? String ?: return null
         val second = v.opt("second")
         if (second != null && second !is String) return null
-        return runCatching { PrfSalts(urlToStd(first), (second as String?)?.let { urlToStd(it) }) }.getOrNull()
+        return PasskeyPrf.salts(first, second as String?)
     }
 
     /** create(): null when the site didn't ask for PRF. */
@@ -51,6 +54,18 @@ object WebauthnJson {
             for (key in map.keys()) salts(map.optJSONObject(key))?.let { byCredential[key] = it }
         }
         return PasskeyPrf.select(salts(prf.optJSONObject("eval")), byCredential, stdToUrl(credentialIdStd))
+    }
+
+    /** Whether a get() (or a create(), whose preference sits in authenticatorSelection) needs a fresh unlock. */
+    fun needsVerification(opts: JSONObject, create: Boolean): Boolean {
+        val holder = if (create) opts.optJSONObject("authenticatorSelection") else opts
+        return PasskeyPolicy.needsVerification(holder?.optString("userVerification"), prfJson(opts) != null)
+    }
+
+    /** A get()'s allowCredentials ids (base64url); null when it names none, which allows any. */
+    fun allowCredentialIds(opts: JSONObject): List<String>? {
+        val list = opts.optJSONArray("allowCredentials")?.takeIf { it.length() > 0 } ?: return null
+        return (0 until list.length()).mapNotNull { list.optJSONObject(it)?.opt("id") as? String }
     }
 
     /** clientExtensionResults.prf for a create: enabled, with results when evaluated. */

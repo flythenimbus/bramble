@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Provider -> app handoffs are transient, and the pending save holds a captured password in the
+     clear, so none of them leave the device. Everything else keeps the default (Android 12+). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="autofill_pending_save.json" />
+        <exclude domain="file" path="autofill_pending_passkeys.json" />
+        <exclude domain="file" path="autofill_pending_passkeys.json.lock" />
+        <exclude domain="file" path="autofill_pending_passkeys.json.tmp" />
+        <exclude domain="file" path="autofill_pending_assoc.json" />
+        <exclude domain="file" path="autofill_pending_assoc.json.lock" />
+        <exclude domain="file" path="autofill_pending_assoc.json.tmp" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="autofill_pending_save.json" />
+        <exclude domain="file" path="autofill_pending_passkeys.json" />
+        <exclude domain="file" path="autofill_pending_passkeys.json.lock" />
+        <exclude domain="file" path="autofill_pending_passkeys.json.tmp" />
+        <exclude domain="file" path="autofill_pending_assoc.json" />
+        <exclude domain="file" path="autofill_pending_assoc.json.lock" />
+        <exclude domain="file" path="autofill_pending_assoc.json.tmp" />
+    </device-transfer>
+</data-extraction-rules>

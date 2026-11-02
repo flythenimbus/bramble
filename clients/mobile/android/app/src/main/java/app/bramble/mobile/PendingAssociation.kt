@@ -1,13 +1,10 @@
 package app.bramble.mobile
 
 import android.content.Context
-import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import uniffi.vault_crypto.encryptWithVek
 
 // A confirmed "fill and save" handoff, VEK-encrypted; the provider never writes the vault.
-// Caller MUST have the VEK loaded.
+// Caller MUST have the VEK loaded. See EncryptedHandoff.
 object PendingAssociation {
     const val FILE = "autofill_pending_assoc.json"
 
@@ -17,14 +14,6 @@ object PendingAssociation {
             .put("url", url)
             .put("label", label)
             .put("vaultId", vaultId)
-        val enc = encryptWithVek(json.toString())
-        val file = File(context.filesDir, FILE)
-        val arr = try {
-            if (file.exists()) JSONArray(file.readText()) else JSONArray()
-        } catch (e: Exception) {
-            JSONArray()
-        }
-        arr.put(JSONObject().put("iv", enc.iv).put("ciphertext", enc.ciphertext))
-        file.writeText(arr.toString())
+        EncryptedHandoff.append(context, FILE, json.toString())
     }
 }

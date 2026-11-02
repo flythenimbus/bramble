@@ -92,9 +92,13 @@ object KeepUnlockedStore {
     private const val CEREMONY_CT = "ceremony.ct"
     private const val CEREMONY_IV = "ceremony.iv"
     private const val CEREMONY_AT = "ceremony.at"
+    private const val CEREMONY_UV = "ceremony.uv"
     private const val CEREMONY_TTL_MS = 120_000L
 
-    fun saveCeremony(context: Context, vekB64: String) {
+    /** A bridged VEK, and whether the hop that unlocked it verified the user (not a keep-unlocked session). */
+    class Ceremony(val vekB64: String, val verified: Boolean)
+
+    fun saveCeremony(context: Context, vekB64: String, verified: Boolean) {
         try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, sessionKey())
@@ -103,13 +107,14 @@ object KeepUnlockedStore {
                 .putString(CEREMONY_CT, Base64.encodeToString(ct, Base64.NO_WRAP))
                 .putString(CEREMONY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
                 .putLong(CEREMONY_AT, System.currentTimeMillis())
+                .putBoolean(CEREMONY_UV, verified)
                 .apply()
         } catch (e: Exception) {
             clearCeremony(context)
         }
     }
 
-    fun loadCeremony(context: Context): String? {
+    fun loadCeremony(context: Context): Ceremony? {
         val p = prefs(context)
         val ctB64 = p.getString(CEREMONY_CT, null) ?: return null
         val ivB64 = p.getString(CEREMONY_IV, null) ?: return null
@@ -121,7 +126,7 @@ object KeepUnlockedStore {
             val key = loadSessionKey() ?: return null
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, Base64.decode(ivB64, Base64.NO_WRAP)))
-            String(cipher.doFinal(Base64.decode(ctB64, Base64.NO_WRAP)), Charsets.UTF_8)
+            Ceremony(String(cipher.doFinal(Base64.decode(ctB64, Base64.NO_WRAP)), Charsets.UTF_8), p.getBoolean(CEREMONY_UV, false))
         } catch (e: Exception) {
             clearCeremony(context)
             null
@@ -129,7 +134,7 @@ object KeepUnlockedStore {
     }
 
     fun clearCeremony(context: Context) {
-        prefs(context).edit().remove(CEREMONY_CT).remove(CEREMONY_IV).remove(CEREMONY_AT).apply()
+        prefs(context).edit().remove(CEREMONY_CT).remove(CEREMONY_IV).remove(CEREMONY_AT).remove(CEREMONY_UV).apply()
     }
 
     private fun prefs(context: Context) =
