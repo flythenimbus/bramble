@@ -1,6 +1,6 @@
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { actOnPasskeyCard, createVault } from "./helpers";
+import { actOnPasskeyCard, createVault, STRONG_PW } from "./helpers";
 
 // PRF through Chrome's real webAuthenticationProxy: the request Chrome hands us carries the site's
 // inputs, and Chrome accepts what we answer (enabled on create, 32-byte results) and passes it to
@@ -59,6 +59,24 @@ function get(page: Page, id: string, salt: string, ownSalt?: string) {
 	);
 }
 
+/**
+ * A PRF ceremony on an unlocked vault: approve the card, then confirm it's you in the window the
+ * provider opens (a card click is consent, not user verification), and return the page's result.
+ */
+async function verifiedCeremony<T>(
+	context: BrowserContext,
+	page: Page,
+	action: "passkey-approve" | "passkey-pick",
+	run: () => Promise<T>,
+): Promise<T> {
+	const verifyWindow = context.waitForEvent("page");
+	const result = actOnPasskeyCard(page, action, run);
+	const verify = await verifyWindow;
+	await verify.getByLabel("Master password").fill(STRONG_PW);
+	await verify.getByRole("button", { name: "Confirm" }).click();
+	return result;
+}
+
 test("PRF round-trips through Chrome's webAuthenticationProxy", async ({
 	context,
 	extensionId,
@@ -84,13 +102,15 @@ test("PRF round-trips through Chrome's webAuthenticationProxy", async ({
 	await page.goto("http://localhost:4719/");
 	await page.bringToFront();
 
-	const created = await actOnPasskeyCard(page, "passkey-approve", () => create(page, "salt-a"));
+	const created = await verifiedCeremony(context, page, "passkey-approve", () =>
+		create(page, "salt-a"),
+	);
 	expect(created.enabled).toBe(true);
 	expect(created.first).toMatch(/^[0-9a-f]{64}$/);
 
 	// Same passkey, same input: the same key at sign-in as at registration.
 	const signIn = (salt: string, ownSalt?: string) =>
-		actOnPasskeyCard(page, "passkey-pick", () => get(page, created.id, salt, ownSalt));
+		verifiedCeremony(context, page, "passkey-pick", () => get(page, created.id, salt, ownSalt));
 	expect(await signIn("salt-a")).toBe(created.first);
 
 	const saltB = await signIn("salt-b");

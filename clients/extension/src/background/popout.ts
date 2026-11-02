@@ -92,6 +92,12 @@ export async function openUnlockView(): Promise<number | undefined> {
 	return (await createPopoutWindow())?.id;
 }
 
+/** Open a detached window on app route `path` (via the boot handoff); returns its window id. */
+export async function openPopoutAt(path: string): Promise<number | undefined> {
+	await api.storage.session.set({ [POPOUT_HANDOFF_KEY]: { path } });
+	return (await createPopoutWindow())?.id;
+}
+
 async function popoutOpen(
 	message: any,
 	sender: chrome.runtime.MessageSender,

@@ -169,6 +169,10 @@ msgstr "{passwordDiffers} itens têm o mesmo site e nome de usuário que uma ent
 msgid "{remaining}s left"
 msgstr "{remaining}s restantes"
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "{rp} wants to use your passkey. Confirm it's you to continue."
+msgstr "{rp} quer usar a sua chave de acesso. Confirme que é você para continuar."
+
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "{skippedFiles, plural, one {# attachment in this file is left out: this browser can add files only once it's linked to the Bramble desktop app.} other {# attachments in this file are left out: this browser can add files only once it's linked to the Bramble desktop app.}}"
 msgstr "{skippedFiles, plural, one {# anexo neste arquivo é deixado de fora: este navegador só pode adicionar arquivos depois que estiver vinculado ao aplicativo de desktop Bramble.} other {# anexos neste arquivo são deixados de fora: este navegador só pode adicionar arquivos depois que estiver vinculado ao aplicativo de desktop Bramble.}}"
@@ -715,6 +719,7 @@ msgstr "Não é possível salvar este código"
 #: packages/core/src/app/components/ui/confirm-dialog.tsx
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 #: packages/core/src/app/components/ui/inline-confirm.tsx
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -902,6 +907,7 @@ msgstr "Vírgula (,)"
 msgid "Compare versions"
 msgstr "Comparar versões"
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Confirm"
 msgstr "Confirmar"
@@ -910,6 +916,7 @@ msgstr "Confirmar"
 msgid "Confirm disconnect"
 msgstr "Confirmar desconexão"
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Confirm it's you"
@@ -1113,6 +1120,7 @@ msgstr "Não foi possível desbloquear o cofre."
 msgid "Couldn't verify your key."
 msgstr "Não foi possível verificar a sua chave."
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Couldn't verify your key. Try again."
 msgstr "Não foi possível verificar a sua chave. Tente novamente."
@@ -1835,6 +1843,7 @@ msgstr "Na extensão do Bramble, abra Settings → Sync → Desktop app e digite
 msgid "Include a number"
 msgstr "Incluir um número"
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
@@ -2104,6 +2113,7 @@ msgstr "Logins"
 #~ msgid "Look up a site"
 #~ msgstr "Pesquisar um site"
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
@@ -3998,6 +4008,10 @@ msgstr "Use apenas dígitos, espaços ou hífens."
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Use password"
 msgstr "Usar senha"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "Use security key"
+msgstr "Usar chave de segurança"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 msgid "Use this one"

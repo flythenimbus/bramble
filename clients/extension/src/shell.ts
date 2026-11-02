@@ -176,6 +176,9 @@ export const extensionShell: ShellAdapter = {
 			| undefined;
 		return res?.data ?? null;
 	},
+	async reportPasskeyVerification(id: string, verified: boolean) {
+		await api.runtime.sendMessage({ type: "PASSKEY_VERIFY_RESULT", payload: { id, verified } });
+	},
 	persistRoute(path: string) {
 		// Direct session-storage write from the popup context (no gesture, no background
 		// round-trip); best-effort, so a transient failure never blocks navigation.

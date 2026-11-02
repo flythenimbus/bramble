@@ -21,9 +21,9 @@ import {
 	passkeyPrfEval,
 	savePlacement,
 } from "./passkey-store";
-import { openUnlockView } from "./popout";
+import { openPopoutAt, openUnlockView } from "./popout";
 import { getPasskeyProviderEnabled } from "./prefs";
-import { on } from "./router";
+import { extensionOnly, on } from "./router";
 import { vaultLocked } from "./session";
 import {
 	type CeremonyFn,
@@ -90,6 +90,40 @@ function cardPayload(
 	};
 }
 
+// Confirm-it's-you windows awaiting an answer, keyed by a per-request id; PASSKEY_VERIFY_RESULT
+// resolves them.
+const pendingVerifications = new Map<string, (verified: boolean) => void>();
+
+// Ask the user to confirm it's them in a detached window (master password or security key), for a
+// request that needs verification while the vault is already unlocked. Timeout counts as no.
+async function verifyUser(rpId: string, timeoutMs: number): Promise<boolean> {
+	const id = globalThis.crypto.randomUUID();
+	const answer = new Promise<boolean>((resolve) => {
+		pendingVerifications.set(id, resolve);
+		setTimeout(() => {
+			if (pendingVerifications.delete(id)) resolve(false);
+		}, timeoutMs);
+	});
+	const windowId = await openPopoutAt(`/passkey-verify?${new URLSearchParams({ id, rp: rpId })}`);
+	const verified = await answer;
+	if (windowId !== undefined) await api.windows.remove(windowId).catch(() => {});
+	return verified;
+}
+
+// Only an extension page may answer: content scripts run inside pages we don't control.
+on(
+	"PASSKEY_VERIFY_RESULT",
+	extensionOnly(async (message) => {
+		const { id, verified } = (message.payload ?? {}) as { id?: string; verified?: boolean };
+		const resolve = id ? pendingVerifications.get(id) : undefined;
+		if (id && resolve) {
+			pendingVerifications.delete(id);
+			resolve(verified === true);
+		}
+		return { ok: true, data: null };
+	}),
+);
+
 // Open the popup so a user gesture can unlock the vault, then wait until it is unlocked.
 async function ensureUnlocked(timeoutMs: number): Promise<boolean> {
 	if (!vaultLocked()) return true;
@@ -121,6 +155,7 @@ function cornerCeremonyForTab(tabId: number): CeremonyFn {
 			const host: CeremonyHost = {
 				isLocked: () => startedLocked,
 				ensureUnlocked: () => ensureUnlocked(remaining()),
+				verifyUser: () => verifyUser(req.rpId, remaining()),
 				loadEntries: loadDecryptedEntries,
 				showCard: (opts) => showCard(tabId, cardPayload(req, opts), remaining()),
 			};

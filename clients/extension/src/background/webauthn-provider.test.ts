@@ -19,6 +19,13 @@ const h = vi.hoisted(() => ({
 	hookThrows: false,
 	/** Settles the running ceremony, so a test can hold one mid-flight. */
 	releaseCeremony: undefined as (() => void) | undefined,
+	/** What the mocked get ceremony does with its host (default: wait for releaseCeremony). */
+	runGet: undefined as
+		| ((host: { verifyUser: () => Promise<boolean> }) => Promise<unknown>)
+		| undefined,
+	/** App routes the provider opened in a detached window, and the handlers marked extension-only. */
+	openedPaths: [] as string[],
+	extensionOnly: new Set<unknown>(),
 }));
 
 vi.mock("./prefs", () => ({
@@ -30,6 +37,18 @@ vi.mock("./prefs", () => ({
 
 vi.mock("./router", () => ({
 	on: (type: string, handler: (m: unknown) => Promise<unknown>) => h.handlers.set(type, handler),
+	extensionOnly: (handler: unknown) => {
+		h.extensionOnly.add(handler);
+		return handler;
+	},
+}));
+
+vi.mock("./popout", () => ({
+	openUnlockView: async () => undefined,
+	openPopoutAt: async (path: string) => {
+		h.openedPaths.push(path);
+		return 99;
+	},
 }));
 
 vi.mock("../platform-api", () => ({
@@ -53,10 +72,12 @@ vi.mock("./session", () => ({ vaultLocked: () => false }));
 
 vi.mock("./webauthn-proxy", () => ({
 	runCreateCeremony: async () => ({ approved: false }),
-	runGetCeremony: () =>
-		new Promise((resolve) => {
-			h.releaseCeremony = () => resolve({ approved: true, userVerified: true });
-		}),
+	runGetCeremony: (_req: unknown, host: { verifyUser: () => Promise<boolean> }) =>
+		h.runGet
+			? h.runGet(host)
+			: new Promise((resolve) => {
+					h.releaseCeremony = () => resolve({ approved: true, userVerified: true });
+				}),
 }));
 
 async function load() {
@@ -65,6 +86,9 @@ async function load() {
 	h.settlePref = undefined;
 	h.applied = [];
 	h.hookThrows = false;
+	h.runGet = undefined;
+	h.openedPaths = [];
+	h.extensionOnly.clear();
 	const mod = await import("./webauthn-provider");
 	mod.setProviderApplyHook(async (enabled) => {
 		h.applied.push(enabled);
@@ -154,5 +178,38 @@ describe("one ceremony at a time", () => {
 		await Promise.resolve();
 		h.releaseCeremony?.();
 		expect(await next).toEqual({ approved: true, userVerified: true });
+	});
+});
+
+describe("confirm it's you", () => {
+	const req = { kind: "get" as const, rpId: "example.com", origin: "https://example.com" };
+	const flush = () => new Promise((r) => setTimeout(r, 0));
+
+	it("resolves the ceremony from its own verify window's answer, and only from that", async () => {
+		const m = await load();
+		h.runGet = async (host) => ({ approved: await host.verifyUser() });
+		const pending = m.depsForTab(1).ceremony(req);
+		await flush();
+
+		expect(h.openedPaths).toHaveLength(1);
+		const url = new URL(h.openedPaths[0] ?? "", "chrome-extension://x");
+		expect(url.pathname).toBe("/passkey-verify");
+		expect(url.searchParams.get("rp")).toBe("example.com");
+		const answer = h.handlers.get("PASSKEY_VERIFY_RESULT");
+		expect(h.extensionOnly.has(answer)).toBe(true);
+
+		await answer?.({ payload: { id: "someone-else", verified: true } });
+		await answer?.({ payload: { id: url.searchParams.get("id"), verified: true } });
+		expect(await pending).toEqual({ approved: true });
+	});
+
+	it("a no from the window is a no", async () => {
+		const m = await load();
+		h.runGet = async (host) => ({ approved: await host.verifyUser() });
+		const pending = m.depsForTab(1).ceremony(req);
+		await flush();
+		const id = new URL(h.openedPaths[0] ?? "", "chrome-extension://x").searchParams.get("id");
+		await h.handlers.get("PASSKEY_VERIFY_RESULT")?.({ payload: { id, verified: false } });
+		expect(await pending).toEqual({ approved: false });
 	});
 });

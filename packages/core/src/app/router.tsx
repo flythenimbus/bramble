@@ -11,6 +11,7 @@ import { Loader2 } from "lucide-react";
 import type { UseVault } from "../hooks/useVault";
 import { AppLayout } from "./layouts/AppLayout";
 import { AuthRoute } from "./routes/AuthRoute";
+import { passkeyVerifySearchSchema } from "./routes/passkey-verify-search";
 import { VaultHomeRoute } from "./routes/VaultHomeRoute";
 import { settingsSearchSchema } from "./screens/Settings/settings-search";
 import { vaultSearchSchema } from "./screens/VaultHome/vault-search";
@@ -37,6 +38,10 @@ const EntryEditRoute = lazyRouteComponent(
 	"EntryEditRoute",
 );
 const SettingsRoute = lazyRouteComponent(() => import("./routes/SettingsRoute"), "SettingsRoute");
+const PasskeyVerifyRoute = lazyRouteComponent(
+	() => import("./routes/PasskeyVerifyRoute"),
+	"PasskeyVerifyRoute",
+);
 const TotpSetupRoute = lazyRouteComponent(
 	() => import("./routes/TotpSetupRoute"),
 	"TotpSetupRoute",
@@ -174,6 +179,14 @@ const settingsRoute = createRoute({
 	component: SettingsRoute,
 });
 
+// The extension's passkey provider opens this in a detached window to confirm it's you.
+const passkeyVerifyRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
+	path: "/passkey-verify",
+	validateSearch: passkeyVerifySearchSchema,
+	component: PasskeyVerifyRoute,
+});
+
 const routeTree = rootRoute.addChildren([
 	authRoute,
 	selectVaultRoute,
@@ -184,6 +197,7 @@ const routeTree = rootRoute.addChildren([
 		entryDetailRoute,
 		entryEditRoute,
 		settingsRoute,
+		passkeyVerifyRoute,
 	]),
 ]);
 

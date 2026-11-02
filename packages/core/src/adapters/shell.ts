@@ -111,6 +111,8 @@ export interface ShellAdapter {
 	popOut(handoff?: PopOutHandoff): Promise<void>;
 	/** Read (and clear) the handoff stashed by a preceding popOut(). Null when there's nothing to restore. Called once during boot. */
 	consumeHandoff(): Promise<PopOutHandoff | null>;
+	/** Extension only: answer the passkey provider's confirm-it's-you window (`id` from its URL). */
+	reportPasskeyVerification?(id: string, verified: boolean): Promise<void>;
 	/**
 	 * Persist the current route so a normal (non-detached) popup resumes where it was after
 	 * being closed and reopened while the session is still unlocked. Fire-and-forget; only

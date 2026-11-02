@@ -50,17 +50,19 @@ class WebAuthnError extends Error {
 	}
 }
 
-export interface CeremonyCreateRequest {
-	kind: "create";
+interface CeremonyRequestBase {
 	rpId: string;
+	origin: string;
+	/** The site requires user verification or asked for PRF: a card click alone isn't enough. */
+	needsVerification?: boolean;
+}
+export interface CeremonyCreateRequest extends CeremonyRequestBase {
+	kind: "create";
 	rpName?: string;
 	userName?: string;
-	origin: string;
 }
-export interface CeremonyGetRequest {
+export interface CeremonyGetRequest extends CeremonyRequestBase {
 	kind: "get";
-	rpId: string;
-	origin: string;
 	/** allowCredentials ids (STANDARD base64) to narrow matches; empty = any for the rpId. */
 	allowCredentials?: string[];
 }
@@ -105,12 +107,33 @@ export interface CeremonyHost {
 	}) => Promise<CardReply>;
 	isLocked: () => boolean;
 	ensureUnlocked: () => Promise<boolean>;
+	/** Ask the user to confirm it's them (master password or security key) on an unlocked vault. */
+	verifyUser: () => Promise<boolean>;
 	loadEntries: () => Promise<Entry[]>;
 }
 
 /** Label a passkey for the get picker: its account name, else display name, else generic. */
 function passkeyLabel(p: { userName?: string; userDisplayName?: string }): string {
 	return p.userName?.trim() || p.userDisplayName?.trim() || "Passkey";
+}
+
+type Approved = Extract<CeremonyDecision, { approved: true }>;
+
+/**
+ * Approve, claiming user verification only when it happened: the unlock this ceremony just did,
+ * or a confirm-it's-you for a request that needs one. A card click alone is consent, so an
+ * already-unlocked vault reports UV=0 unless the site needs verification (docs/passkey-prf.md).
+ */
+async function approve(
+	req: CeremonyRequest,
+	host: CeremonyHost,
+	startedLocked: boolean,
+	choice: Omit<Approved, "approved" | "userVerified">,
+): Promise<CeremonyDecision> {
+	if (startedLocked) return { approved: true, userVerified: true, ...choice };
+	if (!req.needsVerification) return { approved: true, userVerified: false, ...choice };
+	if (!(await host.verifyUser())) return { approved: false };
+	return { approved: true, userVerified: true, ...choice };
 }
 
 /**
@@ -138,12 +161,12 @@ export async function runGetCeremony(
 	// path), then let handleGet map the absent credentialId to NotAllowedError.
 	if (matches.length === 0) {
 		if (!startedLocked && !(await host.showCard({})).approved) return { approved: false };
-		return { approved: true, userVerified: true, credentialId: undefined };
+		return { approved: true, userVerified: startedLocked, credentialId: undefined };
 	}
 
 	// The locked path already confirmed via the unlock card, so a single match just proceeds.
 	if (startedLocked && matches.length === 1) {
-		return { approved: true, userVerified: true, credentialId: matches[0]?.passkey.credentialId };
+		return approve(req, host, startedLocked, { credentialId: matches[0]?.passkey.credentialId });
 	}
 
 	// Otherwise always show which account(s): one so the user sees who they're signing in as,
@@ -155,11 +178,9 @@ export async function runGetCeremony(
 		})),
 	});
 	if (!reply.approved) return { approved: false };
-	return {
-		approved: true,
-		userVerified: true,
+	return approve(req, host, startedLocked, {
 		credentialId: reply.choice ?? matches[0]?.passkey.credentialId,
-	};
+	});
 }
 
 /**
@@ -189,13 +210,13 @@ export async function runCreateCeremony(
 		if (!startedLocked && !(await host.showCard({ existingLoginName: target.name })).approved) {
 			return { approved: false };
 		}
-		return { approved: true, userVerified: true, placement: { entryId: target.id } };
+		return approve(req, host, startedLocked, { placement: { entryId: target.id } });
 	}
 
 	const candidates = loginsCoveringRpId(entries, req.rpId);
 	if (candidates.length === 0) {
 		if (!startedLocked && !(await host.showCard({})).approved) return { approved: false };
-		return { approved: true, userVerified: true, placement: "new" };
+		return approve(req, host, startedLocked, { placement: "new" });
 	}
 
 	// Several accounts on this domain and no clear match: let the user pick one or create new.
@@ -203,11 +224,9 @@ export async function runCreateCeremony(
 		candidates: candidates.map((c) => ({ id: c.id, name: c.name, username: c.username })),
 	});
 	if (!reply.approved) return { approved: false };
-	return {
-		approved: true,
-		userVerified: true,
+	return approve(req, host, startedLocked, {
 		placement: reply.choice && reply.choice !== "new" ? { entryId: reply.choice } : "new",
-	};
+	});
 }
 
 export interface PasskeyProxyDeps {
@@ -304,6 +323,7 @@ export async function handleCreate(
 			rpName: opts.rpName,
 			userName: opts.userName,
 			origin: caller.origin,
+			needsVerification: opts.userVerification === "required" || opts.prf !== undefined,
 		});
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
 
@@ -389,6 +409,7 @@ export async function handleGet(
 			kind: "get",
 			rpId,
 			origin: caller.origin,
+			needsVerification: opts.userVerification === "required" || opts.prf !== undefined,
 			allowCredentials: allowStd.length ? allowStd : undefined,
 		});
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");

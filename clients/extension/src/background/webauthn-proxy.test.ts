@@ -252,6 +252,17 @@ describe("handleGet", () => {
 		expect(res.error?.name).toBe("SecurityError");
 	});
 
+	it("asks the ceremony to verify the user for userVerification required or a PRF request", async () => {
+		const asked = async (json: string) => {
+			const d = deps({ loadEntries: vi.fn(async () => githubEntries) });
+			await handleGet(d, 1, json, caller("https://github.com"));
+			return vi.mocked(d.ceremony).mock.calls[0]?.[0]?.needsVerification;
+		};
+		expect(await asked(getJson())).toBe(false);
+		expect(await asked(getJson({ userVerification: "required" }))).toBe(true);
+		expect(await asked(getJson({ extensions: { prf: { eval: { first: "AQ" } } } }))).toBe(true);
+	});
+
 	it("signs for the real caller: its own origin, and crossOrigin for an iframe", async () => {
 		const d = deps({
 			loadEntries: vi.fn(async () => githubEntries),
@@ -463,6 +474,7 @@ describe("runCreateCeremony", () => {
 	function host(opts: {
 		locked?: boolean;
 		unlockOk?: boolean;
+		verifyOk?: boolean;
 		entries?: Entry[];
 		replies?: CardReply[];
 	}) {
@@ -471,6 +483,7 @@ describe("runCreateCeremony", () => {
 		const h: CeremonyHost = {
 			isLocked: () => opts.locked ?? false,
 			ensureUnlocked: async () => opts.unlockOk ?? true,
+			verifyUser: vi.fn(async () => opts.verifyOk ?? true),
 			loadEntries: async () => opts.entries ?? [],
 			showCard: async (o) => {
 				cards.push(o);
@@ -533,6 +546,21 @@ describe("runCreateCeremony", () => {
 		expect(d).toMatchObject({ placement: { entryId: "gh-1" } });
 	});
 
+	it("verifies the user before saving when the site needs it, and only claims it then", async () => {
+		const plain = await runCreateCeremony(req, host({ entries: [] }).h);
+		expect(plain).toMatchObject({ approved: true, userVerified: false });
+
+		const { h } = host({ entries: [] });
+		const strict = await runCreateCeremony({ ...req, needsVerification: true }, h);
+		expect(strict).toMatchObject({ approved: true, userVerified: true, placement: "new" });
+		expect(h.verifyUser).toHaveBeenCalledTimes(1);
+
+		const declined = host({ entries: [], verifyOk: false }).h;
+		expect(await runCreateCeremony({ ...req, needsVerification: true }, declined)).toEqual({
+			approved: false,
+		});
+	});
+
 	it("declining the first card aborts without unlocking", async () => {
 		const unlock = vi.fn(async () => true);
 		const { h } = host({ locked: true, replies: [{ approved: false }] });
@@ -583,6 +611,7 @@ describe("runGetCeremony", () => {
 	function host(opts: {
 		locked?: boolean;
 		unlockOk?: boolean;
+		verifyOk?: boolean;
 		entries?: Entry[];
 		replies?: CardReply[];
 	}) {
@@ -591,6 +620,7 @@ describe("runGetCeremony", () => {
 		const h: CeremonyHost = {
 			isLocked: () => opts.locked ?? false,
 			ensureUnlocked: async () => opts.unlockOk ?? true,
+			verifyUser: vi.fn(async () => opts.verifyOk ?? true),
 			loadEntries: async () => opts.entries ?? [],
 			showCard: async (o) => {
 				cards.push(o);
@@ -603,7 +633,7 @@ describe("runGetCeremony", () => {
 	it("single match -> shows the one account so the user knows who, signs in with it", async () => {
 		const { h, cards } = host({ entries: [pk("AAA", "octocat")] });
 		const d = await runGetCeremony(req, h);
-		expect(d).toMatchObject({ approved: true, userVerified: true, credentialId: "AAA" });
+		expect(d).toMatchObject({ approved: true, userVerified: false, credentialId: "AAA" });
 		expect(cards[0]?.passkeyChoices?.map((c) => c.label)).toEqual(["octocat"]); // account shown
 	});
 
@@ -611,7 +641,7 @@ describe("runGetCeremony", () => {
 		const { h } = host({ entries: [] });
 		expect(await runGetCeremony(req, h)).toEqual({
 			approved: true,
-			userVerified: true,
+			userVerified: false,
 			credentialId: undefined,
 		});
 	});
@@ -640,6 +670,38 @@ describe("runGetCeremony", () => {
 		const d = await runGetCeremony(req, h);
 		expect(cards).toHaveLength(2);
 		expect(d).toMatchObject({ credentialId: "AAA" });
+	});
+
+	// A card click is consent, not verification: only an unlock or a confirm-it's-you counts.
+	describe("user verification", () => {
+		const strict = { ...req, needsVerification: true };
+
+		it("an unlocked vault claims no verification for a plain sign-in", async () => {
+			const { h } = host({ entries: [pk("AAA", "octocat")] });
+			expect(await runGetCeremony(req, h)).toMatchObject({ approved: true, userVerified: false });
+			expect(h.verifyUser).not.toHaveBeenCalled();
+		});
+
+		it("asks the user to confirm it's them when the site needs it", async () => {
+			const { h } = host({ entries: [pk("AAA", "octocat")] });
+			expect(await runGetCeremony(strict, h)).toMatchObject({
+				approved: true,
+				userVerified: true,
+				credentialId: "AAA",
+			});
+			expect(h.verifyUser).toHaveBeenCalledTimes(1);
+		});
+
+		it("declining to confirm aborts", async () => {
+			const { h } = host({ entries: [pk("AAA", "octocat")], verifyOk: false });
+			expect(await runGetCeremony(strict, h)).toEqual({ approved: false });
+		});
+
+		it("a fresh unlock is the verification", async () => {
+			const { h } = host({ locked: true, entries: [pk("AAA", "octocat")] });
+			expect(await runGetCeremony(strict, h)).toMatchObject({ approved: true, userVerified: true });
+			expect(h.verifyUser).not.toHaveBeenCalled();
+		});
 	});
 
 	it("decline first card / failed unlock -> aborted", async () => {
