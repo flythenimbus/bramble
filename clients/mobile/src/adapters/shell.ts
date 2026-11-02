@@ -8,6 +8,7 @@ import { requestStoreReview } from "../app-review";
 import { armFilePickGrace } from "../auto-lock";
 import { consumePendingAssociations as drainPendingAssociations } from "../autofill-pending-assoc";
 import { consumePendingPasskeys as drainPendingPasskeys } from "../autofill-pending-passkeys";
+import { pendingNativeCalls } from "../native-calls";
 import { scanQr } from "../qr-scanner";
 import {
 	ACTIVE_VAULT_KEY,
@@ -90,6 +91,7 @@ export const mobileShell: ShellAdapter = {
 	// A native file picker backgrounds the app; without this the "Immediately" auto-lock
 	// would fire and drop the in-progress import. See ./auto-lock.ts.
 	notifyFilePickerOpening: armFilePickGrace,
+	pendingNativeCalls,
 	// Capacitor's default follows the OS scheme, not Settings > Appearance. Dark = light icons.
 	setSystemBarsDark(dark) {
 		void SystemBars.setStyle({

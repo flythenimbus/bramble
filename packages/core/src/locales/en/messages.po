@@ -3276,6 +3276,10 @@ msgstr "Start at login"
 msgid "Start Bramble at login"
 msgstr "Start Bramble at login"
 
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Still saving. This is taking longer than it should."
+msgstr "Still saving. This is taking longer than it should."
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Stop using the app"
 msgstr "Stop using the app"

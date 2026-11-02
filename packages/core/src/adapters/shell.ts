@@ -93,6 +93,9 @@ export interface ShellAdapter {
 	 * whose session isn't foreground-gated (no-op).
 	 */
 	notifyFilePickerOpening?(): void;
+	/** Native calls still unanswered, oldest first ("Plugin.method 42s"), so a stalled save can
+	 * say what it waits on. Absent where native calls can't stall the app (extension, desktop). */
+	pendingNativeCalls?(): string[];
 	/**
 	 * Match the OS status and navigation bar icons to the app's resolved theme, which the user
 	 * can set apart from the OS's. Absent where the app draws under no system bars (extension,

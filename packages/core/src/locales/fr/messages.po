@@ -3276,6 +3276,10 @@ msgstr "Démarrer à l’ouverture de session"
 msgid "Start Bramble at login"
 msgstr "Démarrer Bramble à l’ouverture de session"
 
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Still saving. This is taking longer than it should."
+msgstr "Enregistrement toujours en cours. Cela prend plus de temps que prévu."
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Stop using the app"
 msgstr "Arrêter d'utiliser l'application"

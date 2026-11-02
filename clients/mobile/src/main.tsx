@@ -29,10 +29,13 @@ import { startAutoLock } from "./auto-lock";
 import { consumePendingAutofillSave } from "./autofill-pending";
 import { mobileBackupActivity, startBackupRuns } from "./backup";
 import { hasPendingImport, onImportAvailable } from "./credential-exchange";
+import { trackNativeCalls } from "./native-calls";
 import { installNativeWebRtc } from "./native-webrtc";
 import { initRosterSync } from "./sync/sync-manager";
 import { onTotpHandoff } from "./totp-handoff";
 
+// First, so every plugin call after it is counted. See ./native-calls.ts.
+trackNativeCalls();
 // iOS WKWebView (capacitor:// scheme) has no RTCPeerConnection; install the native-backed
 // shim before any sync transport runs. No-op on Android/extension/dev-browser.
 installNativeWebRtc();

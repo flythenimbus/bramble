@@ -3276,6 +3276,10 @@ msgstr "Iniciar al iniciar sesión"
 msgid "Start Bramble at login"
 msgstr "Iniciar Bramble al iniciar sesión"
 
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Still saving. This is taking longer than it should."
+msgstr "Todavía se está guardando. Esto está tardando más de lo que debería."
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Stop using the app"
 msgstr "Dejar de usar la aplicación"

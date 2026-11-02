@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useEffect, useMemo, useState } from "react";
 import { type FieldValues, FormProvider, useForm } from "react-hook-form";
+import { usePlatform } from "../../../context/PlatformContext";
 import type { BreachStatus, EntryData, EntryType } from "../../../hooks/useVault";
 import { useVaultState } from "../../../hooks/useVault";
 import { allTags } from "../../../vault/tags";
@@ -19,6 +20,9 @@ import { formToTags, TAGS_NAME, TagsEditor, tagsToForm } from "../../entry-modes
  * handoff. Loosely typed: its shape depends on the active mode.
  */
 export type EntryFormDraft = FieldValues;
+
+/** A save still running after this is stuck behind something, not merely slow. */
+const STALLED_SAVE_MS = 15_000;
 
 interface EntryFormProps {
 	// Keep stable for the host's lifetime: callers key the host by type, so a
@@ -51,6 +55,9 @@ export function EntryForm({
 	const mode = getEntryMode(type);
 	const [busy, setBusy] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
+	// Set once a save outlives STALLED_SAVE_MS: what it waits on, as far as the host can tell.
+	const [stalledOn, setStalledOn] = useState<string[] | null>(null);
+	const { shell } = usePlatform();
 	// The vault's existing tags, so the editor can suggest them rather than let the user
 	// invent a second spelling of one they already have.
 	const { entries } = useVaultState();
@@ -76,6 +83,11 @@ export function EntryForm({
 	const onSubmit = async (values: FieldValues) => {
 		setSaveError(null);
 		setBusy(true);
+		const watchdog = setTimeout(() => {
+			const waiting = shell.pendingNativeCalls?.() ?? [];
+			console.warn("[vault] a save is still running, waiting on:", waiting.join(", ") || "unknown");
+			setStalledOn(waiting);
+		}, STALLED_SAVE_MS);
 		try {
 			await onSave({
 				...mode.toEntry(values),
@@ -86,6 +98,8 @@ export function EntryForm({
 		} catch (e) {
 			setSaveError((e as Error).message);
 		} finally {
+			clearTimeout(watchdog);
+			setStalledOn(null);
 			setBusy(false);
 		}
 	};
@@ -134,6 +148,16 @@ export function EntryForm({
 							{saveError && (
 								<p className="flex-1 text-xs text-destructive truncate" title={saveError}>
 									{saveError}
+								</p>
+							)}
+							{busy && stalledOn && (
+								<p className="flex-1 min-w-0 text-xs text-muted-foreground">
+									<Trans>Still saving. This is taking longer than it should.</Trans>
+									{stalledOn.length > 0 && (
+										<span className="block truncate" title={stalledOn.join(", ")}>
+											{stalledOn.join(", ")}
+										</span>
+									)}
 								</p>
 							)}
 							<Button type="submit" variant="primary" size="md" disabled={busy}>

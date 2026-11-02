@@ -3276,6 +3276,10 @@ msgstr "Avviare all'accesso"
 msgid "Start Bramble at login"
 msgstr "Avviare Bramble all'accesso"
 
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Still saving. This is taking longer than it should."
+msgstr "Salvataggio ancora in corso. L'operazione sta richiedendo più tempo del previsto."
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Stop using the app"
 msgstr "Smettere di utilizzare l'app"
