@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
 	chunkMessage,
+	type DataFrame,
 	MAX_CHUNK,
+	MAX_FRAMES,
+	MAX_PENDING,
 	makeReassembler,
 	padMessage,
 	unpadMessage,
@@ -66,6 +69,44 @@ describe("relay-channel reassembly", () => {
 		push(a1);
 		push(b1);
 		expect(new Set(got)).toEqual(new Set([a, b]));
+	});
+
+	it("drops frames it would have to allocate for or could throw on", () => {
+		const got: string[] = [];
+		const push = makeReassembler((m) => got.push(m));
+		const bad: unknown[] = [
+			{ msgId: 1, idx: 0, total: 25_000_000, chunk: "a" },
+			{ msgId: 2, idx: 0, total: 2 ** 32, chunk: "a" },
+			{ msgId: 3, idx: 0, total: 0, chunk: "a" },
+			{ msgId: 4, idx: 0, total: 1.5, chunk: "a" },
+			{ msgId: 5, idx: 0, total: "1", chunk: "a" },
+			{ msgId: 6, idx: 1, total: 1, chunk: "a" },
+			{ msgId: 7, idx: 0, total: 1, chunk: 5 },
+			{ msgId: 8, idx: 0, total: 1, chunk: "a".repeat(MAX_CHUNK + 1) },
+			{ msgId: "9", idx: 0, total: 1, chunk: "a" },
+		];
+		for (const f of bad) expect(() => push(f as DataFrame)).not.toThrow();
+		expect(got).toEqual([]);
+		push({ msgId: 10, idx: 0, total: 1, chunk: "ok" });
+		expect(got).toEqual(["ok"]);
+	});
+
+	it("ignores a chunk that disagrees with its message's total", () => {
+		const got: string[] = [];
+		const push = makeReassembler((m) => got.push(m));
+		push({ msgId: 1, idx: 0, total: 2, chunk: "a" });
+		push({ msgId: 1, idx: 1, total: MAX_FRAMES, chunk: "x" });
+		push({ msgId: 1, idx: 1, total: 2, chunk: "b" });
+		expect(got).toEqual(["ab"]);
+	});
+
+	it("keeps at most MAX_PENDING incomplete messages, dropping the oldest", () => {
+		const got: string[] = [];
+		const push = makeReassembler((m) => got.push(m));
+		for (let id = 0; id <= MAX_PENDING; id++) push({ msgId: id, idx: 0, total: 2, chunk: `${id}` });
+		push({ msgId: 0, idx: 1, total: 2, chunk: "!" });
+		push({ msgId: MAX_PENDING, idx: 1, total: 2, chunk: "!" });
+		expect(got).toEqual([`${MAX_PENDING}!`]);
 	});
 });
 

@@ -56,6 +56,23 @@ export function chunkMessage(msgId: number, data: string): DataFrame[] {
 	return frames;
 }
 
+// A message is one Noise frame (at most 64 KiB on any build), so 3 chunks at most; more is hostile.
+export const MAX_FRAMES = 16;
+// A sender's chunks arrive back to back, so only a stray duplicate leaves a second one pending.
+export const MAX_PENDING = 8;
+
+// Frames come off the wire unchecked: `total` sizes an allocation, so check it first.
+const validFrame = (f: DataFrame): boolean =>
+	Number.isInteger(f.msgId) &&
+	Number.isInteger(f.total) &&
+	f.total >= 1 &&
+	f.total <= MAX_FRAMES &&
+	Number.isInteger(f.idx) &&
+	f.idx >= 0 &&
+	f.idx < f.total &&
+	typeof f.chunk === "string" &&
+	f.chunk.length <= MAX_CHUNK;
+
 /**
  * Buffer frames until a message is complete, then deliver the reassembled string.
  * Tolerates interleaved messages (keyed by msgId), out-of-order chunks, and duplicates.
@@ -63,12 +80,16 @@ export function chunkMessage(msgId: number, data: string): DataFrame[] {
 export function makeReassembler(deliver: (full: string) => void): (frame: DataFrame) => void {
 	const pending = new Map<number, { parts: string[]; have: number; total: number }>();
 	return (frame) => {
+		if (!validFrame(frame)) return;
 		let entry = pending.get(frame.msgId);
 		if (!entry) {
+			if (pending.size >= MAX_PENDING) pending.delete(pending.keys().next().value!);
 			entry = { parts: new Array<string>(frame.total), have: 0, total: frame.total };
 			pending.set(frame.msgId, entry);
+		} else if (entry.total !== frame.total) {
+			return;
 		}
-		if (frame.idx >= 0 && frame.idx < entry.total && entry.parts[frame.idx] === undefined) {
+		if (entry.parts[frame.idx] === undefined) {
 			entry.parts[frame.idx] = frame.chunk;
 			entry.have++;
 		}
