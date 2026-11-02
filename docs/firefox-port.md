@@ -57,7 +57,9 @@ on-device checks not yet crossed live are under "Remaining" below.
   stale-peer reaper, epoch-rotating sync room, payload padding. Initial + ongoing sync device-tested
   Chrome↔Firefox. See "Firefox P2P transport".
 - UI/behaviour — popup closes after opening setup, the FSA "vault file location" step is hidden (no
-  picker), dark-mode toolbar icon via manifest `theme_icons`, storage durability (`unlimitedStorage`
+  picker), dark-mode toolbar icon via a themed SVG built from the PNGs (manifest `theme_icons`
+  never reached the Extensions panel, where Firefox kept the black mark on dark themes), storage
+  durability (`unlimitedStorage`
   + `navigator.storage.persist()`).
 
 - **On-page UI localization.** The corner-prompt cards (save / update / passkey), the autofill

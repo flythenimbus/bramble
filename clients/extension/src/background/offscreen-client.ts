@@ -204,8 +204,8 @@ export async function sendToOffscreen(
 	return deliver(message);
 }
 
-// Firefox swaps the toolbar icon declaratively via manifest action.theme_icons (it
-// follows the real toolbar theme, which prefers-color-scheme in the event page does
-// not reliably track). No JS reporter here: calling action.setIcon would override
-// theme_icons. Chrome has no theme_icons, so its offscreen document reports the scheme
+// Firefox's action icon is an SVG that picks its mark by the browser theme itself (see
+// the firefox-themed-icon step in vite.config.ts), which prefers-color-scheme in the event
+// page does not reliably track. No JS reporter here: calling action.setIcon would replace
+// that SVG. Chrome renders no SVG action icon, so its offscreen document reports the scheme
 // (see offscreen.ts) and theme.ts calls setIcon.

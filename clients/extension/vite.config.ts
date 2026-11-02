@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -35,6 +35,20 @@ export default defineConfig({
 			writeBundle() {
 				mkdirSync(outDir, { recursive: true });
 				copyFileSync(manifestSrc, resolve(outDir, "manifest.json"));
+			},
+		},
+		{
+			// Firefox's action icon: one SVG that picks the black or white mark by the browser
+			// theme, from the same PNGs Chrome uses. Manifest theme_icons only reach a button
+			// pinned to the toolbar; in the Extensions panel Firefox showed the black mark on
+			// dark themes too.
+			name: "firefox-themed-icon",
+			writeBundle() {
+				if (target !== "firefox") return;
+				const png = (name: string) =>
+					readFileSync(resolve(import.meta.dirname, "public/icons", name)).toString("base64");
+				const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><style>.d{display:none}@media (prefers-color-scheme: dark){.l{display:none}.d{display:inline}}</style><image class="l" width="32" height="32" href="data:image/png;base64,${png("icon-32.png")}"/><image class="d" width="32" height="32" href="data:image/png;base64,${png("icon-32-dark.png")}"/></svg>\n`;
+				writeFileSync(resolve(outDir, "icons/icon-themed.svg"), svg);
 			},
 		},
 		{

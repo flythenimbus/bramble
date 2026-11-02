@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 
 // Strict-monochrome toolbar icon that follows the OS colour scheme. Chrome has
-// no declarative per-theme action icon (Firefox's theme_icons is ignored here),
+// no declarative per-theme action icon (Firefox uses a themed SVG instead),
 // and the service worker can't read prefers-color-scheme, so the offscreen
 // document detects the scheme and reports it via THEME_ICON_SET; we swap the
 // action icon to the matching monochrome variant.
