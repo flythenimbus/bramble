@@ -1,6 +1,7 @@
+import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import type { EntryData, LoginEntryData } from "../hooks/useVault";
-import { parseCsvRows, summarize, toCustomFields } from "./shared";
+import { parseCsvRows, summarize, toCustomFields, unzipCapped } from "./shared";
 
 describe("summarize", () => {
 	it("validates output against the EntryData schema and drops malformed entries", () => {
@@ -151,5 +152,28 @@ describe("parseCsvRows", () => {
 
 	it("returns nothing for empty input", () => {
 		expect(parseCsvRows("")).toEqual([]);
+	});
+});
+
+describe("unzipCapped", () => {
+	/** A two-byte zip whose central directory claims `declared` bytes uncompressed. */
+	function lyingZip(declared: number): Uint8Array {
+		const zip = zipSync({ "data.json": strToU8("{}") });
+		const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+		for (let i = 0; i + 4 <= zip.length; i++) {
+			// Central directory file header; its uncompressed size is at offset 24.
+			if (view.getUint32(i, true) === 0x02014b50) view.setUint32(i + 24, declared, true);
+		}
+		return zip;
+	}
+
+	// fflate allocates the declared size up front, so the cap has to apply before inflating.
+	it("refuses an archive that declares more than the cap, before inflating it", () => {
+		expect(() => unzipCapped(lyingZip(300 * 1024 * 1024), "corrupt")).toThrow(/looks unsafe/);
+	});
+
+	it("unzips an archive under the cap", () => {
+		const files = unzipCapped(zipSync({ "data.json": strToU8("{}") }), "corrupt");
+		expect(Object.keys(files)).toEqual(["data.json"]);
 	});
 });

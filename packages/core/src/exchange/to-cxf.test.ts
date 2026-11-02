@@ -170,6 +170,23 @@ describe("toCxf: passkey extensions", () => {
 		expect(pk?.fido2Extensions).toMatchObject({ largeBlob, hmacCredentials: expect.any(Object) });
 	});
 
+	it("leaves out PRF secrets it can't read, and says so", () => {
+		const { passkeys, warnings } = exported([
+			passkey({ prf: { credWithUV: "junk!", credWithoutUV: PRF.credWithoutUV } }),
+		]);
+		expect(passkeys[0] && "fido2Extensions" in passkeys[0]).toBe(false);
+		expect(warnings).toEqual([expect.stringMatching(/PRF secrets Bramble can't read/)]);
+	});
+
+	it("leaves out a large blob it can't read, and says so", () => {
+		const largeBlob = { uncompressedSize: -1, data: "AAAA" };
+		const { passkeys, warnings } = exported([
+			passkey({ fido2Extensions: { largeBlob, credBlob: "AQ" } }),
+		]);
+		expect(passkeys[0]?.fido2Extensions).toEqual({ credBlob: "AQ" });
+		expect(warnings).toEqual([expect.stringMatching(/large blob Bramble can't read/)]);
+	});
+
 	it("omits fido2Extensions for a passkey with none", () => {
 		const [pk] = exported([passkey()]).passkeys;
 		expect(pk).toBeDefined();

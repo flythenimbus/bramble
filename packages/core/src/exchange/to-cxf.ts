@@ -9,7 +9,7 @@ import type { CardEntryData, Entry, LoginEntryData, PasskeyCredential } from "..
 import { base64ToBase64Url, bytesToBase64Url } from "../util/bytes";
 import { parseTotp } from "../util/totp";
 import { withScheme } from "../util/url";
-import { COSE_ES256 } from "../vault/passkey";
+import { COSE_ES256, isPrfSecret, keptExtensions } from "../vault/passkey";
 import { pkcs8FromScalar } from "./passkey-key";
 import {
 	CXF_VERSION,
@@ -66,7 +66,11 @@ function toUrls(urls: readonly string[]): string[] {
 }
 
 /** Null when the stored key isn't a P-256 scalar we can express as PKCS#8. */
-function passkeyCredential(p: PasskeyCredential): CxfCredential | null {
+function passkeyCredential(
+	p: PasskeyCredential,
+	warnings: string[],
+	name: string,
+): CxfCredential | null {
 	// pkcs8FromScalar wraps ANY 32 bytes in a P-256 PKCS#8 prefix, and an Ed25519 seed is also
 	// 32 bytes, so without this gate an imported EdDSA passkey would export as a corrupt P-256
 	// key that decodes fine and then verifies against nothing. Skipping is warned about upstream.
@@ -76,15 +80,27 @@ function passkeyCredential(p: PasskeyCredential): CxfCredential | null {
 	// is what "contains unsupported data" looks like from the user's end.
 	const key = pkcs8FromScalar(p.privateKey);
 	if (!key) return null;
-	// Both halves always go out: Apple rejects the whole payload when credWithoutUV is missing.
+	// Both halves always go out: Apple rejects the whole payload when credWithoutUV is missing, or
+	// when one won't decode, so an unreadable pair is left out rather than sinking the transfer.
+	const prf =
+		p.prf && isPrfSecret(p.prf.credWithUV) && isPrfSecret(p.prf.credWithoutUV) ? p.prf : undefined;
+	if (p.prf && !prf)
+		warnings.push(
+			`A passkey on "${name}" has PRF secrets Bramble can't read; it went without them.`,
+		);
+	const { kept, badLargeBlob } = keptExtensions(p.fido2Extensions);
+	if (badLargeBlob)
+		warnings.push(
+			`A passkey on "${name}" has a large blob Bramble can't read; it went without it.`,
+		);
 	const fido2Extensions = {
-		...p.fido2Extensions,
-		...(p.prf
+		...kept,
+		...(prf
 			? {
 					hmacCredentials: {
 						algorithm: "hmac-sha256",
-						credWithUV: base64ToBase64Url(p.prf.credWithUV),
-						credWithoutUV: base64ToBase64Url(p.prf.credWithoutUV),
+						credWithUV: base64ToBase64Url(prf.credWithUV),
+						credWithoutUV: base64ToBase64Url(prf.credWithoutUV),
 					},
 				}
 			: {}),
@@ -167,7 +183,7 @@ function loginCredentials(e: LoginEntryData, warnings: string[]): CxfCredential[
 		}
 	}
 	for (const p of e.passkeys ?? []) {
-		const credential = passkeyCredential(p);
+		const credential = passkeyCredential(p, warnings, e.name);
 		if (credential) out.push(credential);
 		else warnings.push(`A passkey on "${e.name}" uses a key we can't export and was left behind.`);
 	}

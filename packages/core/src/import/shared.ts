@@ -133,17 +133,28 @@ function asBytes(raw: string | Uint8Array): Uint8Array {
 // a high-ratio zip bomb, so bound the decompressed total too.
 const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024;
 
+const TOO_BIG = `This archive decompresses to more than ${MAX_DECOMPRESSED_BYTES / 1024 / 1024} MB and looks unsafe to process.`;
+
 /** Unzip under the size cap. `corruptError` covers an unreadable archive (a truncated download). */
 export function unzipCapped(
 	raw: string | Uint8Array,
 	corruptError: string,
 ): Record<string, Uint8Array> {
+	// fflate allocates each file's declared size before inflating it, so the cap is applied to the
+	// declared sizes first; the check on the real sizes afterwards covers an archive that lies low.
+	let declared = 0;
 	let files: Record<string, Uint8Array>;
 	try {
-		files = unzipSync(asBytes(raw));
+		files = unzipSync(asBytes(raw), {
+			filter: (file) => {
+				declared += file.originalSize;
+				return declared <= MAX_DECOMPRESSED_BYTES;
+			},
+		});
 	} catch {
 		throw new Error(corruptError);
 	}
+	if (declared > MAX_DECOMPRESSED_BYTES) throw new Error(TOO_BIG);
 	assertUnzipUnderCap(files);
 	return files;
 }
@@ -187,10 +198,6 @@ function assertUnzipUnderCap(files: Record<string, Uint8Array>): void {
 	for (const k in files) {
 		const f = files[k];
 		if (f) total += f.byteLength;
-		if (total > MAX_DECOMPRESSED_BYTES) {
-			throw new Error(
-				`This archive decompresses to more than ${MAX_DECOMPRESSED_BYTES / 1024 / 1024} MB and looks unsafe to process.`,
-			);
-		}
+		if (total > MAX_DECOMPRESSED_BYTES) throw new Error(TOO_BIG);
 	}
 }

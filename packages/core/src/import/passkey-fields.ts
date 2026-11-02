@@ -9,6 +9,7 @@
 
 import type { PasskeyPrfSecrets } from "../adapters/crypto";
 import { base64UrlToBase64, base64UrlToBytes, bytesToBase64 } from "../util/bytes";
+import { MAX_PRF_SECRET_BYTES } from "../vault/passkey";
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 const BASE64_STD = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -27,9 +28,8 @@ export function maxBase64UrlLength(decodedBytes: number): number {
 	return Math.ceil((decodedBytes * 4) / 3);
 }
 
-// CTAP CredRandom is 32 bytes; the cap only bounds what a hostile export can make us store.
+// CTAP CredRandom size, for a minted without-UV half.
 const PRF_SECRET_BYTES = 32;
-export const MAX_PRF_SECRET_BYTES = 1024;
 
 /**
  * A passkey's PRF secrets in stored form, or undefined when a half is empty or oversized. A missing

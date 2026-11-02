@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { EntryData } from "../hooks/useVault";
 import { HlcSchema } from "../sync/hlc";
+import { isPrfSecret, largeBlobSchema } from "./passkey";
 
 // Runtime mirror of EntryData; the z.ZodType<EntryData> annotation fails the
 // build if schema and union diverge.
@@ -47,8 +48,14 @@ const passkeyCredentialSchema = z.object({
 	signCount: z.number(),
 	createdAt: z.number(),
 	lastUsedAt: z.number().optional(),
-	prf: z.object({ credWithUV: z.string(), credWithoutUV: z.string() }).optional(),
-	fido2Extensions: z.record(z.string(), z.unknown()).optional(),
+	prf: z
+		.object({
+			credWithUV: z.string().refine(isPrfSecret),
+			credWithoutUV: z.string().refine(isPrfSecret),
+		})
+		.optional(),
+	// Kept verbatim for a later export.
+	fido2Extensions: z.looseObject({ largeBlob: largeBlobSchema.optional() }).optional(),
 });
 
 // Mirror of PasswordChange. Kept in lockstep with the interface in useVault.

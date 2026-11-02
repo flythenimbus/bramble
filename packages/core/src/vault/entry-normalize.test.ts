@@ -204,6 +204,23 @@ describe("passkey PRF fields", () => {
 		expect(entryDataSchema.safeParse(loginWithPasskey({ prf: { credWithUV: 1 } })).success).toBe(
 			false,
 		);
+		// The halves become an HMAC key and must survive a credential-exchange export (Apple
+		// rejects a whole transfer over one bad one): standard base64, 1 byte to 1 KiB.
+		const huge = btoa("x".repeat(1025));
+		for (const bad of ["not base64!", "", huge]) {
+			expect(
+				entryDataSchema.safeParse(
+					loginWithPasskey({ prf: { credWithUV: bad, credWithoutUV: "Qg==" } }),
+				).success,
+			).toBe(false);
+		}
+		expect(
+			entryDataSchema.safeParse(
+				loginWithPasskey({
+					fido2Extensions: { largeBlob: { uncompressedSize: "3", data: "AAAA" } },
+				}),
+			).success,
+		).toBe(false);
 		expect(entryDataSchema.safeParse(loginWithPasskey({ fido2Extensions: "junk" })).success).toBe(
 			false,
 		);

@@ -4,13 +4,51 @@
 // share one canonical placement rule, and so it is unit-tested without any IO.
 // See docs/passkey-provider.md.
 
+import { z } from "zod";
 import type { Entry, LoginEntryData, PasskeyCredential } from "../hooks/useVault";
+import { base64ToBytes } from "../util/bytes";
 import { extractHostname } from "./autofill-index";
 
 /** COSE algorithm identifier for ES256, the only algorithm Bramble MINTS. */
 export const COSE_ES256 = -7;
 /** EdDSA. Imported only (KeePassXC prefers it); see docs/passkey-import.md. */
 export const COSE_EDDSA = -8;
+
+/** CTAP CredRandom is 32 bytes; the cap only bounds what a hostile import can make us store. */
+export const MAX_PRF_SECRET_BYTES = 1024;
+
+/**
+ * A stored PRF secret half: standard base64 of 1 to MAX_PRF_SECRET_BYTES bytes, checked before
+ * decoding. It becomes an HMAC key, and one bad half fails a whole Apple credential exchange.
+ */
+export function isPrfSecret(s: string): boolean {
+	if (s.length > 4 * Math.ceil(MAX_PRF_SECRET_BYTES / 3)) return false;
+	if (s.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(s)) return false;
+	try {
+		const n = base64ToBytes(s).length;
+		return n > 0 && n <= MAX_PRF_SECRET_BYTES;
+	} catch {
+		return false;
+	}
+}
+
+/** CXF's `largeBlob` as Apple's decoder requires it; one malformed blob fails a whole transfer. */
+export const largeBlobSchema = z.object({
+	uncompressedSize: z.number().int().nonnegative(),
+	data: z.string().regex(/^[A-Za-z0-9_-]*$/),
+});
+
+/** The `fido2Extensions` members worth keeping: all of them but a malformed large blob. */
+export function keptExtensions(ext: Record<string, unknown> | undefined): {
+	kept?: Record<string, unknown>;
+	badLargeBlob: boolean;
+} {
+	if (!ext) return { badLargeBlob: false };
+	const badLargeBlob = "largeBlob" in ext && !largeBlobSchema.safeParse(ext.largeBlob).success;
+	const { largeBlob, ...others } = ext;
+	const kept = badLargeBlob ? others : ext;
+	return { kept: Object.keys(kept).length ? kept : undefined, badLargeBlob };
+}
 
 export interface PasskeyMatch {
 	/** The login entry that holds this passkey. */

@@ -171,6 +171,29 @@ describe("parseCxf: passkeys", () => {
 		expect(res.imported[0]).toMatchObject({ urls: ["https://github.com"] });
 	});
 
+	// The caps every file importer applies, before anything is decoded.
+	it("skips a passkey with an invalid relying-party id or oversized ids, and says why", async () => {
+		const base = {
+			type: "passkey",
+			credentialId: "-_--",
+			rpId: "github.com",
+			userHandle: "-_--",
+			key: keyB64Url,
+		};
+		const huge = bytesToBase64Url(new Uint8Array(2000));
+		for (const bad of [
+			{ rpId: "" },
+			{ rpId: "not a host" },
+			{ credentialId: huge },
+			{ userHandle: huge },
+		]) {
+			const { res, entry } = await first(basicAuth, { ...base, ...bad });
+			if (!entry || !isLogin(entry)) throw new Error("expected a login");
+			expect(entry.passkeys).toBeUndefined();
+			expect(res.warnings.join(" ")).toMatch(/passkey on "GitHub"/);
+		}
+	});
+
 	it("skips a passkey whose key we can't read, keeping the rest of the item", async () => {
 		const { res, entry } = await first(basicAuth, {
 			type: "passkey",
@@ -245,6 +268,17 @@ describe("parseCxf: passkey extensions", () => {
 			credBlob: "AQ",
 		});
 		expect(pk?.prf).toBeUndefined();
+	});
+
+	// The vault refuses a malformed large blob (Apple's decoder fails a whole transfer on one), so
+	// it costs that member and nothing else.
+	it("leaves out a malformed largeBlob, keeping the passkey and other members, and says so", async () => {
+		const { res, pk } = await passkeyWith({
+			largeBlob: { uncompressedSize: "3", data: "AAAA" },
+			credBlob: "AQ",
+		});
+		expect(pk?.fido2Extensions).toEqual({ credBlob: "AQ" });
+		expect(res.warnings).toEqual([expect.stringMatching(/large blob Bramble can't use/)]);
 	});
 
 	it("imports the passkey when fido2Extensions is junk", async () => {

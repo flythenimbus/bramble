@@ -7,17 +7,24 @@
 import type { PasskeyImportResult, PasskeyPrfSecrets } from "../adapters/crypto";
 import type { EntryData, PasskeyCredential } from "../hooks/useVault";
 import {
+	bareBase64UrlToBase64,
 	type ConversionTally,
-	MAX_PRF_SECRET_BYTES,
+	MAX_CREDENTIAL_ID_BYTES,
+	pkcs8ToStandardBase64,
 	prfSecretsFrom,
+	reject,
+	rejectionReason,
 	strictBase64Url,
 	systemicFailureWarning,
+	userHandleToBase64,
+	validRpId,
 } from "../import/passkey-fields";
 import { asText, type RawField, summarize, toCustomFields } from "../import/shared";
 import type { ImportParserContext, ImportResult } from "../import/types";
 import { base64UrlToBase64, base64UrlToBytes } from "../util/bytes";
 import { cardBrand } from "../util/card";
 import { buildTotpUri } from "../util/totp";
+import { keptExtensions, MAX_PRF_SECRET_BYTES } from "../vault/passkey";
 import { normalizeTags } from "../vault/tags";
 
 import {
@@ -113,11 +120,12 @@ function passkeyExtensions(ext: Record<string, unknown> | undefined): {
 	prf?: PasskeyPrfSecrets;
 	rest?: Record<string, unknown>;
 	unusable: boolean;
+	badLargeBlob: boolean;
 } {
-	if (!ext) return { unusable: false };
+	if (!ext) return { unusable: false, badLargeBlob: false };
 	const { hmacCredentials, ...others } = ext;
-	const rest = Object.keys(others).length ? others : undefined;
-	if (hmacCredentials === undefined) return { rest, unusable: false };
+	const { kept: rest, badLargeBlob } = keptExtensions(others);
+	if (hmacCredentials === undefined) return { rest, unusable: false, badLargeBlob };
 	const parsed = cxfHmacCredentialsSchema.safeParse(hmacCredentials);
 	const algorithm = parsed.success ? (parsed.data.algorithm ?? "hmac-sha256") : "";
 	let prf: PasskeyPrfSecrets | undefined;
@@ -130,7 +138,7 @@ function passkeyExtensions(ext: Record<string, unknown> | undefined): {
 			prf = undefined;
 		}
 	}
-	return { prf, rest, unusable: !prf };
+	return { prf, rest, unusable: !prf, badLargeBlob };
 }
 
 /** CXF ships PKCS#8 DER; our SSH entries hold PEM text, and that direction is a clean wrap. */
@@ -150,29 +158,50 @@ async function toPasskeys(
 ): Promise<PasskeyCredential[]> {
 	const out: PasskeyCredential[] = [];
 	for (const p of raw) {
+		// The same caps every file importer applies, before anything is decoded. Stored ids are
+		// STANDARD base64 throughout the app; CXF is base64url.
+		let ids: { credentialId: string; userHandle: string; key: string };
+		try {
+			if (!validRpId(p.rpId)) reject("has an invalid relying-party ID");
+			ids = {
+				credentialId: bareBase64UrlToBase64(p.credentialId, MAX_CREDENTIAL_ID_BYTES),
+				userHandle: userHandleToBase64(p.userHandle),
+				key: pkcs8ToStandardBase64(p.key),
+			};
+		} catch (e) {
+			// Only our own reasons are shown: a decoder error could carry bytes of the key.
+			warnings.push(
+				`A passkey on "${title}" ${rejectionReason(e) ?? "couldn't be read"}, so it was skipped.`,
+			);
+			continue;
+		}
 		// The Rust core parses the key and rebuilds the COSE public half, so an imported
-		// passkey is byte-identical in shape to a minted one. CXF is base64url, that API is
-		// standard base64. A key it rejects costs one passkey, not the item.
+		// passkey is byte-identical in shape to a minted one. A key it rejects costs one
+		// passkey, not the item.
 		let material: PasskeyImportResult;
 		try {
-			material = await context.passkeyImportPkcs8(base64UrlToBase64(p.key));
+			material = await context.passkeyImportPkcs8(ids.key);
 		} catch {
 			warnings.push(`A passkey on "${title}" uses a key type we can't read and was skipped.`);
 			tally.failed++;
 			continue;
 		}
 		tally.converted++;
-		const { prf, rest, unusable } = passkeyExtensions(p.fido2Extensions);
+		const { prf, rest, unusable, badLargeBlob } = passkeyExtensions(p.fido2Extensions);
 		if (unusable) {
 			warnings.push(
 				`A passkey on "${title}" had a PRF secret Bramble can't use, so it was left out. Signing in works, but a site that encrypted data with it can't decrypt that data.`,
 			);
 		}
+		if (badLargeBlob) {
+			warnings.push(
+				`A passkey on "${title}" had a large blob Bramble can't use, so it was left out.`,
+			);
+		}
 		out.push({
-			// Stored as STANDARD base64 throughout the app; CXF is base64url.
-			credentialId: base64UrlToBase64(p.credentialId),
+			credentialId: ids.credentialId,
 			rpId: p.rpId,
-			userHandle: base64UrlToBase64(p.userHandle),
+			userHandle: ids.userHandle,
 			userName: p.username || undefined,
 			userDisplayName: p.userDisplayName || undefined,
 			// From the key's OID, not assumed: CXF carries no algorithm, so this is the only
