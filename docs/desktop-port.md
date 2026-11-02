@@ -386,7 +386,10 @@ Five controls make it defensible. The first two carry most of the weight:
    bad, but not the passwords.
 3. **Keep the desktop's private key in the macOS Keychain**, `WhenUnlockedThisDeviceOnly` with
    an ACL requiring the app's code signature, rather than a file beside the vault. Does not
-   protect the extension's half, but stops the trivial symmetric theft `[unverified]`.
+   protect the extension's half, but stops the trivial symmetric theft `[unverified]`. The
+   allowlist file beside the vault is sealed with a key derived from it, so a process that can
+   write the file still cannot add itself as a paired browser: a file that fails the seal
+   trusts no browser until they pair again.
 4. **Verify the connecting process** (`LOCAL_PEERPID` then a code-signature check). See below
    for why this is weaker than it looks.
 5. **Make fills visible.** A tray flash or notification per fill means bulk exfiltration is not

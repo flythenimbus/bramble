@@ -46,9 +46,9 @@ export function BrowserPairingSection() {
 		if (!pairing) return;
 		try {
 			setBrowsers(await pairing.list());
-			// Checked here and nowhere else. Listing browsers does not touch the credential
-			// store, so without this a device whose key has gone missing shows a perfectly
-			// normal list of browsers that can never connect again.
+			// Checked here and nowhere else. Listing browsers never fails on a missing key, so
+			// without this a device whose key has gone missing shows a perfectly normal list of
+			// browsers that can never connect again.
 			await pairing.identity();
 			setError(null);
 		} catch (e) {

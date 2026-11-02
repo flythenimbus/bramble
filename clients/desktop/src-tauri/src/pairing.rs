@@ -27,7 +27,7 @@ use std::{
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use vault_crypto::handshake;
+use vault_crypto::{handshake, roster_sig};
 
 type Res<T> = Result<T, String>;
 
@@ -51,8 +51,11 @@ const MAX_ATTEMPTS: u8 = 5;
 /// anywhere else in the system.
 const PSK_INFO: &[u8] = b"bramble/desktop/extension-pairing/psk/v1";
 
-#[cfg_attr(test, allow(dead_code))]
-const KEYCHAIN_ACCOUNT: &str = "extension-pairing-identity";
+/// Derives the key that seals pairing.json from the identity's private key.
+const SEAL_INFO: &[u8] = b"bramble/desktop/extension-pairing/allowlist-seal/v1";
+
+/// Also reserved from the webview in `secure_store`: the seal is only as private as this key.
+pub(crate) const KEYCHAIN_ACCOUNT: &str = "extension-pairing-identity";
 
 /// A browser that completed pairing and may now open authenticated sessions.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -75,6 +78,9 @@ pub struct PairedPeer {
 /// against, and is checked on every load. Without it, an allowlist that outlived its
 /// keypair would silently pair against a freshly generated identity and every browser in the
 /// list would stop working with no indication why.
+///
+/// Any process running as the user can write this file, so `seal` signs the other two fields
+/// with a key only the identity yields. A file that fails it keeps no peers (see `read_trusted`).
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PairingFile {
@@ -82,10 +88,8 @@ struct PairingFile {
     public_key: String,
     #[serde(default)]
     peers: Vec<PairedPeer>,
-    /// An earlier build kept the private key here. Read only so it can be migrated into the
-    /// credential store and removed; never written back.
-    #[serde(default, skip_serializing)]
-    private_key: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    seal: String,
 }
 
 /// Both halves together, so the two can never drift apart across separate stores.
@@ -94,6 +98,10 @@ struct PairingFile {
 struct Identity {
     private_key: String,
     public_key: String,
+    /// Whether pairing.json is sealed. Absent on an identity from before sealing, whose file is
+    /// trusted as it stands once and sealed then.
+    #[serde(default)]
+    sealed: bool,
 }
 
 /// A pairing the user has opened but no extension has completed yet.
@@ -135,6 +143,62 @@ fn write_file(root: &Path, file: &PairingFile) -> Res<()> {
     fs::write(&tmp, &bytes).map_err(|e| format!("write pairing temp: {e}"))?;
     restrict(&tmp)?;
     fs::rename(&tmp, &p).map_err(|e| format!("rename pairing state: {e}"))
+}
+
+/// An Ed25519 seed only this identity yields, so a seal cannot be forged from the file.
+fn seal_key(id: &Identity) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(SEAL_INFO);
+    hasher.update(id.private_key.as_bytes());
+    B64.encode(hasher.finalize())
+}
+
+fn sealed_fields(file: &PairingFile) -> Res<String> {
+    serde_json::to_string(&(&file.public_key, &file.peers))
+        .map_err(|e| format!("encode pairing state: {e}"))
+}
+
+fn sign_seal(id: &Identity, file: &PairingFile) -> Res<String> {
+    roster_sig::roster_sign(seal_key(id), sealed_fields(file)?)
+        .map_err(|e| format!("seal pairing state: {e:?}"))
+}
+
+fn seal_holds(id: &Identity, file: &PairingFile) -> bool {
+    let check = || -> Res<bool> {
+        let key = roster_sig::roster_sig_public_key(seal_key(id)).map_err(|e| format!("{e:?}"))?;
+        roster_sig::roster_verify(key, sealed_fields(file)?, file.seal.clone())
+            .map_err(|e| format!("{e:?}"))
+    };
+    check().unwrap_or(false)
+}
+
+fn sealed_identity() -> Res<Option<Identity>> {
+    Ok(load_identity()?.filter(|id| id.sealed))
+}
+
+/// pairing.json with `peers` cut to what this app sealed: a file anything else changed keeps
+/// none, so writing it is never a way onto the allowlist. Before sealing (or with no key at
+/// all) the peers are returned as they stand, for listing; `identity` decides whether to trust them.
+fn read_trusted(root: &Path) -> Res<PairingFile> {
+    let mut file = read_file(root)?;
+    if let Some(id) = sealed_identity()? {
+        if !seal_holds(&id, &file) {
+            if !file.peers.is_empty() {
+                log::warn!("pairing.json was changed outside Bramble; not trusting its browsers");
+            }
+            file.peers.clear();
+        }
+    }
+    Ok(file)
+}
+
+/// Write pairing.json, sealed whenever this device's identity seals it.
+fn save(root: &Path, file: &mut PairingFile) -> Res<()> {
+    file.seal = match sealed_identity()? {
+        Some(id) => sign_seal(&id, file)?,
+        None => String::new(),
+    };
+    write_file(root, file)
 }
 
 /// Owner-only. Does not stop a process running as the user, which is the threat the pairing
@@ -245,25 +309,20 @@ fn store_identity(id: &Identity) -> Res<()> {
 fn identity(root: &Path) -> Res<(String, String)> {
     let mut file = read_file(root)?;
 
-    // An earlier build kept the private key in pairing.json. Move it rather than generating
-    // a new one, which would orphan every browser already paired against it.
-    if !file.private_key.is_empty() {
-        if load_identity()?.is_none() {
-            store_identity(&Identity {
-                private_key: std::mem::take(&mut file.private_key),
-                public_key: file.public_key.clone(),
-            })?;
-        }
-        file.private_key = String::new();
-        write_file(root, &file)?;
-    }
-
-    if let Some(id) = load_identity()? {
+    if let Some(mut id) = load_identity()? {
         // The allowlist names peers that authenticate against a specific key. If the stored
         // identity is not that key, those entries are meaningless and continuing would look
         // like every browser spontaneously failing to connect.
         if !file.public_key.is_empty() && file.public_key != id.public_key {
             return Err("pairing identity does not match the stored allowlist".into());
+        }
+        if !id.sealed {
+            // File first: a crash before the flag is stored just seals the same file again.
+            file.public_key = id.public_key.clone();
+            file.seal = sign_seal(&id, &file)?;
+            write_file(root, &file)?;
+            id.sealed = true;
+            store_identity(&id)?;
         }
         return Ok((id.private_key, id.public_key));
     }
@@ -276,9 +335,10 @@ fn identity(root: &Path) -> Res<(String, String)> {
     store_identity(&Identity {
         private_key: kp.private_key.clone(),
         public_key: kp.public_key.clone(),
+        sealed: true,
     })?;
     file.public_key = kp.public_key.clone();
-    write_file(root, &file)?;
+    save(root, &mut file)?;
     Ok((kp.private_key, kp.public_key))
 }
 
@@ -287,18 +347,18 @@ pub fn public_key(root: &Path) -> Res<String> {
 }
 
 pub fn paired_peers(root: &Path) -> Res<Vec<PairedPeer>> {
-    Ok(read_file(root)?.peers)
+    Ok(read_trusted(root)?.peers)
 }
 
 /// Revoke a browser. The next connection from it fails the KK handshake, because its static
 /// key is no longer one this device will accept.
 pub fn forget_peer(root: &Path, public_key: &str) -> Res<bool> {
-    let mut file = read_file(root)?;
+    let mut file = read_trusted(root)?;
     let before = file.peers.len();
     file.peers.retain(|p| p.public_key != public_key);
     let removed = file.peers.len() != before;
     if removed {
-        write_file(root, &file)?;
+        save(root, &mut file)?;
     }
     Ok(removed)
 }
@@ -381,7 +441,7 @@ pub struct Handshake {
 #[allow(dead_code)]
 pub fn accept_known(root: &Path, peer_public_key: &str) -> Res<Handshake> {
     let (priv_key, _) = identity(root)?;
-    let known = read_file(root)?
+    let known = read_trusted(root)?
         .peers
         .iter()
         .any(|p| p.public_key == peer_public_key);
@@ -440,7 +500,7 @@ pub struct Step {
 }
 
 fn add_peer(root: &Path, public_key: &str, label: &str) -> Res<()> {
-    let mut file = read_file(root)?;
+    let mut file = read_trusted(root)?;
     // Re-pairing an existing browser refreshes it rather than adding a duplicate that would
     // then need revoking twice.
     file.peers.retain(|p| p.public_key != public_key);
@@ -449,7 +509,7 @@ fn add_peer(root: &Path, public_key: &str, label: &str) -> Res<()> {
         label: label.to_string(),
         paired_at: now_ms(),
     });
-    write_file(root, &file)
+    save(root, &mut file)
 }
 
 #[allow(dead_code)]
@@ -695,35 +755,99 @@ mod tests {
         assert!(paired_peers(d.path()).is_err());
     }
 
+    fn peer_json(public_key: &str) -> serde_json::Value {
+        serde_json::json!({ "publicKey": public_key, "label": "rogue", "pairedAt": 1 })
+    }
+
     #[test]
-    fn a_legacy_file_key_migrates_into_the_credential_store() {
+    fn a_key_planted_in_the_file_is_never_adopted() {
         let _g = setup();
         let d = root();
-        // What the previous build wrote: the private key inline.
-        let kp = handshake::handshake_generate_keypair().unwrap();
+        // Another process seeds an identity and allowlists itself before the app first pairs.
+        let planted = handshake::handshake_generate_keypair().unwrap();
+        let rogue = handshake::handshake_generate_keypair().unwrap();
         fs::write(
             path(d.path()),
             serde_json::json!({
-                "privateKey": kp.private_key,
-                "publicKey": kp.public_key,
-                "peers": [],
+                "privateKey": planted.private_key,
+                "publicKey": planted.public_key,
+                "peers": [peer_json(&rogue.public_key)],
             })
             .to_string(),
         )
         .unwrap();
 
-        // Same identity, not a fresh one: regenerating would orphan every paired browser.
-        assert_eq!(public_key(d.path()).unwrap(), kp.public_key);
+        assert!(accept_known(d.path(), &rogue.public_key).is_err());
         assert!(
-            read_raw().unwrap().is_some(),
-            "key should now be in the store"
+            read_raw().unwrap().is_none(),
+            "nothing adopted into the store"
         );
+    }
 
-        let on_disk = fs::read_to_string(path(d.path())).unwrap();
-        assert!(
-            !on_disk.contains(&kp.private_key),
-            "private key should no longer be on disk"
+    #[test]
+    fn a_peer_written_into_the_file_is_not_trusted() {
+        let _g = setup();
+        let d = root();
+        let code = begin_pairing().unwrap();
+        pair(d.path(), &code, "chrome").unwrap();
+
+        // Keep the real identity's public key and seal, and append a peer of one's own.
+        let rogue = handshake::handshake_generate_keypair().unwrap();
+        let mut file: serde_json::Value =
+            serde_json::from_slice(&fs::read(path(d.path())).unwrap()).unwrap();
+        file["peers"]
+            .as_array_mut()
+            .unwrap()
+            .push(peer_json(&rogue.public_key));
+        fs::write(path(d.path()), file.to_string()).unwrap();
+
+        assert!(accept_known(d.path(), &rogue.public_key).is_err());
+        // Fail closed: once tampered, the file vouches for nobody until browsers pair again.
+        assert!(paired_peers(d.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_allowlist_from_before_sealing_is_trusted_once_then_sealed() {
+        let _g = setup();
+        let d = root();
+        // What an earlier build left: an identity with no seal flag and an unsealed file.
+        let id = handshake::handshake_generate_keypair().unwrap();
+        let browser = handshake::handshake_generate_keypair().unwrap();
+        *TEST_STORE.lock().unwrap() = Some(
+            serde_json::json!({ "privateKey": id.private_key, "publicKey": id.public_key })
+                .to_string(),
         );
+        fs::write(
+            path(d.path()),
+            serde_json::json!({ "publicKey": id.public_key, "peers": [peer_json(&browser.public_key)] })
+                .to_string(),
+        )
+        .unwrap();
+
+        close(&accept_known(d.path(), &browser.public_key).unwrap());
+        assert!(load_identity().unwrap().unwrap().sealed);
+
+        let rogue = handshake::handshake_generate_keypair().unwrap();
+        let mut file: serde_json::Value =
+            serde_json::from_slice(&fs::read(path(d.path())).unwrap()).unwrap();
+        file["peers"]
+            .as_array_mut()
+            .unwrap()
+            .push(peer_json(&rogue.public_key));
+        fs::write(path(d.path()), file.to_string()).unwrap();
+        assert!(accept_known(d.path(), &rogue.public_key).is_err());
+    }
+
+    #[test]
+    fn forgetting_one_browser_keeps_the_others_trusted() {
+        let _g = setup();
+        let d = root();
+        let first = pair(d.path(), &begin_pairing().unwrap(), "first").unwrap();
+        let second = pair(d.path(), &begin_pairing().unwrap(), "second").unwrap();
+
+        assert!(forget_peer(d.path(), &first).unwrap());
+        assert!(accept_known(d.path(), &first).is_err());
+        close(&accept_known(d.path(), &second).unwrap());
     }
 
     #[test]

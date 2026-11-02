@@ -262,9 +262,13 @@ pub fn purge_all() -> usize {
 // Except for the reserved names below, which the webview may not touch at all: they hold
 // secrets this process owns and uses on the webview's behalf, so handing one back would defeat
 // the point of keeping it here. Backup provider credentials are the first (see `backup`): the
-// webview asks for a request to be SENT, never for the credential that authenticates it.
+// webview asks for a request to be SENT, never for the credential that authenticates it. The
+// browser-link identity is the second: it also seals the link's allowlist (see `pairing`).
 
-const RESERVED: [&str; 1] = [crate::backup::CREDS_PREFIX];
+const RESERVED: [&str; 2] = [
+    crate::backup::CREDS_PREFIX,
+    crate::pairing::KEYCHAIN_ACCOUNT,
+];
 
 fn reserved(key: &str) -> Res<()> {
     if RESERVED.iter().any(|p| key.starts_with(p)) {
@@ -338,6 +342,8 @@ mod tests {
         assert!(secure_delete("backup.creds:v1:t1".into()).is_err());
         // ...and the value is untouched by the refused writes.
         assert_eq!(read("backup.creds:v1:t1").unwrap(), Some("secret".into()));
+        assert!(secure_get(crate::pairing::KEYCHAIN_ACCOUNT.into()).is_err());
+        assert!(secure_set(crate::pairing::KEYCHAIN_ACCOUNT.into(), "{}".into()).is_err());
         // Everything else still works.
         assert!(secure_set("sync.deviceKeypair".into(), "kp".into()).is_ok());
         assert_eq!(
