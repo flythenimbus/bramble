@@ -62,13 +62,17 @@ function makePlatform(ownPub: string) {
 		decryptWithVek: vi.fn(async () => JSON.stringify({ entries: [], tombstones: [] })),
 	};
 	const startEnrollInvite = vi.fn(async () => {});
+	const syncListeners: ((ev: { kind: string; entryJson?: string }) => void)[] = [];
 	const shell = {
 		setActiveVault: vi.fn(async () => {}),
 		getActiveVault: vi.fn(async () => "v1"),
 		flushPendingCornerCapture: vi.fn(async () => {}),
 		stopSyncSpike: vi.fn(async () => {}),
 		syncDevicePublicKey: vi.fn(async () => CURRENT_PUB),
-		onSyncEvent: vi.fn(() => () => {}),
+		onSyncEvent: vi.fn((cb: (ev: { kind: string; entryJson?: string }) => void) => {
+			syncListeners.push(cb);
+			return () => {};
+		}),
 		startEnrollInvite,
 	};
 	const platform = {
@@ -78,7 +82,10 @@ function makePlatform(ownPub: string) {
 		shell,
 		clipboard: {},
 	} as unknown as Platform;
-	return { platform, startEnrollInvite };
+	const enrolled = (entry: object) => {
+		for (const cb of syncListeners) cb({ kind: "enrolled", entryJson: JSON.stringify(entry) });
+	};
+	return { platform, startEnrollInvite, setMeta: storage.setMeta, enrolled };
 }
 
 async function mount(platform: Platform) {
@@ -107,5 +114,38 @@ describe("inviting from this device", () => {
 			);
 		});
 		expect(startEnrollInvite).not.toHaveBeenCalled();
+	});
+});
+
+describe("adding the device that joined", () => {
+	const joiner = (id: string) => ({
+		id,
+		publicKey: "am9pbmVy",
+		label: "Joiner",
+		addedAt: 2,
+		hlc: { wall: 2, counter: 0, node: id },
+	});
+	const groupWrites = (setMeta: ReturnType<typeof vi.fn>) =>
+		setMeta.mock.calls.filter(([k]) => k === "sync.group:v1") as [
+			string,
+			{ roster: RosterPayload },
+		][];
+
+	it("does not let it take this device's id under its own key", async () => {
+		const { platform, setMeta, enrolled } = makePlatform(CURRENT_PUB);
+		const actions = await mount(platform);
+		await act(async () => {
+			await actions().inviteDevice("wss://relay.example");
+		});
+		setMeta.mockClear();
+
+		await act(async () => enrolled(joiner("device-1")));
+		expect(groupWrites(setMeta)).toEqual([]);
+
+		await act(async () => enrolled(joiner("device-2")));
+		const ids = groupWrites(setMeta)
+			.at(-1)?.[1]
+			.roster.devices.map((d) => d.id);
+		expect(ids?.sort()).toEqual(["device-1", "device-2"]);
 	});
 });

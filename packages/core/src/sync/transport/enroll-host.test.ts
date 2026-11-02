@@ -4,7 +4,7 @@ import { decodeVaultBlob, findRecoverySlots } from "../../vault-format";
 import { encodeEnrollmentBundle, INVITE_TTL_MS, type WireRecoverySlot } from "../enrollment";
 import { emptyEntriesPayload } from "../entries-payload";
 import { pairingSas } from "../pairing-sas";
-import { emptyRoster, type RosterEntry } from "../roster";
+import { addDevice, emptyRoster, type RosterEntry } from "../roster";
 import { type Channel, makeChannel } from "./channel";
 import {
 	ENROLL_REJECTED,
@@ -496,6 +496,22 @@ describe("invite lifecycle — single use + bounded waits", () => {
 
 		expect(peer.sent).toEqual([]); // caught BEFORE the bundle, not after it
 		expect(approve).not.toHaveBeenCalled(); // and the user is never asked about a bogus peer
+		expect(onEnrolled).not.toHaveBeenCalled();
+	});
+
+	it("refuses a joiner claiming a member's id under its own key, before the SAS", async () => {
+		const approve = vi.fn(async () => true);
+		const onEnrolled = vi.fn();
+		const laptop: RosterEntry = { ...ownEntry, id: "laptop", publicKey: "laptoppub" };
+		const roster = addDevice(emptyRoster(), laptop);
+		const handle = makeEnrollHandler("inviter", hostOpts({ approve, onEnrolled, roster }), vi.fn());
+		const peer = invitePeer("aaaaaaaa");
+		peer.push(JSON.stringify({ ...ownEntry, id: "laptop" }));
+
+		await handle(peer.peer);
+
+		expect(peer.sent).toEqual([]);
+		expect(approve).not.toHaveBeenCalled();
 		expect(onEnrolled).not.toHaveBeenCalled();
 	});
 

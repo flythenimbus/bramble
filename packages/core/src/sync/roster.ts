@@ -193,6 +193,14 @@ export function addDevice(roster: RosterPayload, device: RosterEntry): RosterPay
 	return mergeRosters(roster, { devices: [device], revoked: [] });
 }
 
+/** Whether a joiner's entry may be enrolled: a fresh id, or a member re-presenting its own key. A
+ * taken id under another key would evict that member by LWW. */
+export function mayEnroll(roster: RosterPayload, entry: RosterEntry): boolean {
+	if (roster.revoked.some((t) => t.id === entry.id)) return false;
+	const held = roster.devices.find((d) => d.id === entry.id);
+	return !held || held.publicKey === entry.publicKey;
+}
+
 /** Revoke a device. `hlc` must be a freshly stamped revocation stamp. */
 export function revokeDevice(roster: RosterPayload, id: string, hlc: Hlc): RosterPayload {
 	return mergeRosters(roster, { devices: [], revoked: [{ id, hlc }] });

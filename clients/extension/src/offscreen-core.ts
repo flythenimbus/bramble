@@ -17,7 +17,14 @@ import type {
 } from "@core/adapters/crypto";
 import { buildCryptoAdapter } from "@core/adapters/crypto-wasm";
 import { decodeEntriesPayload } from "@core/sync/entries-payload";
-import { canonicalRosterEntry, encodeRoster, RosterEntrySchema } from "@core/sync/roster";
+import {
+	canonicalRosterEntry,
+	decodeRoster,
+	emptyRoster,
+	encodeRoster,
+	mayEnroll,
+	RosterEntrySchema,
+} from "@core/sync/roster";
 import { blobLinkDialer } from "@core/sync/transport/blob-link";
 import {
 	type BlobSyncSession,
@@ -740,6 +747,8 @@ export async function addEnrolledToLocalRoster(
 ): Promise<void> {
 	try {
 		const entry = RosterEntrySchema.parse(JSON.parse(entryJson));
+		const local = await bridge.fetchLocalRoster(vaultId).then(decodeRoster).catch(emptyRoster);
+		if (!mayEnroll(local, entry)) return;
 		let admitted = entry;
 		if (admission) {
 			const w = await getWasm();

@@ -32,7 +32,7 @@ import {
 } from "@core/index";
 import { blobArrived } from "@core/sync/blob-arrivals";
 import { answerBlobStatus } from "@core/sync/blob-status";
-import { addDevice } from "@core/sync/roster";
+import { addDevice, mayEnroll } from "@core/sync/roster";
 import { syncKeyFor } from "@core/sync/sync-keys";
 import {
 	type BlobSyncSession,
@@ -91,6 +91,7 @@ export async function addToLocalRoster(vaultId: string, device: RosterEntry): Pr
 	const key = syncKeyFor(GROUP_KEY, vaultId);
 	const group = await desktopStorage.getMeta<GroupConfig>(key);
 	if (!group) return; // no group to add to; the invite was for a vault that has since gone
+	if (!mayEnroll(group.roster, device)) return;
 	await desktopStorage.setMeta(key, { ...group, roster: addDevice(group.roster, device) });
 	emit({ kind: "roster" });
 }

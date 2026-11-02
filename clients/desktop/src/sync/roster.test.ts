@@ -376,3 +376,33 @@ describe("lock state", () => {
 		await vi.waitFor(() => expect(h.rosterOpts).not.toBeNull());
 	});
 });
+
+describe("addToLocalRoster", () => {
+	const member = (id: string, publicKey: string) => ({
+		id,
+		publicKey,
+		label: id,
+		addedAt: 1,
+		hlc: { wall: 1, counter: 0, node: id },
+	});
+
+	it("does not let a joiner take a member's id under another key", async () => {
+		const laptop = member("laptop", "laptoppub");
+		h.meta.set(`sync.group:${VAULT_A}`, {
+			groupKey: "k",
+			roster: { devices: [laptop], revoked: [] },
+		});
+		const mod = await loadRoster();
+
+		await mod.addToLocalRoster(VAULT_A, {
+			...member("laptop", "attackerpub"),
+			hlc: { wall: 9, counter: 0, node: "x" },
+		});
+		await mod.addToLocalRoster(VAULT_A, member("phone", "phonepub"));
+
+		const group = h.meta.get(`sync.group:${VAULT_A}`) as {
+			roster: { devices: { publicKey: string }[] };
+		};
+		expect(group.roster.devices.map((d) => d.publicKey).sort()).toEqual(["laptoppub", "phonepub"]);
+	});
+});

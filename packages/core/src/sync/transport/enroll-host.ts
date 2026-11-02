@@ -11,6 +11,7 @@ import {
 	type EntriesPayload,
 	encodeEnrollmentBundle,
 	INVITE_TTL_MS,
+	mayEnroll,
 	type RosterEntry,
 	RosterEntrySchema,
 	type RosterPayload,
@@ -420,7 +421,11 @@ async function recvJoinerHello(
 	// Pin the entry's key to the one the joiner actually proved, so it can't seat a key it doesn't
 	// control (or a third party's) into the roster. This used to run AFTER the bundle was sent,
 	// which made it a roster hygiene check rather than the access check it reads as.
-	if (!entry || entry.publicKey !== sess.remoteStatic) {
+	if (
+		!entry ||
+		entry.publicKey !== sess.remoteStatic ||
+		!mayEnroll(opts.roster ?? { devices: [], revoked: [] }, entry)
+	) {
 		opts.report("⚠ the joining device sent an invalid introduction, not enrolling");
 		opts.onEnrollFailed?.(
 			"That device couldn't be verified, so nothing was sent. Generate a new code and try again.",

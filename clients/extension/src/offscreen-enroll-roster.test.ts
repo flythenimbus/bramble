@@ -1,4 +1,9 @@
-import { canonicalRosterEntry, decodeRoster, type RosterEntry } from "@core/sync/roster";
+import {
+	canonicalRosterEntry,
+	decodeRoster,
+	encodeRoster,
+	type RosterEntry,
+} from "@core/sync/roster";
 import { describe, expect, it, vi } from "vitest";
 
 // Regression guard for the Firefox-inviter fix: the enroll HOST must add a freshly-joined device to
@@ -25,7 +30,7 @@ const JOINER: RosterEntry = {
 	hlc: { wall: 1000, counter: 0, node: "joiner-id" },
 };
 
-function captureBridge() {
+function captureBridge(localRoster = "") {
 	const pushed: string[] = [];
 	const vaults: string[] = [];
 	return {
@@ -34,7 +39,7 @@ function captureBridge() {
 		bridge: {
 			fetchLocalPayload: async () => "",
 			pushRemotePayload: async () => {},
-			fetchLocalRoster: async () => "",
+			fetchLocalRoster: async () => localRoster,
 			pushRemoteRoster: async (vaultId: string, rosterJson: string) => {
 				vaults.push(vaultId);
 				pushed.push(rosterJson);
@@ -79,6 +84,13 @@ describe("addEnrolledToLocalRoster (host-side roster add on enroll)", () => {
 		await expect(
 			addEnrolledToLocalRoster(bridge, "vault-a", undefined, "definitely not json"),
 		).resolves.toBeUndefined();
+		expect(pushed).toHaveLength(0);
+	});
+
+	it("does not push a joiner that takes a member's id under another key", async () => {
+		const member = { ...JOINER, publicKey: "memberPub" };
+		const { pushed, bridge } = captureBridge(encodeRoster({ devices: [member], revoked: [] }));
+		await addEnrolledToLocalRoster(bridge, "vault-a", undefined, JSON.stringify(JOINER));
 		expect(pushed).toHaveLength(0);
 	});
 });

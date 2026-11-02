@@ -10,6 +10,7 @@ import {
 	findDevice,
 	hasSignedEntry,
 	isActiveDevice,
+	mayEnroll,
 	mergeRemoteRoster,
 	mergeRosters,
 	type RosterEntry,
@@ -258,6 +259,32 @@ describe("roster add/revoke", () => {
 		// Re-adding the device under a fresh id brings it back (that is how a removed device returns).
 		r = addDevice(r, device("phone-2", 400));
 		expect(ids(r)).toEqual(["phone-2"]);
+	});
+});
+
+describe("mayEnroll (a joiner's id is bound to the key it proved)", () => {
+	const roster = revokeDevice(
+		addDevice(addDevice(emptyRoster(), device("laptop", 100)), device("old", 50)),
+		"old",
+		hlc(150, "laptop"),
+	);
+
+	it("accepts a fresh id", () => {
+		expect(mayEnroll(roster, device("phone", 200))).toBe(true);
+	});
+
+	it("accepts a device re-presenting its own id and key", () => {
+		expect(mayEnroll(roster, device("laptop", 200))).toBe(true);
+	});
+
+	it("refuses a member's id under another key, which would evict that member", () => {
+		const seize = { ...device("laptop", 200), publicKey: "pk-attacker" };
+		expect(mayEnroll(roster, seize)).toBe(false);
+		expect(findDevice(addDevice(roster, seize), "laptop")?.publicKey).toBe("pk-attacker");
+	});
+
+	it("refuses a revoked id", () => {
+		expect(mayEnroll(roster, device("old", 200))).toBe(false);
 	});
 });
 

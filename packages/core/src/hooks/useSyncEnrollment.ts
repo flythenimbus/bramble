@@ -12,6 +12,7 @@ import {
 	encodePairingCode,
 	type HybridClock,
 	INVITE_TTL_MS,
+	mayEnroll,
 	pairingCodeExpired,
 	type RosterEntry,
 	RosterEntrySchema,
@@ -303,7 +304,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 					const cur = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
 						syncKey("sync.group"),
 					);
-					if (!cur) return;
+					if (!cur || !mayEnroll(cur.roster, admitted)) return;
 					await storage.setMeta(syncKey("sync.group"), {
 						groupKey: cur.groupKey,
 						roster: addDevice(cur.roster, admitted),
