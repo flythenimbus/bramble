@@ -107,9 +107,14 @@ private func prfGet(_ input: ASAuthorizationPublicKeyCredentialPRFAssertionInput
 	guard let input else { return nil }
 	var byCredential: [String: PrfSalts] = [:]
 	for (id, values) in input.perCredentialInputValues ?? [:] {
-		byCredential[id.base64EncodedString()] = PrfSalts(first: values.saltInput1, second: values.saltInput2)
+		byCredential[id.base64EncodedString()] = prfSalts(values)
 	}
 	return PrfGet(salts: prfSalts(input.inputValues), byCredential: byCredential)
+}
+
+// A minted passkey's PRF secrets as core's PasskeyCredential.prf stores them (STANDARD base64).
+private func prfSecrets(_ reg: PasskeyRegistration) -> [String: String] {
+	["credWithUV": reg.prf.credWithUv, "credWithoutUV": reg.prf.credWithoutUv]
 }
 
 // Run the core's PRF over a stored secret; nil on failure, so a PRF fault never fails the ceremony.
@@ -901,7 +906,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			"privateKey": reg.privateKey,
 			"signCount": 0,
 			"createdAt": Int(Date().timeIntervalSince1970 * 1000),
-			"prf": ["credWithUV": reg.prf.credWithUv, "credWithoutUV": reg.prf.credWithoutUv],
+			"prf": prfSecrets(reg),
 		]
 		guard let json = try? JSONSerialization.data(withJSONObject: credential),
 			let plaintext = String(data: json, encoding: .utf8),
@@ -942,7 +947,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			// We only ever mint ES256; imported EdDSA passkeys reach this bundle from the main
 			// app's setIndex rebuild, not from here.
 			"alg": -7,
-			"prf": ["credWithUV": reg.prf.credWithUv, "credWithoutUV": reg.prf.credWithoutUv],
+			"prf": prfSecrets(reg),
 		])
 		guard let plain = try? JSONSerialization.data(withJSONObject: list),
 			let str = String(data: plain, encoding: .utf8),

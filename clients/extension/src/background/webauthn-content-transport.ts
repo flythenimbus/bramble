@@ -7,8 +7,7 @@
 // (handleCreate/handleGet), so only the delivery differs. See docs/firefox-port.md.
 //
 // Origin: taken from the message sender (browser-set, per-frame), which is authoritative
-// and cannot be forged by the page. This is strictly better than the Chrome proxy, which
-// has to guess the requester from the active tab.
+// and cannot be forged by the page.
 //
 // The response envelope's `data` tells the in-page shim what to do:
 //  - { passthrough: true }  -> call the native navigator.credentials (provider off, or an
@@ -66,19 +65,16 @@ export function senderCaller(
 // Register only on Firefox (no proxy API). On Chrome the MAIN-world script is never
 // injected, so these would be dead handlers; guarding keeps the Chrome path clean.
 if (typeof api.webAuthenticationProxy === "undefined") {
-	on("WEBAUTHN_CREATE", async (message, sender): Promise<{ ok: true; data: TransportResult }> => {
-		const bound = isProviderEnabled() ? senderCaller(sender) : null;
-		if (!bound) return { ok: true, data: { passthrough: true } };
-		const json = JSON.stringify(message.payload ?? {});
-		const details = await handleCreate(depsForTab(bound.tabId), 0, json, bound.caller);
-		return { ok: true, data: toTransportResult(details) };
-	});
-
-	on("WEBAUTHN_GET", async (message, sender): Promise<{ ok: true; data: TransportResult }> => {
-		const bound = isProviderEnabled() ? senderCaller(sender) : null;
-		if (!bound) return { ok: true, data: { passthrough: true } };
-		const json = JSON.stringify(message.payload ?? {});
-		const details = await handleGet(depsForTab(bound.tabId), 0, json, bound.caller);
-		return { ok: true, data: toTransportResult(details) };
-	});
+	for (const [type, handle] of [
+		["WEBAUTHN_CREATE", handleCreate],
+		["WEBAUTHN_GET", handleGet],
+	] as const) {
+		on(type, async (message, sender): Promise<{ ok: true; data: TransportResult }> => {
+			const bound = isProviderEnabled() ? senderCaller(sender) : null;
+			if (!bound) return { ok: true, data: { passthrough: true } };
+			const json = JSON.stringify(message.payload ?? {});
+			const details = await handle(depsForTab(bound.tabId), 0, json, bound.caller);
+			return { ok: true, data: toTransportResult(details) };
+		});
+	}
 }

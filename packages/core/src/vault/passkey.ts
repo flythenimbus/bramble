@@ -1,5 +1,6 @@
 // Pure decision logic for the passkey provider (authenticator role): which stored
-// passkey satisfies a get(), and where a freshly minted passkey should live. Kept
+// passkey satisfies a get(), where a freshly minted passkey should live, and what a
+// stored passkey's PRF secrets and kept extension members must look like. Kept
 // pure and platform-agnostic so the extension and (eventually) the mobile providers
 // share one canonical placement rule, and so it is unit-tested without any IO.
 // See docs/passkey-provider.md.

@@ -119,6 +119,30 @@ function passkeyLabel(p: { userName?: string; userDisplayName?: string }): strin
 
 type Approved = Extract<CeremonyDecision, { approved: true }>;
 
+/** A request that needs more than a card click: UV "required", or PRF, whose key rests on UV. */
+function needsVerification(opts: { userVerification?: string; prf?: unknown }): boolean {
+	return opts.userVerification === "required" || opts.prf !== undefined;
+}
+
+/**
+ * Confirm and unlock a locked vault, then read it (an unreadable vault reads as empty). Null when
+ * the user declined either step.
+ */
+async function unlockAndLoad(
+	host: CeremonyHost,
+): Promise<{ startedLocked: boolean; entries: Entry[] } | null> {
+	const startedLocked = host.isLocked();
+	if (startedLocked) {
+		if (!(await host.showCard({})).approved) return null;
+		if (!(await host.ensureUnlocked())) return null;
+	}
+	let entries: Entry[] = [];
+	try {
+		entries = await host.loadEntries();
+	} catch {}
+	return { startedLocked, entries };
+}
+
 /**
  * Approve, claiming user verification only when it happened: the unlock this ceremony just did,
  * or a confirm-it's-you for a request that needs one. A card click alone is consent, so an
@@ -145,16 +169,9 @@ export async function runGetCeremony(
 	req: CeremonyGetRequest,
 	host: CeremonyHost,
 ): Promise<CeremonyDecision> {
-	const startedLocked = host.isLocked();
-	if (startedLocked) {
-		if (!(await host.showCard({})).approved) return { approved: false };
-		if (!(await host.ensureUnlocked())) return { approved: false };
-	}
-
-	let entries: Entry[] = [];
-	try {
-		entries = await host.loadEntries();
-	} catch {}
+	const opened = await unlockAndLoad(host);
+	if (!opened) return { approved: false };
+	const { startedLocked, entries } = opened;
 	const matches = findPasskeys(entries, req.rpId, req.allowCredentials);
 
 	// No stored passkey for this site: confirm generically if we didn't already (locked
@@ -193,16 +210,9 @@ export async function runCreateCeremony(
 	req: CeremonyCreateRequest,
 	host: CeremonyHost,
 ): Promise<CeremonyDecision> {
-	const startedLocked = host.isLocked();
-	if (startedLocked) {
-		if (!(await host.showCard({})).approved) return { approved: false };
-		if (!(await host.ensureUnlocked())) return { approved: false };
-	}
-
-	let entries: Entry[] = [];
-	try {
-		entries = await host.loadEntries();
-	} catch {}
+	const opened = await unlockAndLoad(host);
+	if (!opened) return { approved: false };
+	const { startedLocked, entries } = opened;
 
 	const target = passkeyAttachTarget(entries, req.rpId, req.userName);
 	if (target) {
@@ -282,7 +292,7 @@ async function evalPrf(
 
 /** Apply the ceremony's create placement choice ("new" / a chosen login), else auto. */
 function resolveCreatePlan(
-	decision: Extract<CeremonyDecision, { approved: true }>,
+	decision: Approved,
 	entries: Entry[],
 	rpId: string,
 	rpName: string | undefined,
@@ -323,7 +333,7 @@ export async function handleCreate(
 			rpName: opts.rpName,
 			userName: opts.userName,
 			origin: caller.origin,
-			needsVerification: opts.userVerification === "required" || opts.prf !== undefined,
+			needsVerification: needsVerification(opts),
 		});
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
 
@@ -409,7 +419,7 @@ export async function handleGet(
 			kind: "get",
 			rpId,
 			origin: caller.origin,
-			needsVerification: opts.userVerification === "required" || opts.prf !== undefined,
+			needsVerification: needsVerification(opts),
 			allowCredentials: allowStd.length ? allowStd : undefined,
 		});
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");

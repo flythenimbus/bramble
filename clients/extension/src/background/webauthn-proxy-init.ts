@@ -56,26 +56,62 @@ let pausedWhileAttached = false;
 // the page gets a bare `AbortError` and onRequestCanceled never fires, so we would not otherwise
 // know. Answering first gives the site a reason, and clearing the map stops the ceremony from
 // walking the user through a picker for a request that no longer exists.
-const inFlight = new Map<number, "create" | "get">();
+type Kind = "create" | "get";
+const inFlight = new Map<number, Kind>();
+
+// Create and get answers share one shape.
+function complete(
+	kind: Kind,
+	details: chrome.webAuthenticationProxy.CreateResponseDetails,
+): Promise<void> {
+	return kind === "create"
+		? api.webAuthenticationProxy.completeCreateRequest(details)
+		: api.webAuthenticationProxy.completeGetRequest(details);
+}
 
 async function failInFlightRequests(): Promise<void> {
 	if (typeof api.webAuthenticationProxy === "undefined" || inFlight.size === 0) return;
 	const pending = [...inFlight];
 	inFlight.clear();
 	for (const [requestId, kind] of pending) {
-		const details = {
-			requestId,
-			error: {
-				name: "NotAllowedError",
-				message: "Bramble paused passkey handling to unlock its own vault. Try again.",
-			},
+		const error = {
+			name: "NotAllowedError",
+			message: "Bramble paused passkey handling to unlock its own vault. Try again.",
 		};
-		const done =
-			kind === "create"
-				? api.webAuthenticationProxy.completeCreateRequest(details)
-				: api.webAuthenticationProxy.completeGetRequest(details);
-		await done.catch(() => {});
+		await complete(kind, { requestId, error }).catch(() => {});
 	}
+}
+
+const HANDLERS = { create: handleCreate, get: handleGet } as const;
+
+// Answer one proxied request: bind it to its page, run the ceremony, complete it once.
+function serve(kind: Kind, req: { requestId: number; requestDetailsJson: string }): void {
+	inFlight.set(req.requestId, kind);
+	void (async () => {
+		// These listeners bypass the message router, so await hydration ourselves: on a
+		// fresh SW wake the session VEK is restored asynchronously, and reading lock state
+		// before it lands would wrongly prompt to unlock an already-unlocked vault.
+		await whenReady();
+		const bound = await bindRequest(req.requestDetailsJson);
+		const details = bound
+			? await HANDLERS[kind](
+					depsForTab(bound.tabId),
+					req.requestId,
+					req.requestDetailsJson,
+					bound.caller,
+				)
+			: { requestId: req.requestId, error: NOT_ALLOWED };
+		// Gone means a pause already failed it; completing again throws "Invalid sender".
+		if (!inFlight.delete(req.requestId)) return;
+		try {
+			await complete(kind, details);
+		} catch (e) {
+			// A malformed responseJson rejects here; error the request so the page's call fails
+			// fast instead of hanging forever ("nothing happens").
+			console.error(`[passkey] completing a ${kind} request failed`, e);
+			await complete(kind, { requestId: req.requestId, error: NOT_ALLOWED }).catch(() => {});
+		}
+	})();
 }
 
 on("PASSKEY_PROXY_PAUSE", async () => {
@@ -116,66 +152,8 @@ function registerListeners(): void {
 			isUvpaa: true,
 		});
 	});
-	api.webAuthenticationProxy.onCreateRequest.addListener((req) => {
-		inFlight.set(req.requestId, "create");
-		void (async () => {
-			// These listeners bypass the message router, so await hydration ourselves: on a
-			// fresh SW wake the session VEK is restored asynchronously, and reading lock state
-			// before it lands would wrongly prompt to unlock an already-unlocked vault.
-			await whenReady();
-			const bound = await bindRequest(req.requestDetailsJson);
-			const details = bound
-				? await handleCreate(
-						depsForTab(bound.tabId),
-						req.requestId,
-						req.requestDetailsJson,
-						bound.caller,
-					)
-				: { requestId: req.requestId, error: NOT_ALLOWED };
-			// Gone means a pause already failed it; completing again throws "Invalid sender".
-			if (!inFlight.delete(req.requestId)) return;
-			try {
-				await api.webAuthenticationProxy.completeCreateRequest(details);
-			} catch (e) {
-				// A malformed responseJson rejects here; error the request so the page's
-				// create() fails fast instead of hanging forever ("nothing happens").
-				console.error("[passkey] completeCreateRequest failed", e);
-				await api.webAuthenticationProxy
-					.completeCreateRequest({
-						requestId: req.requestId,
-						error: NOT_ALLOWED,
-					})
-					.catch(() => {});
-			}
-		})();
-	});
-	api.webAuthenticationProxy.onGetRequest.addListener((req) => {
-		inFlight.set(req.requestId, "get");
-		void (async () => {
-			await whenReady(); // as in onCreateRequest: don't read lock state before hydration
-			const bound = await bindRequest(req.requestDetailsJson);
-			const details = bound
-				? await handleGet(
-						depsForTab(bound.tabId),
-						req.requestId,
-						req.requestDetailsJson,
-						bound.caller,
-					)
-				: { requestId: req.requestId, error: NOT_ALLOWED };
-			if (!inFlight.delete(req.requestId)) return; // as in onCreateRequest
-			try {
-				await api.webAuthenticationProxy.completeGetRequest(details);
-			} catch (e) {
-				console.error("[passkey] completeGetRequest failed", e);
-				await api.webAuthenticationProxy
-					.completeGetRequest({
-						requestId: req.requestId,
-						error: NOT_ALLOWED,
-					})
-					.catch(() => {});
-			}
-		})();
-	});
+	api.webAuthenticationProxy.onCreateRequest.addListener((req) => serve("create", req));
+	api.webAuthenticationProxy.onGetRequest.addListener((req) => serve("get", req));
 }
 
 // Registered at module scope rather than from the attach path, and this is load-bearing: the

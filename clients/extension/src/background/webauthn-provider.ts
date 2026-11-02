@@ -5,10 +5,10 @@
 // handlers (handleCreate/handleGet in ./webauthn-proxy) consume the deps built here.
 //
 // Two deliveries drive the same deps:
-//  - Chrome: chrome.webAuthenticationProxy (./webauthn-proxy-init) — attaches to the
-//    browser and recovers the origin from the active tab.
-//  - Firefox: a MAIN-world content script (./webauthn-content-transport) — overrides
-//    navigator.credentials and forwards, with the origin coming from the message sender.
+//  - Chrome: chrome.webAuthenticationProxy (./webauthn-proxy-init), with the origin from
+//    Chrome's own stamp on each proxied request.
+//  - Firefox: a MAIN-world content script (./webauthn-content-transport) that overrides
+//    navigator.credentials and forwards, with the origin from the message sender.
 // See docs/passkey-provider.md and docs/firefox-port.md.
 
 import type { PasskeyPromptResponse, SavePasskeyPrompt } from "@core/adapters/autofill";
@@ -137,11 +137,11 @@ async function ensureUnlocked(timeoutMs: number): Promise<boolean> {
 	return ok;
 }
 
-/** The corner-card ceremony, shown in `tabId`: the tab its transport bound the request to. */
 // The corner card has one slot, so a second concurrent ceremony is declined rather than allowed
 // to replace the first's card (which then could only auto-decline at its deadline).
 let ceremonyInProgress = false;
 
+/** The corner-card ceremony, shown in `tabId`: the tab its transport bound the request to. */
 function cornerCeremonyForTab(tabId: number): CeremonyFn {
 	return async (req) => {
 		if (ceremonyInProgress) return { approved: false };
