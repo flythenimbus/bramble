@@ -24,7 +24,7 @@ export const HlcSchema = z.object({
 	node: z.string().min(1),
 });
 
-// Backstop against a runaway loop; far above any real per-millisecond event rate.
+// Past this the counter carries into the wall: a peer's huge counter must not wedge the clock.
 const MAX_COUNTER = 0x7fffffff;
 
 // A remote stamp this far ahead of our physical clock is implausible (honest skew
@@ -109,33 +109,27 @@ export class HybridClock {
 	/** Stamp a local write. */
 	send(): Hlc {
 		const pt = this.now();
-		const prevWall = this.wall;
-		this.wall = Math.max(prevWall, pt);
-		this.counter = this.wall === prevWall ? this.counter + 1 : 0;
-		this.guard();
-		return { wall: this.wall, counter: this.counter, node: this.node };
+		const wall = Math.max(this.wall, pt);
+		return this.advance(wall, wall === this.wall ? this.counter + 1 : 0);
 	}
 
 	/** Advance past an observed remote stamp, then stamp the receiving event. */
 	receive(remote: Hlc): Hlc {
 		const pt = this.now();
 		const prevWall = this.wall;
-		const prevCounter = this.counter;
 		// Clamp an implausibly-far-future remote wall (see HLC_MAX_DRIFT_MS) so a peer
 		// can't shove our clock past physical time + honest skew.
 		const remoteWall = Math.min(remote.wall, pt + HLC_MAX_DRIFT_MS);
-		this.wall = Math.max(prevWall, remoteWall, pt);
-		if (this.wall === prevWall && this.wall === remoteWall) {
-			this.counter = Math.max(prevCounter, remote.counter) + 1;
-		} else if (this.wall === prevWall) {
-			this.counter = prevCounter + 1;
-		} else if (this.wall === remoteWall) {
-			this.counter = remote.counter + 1;
-		} else {
-			this.counter = 0;
+		const wall = Math.max(prevWall, remoteWall, pt);
+		let counter = 0;
+		if (wall === prevWall && wall === remoteWall) {
+			counter = Math.max(this.counter, remote.counter) + 1;
+		} else if (wall === prevWall) {
+			counter = this.counter + 1;
+		} else if (wall === remoteWall) {
+			counter = remote.counter + 1;
 		}
-		this.guard();
-		return { wall: this.wall, counter: this.counter, node: this.node };
+		return this.advance(wall, counter);
 	}
 
 	/** Observe a remote stamp without emitting one (e.g. ingesting a batch). */
@@ -143,9 +137,15 @@ export class HybridClock {
 		this.receive(remote);
 	}
 
-	private guard(): void {
-		if (this.counter > MAX_COUNTER) {
-			throw new Error("HLC counter overflow");
+	private advance(wall: number, counter: number): Hlc {
+		// The next millisecond sorts after every stamp at `wall`, whatever its counter.
+		if (counter > MAX_COUNTER) {
+			this.wall = wall + 1;
+			this.counter = 0;
+		} else {
+			this.wall = wall;
+			this.counter = counter;
 		}
+		return { wall: this.wall, counter: this.counter, node: this.node };
 	}
 }

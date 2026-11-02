@@ -149,6 +149,24 @@ describe("HybridClock.receive", () => {
 		time.set(1000 + HLC_MAX_DRIFT_MS + 1);
 		expect(clock.send().wall).toBe(1000 + HLC_MAX_DRIFT_MS + 1);
 	});
+
+	it("carries a remote counter at the limit into the wall instead of throwing", () => {
+		const time = fakeTime(1000);
+		const clock = new HybridClock("dev", time.now);
+		const poison = h(61_000, 0x7fffffff, "evil");
+		const out = clock.receive(poison);
+		expect(out).toEqual(h(61_001, 0, "dev"));
+		expect(compareHlc(out, poison)).toBe(1);
+		const next = clock.send();
+		expect(compareHlc(next, out)).toBe(1);
+	});
+
+	it("carries a local send past the limit into the wall", () => {
+		const time = fakeTime(1000);
+		const clock = new HybridClock("dev", time.now);
+		clock.witness(h(5000, 0x7ffffffe, "other"));
+		expect(clock.send()).toEqual(h(5001, 0, "dev"));
+	});
 });
 
 describe("isFutureStamp", () => {
