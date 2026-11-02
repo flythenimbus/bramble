@@ -40,11 +40,9 @@ enum BrambleVault {
 	// The VEK-encrypted passkey bundle (provider role); a second blob alongside the logins so
 	// the password-fill path is untouched. The extension decrypts it to assert a passkey.
 	static let passkeyBundleKey = "autofill.passkeys"
-	// Handoff for passkeys the extension MINTS during a registration: the extension can't write
-	// the vault, so it stashes each new credential (VEK-encrypted) here and the main app drains
-	// it on next launch. Array of {iv, ciphertext}. Mirrors Android's PendingSave.
+	// Where builds before AppGroupHandoff's file queues kept the minted-passkey and fill-and-save
+	// handoffs; AppGroupHandoff drains them once.
 	static let pendingPasskeysKey = "autofill.pendingPasskeys"
-	// Confirmed "fill and save" associations, VEK-encrypted for the app to drain and apply.
 	static let pendingAssociationsKey = "autofill.pendingAssociations"
 
 }

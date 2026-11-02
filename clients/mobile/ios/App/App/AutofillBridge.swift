@@ -49,11 +49,12 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 			defaults?.set(slotJson, forKey: BrambleVault.slotKey)
 		}
 		// Passkey bundle (provider role): a second VEK-encrypted blob the extension decrypts
-		// to assert. Its own key so the login/password path above is untouched.
+		// to assert. Its own key so the login/password path above is untouched. Locked against
+		// the extension appending a passkey it just minted.
 		if let pkIv = call.getString("passkeyIv"), let pkCt = call.getString("passkeyCiphertext"),
 			let pkData = try? JSONSerialization.data(withJSONObject: ["iv": pkIv, "ciphertext": pkCt])
 		{
-			defaults?.set(pkData, forKey: BrambleVault.passkeyBundleKey)
+			AppGroupHandoff.locked { defaults?.set(pkData, forKey: BrambleVault.passkeyBundleKey) }
 		}
 		// QuickType identity store: populated only when the user opted into keyboard
 		// suggestions (the JS sends identities then). Each carries a domain + username +
@@ -127,47 +128,26 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 
 	// Drain the passkeys the AutoFill extension minted during sign-in registrations (it can't
 	// write the vault itself). Returns the VEK-encrypted entries and clears them; the app
-	// decrypts and merges them into the vault. See CredentialProviderViewController.stashPending.
+	// decrypts and merges them into the vault. See AppGroupHandoff.
 	@objc func consumePendingPasskeys(_ call: CAPPluginCall) {
-		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		let pending =
-			(defaults?.array(forKey: BrambleVault.pendingPasskeysKey) as? [[String: String]]) ?? []
-		defaults?.removeObject(forKey: BrambleVault.pendingPasskeysKey)
-		call.resolve(["pending": pending])
+		call.resolve(["pending": AppGroupHandoff.take(.passkeys)])
 	}
 
 	// Drain the confirmed "fill and save" associations: VEK-encrypted records, cleared on read.
 	@objc func consumePendingAssociations(_ call: CAPPluginCall) {
-		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		let pending =
-			(defaults?.array(forKey: BrambleVault.pendingAssociationsKey) as? [[String: String]]) ?? []
-		defaults?.removeObject(forKey: BrambleVault.pendingAssociationsKey)
-		call.resolve(["pending": pending])
+		call.resolve(["pending": AppGroupHandoff.take(.associations)])
 	}
 
-	// Put drained records back when the app could not decrypt them (they belong to
-	// whichever vault was active at the pick). Merged with any records a fill wrote after
-	// the drain, so nothing is lost.
+	// Put drained records back when the app could not decrypt them (they belong to whichever
+	// vault was active at the pick), ahead of any a fill wrote after the drain.
 	@objc func restorePendingAssociations(_ call: CAPPluginCall) {
-		let keep = (call.getArray("keep") as? [[String: String]]) ?? []
-		if !keep.isEmpty {
-			let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-			let existing =
-				(defaults?.array(forKey: BrambleVault.pendingAssociationsKey) as? [[String: String]]) ?? []
-			defaults?.set(existing + keep, forKey: BrambleVault.pendingAssociationsKey)
-		}
+		AppGroupHandoff.restore((call.getArray("keep") as? [[String: String]]) ?? [], to: .associations)
 		call.resolve()
 	}
 
 	// Passkey handoff counterpart of the above.
 	@objc func restorePendingPasskeys(_ call: CAPPluginCall) {
-		let keep = (call.getArray("keep") as? [[String: String]]) ?? []
-		if !keep.isEmpty {
-			let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-			let existing =
-				(defaults?.array(forKey: BrambleVault.pendingPasskeysKey) as? [[String: String]]) ?? []
-			defaults?.set(existing + keep, forKey: BrambleVault.pendingPasskeysKey)
-		}
+		AppGroupHandoff.restore((call.getArray("keep") as? [[String: String]]) ?? [], to: .passkeys)
 		call.resolve()
 	}
 
@@ -179,8 +159,7 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		defaults?.removeObject(forKey: BrambleVault.bundleKey)
 		defaults?.removeObject(forKey: BrambleVault.slotKey)
 		defaults?.removeObject(forKey: BrambleVault.passkeyBundleKey)
-		defaults?.removeObject(forKey: BrambleVault.pendingPasskeysKey)
-		defaults?.removeObject(forKey: BrambleVault.pendingAssociationsKey)
+		AppGroupHandoff.removeAll()
 		// Without this the extension still believes it holds a bundle for the deleted vault.
 		defaults?.removeObject(forKey: BrambleVault.bundleVaultKey)
 		Self.deleteAllSessions()

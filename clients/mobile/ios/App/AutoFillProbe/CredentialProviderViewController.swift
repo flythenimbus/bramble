@@ -689,7 +689,8 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			return
 		}
 		saveSession(vek)
-		guard let pk = loadPasskeyBundle().first(where: { $0.credentialId == identity.credentialID.base64EncodedString() })
+		let id = identity.credentialID.base64EncodedString()
+		guard let pk = loadPasskeyBundle().first(where: { $0.credentialId == id && $0.rpId == identity.relyingPartyIdentifier })
 		else {
 			cancel(.userInteractionRequired)
 			return
@@ -756,7 +757,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		guard let req = pendingPasskey else { return }
 		let all = loadPasskeyBundle()
 		let matches =
-			req.chosen.map { id in all.filter { $0.credentialId == id } }
+			req.chosen.map { id in all.filter { $0.credentialId == id && $0.rpId == req.rpId } }
 			?? all.filter { $0.rpId == req.rpId && (req.allowed.isEmpty || req.allowed.contains($0.credentialId)) }
 		if matches.count == 1 {
 			assertPasskey(matches[0], clientDataHash: req.clientDataHash, userVerified: true, prf: req.prf)
@@ -906,11 +907,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			let plaintext = String(data: json, encoding: .utf8),
 			let enc = try? encryptWithVek(plaintext: plaintext)
 		else { return }
-		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		var pending =
-			(defaults?.array(forKey: BrambleVault.pendingPasskeysKey) as? [[String: String]]) ?? []
-		pending.append(["iv": enc.iv, "ciphertext": enc.ciphertext])
-		defaults?.set(pending, forKey: BrambleVault.pendingPasskeysKey)
+		AppGroupHandoff.append(["iv": enc.iv, "ciphertext": enc.ciphertext], to: .passkeys)
 	}
 
 	// Immediate-use bridge #1: append the new passkey to the (VEK-encrypted) assertion bundle so
@@ -918,6 +915,12 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	// writes (all STANDARD base64); the main app's next setIndex rebuild reproduces it exactly.
 	@available(iOS 17.0, *)
 	private func appendToPasskeyBundle(_ reg: PasskeyRegistration, req: PasskeyCreate) {
+		// Locked against the app republishing the bundle mid-append, which would revert it.
+		AppGroupHandoff.locked { appendToPasskeyBundleLocked(reg, req: req) }
+	}
+
+	@available(iOS 17.0, *)
+	private func appendToPasskeyBundleLocked(_ reg: PasskeyRegistration, req: PasskeyCreate) {
 		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
 		// [String: Any], not [String: String]: `alg` is a number, and the stricter cast would
 		// return nil for a bundle containing one, silently dropping every passkey already in it.
@@ -1201,11 +1204,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			let plaintext = String(data: json, encoding: .utf8),
 			let enc = try? encryptWithVek(plaintext: plaintext)
 		else { return }
-		let defaults = UserDefaults(suiteName: BrambleVault.appGroup)
-		var pending =
-			(defaults?.array(forKey: BrambleVault.pendingAssociationsKey) as? [[String: String]]) ?? []
-		pending.append(["iv": enc.iv, "ciphertext": enc.ciphertext])
-		defaults?.set(pending, forKey: BrambleVault.pendingAssociationsKey)
+		AppGroupHandoff.append(["iv": enc.iv, "ciphertext": enc.ciphertext], to: .associations)
 	}
 
 	private func complete(_ cred: Cred) {

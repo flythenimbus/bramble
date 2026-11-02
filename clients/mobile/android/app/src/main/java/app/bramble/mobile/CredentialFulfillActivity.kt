@@ -162,7 +162,7 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         var code = 100 // keep clear of the service's get(1)/create(2) action request codes
         // Vault + not-yet-drained pending passkeys, so a freshly-created one is usable immediately.
         val all = (VaultReader.readPasskeys(this) + VaultReader.readPendingPasskeys(this))
-            .distinctBy { it.credentialId }
+            .distinctBy { it.credentialId to it.rpId }
         val entries = options.flatMap { option ->
             val opts = runCatching { JSONObject(option.requestJson) }.getOrNull() ?: return@flatMap emptyList()
             val rpId = opts.optString("rpId")
@@ -191,14 +191,15 @@ class CredentialFulfillActivity : BrambleUnlockActivity() {
         val option = request.credentialOptions.filterIsInstance<GetPublicKeyCredentialOption>().firstOrNull()
             ?: return false
         val id = credentialId ?: return false
-        val pk = (VaultReader.readPasskeys(this) + VaultReader.readPendingPasskeys(this))
-            .firstOrNull { it.credentialId == id } ?: return false
         val opts = JSONObject(option.requestJson)
         val challenge = opts.optString("challenge")
-        if (challenge.isEmpty()) return false
+        val rpId = opts.optString("rpId")
+        if (challenge.isEmpty() || rpId.isEmpty()) return false
+        // By rpId too: an imported passkey can reuse another site's credential id.
+        val pk = (VaultReader.readPasskeys(this) + VaultReader.readPendingPasskeys(this))
+            .firstOrNull { it.credentialId == id && it.rpId == rpId } ?: return false
         // The id rides in our own PendingIntent extra, so check again that this request allows it.
-        val allowed = WebauthnJson.allowCredentialIds(opts)
-        if (opts.optString("rpId") != pk.rpId || !PasskeyPolicy.allows(allowed, WebauthnJson.stdToUrl(pk.credentialId))) {
+        if (!PasskeyPolicy.allows(WebauthnJson.allowCredentialIds(opts), WebauthnJson.stdToUrl(id))) {
             Log.w(TAG, "declined assertion: the picked passkey isn't one this request allows")
             return false
         }
