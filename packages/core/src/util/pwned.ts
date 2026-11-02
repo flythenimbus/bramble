@@ -1,5 +1,7 @@
 const crypto = globalThis.crypto;
 
+const BREACH_CHECK_TIMEOUT_MS = 10_000;
+
 /** True if `password`'s SHA-1 appears in the HIBP range API (k-anonymity). Throws on network failure. */
 async function isPasswordLeaked(password: string) {
 	if (typeof password !== "string") throw new Error("Password must be a string");
@@ -9,14 +11,22 @@ async function isPasswordLeaked(password: string) {
 		.map((b) => b.toString(16).padStart(2, "0"))
 		.join("");
 	const firstFive = hashedPasswordString.substring(0, 5).toUpperCase();
-	const response = await fetch(`https://api.pwnedpasswords.com/range/${firstFive}`, {
-		// Tells HIBP to pad the response set so an on-path observer can't
-		// infer which range was actually queried. No-op on the result.
-		headers: { "Add-Padding": "true" },
-	});
-	const data = await response.text();
-
-	return data.includes(hashedPasswordString.substring(5).toUpperCase());
+	// A save awaits this, so a network that never answers must not hold it. A timer rather than
+	// AbortSignal.timeout, which iOS 15 WebViews lack.
+	const abort = new AbortController();
+	const timer = setTimeout(() => abort.abort(), BREACH_CHECK_TIMEOUT_MS);
+	try {
+		const response = await fetch(`https://api.pwnedpasswords.com/range/${firstFive}`, {
+			// Tells HIBP to pad the response set so an on-path observer can't
+			// infer which range was actually queried. No-op on the result.
+			headers: { "Add-Padding": "true" },
+			signal: abort.signal,
+		});
+		const data = await response.text();
+		return data.includes(hashedPasswordString.substring(5).toUpperCase());
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 /** Check a password against HIBP. Returns undefined on any failure so callers fail-open (not "safe"). */
