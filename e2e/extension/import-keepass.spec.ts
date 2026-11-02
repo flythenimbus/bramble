@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "./fixtures";
 import {
 	createVault,
+	downloadAttachment,
 	expectUnlocked,
 	lock,
 	openPopup,
@@ -271,28 +272,6 @@ async function openDatabase(
 		.first()
 		.fill(ATTACH_PASSWORD);
 	await page.getByRole("button", { name: /Open database/i }).click();
-}
-
-/** In the popup, open `entry` and download `file` from it. */
-async function downloadAttachment(
-	popup: import("@playwright/test").Page,
-	entry: string,
-	file: string,
-) {
-	await popup.getByText(entry, { exact: true }).click();
-	const row = popup
-		.locator("div")
-		.filter({ hasText: file })
-		.filter({ has: popup.getByRole("button", { name: "Open attachment" }) })
-		.last();
-	const downloading = popup.waitForEvent("download");
-	await row.getByRole("button", { name: "Open attachment" }).click();
-	const saved = readFileSync((await (await downloading).path()) as string);
-	await popup
-		.getByRole("button", { name: /^(Back|Go back)/i })
-		.first()
-		.click();
-	return saved;
 }
 
 test("imports a database's attachments onto the entries that hold them", async ({

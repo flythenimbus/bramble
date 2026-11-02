@@ -55,3 +55,8 @@ item and share ids were replaced with fake ones and every other item was removed
 
 `dashlane.zip` is invented data in the layout of a real Dashlane CSV export: five CSVs, one per
 kind of item, with the headers and CRLF line endings Dashlane writes today.
+
+`onepassword-files.1pux` is invented data with two files: `statement.pdf` on a field of the
+Bank login, and `passport-scan.png`, the Passport Document item's own. Each sits at
+`files/<documentId>__<fileName>`, the layout KeePassXC and Proton Pass read; neither file is
+really a PDF or PNG, just a line of text the e2e checks byte for byte.

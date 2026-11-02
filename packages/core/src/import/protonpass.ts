@@ -77,7 +77,7 @@ export async function parseProtonPass(
 	raw: string | Uint8Array,
 	context: ImportParserContext,
 ): Promise<ImportResult> {
-	const parsed = readZippedJson(raw, {
+	const { data: parsed } = readZippedJson(raw, {
 		findData: (files) => Object.entries(files).find(([p]) => p.endsWith("data.json"))?.[1],
 		schema: exportSchema,
 		corruptError: "Couldn't read this Proton Pass file. It may be corrupt.",

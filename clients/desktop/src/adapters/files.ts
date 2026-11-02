@@ -3,9 +3,9 @@
 //
 // A picked file is sealed from its PATH in the shell, with the VEK that process holds, and a
 // copy to open is decrypted there straight to disk: the attachment's bytes never enter this
-// webview. Only backup and restore move blob bytes across, and those as raw IPC bytes, never the
-// JSON number arrays the rest of this IPC uses, which would turn a 90 MB file into several
-// hundred megabytes of JSON.
+// webview. Only backup and restore move blob bytes across, and an import's files, which were
+// read from the export here; those go as raw IPC bytes, never the JSON number arrays the rest
+// of this IPC uses, which would turn a 90 MB file into several hundred megabytes of JSON.
 
 import {
 	type BlobBackend,
@@ -33,6 +33,15 @@ export async function rawBytes(
 	return new Uint8Array(await invoke<ArrayBuffer>(command, args));
 }
 
+/** JSON, UTF-8, then base64, so a header can carry a value that is not ASCII. A raw body leaves
+ * no JSON arguments, so this is how its command's other arguments travel. */
+export function base64Json(value: unknown): string {
+	const bytes = new TextEncoder().encode(JSON.stringify(value));
+	let binary = "";
+	for (const b of bytes) binary += String.fromCharCode(b);
+	return btoa(binary);
+}
+
 function createDesktopBlobBackend(vaultId: string): BlobBackend {
 	return {
 		appendStaged: (hash, bytes) =>
@@ -56,15 +65,21 @@ function createDesktopBlobBackend(vaultId: string): BlobBackend {
 function createDesktopSealer(vaultId: string): FileSealer {
 	return {
 		async seal(source, meta): Promise<SealedFile> {
-			// Desktop picks through the native dialog, which yields a path. A Blob would mean the
-			// file's bytes had already crossed into the webview, which is what this avoids.
+			const token = globalThis.crypto.randomUUID();
+			const metaJson = encodeFileMeta(meta);
+			// An import's files, read from the export here, so their bytes are in the webview
+			// already. They cross once, raw, and the shell seals them as it does a picked file.
+			if (source.kind === "blob" || source.kind === "bytes") {
+				const bytes =
+					source.kind === "blob" ? new Uint8Array(await source.blob.arrayBuffer()) : source.bytes;
+				return invoke<SealedFile>("files_seal_bytes", bytes, {
+					headers: { "x-bramble-request": base64Json({ vaultId, token, metaJson }) },
+				});
+			}
+			// Desktop picks through the native dialog, which yields a path, so a picked file's
+			// bytes never cross into the webview.
 			if (source.kind !== "path") throw new Error(`desktop seals from a path, got ${source.kind}`);
-			return invoke<SealedFile>("files_seal", {
-				vaultId,
-				token: globalThis.crypto.randomUUID(),
-				srcPath: source.path,
-				metaJson: encodeFileMeta(meta),
-			});
+			return invoke<SealedFile>("files_seal", { vaultId, token, srcPath: source.path, metaJson });
 		},
 		async resealMeta(record, meta) {
 			const out = await invoke<{ iv: string; ciphertext: string }>("files_reseal_meta", {

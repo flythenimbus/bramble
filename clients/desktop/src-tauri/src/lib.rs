@@ -242,6 +242,7 @@ pub fn run() {
             quit_app,
             files::files_pick,
             files::files_seal,
+            files::files_seal_bytes,
             files::files_open_meta,
             files::files_reseal_meta,
             files::files_open,

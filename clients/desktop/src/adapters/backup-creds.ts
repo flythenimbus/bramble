@@ -12,6 +12,7 @@ import type { HttpBodySource } from "@core/adapters/http";
 import type { BackupSecrets, BackupTargetConfig } from "@core/backup/config";
 import type { BackupHttpResponse } from "@core/backup/types";
 import { invoke } from "@tauri-apps/api/core";
+import { base64Json } from "./files";
 import { streamInto } from "./stream";
 
 /** Which stored secret the shell should apply, decided by the provider kind. */
@@ -32,14 +33,6 @@ function inlineAuthFor(target: BackupTargetConfig, secrets: BackupSecrets) {
 	}
 	const s = secrets as { username: string; password: string };
 	return { kind: "basicInline" as const, username: s.username, password: s.password };
-}
-
-/** JSON, UTF-8, then base64, so a header can carry a URL or header value that is not ASCII. */
-function base64Json(value: unknown): string {
-	const bytes = new TextEncoder().encode(JSON.stringify(value));
-	let binary = "";
-	for (const b of bytes) binary += String.fromCharCode(b);
-	return btoa(binary);
 }
 
 /** One authenticated request through the shell. `auth` decides where the secret comes from. */

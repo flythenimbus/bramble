@@ -22,7 +22,7 @@ export interface ImportResult {
 	byType: Partial<Record<EntryType, number>>;
 	skipped: number;
 	warnings: string[];
-	/** Files the import brings (only KeePass carries any), each on one of `imported`. */
+	/** Files the import brings (KeePass and 1Password carry them), each on one of `imported`. */
 	attachments?: ImportAttachment[];
 }
 

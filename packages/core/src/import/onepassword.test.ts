@@ -1,9 +1,13 @@
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { parseOnePassword } from "./onepassword";
+import type { ImportAttachment } from "./types";
 
-const pux = (data: unknown): Uint8Array =>
-	zipSync({ "export.data": strToU8(JSON.stringify(data)) });
+const pux = (data: unknown, files: Record<string, string> = {}): Uint8Array =>
+	zipSync({
+		"export.data": strToU8(JSON.stringify(data)),
+		...Object.fromEntries(Object.entries(files).map(([k, v]) => [k, strToU8(v)])),
+	});
 
 const items = (...is: unknown[]) => ({ accounts: [{ vaults: [{ items: is }] }] });
 
@@ -130,5 +134,103 @@ describe("parseOnePassword tags", () => {
 			pux(items({ categoryUuid: "003", overview: { title: "Note" }, details: {} })),
 		);
 		expect(res.imported[0]?.tags).toBeUndefined();
+	});
+});
+
+describe("parseOnePassword files", () => {
+	// files/ holds every file, named by the documentId export.data refers to it by.
+	const fileField = (documentId: string, fileName: string) => ({
+		id: documentId,
+		title: fileName,
+		value: { file: { fileName, documentId, decryptedSize: 1 } },
+	});
+	const text = async (a: ImportAttachment | undefined) =>
+		a?.source.kind === "blob" ? await a.source.blob.text() : undefined;
+
+	it("carries a field's file and a Document's file onto their items", async () => {
+		const res = parseOnePassword(
+			pux(
+				items(
+					{
+						categoryUuid: "001",
+						overview: { title: "Bank" },
+						details: {
+							loginFields: [{ designation: "username", value: "me" }],
+							sections: [{ fields: [fileField("aaaa", "statement.pdf")] }],
+						},
+					},
+					{
+						categoryUuid: "006",
+						// Tagged, so the file has to follow the tagged copy of the entry.
+						overview: { title: "Passport", tags: ["id"] },
+						details: {
+							notesPlain: "renew 2030",
+							documentAttributes: { fileName: "scan.png", documentId: "bbbb", decryptedSize: 3 },
+						},
+					},
+				),
+				{ "files/aaaa__statement.pdf": "pdf bytes", "files/bbbb__scan.png": "png" },
+			),
+		);
+		const [bank, passport] = res.imported;
+		expect(passport).toMatchObject({ type: "note", name: "Passport", notes: "renew 2030" });
+		expect(res.attachments?.map((a) => [a.entry, a.name, a.mime, a.size])).toEqual([
+			[bank, "statement.pdf", "application/pdf", 9],
+			[passport, "scan.png", "image/png", 3],
+		]);
+		expect(await text(res.attachments?.[0])).toBe("pdf bytes");
+		expect(await text(res.attachments?.[1])).toBe("png");
+		// A file field is the file itself, not a blank custom field beside it.
+		expect(bank?.customFields).toBeUndefined();
+		expect(res.warnings).toEqual([]);
+	});
+
+	// 1Password's format page writes the separator as three underscores; real exports, as
+	// KeePassXC and Proton Pass read them, use two. The documentId is what identifies the file.
+	it("finds a file however many underscores follow its documentId", async () => {
+		const res = parseOnePassword(
+			pux(
+				items({
+					categoryUuid: "003",
+					overview: { title: "Note" },
+					details: { sections: [{ fields: [fileField("cccc", "a_b.txt")] }] },
+				}),
+				{ "files/cccc___a_b.txt": "three" },
+			),
+		);
+		expect(res.attachments?.map((a) => a.name)).toEqual(["a_b.txt"]);
+		expect(await text(res.attachments?.[0])).toBe("three");
+	});
+
+	it("says so when an item names a file the export does not hold", () => {
+		const res = parseOnePassword(
+			pux(
+				items({
+					categoryUuid: "003",
+					overview: { title: "Note" },
+					details: { sections: [{ fields: [fileField("dddd", "gone.pdf")] }] },
+				}),
+			),
+		);
+		expect(res.imported).toHaveLength(1);
+		expect(res.attachments).toBeUndefined();
+		expect(res.warnings).toEqual([
+			"1 attachment(s) are named in this export but not stored in it.",
+		]);
+	});
+
+	// files/ also carries custom item icons, which no field names. Those aren't the user's files.
+	it("brings only the files an item names", () => {
+		const res = parseOnePassword(
+			pux(
+				items({
+					categoryUuid: "003",
+					overview: { title: "Note" },
+					details: { sections: [{ fields: [fileField("eeee", "kept.txt")] }] },
+				}),
+				{ "files/eeee__kept.txt": "kept", "files/ffff__icon.png": "icon" },
+			),
+		);
+		expect(res.attachments?.map((a) => a.name)).toEqual(["kept.txt"]);
 	});
 });

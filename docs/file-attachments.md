@@ -225,6 +225,10 @@ where the bytes already are.
 - **Mobile and desktop.** A uniffi call taking `(srcPath, dstPath, fek)` and
   returning the hash, sealing on the Rust side. Bytes never reach the JS bridge.
 
+The one exception is a file whose bytes are already in the webview: a 1Password
+import's files, unzipped from the export there. Those cross once, raw, to be
+sealed (see "Export, backup, import").
+
 `core-rust/src/files.rs` is written for exactly this. It takes a FEK as a
 parameter and never touches the global VEK slot, so the binding layer decides
 where the bytes live, and it offers three levels:
@@ -944,6 +948,17 @@ object.
   already has a file of that name and size is left alone). Proven against a database KeePassXC
   wrote, in core-rust's tests and `e2e/extension/import-keepass.spec.ts`. See
   [encrypted-import.md](encrypted-import.md).
+- **1Password import keeps every file**: a Document item's own, and any on an item's fields,
+  on the item that holds it. A .1pux is a plain zip, unzipped by the one parser every target
+  shares, so its files arrive as Blobs. The extension seals those as it does a picked file and
+  mobile spools them to a path; desktop sends each across once as raw IPC bytes
+  (`files_seal_bytes`), writes it among the decrypted copies, seals it from there and deletes
+  it, sealed or not. A file is found under `files/` by its documentId, whatever follows:
+  1Password's format page shows three underscores where real exports, as KeePassXC and Proton
+  Pass read them, have two. A file an item names that the export doesn't hold is counted in a
+  warning. Proven in `e2e/extension/import-onepassword.spec.ts` against an invented export in
+  that layout, not yet against one 1Password wrote. Placement, re-import and the whole-or-nothing
+  write are KeePass's, above.
 - **Sending to another app** (credential exchange) carries no attachments. The row says so
   when the vault has any, and the transfer's first warning repeats it.
 - Issue #98 (local favicon upload) can reuse this store, though at under ~50 KB

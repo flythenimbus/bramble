@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { type BrowserContext, expect, type Page, type Worker } from "@playwright/test";
 
 export const optionsUrl = (id: string) => `chrome-extension://${id}/options.html`;
@@ -343,4 +344,22 @@ export async function actOnPasskeyCard<T>(
 		)
 		.toBe(true);
 	return result;
+}
+
+/** In the popup, open `entry` and download `file` from it. */
+export async function downloadAttachment(popup: Page, entry: string, file: string) {
+	await popup.getByText(entry, { exact: true }).click();
+	const row = popup
+		.locator("div")
+		.filter({ hasText: file })
+		.filter({ has: popup.getByRole("button", { name: "Open attachment" }) })
+		.last();
+	const downloading = popup.waitForEvent("download");
+	await row.getByRole("button", { name: "Open attachment" }).click();
+	const saved = readFileSync((await (await downloading).path()) as string);
+	await popup
+		.getByRole("button", { name: /^(Back|Go back)/i })
+		.first()
+		.click();
+	return saved;
 }

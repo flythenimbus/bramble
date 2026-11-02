@@ -2,13 +2,19 @@ import { z } from "zod";
 import type { CardEntryData, EntryData, LoginEntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
+import { mimeFor } from "../vault/mime";
 import { normalizeTags } from "../vault/tags";
 import { type RawField, readZippedJson, summarize, toCustomFields } from "./shared";
-import type { ImportResult } from "./types";
+import type { ImportAttachment, ImportResult } from "./types";
 
-// 1Password .1pux = a zip whose export.data is JSON (accounts > vaults > items).
+// 1Password .1pux = a zip whose export.data is JSON (accounts > vaults > items), with each file
+// under files/, named by the documentId export.data refers to it by.
 // Schema is lenient except the top-level accounts array, which identifies the format.
 // https://support.1password.com/1pux-format/
+const fileSchema = z.object({
+	fileName: z.string().nullish(),
+	documentId: z.string().nullish(),
+});
 const valueSchema = z.object({
 	string: z.string().nullish(),
 	concealed: z.string().nullish(),
@@ -19,6 +25,7 @@ const valueSchema = z.object({
 	phone: z.string().nullish(),
 	url: z.string().nullish(),
 	date: z.number().nullish(),
+	file: fileSchema.nullish(),
 });
 const fieldSchema = z.object({
 	id: z.string().nullish(),
@@ -43,6 +50,8 @@ const itemSchema = z.object({
 			sections: z.array(z.object({ fields: z.array(fieldSchema).nullish() })).nullish(),
 			notesPlain: z.string().nullish(),
 			password: z.string().nullish(),
+			// A Document item's own file.
+			documentAttributes: fileSchema.nullish(),
 		})
 		.nullish(),
 });
@@ -52,6 +61,7 @@ const exportSchema = z.object({
 	),
 });
 
+type OpFile = z.infer<typeof fileSchema>;
 type OpValue = z.infer<typeof valueSchema>;
 type OpItem = z.infer<typeof itemSchema>;
 
@@ -222,9 +232,35 @@ function mapNote(item: OpItem, name: string, notes: string | undefined): EntryDa
 	return { type: "note", name, notes, customFields: toCustomFields(extras) };
 }
 
+// The files an item names: a Document item's own, then any on its fields.
+function fileRefs(item: OpItem): { documentId: string; name: string }[] {
+	const refs: { documentId: string; name: string }[] = [];
+	const push = (f: OpFile | null | undefined) => {
+		if (f?.documentId)
+			refs.push({ documentId: f.documentId, name: f.fileName?.trim() || "attachment" });
+	};
+	push(item.details?.documentAttributes);
+	for (const section of item.details?.sections ?? []) {
+		for (const field of section.fields ?? []) push(field.value?.file);
+	}
+	return refs;
+}
+
+// files/<documentId>__<fileName>, keyed by documentId. 1Password's format page shows three
+// underscores where real exports (as KeePassXC and Proton Pass read them) have two, and a
+// documentId has none, so everything up to the first one is the id.
+function filesById(files: Record<string, Uint8Array>): Map<string, Uint8Array> {
+	const out = new Map<string, Uint8Array>();
+	for (const [path, bytes] of Object.entries(files)) {
+		const id = /(?:^|\/)files\/([^/_]+)_[^/]*$/.exec(path)?.[1];
+		if (id) out.set(id, bytes);
+	}
+	return out;
+}
+
 /** Parse a 1Password .1pux export (zip) into importable entries. */
 export function parseOnePassword(raw: string | Uint8Array): ImportResult {
-	const parsed = readZippedJson(raw, {
+	const { data: parsed, files } = readZippedJson(raw, {
 		findData: (files) =>
 			files["export.data"] ?? Object.entries(files).find(([p]) => p.endsWith("export.data"))?.[1],
 		schema: exportSchema,
@@ -232,7 +268,10 @@ export function parseOnePassword(raw: string | Uint8Array): ImportResult {
 		formatError: FORMAT_ERROR,
 	});
 
+	const stored = filesById(files);
 	const imported: EntryData[] = [];
+	const attachments: ImportAttachment[] = [];
+	let missing = 0;
 	for (const account of parsed.accounts) {
 		for (const vault of account.vaults ?? []) {
 			for (const item of vault.items ?? []) {
@@ -257,10 +296,29 @@ export function parseOnePassword(raw: string | Uint8Array): ImportResult {
 					default:
 						entry = mapNote(item, name, notes);
 				}
-				imported.push(tags ? { ...entry, tags } : entry);
+				const tagged = tags ? { ...entry, tags } : entry;
+				imported.push(tagged);
+				for (const { documentId, name } of fileRefs(item)) {
+					const bytes = stored.get(documentId);
+					if (!bytes) {
+						missing++;
+						continue;
+					}
+					attachments.push({
+						entry: tagged,
+						name,
+						mime: mimeFor(name),
+						source: { kind: "blob", blob: new Blob([bytes as BlobPart]) },
+						size: bytes.length,
+					});
+				}
 			}
 		}
 	}
 
-	return summarize(imported, 0, []);
+	const warnings: string[] = [];
+	if (missing > 0) {
+		warnings.push(`${missing} attachment(s) are named in this export but not stored in it.`);
+	}
+	return summarize(imported, 0, warnings, attachments);
 }

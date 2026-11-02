@@ -186,7 +186,7 @@ export function unzipCapped(
  * wording differ per vendor, so those are the parameters.
  *
  * `formatError` covers a readable archive that isn't this vendor's export, which is a different
- * thing to tell a user than `corruptError`.
+ * thing to tell a user than `corruptError`. The archive's other files come back beside the data.
  */
 export function readZippedJson<T>(
 	raw: string | Uint8Array,
@@ -196,7 +196,7 @@ export function readZippedJson<T>(
 		corruptError: string;
 		formatError: string;
 	},
-): T {
+): { data: T; files: Record<string, Uint8Array> } {
 	const files = unzipCapped(raw, opts.corruptError);
 
 	const dataFile = opts.findData(files);
@@ -210,7 +210,7 @@ export function readZippedJson<T>(
 	}
 	const parsed = opts.schema.safeParse(json);
 	if (!parsed.success) throw new Error(opts.formatError);
-	return parsed.data;
+	return { data: parsed.data, files };
 }
 
 /** Throw if an unzip result's total decompressed size exceeds the cap. Run before any further parsing. */

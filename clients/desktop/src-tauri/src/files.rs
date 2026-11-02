@@ -273,6 +273,38 @@ pub(crate) mod ops {
         }
     }
 
+    /// `<cache>/open/<token>`, created owner-only, among the decrypted copies the lock sweeps.
+    fn open_folder(cache: &Path, token: &str) -> CmdResult<PathBuf> {
+        validate_key(token)?;
+        let open = cache.join(OPEN_DIR);
+        io(fs::create_dir_all(&open), "create open dir")?;
+        restrict_dir(&open)?;
+        let dir = open.join(token);
+        io(fs::create_dir_all(&dir), "create open folder")?;
+        restrict_dir(&dir)?;
+        Ok(dir)
+    }
+
+    /// Seal bytes the webview already holds, as an import's files are, read from the export.
+    /// Written among the decrypted copies, so a lock's sweep takes them if this is cut short,
+    /// sealed from there as a picked file is, and deleted whether or not the seal succeeded.
+    pub fn seal_bytes(
+        root: &Path,
+        cache: &Path,
+        vault_id: &str,
+        token: &str,
+        bytes: &[u8],
+        meta_json: &str,
+    ) -> CmdResult<SealedFileBlob> {
+        let dir = open_folder(cache, token)?;
+        let src = dir.join("plaintext");
+        let sealed = io(fs::write(&src, bytes), "write import file")
+            .and_then(|_| restrict_file(&src))
+            .and_then(|_| seal(root, vault_id, token, &src, meta_json));
+        not_found_ok(fs::remove_dir_all(&dir), "discard import file")?;
+        sealed
+    }
+
     /// Decrypt one attachment to `<cache>/open/<token>/<name>` and return that path.
     #[allow(clippy::too_many_arguments)]
     pub fn open_copy(
@@ -287,14 +319,7 @@ pub(crate) mod ops {
         nonce_prefix: &str,
     ) -> CmdResult<PathBuf> {
         let src = blob_path(root, vault_id, hash)?;
-        validate_key(token)?;
-        let open = cache.join(OPEN_DIR);
-        io(fs::create_dir_all(&open), "create open dir")?;
-        restrict_dir(&open)?;
-        let dir = open.join(token);
-        io(fs::create_dir_all(&dir), "create open folder")?;
-        restrict_dir(&dir)?;
-        let dst = dir.join(file_name_for(name));
+        let dst = open_folder(cache, token)?.join(file_name_for(name));
         vault_crypto::open_file_to_path(
             wrapped_fek.to_owned(),
             fek_iv.to_owned(),
@@ -483,6 +508,43 @@ pub fn files_seal(
     meta_json: String,
 ) -> CmdResult<vault_crypto::SealedFileBlob> {
     ops::seal(&root(&window)?, &vault_id, &token, Path::new(&src_path), &meta_json)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SealBytesParams {
+    vault_id: String,
+    token: String,
+    meta_json: String,
+}
+
+/// `files_seal` for bytes the webview already holds (an import's files), raw in the body. A raw
+/// body leaves no JSON arguments, so the rest rides in one header, base64 because the name in
+/// the metadata may not be ASCII and a header must be. See `ops::seal_bytes`.
+#[tauri::command]
+pub async fn files_seal_bytes(
+    window: tauri::Window,
+    request: Request<'_>,
+) -> CmdResult<vault_crypto::SealedFileBlob> {
+    use base64::{engine::general_purpose::STANDARD as B64, Engine};
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected raw bytes".into());
+    };
+    let json = B64
+        .decode(header(&request, "x-bramble-request")?)
+        .map_err(|e| format!("seal parameters: {e}"))?;
+    let params: SealBytesParams =
+        serde_json::from_slice(&json).map_err(|e| format!("seal parameters: {e}"))?;
+    let root = root(&window)?;
+    let cache = cache_dir(window.app_handle())?;
+    ops::seal_bytes(
+        &root,
+        &cache,
+        &params.vault_id,
+        &params.token,
+        bytes,
+        &params.meta_json,
+    )
 }
 
 #[tauri::command(async)]
@@ -848,6 +910,56 @@ mod tests {
         ops::sweep_opened(cache.path()).unwrap();
         assert!(!copy.exists());
         vault_crypto::lock();
+    }
+
+    // An import's file arrives as bytes the webview read from the export, not as a path.
+    #[test]
+    fn seals_bytes_it_is_handed_and_keeps_no_plaintext() {
+        let _vek = unlocked();
+        let dir = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let content: Vec<u8> = (0..300_000u32).map(|i| (i % 241) as u8).collect();
+
+        let sealed = ops::seal_bytes(
+            dir.path(),
+            cache.path(),
+            VAULT,
+            "tok-2",
+            &content,
+            r#"{"name":"statement.pdf","mime":"application/pdf"}"#,
+        )
+        .unwrap();
+        assert!(ops::has(dir.path(), VAULT, &sealed.hash).unwrap());
+        assert!(!cache.path().join("open").join("tok-2").exists());
+
+        let copy = ops::open_copy(
+            dir.path(),
+            cache.path(),
+            VAULT,
+            &sealed.hash,
+            "open-2",
+            "statement.pdf",
+            &sealed.wrapped_fek,
+            &sealed.fek_iv,
+            &sealed.nonce_prefix,
+        )
+        .unwrap();
+        assert_eq!(fs::read(&copy).unwrap(), content);
+        vault_crypto::lock();
+    }
+
+    #[test]
+    fn a_failed_seal_of_bytes_keeps_no_plaintext() {
+        let _held = crate::pairing::test_lock();
+        vault_crypto::lock();
+        let dir = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let meta = r#"{"name":"a.txt","mime":"text/plain"}"#;
+        assert!(
+            ops::seal_bytes(dir.path(), cache.path(), VAULT, "tok-3", b"secret", meta).is_err()
+        );
+        assert!(!cache.path().join("open").join("tok-3").exists());
+        assert!(ops::list(dir.path(), VAULT).unwrap().is_empty());
     }
 
     // Sealed in the store, exported as KeePass, copied to the chosen path, opened back.

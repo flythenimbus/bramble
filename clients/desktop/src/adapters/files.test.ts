@@ -58,7 +58,7 @@ describe("desktop pick and seal", () => {
 		expect(await desktopFiles.forVault(VAULT).pick?.()).toBeNull();
 	});
 
-	it("seals by path, and refuses a source whose bytes are already in the webview", async () => {
+	it("seals by path, and refuses a staged source", async () => {
 		h.replies.files_seal = { hash: HASH };
 		const { sealer } = desktopFiles.forVault(VAULT);
 		await sealer.seal(
@@ -71,8 +71,33 @@ describe("desktop pick and seal", () => {
 		expect(JSON.parse(args.metaJson as string)).toEqual({ name: "a.pdf", mime: "application/pdf" });
 
 		await expect(
-			sealer.seal({ kind: "blob", blob: new Blob(["x"]) }, { name: "a", mime: "b" }),
+			sealer.seal({ kind: "staged", key: "k" }, { name: "a", mime: "b" }),
 		).rejects.toThrow(/seals from a path/);
+	});
+
+	// An import's files were read from the export in this webview, so their bytes are here
+	// already. They cross once, raw, with the rest in one base64 header (the name may not be ASCII).
+	it("seals bytes the webview holds raw, with the rest in one header", async () => {
+		h.replies.files_seal_bytes = { hash: HASH };
+		const { sealer } = desktopFiles.forVault(VAULT);
+		await sealer.seal(
+			{ kind: "blob", blob: new Blob(["scan"]) },
+			{ name: "Führerschein.png", mime: "image/png" },
+		);
+		const sent = call("files_seal_bytes");
+		expect(sent.args).toEqual(new TextEncoder().encode("scan"));
+		const header = sent.options?.headers?.["x-bramble-request"] ?? "";
+		const params = JSON.parse(
+			new TextDecoder().decode(Uint8Array.from(atob(header), (c) => c.charCodeAt(0))),
+		);
+		expect(params).toMatchObject({ vaultId: VAULT });
+		expect(params.token).toMatch(/^[0-9a-f-]{36}$/);
+		expect(JSON.parse(params.metaJson)).toEqual({ name: "Führerschein.png", mime: "image/png" });
+
+		await sealer.seal({ kind: "bytes", bytes: new Uint8Array([1, 2]) }, { name: "b", mime: "c" });
+		expect(h.calls.filter((c) => c.cmd === "files_seal_bytes")[1]?.args).toEqual(
+			new Uint8Array([1, 2]),
+		);
 	});
 });
 

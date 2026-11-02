@@ -63,9 +63,9 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		provider: ImportProviderInfo;
 		file: Uint8Array;
 	} | null>(null);
-	// The files a KeePass import brings, placed on their entries, and what holds them until then:
-	// they are the database's attachments in the clear, so they go as soon as they are sealed,
-	// or as soon as the import is abandoned.
+	// The files an import brings, placed on their entries, and what holds a KeePass import's until
+	// then: they are the database's attachments in the clear, so they go as soon as they are
+	// sealed, or as soon as the import is abandoned.
 	const [attachments, setAttachments] = useState<PlacedAttachment[]>([]);
 	// Where this browser can't add files (see useCanAddFiles), the file's attachments stay out, counted.
 	const canAddFiles = useCanAddFiles();
@@ -177,6 +177,12 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		},
 		[entries, files, describeFile, canAddFiles],
 	);
+	// For a file that offers nothing new. Where files can't be added, its attachments may have
+	// been all that was new.
+	const nothingNew = (res: ImportResult) =>
+		!canAddFiles && res.attachments?.length
+			? t`The only new things in this file are attachments, which this browser can add only once it's linked to the Bramble desktop app.`
+			: t`Everything in this file is already in your vault, so there is nothing to import.`;
 	const importHeldBack = async () => {
 		setResult((r) => {
 			if (!r) return r;
@@ -338,10 +344,8 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 				);
 				return;
 			}
-			if (showResult(res) === 0) {
-				setError(
-					t`Everything in this file is already in your vault, so there is nothing to import.`,
-				);
+			if (showResult(res, await placeAttachments(res)) === 0) {
+				setError(nothingNew(res));
 				return;
 			}
 			setProvider(p);
@@ -396,12 +400,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 			if (res.imported.length === 0) {
 				throw new Error(t`No importable items were found in this database.`);
 			}
-			if (showResult(res, await placeAttachments(res)) === 0)
-				throw new Error(
-					!canAddFiles && res.attachments?.length
-						? t`The only new things in this file are attachments, which this browser can add only once it's linked to the Bramble desktop app.`
-						: t`Everything in this file is already in your vault, so there is nothing to import.`,
-				);
+			if (showResult(res, await placeAttachments(res)) === 0) throw new Error(nothingNew(res));
 		} catch (e) {
 			release();
 			throw e;
