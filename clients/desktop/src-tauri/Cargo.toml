@@ -20,13 +20,13 @@ name = "bramble_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.6.3", features = [] }
+tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
 # macos-private-api is what allows a transparent window, which the spotlight panel needs so
 # the native blur behind its webview shows through. It rules out the Mac App Store; Bramble
 # ships direct downloads, so that is not a channel being given up. See docs/desktop-port.md.
-tauri = { version = "2.11.3", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri = { version = "2.12.5", features = ["macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
@@ -76,7 +76,7 @@ sys-locale = "0.3"
 # Updating the app in place. Desktop-gated as the plugin's own docs show, so a future mobile
 # target does not try to build an updater that has no meaning there.
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
-tauri-plugin-updater = "2.10.1"
+tauri-plugin-updater = "2.14.1"
 # Only for relaunching after an update lands.
 tauri-plugin-process = "2.3.1"
 
