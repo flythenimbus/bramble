@@ -15,6 +15,13 @@
 import { DurableObject } from "cloudflare:workers";
 import type { GuardEnv } from "./ice-guard";
 import { policyFrom, STUN_ONLY, TICKET_ACTIVE_MS, turnUsernames } from "./ice-policy";
+import {
+	ephemeralEvent,
+	matches,
+	type NostrFilter,
+	validEventFields,
+	validReq,
+} from "./nostr-filter";
 
 export { IceGuard } from "./ice-guard";
 
@@ -122,32 +129,6 @@ const randomTicket = (): string =>
 	btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24))))
 		.replaceAll("+", "-")
 		.replaceAll("/", "_");
-type NostrFilter = {
-	kinds?: number[];
-	authors?: string[];
-	[tag: `#${string}`]: string[] | undefined;
-};
-type NostrEvent = {
-	id?: string;
-	kind: number;
-	pubkey?: string;
-	tags?: string[][];
-	content?: string;
-};
-
-/** True if `event` matches a single REQ `filter` (kinds, authors, #<tag>). */
-function matches(filter: NostrFilter, event: NostrEvent): boolean {
-	if (filter.kinds && !filter.kinds.includes(event.kind)) return false;
-	if (filter.authors && !(event.pubkey && filter.authors.includes(event.pubkey))) return false;
-	for (const [key, vals] of Object.entries(filter)) {
-		if (!key.startsWith("#") || !Array.isArray(vals)) continue;
-		const tag = key.slice(1);
-		const present = event.tags?.filter((t) => t[0] === tag).map((t) => t[1]) ?? [];
-		// key starts with "#", so this is a tag filter: values are strings.
-		if (!(vals as string[]).some((v) => present.includes(v))) return false;
-	}
-	return true;
-}
 
 export class Relay extends DurableObject {
 	// In memory only: hibernation resets it, which is fine since a flooding socket keeps the DO awake.
@@ -195,9 +176,13 @@ export class Relay extends DurableObject {
 		switch (msg[0]) {
 			case "REQ": {
 				const [, subId, ...filters] = msg;
+				if (!validReq(subId, filters)) {
+					ws.send(JSON.stringify(["NOTICE", "invalid: subscription or filters"]));
+					return;
+				}
 				const state = stateOf(ws);
 				if (!(subId in state.subs) && Object.keys(state.subs).length >= MAX_SUBS_PER_CONN) return;
-				state.subs[subId] = filters;
+				state.subs[subId] = filters as NostrFilter[];
 				ws.serializeAttachment(state);
 				ws.send(JSON.stringify(["EOSE", subId])); // no stored events: ephemeral only
 				return;
@@ -213,9 +198,15 @@ export class Relay extends DurableObject {
 				return;
 			}
 			case "EVENT": {
-				const event = msg[1] as NostrEvent;
-				if (!event || event.kind < 20000 || event.kind >= 30000) {
-					ws.send(JSON.stringify(["OK", event?.id ?? "", false, "only ephemeral kinds"]));
+				const event: unknown = msg[1];
+				const id = (event as { id?: unknown } | null)?.id;
+				const ack = typeof id === "string" ? id : "";
+				if (!ephemeralEvent(event)) {
+					ws.send(JSON.stringify(["OK", ack, false, "only ephemeral kinds"]));
+					return;
+				}
+				if (!validEventFields(event)) {
+					ws.send(JSON.stringify(["OK", ack, false, "invalid: event fields"]));
 					return;
 				}
 				// Publishing is what keeps a ticket live; noted at most once a minute.
@@ -227,14 +218,17 @@ export class Relay extends DurableObject {
 				// Fan out to every other socket's matching subscription; store nothing.
 				for (const peer of this.ctx.getWebSockets()) {
 					if (peer === ws) continue;
-					for (const [subId, filters] of Object.entries(stateOf(peer).subs)) {
-						if (filters.some((f) => matches(f, event))) {
-							peer.send(JSON.stringify(["EVENT", subId, event]));
-							break;
+					// One unreadable or unsendable socket must not cost the rest their delivery.
+					try {
+						for (const [subId, filters] of Object.entries(stateOf(peer).subs)) {
+							if (filters.some((f) => matches(f, event))) {
+								peer.send(JSON.stringify(["EVENT", subId, event]));
+								break;
+							}
 						}
-					}
+					} catch {}
 				}
-				ws.send(JSON.stringify(["OK", event.id ?? "", true, ""]));
+				ws.send(JSON.stringify(["OK", ack, true, ""]));
 				return;
 			}
 		}
