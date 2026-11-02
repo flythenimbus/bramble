@@ -10,15 +10,17 @@
 //!
 //! Peers live in a registry keyed by a u32 handle (mirrors handshake.rs); the JS shim
 //! holds the handle. webrtc-rs is async, so a global multi-thread tokio runtime drives it:
-//! request/response calls `block_on`, fire-and-forget calls `spawn`. Connection events
-//! (ICE candidates, channel open/message, state) flow back through a uniffi callback
-//! interface the Swift plugin implements.
+//! request/response calls `block_on` (bounded by `CALL_DEADLINE`), fire-and-forget calls
+//! `spawn`. Connection events (ICE candidates, channel open/message, state) flow back through
+//! a uniffi callback interface the Swift plugin implements.
 //!
 //! The module is named `webrtc` while the crate dependency is also `webrtc`; inside here
 //! the crate is reached via the leading-colon path `::webrtc::` to disambiguate.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use serde::Deserialize;
 use tokio::runtime::{Builder, Runtime};
@@ -71,6 +73,22 @@ fn runtime() -> &'static Runtime {
             .build()
             .expect("tokio runtime")
     })
+}
+
+/// The longest any call may hold its caller's thread: a network that swallows packets (a VPN in
+/// a bad state) must fail the call, so sync reconnects, rather than park the thread forever.
+const CALL_DEADLINE: Duration = Duration::from_secs(15);
+
+/// Block on a webrtc-rs future for at most `deadline`, naming the call in either error.
+fn within<T>(
+    deadline: Duration,
+    what: &str,
+    fut: impl Future<Output = Result<T, ::webrtc::Error>>,
+) -> Result<T, CryptoError> {
+    runtime()
+        .block_on(async { tokio::time::timeout(deadline, fut).await })
+        .map_err(|_| ce(format!("{what}: timed out")))?
+        .map_err(|e| ce(format!("{what}: {e}")))
 }
 
 struct PeerHandle {
@@ -176,7 +194,7 @@ fn create_peer_core(
     observer: Arc<dyn WebRtcObserver>,
 ) -> Result<u32, CryptoError> {
     let ice_servers = parse_ice_servers(&ice_servers_json)?;
-    let pc = runtime().block_on(async move {
+    let pc = within(CALL_DEADLINE, "new peer connection", async move {
         // Disable mDNS: iOS multicast needs a special entitlement, so a .local candidate
         // can't be resolved on device anyway. Raw-IP host candidates interop with the
         // browser and reach it via host/STUN/TURN; this just avoids binding a multicast
@@ -190,7 +208,7 @@ fn create_peer_core(
         })
         .await
     });
-    let pc = Arc::new(pc.map_err(|e| ce(format!("new peer connection: {e}")))?);
+    let pc = Arc::new(pc?);
 
     // Reserve the handle id up front so the callbacks below can carry it.
     let id = {
@@ -256,9 +274,11 @@ fn create_peer_core(
 
 fn create_data_channel_core(peer: u32, label: String) -> Result<(), CryptoError> {
     let handle = get_peer(peer)?;
-    let dc = runtime()
-        .block_on(async { handle.pc.create_data_channel(&label, None).await })
-        .map_err(|e| ce(format!("create data channel: {e}")))?;
+    let dc = within(
+        CALL_DEADLINE,
+        "create data channel",
+        handle.pc.create_data_channel(&label, None),
+    )?;
     wire_data_channel(peer, &handle.observer, &dc);
     *handle.channel.lock().unwrap() = Some(dc);
     Ok(())
@@ -266,9 +286,7 @@ fn create_data_channel_core(peer: u32, label: String) -> Result<(), CryptoError>
 
 fn create_offer_core(peer: u32) -> Result<String, CryptoError> {
     let handle = get_peer(peer)?;
-    let offer = runtime()
-        .block_on(async { handle.pc.create_offer(None).await })
-        .map_err(|e| ce(format!("create offer: {e}")))?;
+    let offer = within(CALL_DEADLINE, "create offer", handle.pc.create_offer(None))?;
     let sdp = offer.sdp.clone();
     *handle.pending_local.lock().unwrap() = Some(offer);
     Ok(sdp)
@@ -276,9 +294,11 @@ fn create_offer_core(peer: u32) -> Result<String, CryptoError> {
 
 fn create_answer_core(peer: u32) -> Result<String, CryptoError> {
     let handle = get_peer(peer)?;
-    let answer = runtime()
-        .block_on(async { handle.pc.create_answer(None).await })
-        .map_err(|e| ce(format!("create answer: {e}")))?;
+    let answer = within(
+        CALL_DEADLINE,
+        "create answer",
+        handle.pc.create_answer(None),
+    )?;
     let sdp = answer.sdp.clone();
     *handle.pending_local.lock().unwrap() = Some(answer);
     Ok(sdp)
@@ -292,9 +312,11 @@ fn set_local_description_core(peer: u32) -> Result<(), CryptoError> {
         .unwrap()
         .take()
         .ok_or_else(|| ce("no pending local description".into()))?;
-    runtime()
-        .block_on(async { handle.pc.set_local_description(desc).await })
-        .map_err(|e| ce(format!("set local description: {e}")))
+    within(
+        CALL_DEADLINE,
+        "set local description",
+        handle.pc.set_local_description(desc),
+    )
 }
 
 fn set_remote_description_core(peer: u32, sdp_type: String, sdp: String) -> Result<(), CryptoError> {
@@ -306,18 +328,22 @@ fn set_remote_description_core(peer: u32, sdp_type: String, sdp: String) -> Resu
         other => return Err(ce(format!("unknown sdp type: {other}"))),
     }
     .map_err(|e| ce(format!("session description: {e}")))?;
-    runtime()
-        .block_on(async { handle.pc.set_remote_description(desc).await })
-        .map_err(|e| ce(format!("set remote description: {e}")))
+    within(
+        CALL_DEADLINE,
+        "set remote description",
+        handle.pc.set_remote_description(desc),
+    )
 }
 
 fn add_ice_candidate_core(peer: u32, candidate_json: String) -> Result<(), CryptoError> {
     let handle = get_peer(peer)?;
     let init: RTCIceCandidateInit =
         serde_json::from_str(&candidate_json).map_err(|e| ce(format!("ice candidate json: {e}")))?;
-    runtime()
-        .block_on(async { handle.pc.add_ice_candidate(init).await })
-        .map_err(|e| ce(format!("add ice candidate: {e}")))
+    within(
+        CALL_DEADLINE,
+        "add ice candidate",
+        handle.pc.add_ice_candidate(init),
+    )
 }
 
 fn send_core(peer: u32, data: String) -> Result<(), CryptoError> {
@@ -328,10 +354,7 @@ fn send_core(peer: u32, data: String) -> Result<(), CryptoError> {
         .unwrap()
         .clone()
         .ok_or_else(|| ce("no data channel".into()))?;
-    runtime()
-        .block_on(async { dc.send_text(data).await })
-        .map(|_| ())
-        .map_err(|e| ce(format!("send: {e}")))
+    within(CALL_DEADLINE, "send", dc.send_text(data)).map(|_| ())
 }
 
 fn close_core(peer: u32) {
@@ -424,6 +447,30 @@ mod tests {
         assert_eq!(servers[0].urls, vec!["stun:stun.l.google.com:19302"]);
         assert_eq!(servers[1].username, "u");
         assert_eq!(servers[1].credential, "p");
+    }
+
+    fn msg(e: CryptoError) -> String {
+        let CryptoError::Crypto { msg } = e;
+        msg
+    }
+
+    #[test]
+    fn a_call_that_never_settles_fails_at_the_deadline() {
+        let started = std::time::Instant::now();
+        let never = std::future::pending::<Result<(), ::webrtc::Error>>();
+        let err = within(Duration::from_millis(50), "probe", never).unwrap_err();
+        assert_eq!(msg(err), "probe: timed out");
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn a_settled_call_passes_its_result_through() {
+        assert_eq!(within(CALL_DEADLINE, "probe", async { Ok(7) }).unwrap(), 7);
+        let err = within::<()>(CALL_DEADLINE, "probe", async {
+            Err(::webrtc::Error::ErrConnectionClosed)
+        })
+        .unwrap_err();
+        assert!(msg(err).starts_with("probe: "));
     }
 
     #[test]

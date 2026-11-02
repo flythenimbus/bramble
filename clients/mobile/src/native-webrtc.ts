@@ -49,8 +49,9 @@ class NativeRTCDataChannel {
 
 	send(data: string): void {
 		// Fire-and-forget like the browser, but serialized through the peer's op queue so
-		// SCTP-ordered sends reach the native channel in call order.
-		this.pc.enqueue((peer) => Native.send({ peer, data }));
+		// SCTP-ordered sends reach the native channel in call order. A send that times out leaves
+		// the channel unusable, so close it and let the transport reconnect, as a browser would.
+		this.pc.enqueue((peer) => Native.send({ peer, data })).catch(() => this.close());
 	}
 
 	close(): void {

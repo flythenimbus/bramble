@@ -26,7 +26,17 @@ public class NativeWebRTCPlugin: CAPPlugin, CAPBridgedPlugin {
 
 	// --- helpers (mirrors NativeCrypto.swift) ---
 
-	private func fail(_ call: CAPPluginCall, _ error: Error) {
+	// Off Capacitor's bridge queue, which runs every plugin call in the app: a webrtc-rs call stuck
+	// on the network stalls sync alone, not the vault's reads and writes. Serial keeps peer order.
+	private let work = DispatchQueue(label: "app.bramble.webrtc", qos: .userInitiated)
+
+	private func run(_ call: CAPPluginCall, _ body: @escaping () throws -> Void) {
+		work.async {
+			do { try body() } catch { Self.fail(call, error) }
+		}
+	}
+
+	private static func fail(_ call: CAPPluginCall, _ error: Error) {
 		if case let CryptoError.Crypto(message) = error {
 			call.reject(message)
 		} else {
@@ -52,62 +62,71 @@ public class NativeWebRTCPlugin: CAPPlugin, CAPBridgedPlugin {
 		}
 		// A fresh observer per peer (uniffi retains it for the peer's lifetime); it forwards
 		// events tagged with the peer handle to JS, so no shared/lazy plugin state is needed.
-		do {
-			let observer = WebRtcEventBridge(plugin: self)
+		let observer = WebRtcEventBridge(plugin: self)
+		run(call) {
 			let id = try App.webrtcCreatePeer(iceServersJson: ice, observer: observer)
 			call.resolve(["value": Int(id)])
-		} catch { fail(call, error) }
+		}
 	}
 
 	@objc func createDataChannel(_ call: CAPPluginCall) {
 		guard let peer = u32(call, "peer"), let label = call.getString("label") else { return }
-		do {
+		run(call) {
 			try App.webrtcCreateDataChannel(peer: peer, label: label)
 			call.resolve()
-		} catch { fail(call, error) }
+		}
 	}
 
 	@objc func createOffer(_ call: CAPPluginCall) {
 		guard let peer = u32(call, "peer") else { return }
-		do { call.resolve(["value": try App.webrtcCreateOffer(peer: peer)]) } catch { fail(call, error) }
+		run(call) { call.resolve(["value": try App.webrtcCreateOffer(peer: peer)]) }
 	}
 
 	@objc func createAnswer(_ call: CAPPluginCall) {
 		guard let peer = u32(call, "peer") else { return }
-		do { call.resolve(["value": try App.webrtcCreateAnswer(peer: peer)]) } catch { fail(call, error) }
+		run(call) { call.resolve(["value": try App.webrtcCreateAnswer(peer: peer)]) }
 	}
 
 	@objc func setLocalDescription(_ call: CAPPluginCall) {
 		guard let peer = u32(call, "peer") else { return }
-		do { try App.webrtcSetLocalDescription(peer: peer); call.resolve() } catch { fail(call, error) }
+		run(call) {
+			try App.webrtcSetLocalDescription(peer: peer)
+			call.resolve()
+		}
 	}
 
 	@objc func setRemoteDescription(_ call: CAPPluginCall) {
 		guard let peer = u32(call, "peer"), let type = call.getString("type"),
 			let sdp = call.getString("sdp") else { return }
-		do {
+		run(call) {
 			try App.webrtcSetRemoteDescription(peer: peer, sdpType: type, sdp: sdp)
 			call.resolve()
-		} catch { fail(call, error) }
+		}
 	}
 
 	@objc func addIceCandidate(_ call: CAPPluginCall) {
 		guard let peer = u32(call, "peer"), let json = call.getString("candidateJson") else { return }
-		do {
+		run(call) {
 			try App.webrtcAddIceCandidate(peer: peer, candidateJson: json)
 			call.resolve()
-		} catch { fail(call, error) }
+		}
 	}
 
 	@objc func send(_ call: CAPPluginCall) {
 		guard let peer = u32(call, "peer"), let data = call.getString("data") else { return }
-		do { try App.webrtcSend(peer: peer, data: data); call.resolve() } catch { fail(call, error) }
+		run(call) {
+			try App.webrtcSend(peer: peer, data: data)
+			call.resolve()
+		}
 	}
 
 	@objc func close(_ call: CAPPluginCall) {
 		guard let peer = u32(call, "peer") else { return }
-		App.webrtcClose(peer: peer)
-		call.resolve()
+		// Queued too, so it can't overtake the peer's calls still waiting here.
+		run(call) {
+			App.webrtcClose(peer: peer)
+			call.resolve()
+		}
 	}
 }
 
