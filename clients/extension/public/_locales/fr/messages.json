@@ -99,6 +99,10 @@
 		"message": "Déverrouillez Bramble pour enregistrer une clé de passe pour ce site.",
 		"description": "Explains the locked passkey save prompt."
 	},
+	"passkeyRequestedBy": {
+		"message": "Demandé par",
+		"description": "Label in the passkey card naming the site that asked, when it isn't the page the card is shown on (an embedded frame)."
+	},
 	"passkeyAddsTo": {
 		"message": "Ajoute à",
 		"description": "Label showing which login a new passkey will be attached to."

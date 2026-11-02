@@ -243,6 +243,8 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 			passkeyChoices: payload.passkeyChoices,
 			primaryLabel: label,
 			locked: payload.locked,
+			requester: payload.requester,
+			pageHost: location.hostname,
 		});
 	}
 	// The card's box styling lives on the inner .tp-card (not :host) so a host

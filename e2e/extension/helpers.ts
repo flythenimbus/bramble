@@ -315,3 +315,32 @@ export async function addLogin(page: Page, name: string): Promise<void> {
 	await page.getByRole("button", { name: /Save Login/i }).click();
 	await expect(page.getByText(name)).toBeVisible();
 }
+
+/**
+ * Start a ceremony in the page, act on its corner card, and return the page's result. A save card
+ * confirms with "passkey-approve"; a sign-in card lists accounts and acts on "passkey-pick".
+ */
+export async function actOnPasskeyCard<T>(
+	page: Page,
+	action: "passkey-approve" | "passkey-pick",
+	run: () => Promise<T>,
+): Promise<T> {
+	const result = run();
+	await expect
+		.poll(
+			async () => {
+				try {
+					await clickCornerAction(page, action);
+					return true;
+				} catch {
+					return false;
+				}
+			},
+			{ timeout: 15_000 },
+		)
+		.toBe(true);
+	const value = await result;
+	// The next ceremony's card must not be mistaken for this one.
+	await expect(page.locator("#bramble-corner-prompt")).toHaveCount(0, { timeout: 10_000 });
+	return value;
+}

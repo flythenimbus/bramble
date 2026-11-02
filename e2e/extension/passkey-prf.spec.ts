@@ -1,41 +1,10 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { clickCornerAction, createVault } from "./helpers";
+import { actOnPasskeyCard, createVault } from "./helpers";
 
 // PRF through Chrome's real webAuthenticationProxy: the request Chrome hands us carries the site's
 // inputs, and Chrome accepts what we answer (enabled on create, 32-byte results) and passes it to
 // the page. Only a real browser proves both halves. See docs/passkey-prf.md.
-
-const PROMPT = "#bramble-corner-prompt";
-
-/**
- * Start a ceremony in the page, act on its corner card, and return the page's result. A save card
- * confirms with "passkey-approve"; a sign-in card lists accounts and acts on "passkey-pick".
- */
-async function approved<T>(
-	page: Page,
-	action: "passkey-approve" | "passkey-pick",
-	run: () => Promise<T>,
-): Promise<T> {
-	const result = run();
-	await expect
-		.poll(
-			async () => {
-				try {
-					await clickCornerAction(page, action);
-					return true;
-				} catch {
-					return false;
-				}
-			},
-			{ timeout: 15_000 },
-		)
-		.toBe(true);
-	const value = await result;
-	// The next ceremony's card must not be mistaken for this one.
-	await expect(page.locator(PROMPT)).toHaveCount(0, { timeout: 10_000 });
-	return value;
-}
 
 function create(page: Page, salt: string) {
 	return page.evaluate(async (salt) => {
@@ -115,13 +84,13 @@ test("PRF round-trips through Chrome's webAuthenticationProxy", async ({
 	await page.goto("http://localhost:4719/");
 	await page.bringToFront();
 
-	const created = await approved(page, "passkey-approve", () => create(page, "salt-a"));
+	const created = await actOnPasskeyCard(page, "passkey-approve", () => create(page, "salt-a"));
 	expect(created.enabled).toBe(true);
 	expect(created.first).toMatch(/^[0-9a-f]{64}$/);
 
 	// Same passkey, same input: the same key at sign-in as at registration.
 	const signIn = (salt: string, ownSalt?: string) =>
-		approved(page, "passkey-pick", () => get(page, created.id, salt, ownSalt));
+		actOnPasskeyCard(page, "passkey-pick", () => get(page, created.id, salt, ownSalt));
 	expect(await signIn("salt-a")).toBe(created.first);
 
 	const saltB = await signIn("salt-b");

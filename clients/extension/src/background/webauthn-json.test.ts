@@ -15,6 +15,7 @@ import {
 	parseCreationOptions,
 	parseRequestOptions,
 	prfInputsFor,
+	proxyCaller,
 	registrationResponseJSON,
 } from "./webauthn-json";
 
@@ -65,7 +66,10 @@ describe("rpId helpers", () => {
 
 describe("buildClientData", () => {
 	it("produces canonical webauthn clientData with the verbatim challenge", () => {
-		const cd = buildClientData("webauthn.get", "Y2hhbGxlbmdl", "https://example.com");
+		const cd = buildClientData("webauthn.get", "Y2hhbGxlbmdl", {
+			origin: "https://example.com",
+			crossOrigin: false,
+		});
 		expect(JSON.parse(cd.json)).toEqual({
 			type: "webauthn.get",
 			challenge: "Y2hhbGxlbmdl",
@@ -73,6 +77,39 @@ describe("buildClientData", () => {
 			crossOrigin: false,
 		});
 		expect(new TextDecoder().decode(base64UrlToBytes(cd.b64Url))).toBe(cd.json);
+	});
+
+	it("records a cross-origin iframe caller as crossOrigin", () => {
+		const cd = buildClientData("webauthn.get", "Y2hhbA", {
+			origin: "https://pay.example.net",
+			crossOrigin: true,
+		});
+		expect(JSON.parse(cd.json)).toMatchObject({
+			origin: "https://pay.example.net",
+			crossOrigin: true,
+		});
+	});
+});
+
+describe("proxyCaller (Chrome's stamp of the real requester)", () => {
+	const stamped = (stamp: unknown) =>
+		JSON.stringify({ challenge: "Y2hhbA", extensions: { remoteDesktopClientOverride: stamp } });
+
+	it("reads the requester's origin and whether it is a cross-origin iframe", () => {
+		expect(
+			proxyCaller(stamped({ origin: "https://a.example.com", sameOriginWithAncestors: true })),
+		).toEqual({ origin: "https://a.example.com", crossOrigin: false });
+		expect(
+			proxyCaller(stamped({ origin: "https://pay.example.net", sameOriginWithAncestors: false })),
+		).toEqual({ origin: "https://pay.example.net", crossOrigin: true });
+	});
+
+	it("returns null when the request carries no usable stamp", () => {
+		expect(proxyCaller(JSON.stringify({ challenge: "Y2hhbA" }))).toBeNull();
+		expect(proxyCaller(stamped({ origin: "chrome-extension://abcdef" }))).toBeNull();
+		expect(proxyCaller(stamped({ origin: 5 }))).toBeNull();
+		expect(proxyCaller(stamped("https://a.example.com"))).toBeNull();
+		expect(proxyCaller("not json")).toBeNull();
 	});
 });
 

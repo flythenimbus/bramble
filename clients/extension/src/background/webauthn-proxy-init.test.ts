@@ -31,9 +31,11 @@ const h = vi.hoisted(() => ({
 	completed: [] as { requestId: number; kind: string; error?: string }[],
 	/** The request listeners themselves, so a test can deliver a request. */
 	fire: {} as {
-		create?: (r: { requestId: number }) => void;
-		get?: (r: { requestId: number }) => void;
+		create?: (r: { requestId: number; requestDetailsJson: string }) => void;
+		get?: (r: { requestId: number; requestDetailsJson: string }) => void;
 	},
+	/** The tab the user is looking at, as tabs.query reports it. */
+	activeTab: { id: 1, url: "https://example.com/page" } as { id: number; url: string } | undefined,
 	/** Hold the handler mid-ceremony, which is where a real one spends most of its life. */
 	holdHandler: false,
 	release: undefined as (() => void) | undefined,
@@ -56,13 +58,13 @@ const proxy = {
 	},
 	completeIsUvpaaRequest: () => {},
 	onCreateRequest: {
-		addListener: (cb: (r: { requestId: number }) => void) => {
+		addListener: (cb: (r: { requestId: number; requestDetailsJson: string }) => void) => {
 			h.listeners.create++;
 			h.fire.create = cb;
 		},
 	},
 	onGetRequest: {
-		addListener: (cb: (r: { requestId: number }) => void) => {
+		addListener: (cb: (r: { requestId: number; requestDetailsJson: string }) => void) => {
 			h.listeners.get++;
 			h.fire.get = cb;
 		},
@@ -80,7 +82,7 @@ vi.mock("../platform-api", () => ({
 		get webAuthenticationProxy() {
 			return h.hasProxy ? proxy : undefined;
 		},
-		tabs: { query: async () => [{ id: 1, url: "https://example.com/page" }] },
+		tabs: { query: async () => (h.activeTab ? [h.activeTab] : []) },
 	},
 }));
 
@@ -91,7 +93,7 @@ vi.mock("./router", () => ({
 }));
 
 vi.mock("./webauthn-provider", () => ({
-	productionDeps: {},
+	depsForTab: (tabId: number) => ({ tabId }),
 	isProviderEnabled: () => h.enabled,
 	setProviderApplyHook: (fn: (enabled: boolean) => Promise<void>) => {
 		h.applyHook = fn;
@@ -128,8 +130,16 @@ async function load({ hasProxy = true } = {}) {
 	h.fire = {};
 	h.holdHandler = false;
 	h.release = undefined;
+	h.activeTab = { id: 1, url: "https://example.com/page" };
 	return import("./webauthn-proxy-init");
 }
+
+/** A proxied request as Chrome delivers it: stamped with the page that really asked. */
+const stamped = (origin = "https://example.com", sameOriginWithAncestors = true) =>
+	JSON.stringify({
+		challenge: "Y2hhbA",
+		extensions: { remoteDesktopClientOverride: { origin, sameOriginWithAncestors } },
+	});
 
 /** Drive a router message the module registered, as the popup's pauser would. */
 const send = (type: string) => h.handlers.get(type)?.({ type });
@@ -266,7 +276,7 @@ describe("in-flight requests during a pause", () => {
 		const m = await load();
 		await m.initWebauthnProxy();
 		h.holdHandler = true;
-		h.fire.get?.({ requestId: 42 });
+		h.fire.get?.({ requestId: 42, requestDetailsJson: stamped() });
 		await settle(); // the ceremony is now awaiting the user
 
 		await pause();
@@ -281,7 +291,7 @@ describe("in-flight requests during a pause", () => {
 		const m = await load();
 		await m.initWebauthnProxy();
 		h.holdHandler = true;
-		h.fire.get?.({ requestId: 7 });
+		h.fire.get?.({ requestId: 7, requestDetailsJson: stamped() });
 		await settle();
 		await pause();
 		h.completed = []; // drop the pause's own failure; we care about what comes after
@@ -293,9 +303,55 @@ describe("in-flight requests during a pause", () => {
 	it("completes normally when no pause interrupts", async () => {
 		const m = await load();
 		await m.initWebauthnProxy();
-		h.fire.get?.({ requestId: 9 });
+		h.fire.get?.({ requestId: 9, requestDetailsJson: stamped() });
 		await settle();
 		expect(h.completed).toEqual([{ requestId: 9, kind: "get", error: undefined }]);
+	});
+});
+
+describe("binding a request to the page that made it", () => {
+	const settle = () => new Promise((r) => setTimeout(r, 0));
+
+	it("hands the handler Chrome's stamped origin and the focused tab for the card", async () => {
+		const { handleGet } = await import("./webauthn-proxy");
+		const m = await load();
+		await m.initWebauthnProxy();
+		h.fire.get?.({ requestId: 3, requestDetailsJson: stamped() });
+		await settle();
+		expect(vi.mocked(handleGet).mock.calls.at(-1)?.slice(0, 2)).toEqual([{ tabId: 1 }, 3]);
+		expect(vi.mocked(handleGet).mock.calls.at(-1)?.[3]).toEqual({
+			origin: "https://example.com",
+			crossOrigin: false,
+		});
+	});
+
+	it("refuses a top-level request from a tab the user isn't looking at", async () => {
+		// The background tab on a sibling subdomain must not borrow the focused tab's approval.
+		const m = await load();
+		await m.initWebauthnProxy();
+		h.fire.create?.({ requestId: 4, requestDetailsJson: stamped("https://evil.example.com") });
+		await settle();
+		expect(h.completed).toEqual([{ requestId: 4, kind: "create", error: expect.any(String) }]);
+	});
+
+	it("serves a cross-origin iframe, marked as cross-origin", async () => {
+		const { handleGet } = await import("./webauthn-proxy");
+		const m = await load();
+		await m.initWebauthnProxy();
+		h.fire.get?.({ requestId: 5, requestDetailsJson: stamped("https://pay.example.net", false) });
+		await settle();
+		expect(vi.mocked(handleGet).mock.calls.at(-1)?.[3]).toEqual({
+			origin: "https://pay.example.net",
+			crossOrigin: true,
+		});
+	});
+
+	it("refuses a request the browser didn't stamp with its requester", async () => {
+		const m = await load();
+		await m.initWebauthnProxy();
+		h.fire.get?.({ requestId: 6, requestDetailsJson: JSON.stringify({ challenge: "Y2hhbA" }) });
+		await settle();
+		expect(h.completed).toEqual([{ requestId: 6, kind: "get", error: expect.any(String) }]);
 	});
 });
 

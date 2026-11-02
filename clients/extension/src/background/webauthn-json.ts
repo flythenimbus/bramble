@@ -45,9 +45,33 @@ export interface ParsedRequestOptions {
 	prf?: { eval?: PrfValues; evalByCredential?: Record<string, PrfValues> };
 }
 
-// Chrome's requestDetailsJson is the W3C options object (no origin: that is not part of
-// the W3C type, and the proxy events carry no tab). The caller supplies the origin from
-// the active tab instead. Tolerate the options at the root or nested under `publicKey`.
+/** The page that made a request: Chrome's stamp on a proxied one, or Firefox's message sender. */
+export interface RequestCaller {
+	origin: string;
+	/** A cross-origin iframe; WebAuthn records that in clientData. */
+	crossOrigin: boolean;
+}
+
+/**
+ * The real requester of a proxied request. Chrome stamps every request it hands the proxy with
+ * `extensions.remoteDesktopClientOverride` (authenticator_common_impl.cc) and refuses to proxy one
+ * a page stamped itself, so a page can't forge it. Null when absent or not a web origin.
+ */
+export function proxyCaller(json: string): RequestCaller | null {
+	try {
+		const ext = options(json).extensions;
+		const stamp = isRecord(ext) ? ext.remoteDesktopClientOverride : undefined;
+		if (!isRecord(stamp) || typeof stamp.origin !== "string") return null;
+		const url = new URL(stamp.origin);
+		if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+		return { origin: url.origin, crossOrigin: stamp.sameOriginWithAncestors === false };
+	} catch {
+		return null;
+	}
+}
+
+// Chrome's requestDetailsJson is the W3C options object; tolerate it at the root or nested
+// under `publicKey`.
 function options(json: string): Record<string, unknown> {
 	const root = JSON.parse(json) as Record<string, unknown>;
 	return (root.publicKey as Record<string, unknown>) ?? root;
@@ -176,9 +200,14 @@ export interface ClientData {
 export function buildClientData(
 	type: "webauthn.create" | "webauthn.get",
 	challengeB64Url: string,
-	origin: string,
+	caller: RequestCaller,
 ): ClientData {
-	const json = JSON.stringify({ type, challenge: challengeB64Url, origin, crossOrigin: false });
+	const json = JSON.stringify({
+		type,
+		challenge: challengeB64Url,
+		origin: caller.origin,
+		crossOrigin: caller.crossOrigin,
+	});
 	const bytes = new TextEncoder().encode(json);
 	return { json, bytes, b64Url: bytesToBase64Url(bytes) };
 }

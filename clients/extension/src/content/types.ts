@@ -92,35 +92,5 @@ export type AutofillSubmitRevalidationResponse =
 	| { ok: true; data: { sessionGeneration: number } }
 	| { ok: false; error: string };
 
-// Mirror of `CornerPromptPayload` in `@core/adapters/autofill`; duplicated to
-// keep the content script a flat bundle with no cross-package runtime imports.
-export type CornerPromptPayload =
-	| {
-			kind: "save-login";
-			promptId: string;
-			hostname: string;
-			locked: boolean;
-			username: string;
-			password: string;
-	  }
-	| {
-			kind: "update-login";
-			promptId: string;
-			hostname: string;
-			locked: boolean;
-			candidates: { id: string; name: string; username: string }[];
-			newPassword: string;
-	  }
-	| {
-			kind: "save-passkey";
-			promptId: string;
-			hostname: string;
-			locked: boolean;
-			intent: "create" | "get";
-			rpId: string;
-			rpName?: string;
-			userName?: string;
-			existingLoginName?: string;
-			candidates?: { id: string; name: string; username: string }[];
-			passkeyChoices?: { credentialId: string; label: string }[];
-	  };
+// Type-only, so it is erased from the build and the content script stays a flat bundle.
+export type { CornerPromptPayload } from "@core/adapters/autofill";

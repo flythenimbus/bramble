@@ -35,6 +35,7 @@ import {
 	parseCreationOptions,
 	parseRequestOptions,
 	prfInputsFor,
+	type RequestCaller,
 	registrationResponseJSON,
 } from "./webauthn-json";
 
@@ -281,18 +282,18 @@ function resolveCreatePlan(
 }
 
 /**
- * Orchestrate navigator.credentials.create(). `origin` is the calling page's origin,
- * resolved by the caller from the active tab (the proxy request carries no origin).
+ * Orchestrate navigator.credentials.create() for `caller`, the page that made the request
+ * (Chrome's stamp, or Firefox's message sender; see RequestCaller).
  */
 export async function handleCreate(
 	deps: PasskeyProxyDeps,
 	requestId: number,
 	requestDetailsJson: string,
-	origin: string,
+	caller: RequestCaller,
 ): Promise<chrome.webAuthenticationProxy.CreateResponseDetails> {
 	try {
 		const opts = parseCreationOptions(requestDetailsJson);
-		const { rpId } = resolveRpId(origin, opts.rpId);
+		const { rpId } = resolveRpId(caller.origin, opts.rpId);
 		if (!opts.algs.includes(COSE_ES256)) {
 			throw new WebAuthnError("NotSupportedError", "only ES256 (-7) is supported");
 		}
@@ -302,7 +303,7 @@ export async function handleCreate(
 			rpId,
 			rpName: opts.rpName,
 			userName: opts.userName,
-			origin,
+			origin: caller.origin,
 		});
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
 
@@ -351,7 +352,7 @@ export async function handleCreate(
 			opts.prf?.eval && decision.userVerified
 				? await evalPrf(deps, reg.prf.credWithUV, opts.prf.eval)
 				: undefined;
-		const clientData = buildClientData("webauthn.create", opts.challenge, origin);
+		const clientData = buildClientData("webauthn.create", opts.challenge, caller);
 		return {
 			requestId,
 			responseJson: registrationResponseJSON({
@@ -369,18 +370,17 @@ export async function handleCreate(
 }
 
 /**
- * Orchestrate navigator.credentials.get(). `origin` is the calling page's origin,
- * resolved by the caller from the active tab (the proxy request carries no origin).
+ * Orchestrate navigator.credentials.get() for `caller`, the page that made the request.
  */
 export async function handleGet(
 	deps: PasskeyProxyDeps,
 	requestId: number,
 	requestDetailsJson: string,
-	origin: string,
+	caller: RequestCaller,
 ): Promise<chrome.webAuthenticationProxy.GetResponseDetails> {
 	try {
 		const opts = parseRequestOptions(requestDetailsJson);
-		const { rpId } = resolveRpId(origin, opts.rpId);
+		const { rpId } = resolveRpId(caller.origin, opts.rpId);
 		const allowStd = opts.allowCredentialsB64Url.map(base64UrlToBase64);
 
 		// The ceremony enumerates matching passkeys (for the picker) and returns the chosen
@@ -388,7 +388,7 @@ export async function handleGet(
 		const decision = await deps.ceremony({
 			kind: "get",
 			rpId,
-			origin,
+			origin: caller.origin,
 			allowCredentials: allowStd.length ? allowStd : undefined,
 		});
 		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
@@ -402,7 +402,7 @@ export async function handleGet(
 			matches.find((m) => m.passkey.credentialId === decision.credentialId) ?? matches[0];
 		if (!chosen) throw new WebAuthnError("NotAllowedError", "no matching passkey");
 
-		const clientData = buildClientData("webauthn.get", opts.challenge, origin);
+		const clientData = buildClientData("webauthn.get", opts.challenge, caller);
 		const clientDataHash = await deps.sha256(clientData.bytes);
 		// The stored alg travels with the key: 32 bytes alone cannot say whether they are a
 		// P-256 scalar or an Ed25519 seed, and the core refuses an alg it can't sign for.

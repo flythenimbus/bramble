@@ -45,6 +45,8 @@ export function savePasskeyBody({
 	passkeyChoices,
 	primaryLabel,
 	locked,
+	requester,
+	pageHost,
 }: {
 	rpId: string;
 	rpName?: string;
@@ -55,6 +57,9 @@ export function savePasskeyBody({
 	passkeyChoices?: { credentialId: string; label: string }[];
 	primaryLabel: string;
 	locked?: boolean;
+	/** Host of the page that made the request, and of the page this card is shown on. */
+	requester?: string;
+	pageHost?: string;
 }) {
 	// Avoid "x (x)" when the RP's display name equals its id.
 	const site = rpName && rpName !== rpId ? `${rpName} (${rpId})` : rpId;
@@ -102,6 +107,14 @@ export function savePasskeyBody({
 		middle = rows;
 	}
 
+	// The card shows on the focused page; a request from any other page (an iframe) says where.
+	const requesterRow =
+		requester && requester !== pageHost
+			? [
+					html`<div class="tp-row"><div class="tp-label">${t("passkeyRequestedBy")}</div><div>${requester}</div></div>`,
+				]
+			: [];
+
 	// A pickable list acts on row click, so it needs no confirm buttons (dismiss via the ×).
 	// A single confirm (locked prompt, or a save with no ambiguity) keeps the button row.
 	const actions = hasList
@@ -124,6 +137,7 @@ export function savePasskeyBody({
 			</div>
 			<button class="tp-close" data-tp-action="passkey-dismiss" aria-label="Dismiss">×</button>
 		</div>
+		${requesterRow}
 		${middle}
 		${actions}
 	`;

@@ -99,6 +99,10 @@
 		"message": "Unlock Bramble to save a passkey for this site.",
 		"description": "Explains the locked passkey save prompt."
 	},
+	"passkeyRequestedBy": {
+		"message": "Requested by",
+		"description": "Label in the passkey card naming the site that asked, when it isn't the page the card is shown on (an embedded frame)."
+	},
 	"passkeyAddsTo": {
 		"message": "Adds to",
 		"description": "Label showing which login a new passkey will be attached to."

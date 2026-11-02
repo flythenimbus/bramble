@@ -1,5 +1,7 @@
 import type { Entry } from "@core/hooks/useVault";
+import { base64UrlToBytes } from "@core/util/bytes";
 import { describe, expect, it, vi } from "vitest";
+import type { RequestCaller } from "./webauthn-json";
 import {
 	type CardReply,
 	type CeremonyFn,
@@ -10,6 +12,8 @@ import {
 	runCreateCeremony,
 	runGetCeremony,
 } from "./webauthn-proxy";
+
+const caller = (origin: string, crossOrigin = false): RequestCaller => ({ origin, crossOrigin });
 
 function deps(over: Partial<PasskeyProxyDeps> = {}): PasskeyProxyDeps {
 	return {
@@ -75,7 +79,7 @@ const githubEntries: Entry[] = [
 describe("handleCreate", () => {
 	it("mints, stores, and returns a registration response", async () => {
 		const d = deps();
-		const res = await handleCreate(d, 7, createJson(), "https://github.com");
+		const res = await handleCreate(d, 7, createJson(), caller("https://github.com"));
 		expect(res.requestId).toBe(7);
 		expect(res.error).toBeUndefined();
 		expect(d.crypto.passkeyMakeCredential).toHaveBeenCalledWith("github.com", true);
@@ -97,7 +101,7 @@ describe("handleCreate", () => {
 			d,
 			1,
 			createJson({ excludeCredentials: [{ type: "public-key", id: "Q0lE" }] }),
-			"https://github.com",
+			caller("https://github.com"),
 		);
 		expect(res.error?.name).toBe("InvalidStateError");
 		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
@@ -113,7 +117,7 @@ describe("handleCreate", () => {
 			d,
 			1,
 			createJson({ excludeCredentials: [{ type: "public-key", id: "b3RoZXI" }] }),
-			"https://github.com",
+			caller("https://github.com"),
 		);
 		expect(res.error).toBeUndefined();
 		expect(d.crypto.passkeyMakeCredential).toHaveBeenCalledTimes(1);
@@ -122,7 +126,7 @@ describe("handleCreate", () => {
 
 	it("rejects a cross-origin rpId with SecurityError", async () => {
 		const d = deps();
-		const res = await handleCreate(d, 1, createJson(), "https://evil.com");
+		const res = await handleCreate(d, 1, createJson(), caller("https://evil.com"));
 		expect(res.error?.name).toBe("SecurityError");
 		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
 	});
@@ -132,14 +136,14 @@ describe("handleCreate", () => {
 			deps(),
 			1,
 			createJson({ pubKeyCredParams: [{ type: "public-key", alg: -257 }] }),
-			"https://github.com",
+			caller("https://github.com"),
 		);
 		expect(res.error?.name).toBe("NotSupportedError");
 	});
 
 	it("maps a declined ceremony to NotAllowedError and mints nothing", async () => {
 		const d = deps({ ceremony: vi.fn(async () => ({ approved: false })) as unknown as CeremonyFn });
-		const res = await handleCreate(d, 1, createJson(), "https://github.com");
+		const res = await handleCreate(d, 1, createJson(), caller("https://github.com"));
 		expect(res.error?.name).toBe("NotAllowedError");
 		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
 	});
@@ -153,7 +157,7 @@ describe("handleCreate", () => {
 				placement: { entryId: "login-1" },
 			})) as unknown as CeremonyFn,
 		});
-		await handleCreate(d, 1, createJson(), "https://github.com");
+		await handleCreate(d, 1, createJson(), caller("https://github.com"));
 		const plan = (d.savePlacement as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
 		expect(plan.kind).toBe("attach");
 		expect(plan.entryId).toBe("login-1");
@@ -171,7 +175,7 @@ describe("handleCreate", () => {
 				placement: "new",
 			})) as unknown as CeremonyFn,
 		});
-		await handleCreate(d, 1, createJson(), "https://github.com");
+		await handleCreate(d, 1, createJson(), caller("https://github.com"));
 		const plan = (d.savePlacement as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
 		expect(plan.kind).toBe("create");
 	});
@@ -194,7 +198,7 @@ describe("handleGet", () => {
 			} as Entry,
 		];
 		const d = deps({ loadEntries: vi.fn(async () => eddsa) });
-		await handleGet(d, 1, getJson(), "https://github.com");
+		await handleGet(d, 1, getJson(), caller("https://github.com"));
 		expect(d.crypto.passkeyGetAssertion).toHaveBeenCalledWith(
 			"github.com",
 			"U0s",
@@ -222,7 +226,7 @@ describe("handleGet", () => {
 				credentialId: "Q0lE",
 			})) as unknown as CeremonyFn,
 		});
-		const res = await handleGet(d, 9, getJson(), "https://github.com");
+		const res = await handleGet(d, 9, getJson(), caller("https://github.com"));
 		expect(res.requestId).toBe(9);
 		expect(res.error).toBeUndefined();
 		expect(d.crypto.passkeyGetAssertion).toHaveBeenCalledWith(
@@ -239,13 +243,31 @@ describe("handleGet", () => {
 
 	it("returns NotAllowedError when no stored passkey matches", async () => {
 		const d = deps({ loadEntries: vi.fn(async () => []) });
-		const res = await handleGet(d, 1, getJson(), "https://github.com");
+		const res = await handleGet(d, 1, getJson(), caller("https://github.com"));
 		expect(res.error?.name).toBe("NotAllowedError");
 	});
 
 	it("rejects a cross-origin rpId with SecurityError", async () => {
-		const res = await handleGet(deps(), 1, getJson(), "https://evil.com");
+		const res = await handleGet(deps(), 1, getJson(), caller("https://evil.com"));
 		expect(res.error?.name).toBe("SecurityError");
+	});
+
+	it("signs for the real caller: its own origin, and crossOrigin for an iframe", async () => {
+		const d = deps({
+			loadEntries: vi.fn(async () => githubEntries),
+			ceremony: vi.fn(async () => ({
+				approved: true,
+				userVerified: true,
+				credentialId: "Q0lE",
+			})) as unknown as CeremonyFn,
+		});
+		const res = await handleGet(d, 1, getJson(), caller("https://gist.github.com", true));
+		const clientData = JSON.parse(
+			new TextDecoder().decode(
+				base64UrlToBytes(JSON.parse(res.responseJson as string).response.clientDataJSON),
+			),
+		);
+		expect(clientData).toMatchObject({ origin: "https://gist.github.com", crossOrigin: true });
 	});
 });
 
@@ -256,7 +278,7 @@ describe("PRF", () => {
 
 	it("create stores the minted PRF secrets on the credential", async () => {
 		const d = deps();
-		await handleCreate(d, 1, createJson(), "https://github.com");
+		await handleCreate(d, 1, createJson(), caller("https://github.com"));
 		const plan = vi.mocked(d.savePlacement).mock.calls[0]?.[0];
 		if (plan?.kind !== "create") throw new Error("expected a new login");
 		expect(plan.data.passkeys?.[0]?.prf).toEqual({ credWithUV: "V1VW", credWithoutUV: "Tk9VVg==" });
@@ -268,7 +290,7 @@ describe("PRF", () => {
 			d,
 			1,
 			prfCreate({ eval: { first: "-_8" } }),
-			"https://github.com",
+			caller("https://github.com"),
 		);
 		// base64url in, standard base64 to the core: raw input, never pre-hashed.
 		expect(d.crypto.passkeyPrfEval).toHaveBeenCalledWith("V1VW", "+/8=", undefined);
@@ -277,13 +299,13 @@ describe("PRF", () => {
 
 	it("create answers a bare PRF request with enabled and no results", async () => {
 		const d = deps();
-		const res = await handleCreate(d, 1, prfCreate({}), "https://github.com");
+		const res = await handleCreate(d, 1, prfCreate({}), caller("https://github.com"));
 		expect(extensionResults(res)).toEqual({ prf: { enabled: true } });
 		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
 	});
 
 	it("create without a PRF request returns no extension results", async () => {
-		const res = await handleCreate(deps(), 1, createJson(), "https://github.com");
+		const res = await handleCreate(deps(), 1, createJson(), caller("https://github.com"));
 		expect(extensionResults(res)).toEqual({});
 	});
 
@@ -298,7 +320,7 @@ describe("PRF", () => {
 			d,
 			1,
 			prfCreate({ eval: { first: "AQ" } }),
-			"https://github.com",
+			caller("https://github.com"),
 		);
 		expect(extensionResults(res)).toEqual({ prf: { enabled: true } });
 		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
@@ -333,7 +355,7 @@ describe("PRF", () => {
 			d,
 			1,
 			prfGet({ eval: { first: "Ag" }, evalByCredential: { Q0lE: { first: "AQ" } } }),
-			"https://github.com",
+			caller("https://github.com"),
 		);
 		expect(d.crypto.passkeyPrfEval).toHaveBeenCalledWith("S0VZVVY=", "AQ==", undefined);
 		expect(extensionResults(res)).toEqual({ prf: { results: { first: "-_8" } } });
@@ -345,14 +367,19 @@ describe("PRF", () => {
 			d,
 			1,
 			prfGet({ eval: { first: "Ag" }, evalByCredential: { WFla: { first: "AQ" } } }),
-			"https://github.com",
+			caller("https://github.com"),
 		);
 		expect(d.crypto.passkeyPrfEval).toHaveBeenCalledWith("S0VZVVY=", "Ag==", undefined);
 	});
 
 	it("get signs in without PRF output for a passkey minted before PRF", async () => {
 		const d = getDeps(githubEntries);
-		const res = await handleGet(d, 1, prfGet({ eval: { first: "Ag" } }), "https://github.com");
+		const res = await handleGet(
+			d,
+			1,
+			prfGet({ eval: { first: "Ag" } }),
+			caller("https://github.com"),
+		);
 		expect(res.error).toBeUndefined();
 		expect(extensionResults(res)).toEqual({});
 		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
@@ -366,7 +393,12 @@ describe("PRF", () => {
 				credentialId: "Q0lE",
 			})) as unknown as CeremonyFn,
 		});
-		const res = await handleGet(d, 1, prfGet({ eval: { first: "Ag" } }), "https://github.com");
+		const res = await handleGet(
+			d,
+			1,
+			prfGet({ eval: { first: "Ag" } }),
+			caller("https://github.com"),
+		);
 		expect(extensionResults(res)).toEqual({});
 		expect(d.crypto.passkeyPrfEval).not.toHaveBeenCalled();
 	});
@@ -381,14 +413,19 @@ describe("PRF", () => {
 			c,
 			1,
 			prfCreate({ eval: { first: "AQ" } }),
-			"https://github.com",
+			caller("https://github.com"),
 		);
 		expect(created.error).toBeUndefined();
 		expect(extensionResults(created)).toEqual({ prf: { enabled: true } });
 
 		const g = getDeps(prfEntries);
 		g.crypto.passkeyPrfEval = failing;
-		const got = await handleGet(g, 1, prfGet({ eval: { first: "Ag" } }), "https://github.com");
+		const got = await handleGet(
+			g,
+			1,
+			prfGet({ eval: { first: "Ag" } }),
+			caller("https://github.com"),
+		);
 		expect(got.error).toBeUndefined();
 		expect(extensionResults(got)).toEqual({});
 	});

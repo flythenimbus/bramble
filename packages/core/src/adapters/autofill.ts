@@ -162,6 +162,8 @@ export interface SavePasskeyPrompt extends CornerPromptCommon {
 	rpId: string;
 	rpName?: string;
 	userName?: string;
+	/** Host of the page that made the request (it may be an iframe, not the page the card is on). */
+	requester?: string;
 	/** create only: name of the existing login this passkey will attach to, when one
 	 * covers the rpId unambiguously (resolved only when the vault is already unlocked).
 	 * Drives "Add a passkey to your existing X login" vs "Save a new passkey" copy. */

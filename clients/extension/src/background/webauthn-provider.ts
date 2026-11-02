@@ -41,15 +41,6 @@ type PromptReply = { approved: boolean; choice?: string };
 // In-flight passkey cards keyed by promptId; resolved by PASSKEY_PROMPT_RESPONSE.
 const pendingPrompts = new Map<string, (reply: PromptReply) => void>();
 
-async function activeTabId(): Promise<number | undefined> {
-	try {
-		const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
-		return tab?.id;
-	} catch {
-		return undefined;
-	}
-}
-
 async function waitForUnlock(timeoutMs: number): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
@@ -88,6 +79,7 @@ function cardPayload(
 		intent: req.kind,
 		rpId: req.rpId,
 		rpName: req.kind === "create" ? req.rpName : undefined,
+		requester: new URL(req.origin).hostname,
 		userName: req.kind === "create" ? req.userName : undefined,
 		...extra,
 	};
@@ -106,15 +98,9 @@ async function ensureUnlocked(): Promise<boolean> {
 	return ok;
 }
 
-/**
- * Build the corner-card ceremony bound to a tab. Chrome's proxy has no sender tab and
- * passes nothing (falls back to the active tab); Firefox's content transport passes the
- * exact `sender.tab.id`, so the card lands in the requesting tab even if focus moved.
- */
-function cornerCeremonyForTab(explicitTabId?: number): CeremonyFn {
+/** The corner-card ceremony, shown in `tabId`: the tab its transport bound the request to. */
+function cornerCeremonyForTab(tabId: number): CeremonyFn {
 	return async (req) => {
-		const tabId = explicitTabId ?? (await activeTabId());
-		if (tabId === undefined) return { approved: false };
 		// Snapshot the lock state up front so the ceremony's locked-branch UX (confirm card
 		// then unlock) is decided once, not re-read mid-flow.
 		const startedLocked = vaultLocked();
@@ -134,8 +120,8 @@ async function sha256Base64(bytes: Uint8Array): Promise<string> {
 	return bytesToBase64(new Uint8Array(digest));
 }
 
-/** Deps for the pure handlers, with the ceremony bound to a known tab (Firefox) or the active tab. */
-export function depsForTab(tabId?: number): PasskeyProxyDeps {
+/** Deps for the pure handlers, with the ceremony's card bound to `tabId`. */
+export function depsForTab(tabId: number): PasskeyProxyDeps {
 	return {
 		crypto: { passkeyMakeCredential, passkeyGetAssertion, passkeyPrfEval },
 		loadEntries: loadDecryptedEntries,
@@ -149,9 +135,6 @@ export function depsForTab(tabId?: number): PasskeyProxyDeps {
 		},
 	};
 }
-
-/** The Chrome-proxy deps (ceremony resolves the active tab; the proxy carries no tab). */
-export const productionDeps: PasskeyProxyDeps = depsForTab();
 
 // ---- enabled flag (shared by both deliveries) ----
 

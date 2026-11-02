@@ -1,28 +1,47 @@
 /// <reference types="chrome" />
 
 // Chrome delivery for the passkey provider: chrome.webAuthenticationProxy. Registers the
-// create/get/isUvpaa listeners, attaches the proxy on opt-in, and recovers the calling
-// origin from the active tab (the proxy events carry no origin/tab). The transport-free
-// deps it drives (ceremony, vault IO, crypto, enabled flag) live in ./webauthn-provider,
-// shared with the Firefox content-script transport. See docs/passkey-provider.md.
+// create/get/isUvpaa listeners, attaches the proxy on opt-in, and binds each request to the page
+// that made it. The transport-free deps it drives (ceremony, vault IO, crypto, enabled flag) live
+// in ./webauthn-provider, shared with the Firefox content-script transport. See
+// docs/passkey-provider.md.
 
 import { api } from "../platform-api";
 import { on, whenReady } from "./router";
-import { isProviderEnabled, productionDeps, setProviderApplyHook } from "./webauthn-provider";
+import { proxyCaller, type RequestCaller } from "./webauthn-json";
+import { depsForTab, isProviderEnabled, setProviderApplyHook } from "./webauthn-provider";
 import { handleCreate, handleGet } from "./webauthn-proxy";
 
-// The proxy events carry no origin/tab, but WebAuthn requires a focused top-level
-// document, so the active tab in the last-focused window is the requester. This is the
-// authoritative origin for clientData + the rpId check. Null on chrome:// / unreadable tabs.
-async function activeTabOrigin(): Promise<string | null> {
+// The spec's catch-all, so a refusal tells the page nothing about why.
+const REFUSED = { name: "NotAllowedError", message: "The operation was not allowed." };
+
+/** The tab the user is looking at: where the card shows, and its origin when readable. */
+async function focusedTab(): Promise<{ id: number; origin: string | null } | null> {
 	try {
 		const [tab] = await api.tabs.query({ active: true, lastFocusedWindow: true });
-		if (!tab?.url) return null;
-		const u = new URL(tab.url);
-		return u.protocol === "https:" || u.protocol === "http:" ? u.origin : null;
+		if (tab?.id === undefined) return null;
+		let origin: string | null = null;
+		try {
+			origin = tab.url ? new URL(tab.url).origin : null;
+		} catch {}
+		return { id: tab.id, origin };
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * The requester (Chrome's stamp) and the tab its card goes to, or null to refuse. WebAuthn needs a
+ * focused page but Chrome skips that check on the proxy path, so a top-level request must come
+ * from the focused tab: otherwise a background tab on a sibling subdomain could borrow this tab's
+ * approval. A cross-origin iframe can't be matched to a tab; its card names it instead.
+ */
+async function bindRequest(json: string): Promise<{ caller: RequestCaller; tabId: number } | null> {
+	const caller = proxyCaller(json);
+	const tab = await focusedTab();
+	if (!caller || !tab) return null;
+	if (!caller.crossOrigin && caller.origin !== tab.origin) return null;
+	return { caller, tabId: tab.id };
 }
 
 // Pause the proxy while Bramble runs its OWN WebAuthn (security-key PRF) ceremony, so
@@ -107,13 +126,15 @@ function registerListeners(): void {
 			// fresh SW wake the session VEK is restored asynchronously, and reading lock state
 			// before it lands would wrongly prompt to unlock an already-unlocked vault.
 			await whenReady();
-			const origin = await activeTabOrigin();
-			const details = origin
-				? await handleCreate(productionDeps, req.requestId, req.requestDetailsJson, origin)
-				: {
-						requestId: req.requestId,
-						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
-					};
+			const bound = await bindRequest(req.requestDetailsJson);
+			const details = bound
+				? await handleCreate(
+						depsForTab(bound.tabId),
+						req.requestId,
+						req.requestDetailsJson,
+						bound.caller,
+					)
+				: { requestId: req.requestId, error: REFUSED };
 			// Gone means a pause already failed it; completing again throws "Invalid sender".
 			if (!inFlight.delete(req.requestId)) return;
 			try {
@@ -135,13 +156,15 @@ function registerListeners(): void {
 		inFlight.set(req.requestId, "get");
 		void (async () => {
 			await whenReady(); // as in onCreateRequest: don't read lock state before hydration
-			const origin = await activeTabOrigin();
-			const details = origin
-				? await handleGet(productionDeps, req.requestId, req.requestDetailsJson, origin)
-				: {
-						requestId: req.requestId,
-						error: { name: "NotAllowedError", message: "no resolvable tab origin" },
-					};
+			const bound = await bindRequest(req.requestDetailsJson);
+			const details = bound
+				? await handleGet(
+						depsForTab(bound.tabId),
+						req.requestId,
+						req.requestDetailsJson,
+						bound.caller,
+					)
+				: { requestId: req.requestId, error: REFUSED };
 			if (!inFlight.delete(req.requestId)) return; // as in onCreateRequest
 			try {
 				await api.webAuthenticationProxy.completeGetRequest(details);

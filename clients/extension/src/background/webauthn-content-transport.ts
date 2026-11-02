@@ -18,6 +18,7 @@
 
 import { api } from "../platform-api";
 import { on } from "./router";
+import type { RequestCaller } from "./webauthn-json";
 import { depsForTab, isProviderEnabled } from "./webauthn-provider";
 import { handleCreate, handleGet } from "./webauthn-proxy";
 
@@ -36,9 +37,7 @@ function toTransportResult(details: {
 	return { error: { name: "NotAllowedError", message: "no passkey response" } };
 }
 
-/** The requesting frame's web origin, from the browser-set sender. Null for non-web frames. */
-function senderOrigin(sender: chrome.runtime.MessageSender): string | null {
-	const raw = sender.origin ?? sender.url ?? sender.tab?.url;
+function webOrigin(raw: string | undefined): string | null {
 	if (!raw) return null;
 	try {
 		const u = new URL(raw);
@@ -48,24 +47,38 @@ function senderOrigin(sender: chrome.runtime.MessageSender): string | null {
 	}
 }
 
+/**
+ * The requester (browser-set sender) and its tab, or null to pass through to the native
+ * authenticator. The bridge runs in every frame and a frame can post to it directly, skipping the
+ * MAIN-world canIntercept gate, so the same rule is enforced here: the top frame, or a frame
+ * same-origin with it. A cross-origin child goes native, which honours the Permissions Policy.
+ */
+export function senderCaller(
+	sender: chrome.runtime.MessageSender,
+): { caller: RequestCaller; tabId: number } | null {
+	const origin = webOrigin(sender.origin ?? sender.url);
+	const tabId = sender.tab?.id;
+	if (!origin || tabId === undefined) return null;
+	if (sender.frameId !== 0 && origin !== webOrigin(sender.tab?.url)) return null;
+	return { caller: { origin, crossOrigin: false }, tabId };
+}
+
 // Register only on Firefox (no proxy API). On Chrome the MAIN-world script is never
 // injected, so these would be dead handlers; guarding keeps the Chrome path clean.
 if (typeof api.webAuthenticationProxy === "undefined") {
 	on("WEBAUTHN_CREATE", async (message, sender): Promise<{ ok: true; data: TransportResult }> => {
-		if (!isProviderEnabled()) return { ok: true, data: { passthrough: true } };
-		const origin = senderOrigin(sender);
-		if (!origin) return { ok: true, data: { passthrough: true } };
+		const bound = isProviderEnabled() ? senderCaller(sender) : null;
+		if (!bound) return { ok: true, data: { passthrough: true } };
 		const json = JSON.stringify(message.payload ?? {});
-		const details = await handleCreate(depsForTab(sender.tab?.id), 0, json, origin);
+		const details = await handleCreate(depsForTab(bound.tabId), 0, json, bound.caller);
 		return { ok: true, data: toTransportResult(details) };
 	});
 
 	on("WEBAUTHN_GET", async (message, sender): Promise<{ ok: true; data: TransportResult }> => {
-		if (!isProviderEnabled()) return { ok: true, data: { passthrough: true } };
-		const origin = senderOrigin(sender);
-		if (!origin) return { ok: true, data: { passthrough: true } };
+		const bound = isProviderEnabled() ? senderCaller(sender) : null;
+		if (!bound) return { ok: true, data: { passthrough: true } };
 		const json = JSON.stringify(message.payload ?? {});
-		const details = await handleGet(depsForTab(sender.tab?.id), 0, json, origin);
+		const details = await handleGet(depsForTab(bound.tabId), 0, json, bound.caller);
 		return { ok: true, data: toTransportResult(details) };
 	});
 }
