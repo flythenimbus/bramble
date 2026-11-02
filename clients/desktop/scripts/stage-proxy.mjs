@@ -22,6 +22,9 @@
  * `target/universal-apple-darwin/release/bramble-proxy` for the binary copy. Missing either one
  * fails at the bundling step, after everything has been compiled twice.
  *
+ * Linux ships the binary copy alone (tauri.linux.conf.json empties externalBin): both copies would
+ * land on /usr/bin/bramble-proxy, and the .rpm builder refuses a path added twice.
+ *
  * Run automatically by beforeBuildCommand; safe to run by hand.
  */
 
