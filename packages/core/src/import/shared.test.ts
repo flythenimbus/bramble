@@ -23,6 +23,21 @@ describe("summarize", () => {
 		expect(res.imported).toHaveLength(0);
 		expect(res.skipped).toBe(1);
 	});
+
+	it("counts a file whose item it drops, and keeps the rest", () => {
+		const good: EntryData = { type: "note", name: "ok" };
+		const bad = { type: "wormhole", name: "x" } as unknown as EntryData;
+		const file = (entry: EntryData, name: string) => ({
+			entry,
+			name,
+			mime: "text/plain",
+			source: { kind: "bytes" as const, bytes: new Uint8Array(1) },
+			size: 1,
+		});
+		const res = summarize([good, bad], 0, [], [file(good, "kept.txt"), file(bad, "lost.txt")]);
+		expect(res.attachments?.map((a) => [a.entry, a.name])).toEqual([[good, "kept.txt"]]);
+		expect(res.warnings).toContain("1 attachment(s) belonged to items that couldn't be imported.");
+	});
 });
 
 // A URL with a port is one service among several on that host (#145), and only `exact` pins it.

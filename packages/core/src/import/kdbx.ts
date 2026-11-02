@@ -47,13 +47,5 @@ export async function kdbxEntriesToResult(
 	if (missing > 0) {
 		warnings.push(`${missing} attachment(s) are named in this database but not stored in it.`);
 	}
-	const result = summarize(mapped, 0, warnings);
-	// An item the summary dropped takes its files with it; say how many rather than lose them.
-	const kept = new Set(result.imported);
-	const placed = attachments.filter((a) => kept.has(a.entry));
-	if (placed.length < attachments.length) {
-		const lost = attachments.length - placed.length;
-		result.warnings.push(`${lost} attachment(s) belonged to items that couldn't be imported.`);
-	}
-	return placed.length > 0 ? { ...result, attachments: placed } : result;
+	return summarize(mapped, 0, warnings, attachments);
 }

@@ -108,6 +108,25 @@ describe("kdbxEntriesToResult: attachments", () => {
 		expect(res.warnings).toEqual([]);
 	});
 
+	// Pinning a login to its port (#145) hands back a copy of the entry; its files follow it.
+	it("keeps a file on a login it pins to its port", async () => {
+		const res = await kdbxEntriesToResult(
+			{
+				entries: [
+					{
+						strings: [{ key: "URL", value: "https://10.0.0.2:8443", protected: false }],
+						binaries: [{ name: "cert.pem", index: 0 }],
+					},
+				],
+				attachments: [blob("pem")],
+			},
+			noPasskeys,
+		);
+		expect(res.imported[0]).toMatchObject({ subdomainMatch: "exact" });
+		expect(res.attachments?.map((a) => [a.entry, a.name])).toEqual([[res.imported[0], "cert.pem"]]);
+		expect(res.warnings).toEqual([]);
+	});
+
 	it("says so when an entry names an attachment the database does not hold", async () => {
 		const res = await kdbxEntriesToResult(
 			{

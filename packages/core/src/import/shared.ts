@@ -6,7 +6,7 @@ import {
 	entryDataSchema,
 } from "../hooks/useVault";
 import { loginHosts } from "../vault/autofill-index";
-import type { ImportResult } from "./types";
+import type { ImportAttachment, ImportResult } from "./types";
 
 /** Raw key/value pairs collected by a parser before they become CustomFields. */
 export interface RawField {
@@ -43,20 +43,41 @@ function pinPortedLogin(entry: EntryData): EntryData {
 	return hostnames.length === 1 && ports ? { ...entry, subdomainMatch: "exact" } : entry;
 }
 
-/** Validate candidates against EntryData (bad shapes must never reach the vault), drop the rest, tally by type. */
+/**
+ * Validate candidates against EntryData (bad shapes must never reach the vault), drop the rest,
+ * tally by type. Each attachment follows its candidate onto the entry kept for it, which may be
+ * a copy; one whose candidate was dropped is counted rather than lost.
+ */
 export function summarize(
 	candidates: EntryData[],
 	skipped: number,
 	warnings: string[],
+	attachments: ImportAttachment[] = [],
 ): ImportResult {
 	const imported: EntryData[] = [];
+	const kept = new Map<EntryData, EntryData>();
 	let dropped = 0;
 	for (const c of candidates) {
-		if (entryDataSchema.safeParse(c).success) imported.push(pinPortedLogin(c));
-		else dropped++;
+		if (!entryDataSchema.safeParse(c).success) {
+			dropped++;
+			continue;
+		}
+		const entry = pinPortedLogin(c);
+		imported.push(entry);
+		kept.set(c, entry);
 	}
 	if (dropped > 0) warnings.push(`${dropped} item(s) had an unexpected shape and were skipped.`);
-	return { imported, byType: tallyByType(imported), skipped: skipped + dropped, warnings };
+	const placed: ImportAttachment[] = [];
+	for (const a of attachments) {
+		const entry = kept.get(a.entry);
+		if (entry) placed.push({ ...a, entry });
+	}
+	if (placed.length < attachments.length) {
+		const lost = attachments.length - placed.length;
+		warnings.push(`${lost} attachment(s) belonged to items that couldn't be imported.`);
+	}
+	const result = { imported, byType: tallyByType(imported), skipped: skipped + dropped, warnings };
+	return placed.length > 0 ? { ...result, attachments: placed } : result;
 }
 
 /** Best-effort display name for a row with no title: the URL's host, else the raw URL. */
