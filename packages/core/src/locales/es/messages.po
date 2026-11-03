@@ -3284,6 +3284,18 @@ msgstr "Iniciar al iniciar sesión"
 msgid "Start Bramble at login"
 msgstr "Iniciar Bramble al iniciar sesión"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit Bramble. The key is only kept in memory, so the next start asks once."
+msgstr "La bóveda permanece desbloqueada hasta que la bloquee o cierre Bramble. La clave solo se guarda en memoria, así que tendrá que desbloquearla una vez al volver a iniciar."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit the browser. The key is only kept in memory, so the next start asks once."
+msgstr "La bóveda permanece desbloqueada hasta que la bloquee o cierre el navegador. La clave solo se guarda en memoria, así que tendrá que desbloquearla una vez al volver a iniciar."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or the app is closed. The key is only kept in memory, so the next start asks once."
+msgstr "La bóveda permanece desbloqueada hasta que la bloquee o se cierre la aplicación. La clave solo se guarda en memoria, así que tendrá que desbloquearla una vez al volver a iniciar."
+
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 msgid "Still saving. This is taking longer than it should."
 msgstr "Todavía se está guardando. Esto está tardando más de lo que debería."

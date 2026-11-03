@@ -3284,6 +3284,18 @@ msgstr "Avviare all'accesso"
 msgid "Start Bramble at login"
 msgstr "Avviare Bramble all'accesso"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit Bramble. The key is only kept in memory, so the next start asks once."
+msgstr "La cassaforte resta sbloccata finché non la blocca o non chiude Bramble. La chiave è conservata solo in memoria, quindi al prossimo avvio dovrà sbloccarla una volta."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit the browser. The key is only kept in memory, so the next start asks once."
+msgstr "La cassaforte resta sbloccata finché non la blocca o non chiude il browser. La chiave è conservata solo in memoria, quindi al prossimo avvio dovrà sbloccarla una volta."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or the app is closed. The key is only kept in memory, so the next start asks once."
+msgstr "La cassaforte resta sbloccata finché non la blocca o l'app non viene chiusa. La chiave è conservata solo in memoria, quindi al prossimo avvio dovrà sbloccarla una volta."
+
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 msgid "Still saving. This is taking longer than it should."
 msgstr "Salvataggio ancora in corso. L'operazione sta richiedendo più tempo del previsto."

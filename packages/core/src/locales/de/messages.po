@@ -3284,6 +3284,18 @@ msgstr "Bei der Anmeldung starten"
 msgid "Start Bramble at login"
 msgstr "Bramble bei der Anmeldung starten"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit Bramble. The key is only kept in memory, so the next start asks once."
+msgstr "Der Tresor bleibt entsperrt, bis Sie ihn sperren oder Bramble beenden. Der Schlüssel wird nur im Arbeitsspeicher gehalten, daher entsperren Sie ihn nach dem nächsten Start einmal."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit the browser. The key is only kept in memory, so the next start asks once."
+msgstr "Der Tresor bleibt entsperrt, bis Sie ihn sperren oder den Browser beenden. Der Schlüssel wird nur im Arbeitsspeicher gehalten, daher entsperren Sie ihn nach dem nächsten Start einmal."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or the app is closed. The key is only kept in memory, so the next start asks once."
+msgstr "Der Tresor bleibt entsperrt, bis Sie ihn sperren oder die App geschlossen wird. Der Schlüssel wird nur im Arbeitsspeicher gehalten, daher entsperren Sie ihn nach dem nächsten Start einmal."
+
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 msgid "Still saving. This is taking longer than it should."
 msgstr "Wird noch gespeichert. Dies dauert länger als erwartet."

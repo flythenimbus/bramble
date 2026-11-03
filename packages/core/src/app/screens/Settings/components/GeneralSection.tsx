@@ -35,7 +35,7 @@ const keepUnlockedWindow = (autoLockMinutes: number) =>
 /** General settings: auto-lock, clipboard clear, breach checks, and save-prompt prefs. */
 export function GeneralSection() {
 	const { prefs, loaded, update } = usePrefs();
-	const { autofill, shell } = usePlatform();
+	const { autofill, shell, target } = usePlatform();
 	const hasAutofillToggle = useCan("autofillToggle");
 	const hasPasskeyProviderToggle = useCan("passkeyProviderToggle");
 	const hasLockOnScreenLock = useCan("lockOnScreenLock");
@@ -102,9 +102,16 @@ export function GeneralSection() {
 				icon={<Clock className="w-4 h-4 text-primary" />}
 				title={t`Auto-lock timeout`}
 				subtitle={
-					autofill.setKeepUnlocked
-						? t`Lock the vault and require autofill auth after inactivity`
-						: t`Lock vault after inactivity`
+					// "Never" still ends with the session: the key is only ever held in memory (#146).
+					prefs.autoLockMinutes === 0
+						? target === "chromium" || target === "firefox"
+							? t`Stays unlocked until you lock it or quit the browser. The key is only kept in memory, so the next start asks once.`
+							: target === "desktop"
+								? t`Stays unlocked until you lock it or quit Bramble. The key is only kept in memory, so the next start asks once.`
+								: t`Stays unlocked until you lock it or the app is closed. The key is only kept in memory, so the next start asks once.`
+						: autofill.setKeepUnlocked
+							? t`Lock the vault and require autofill auth after inactivity`
+							: t`Lock vault after inactivity`
 				}
 			>
 				<div className="w-44">

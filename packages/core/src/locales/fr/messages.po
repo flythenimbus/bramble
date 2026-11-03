@@ -3284,6 +3284,18 @@ msgstr "Démarrer à l’ouverture de session"
 msgid "Start Bramble at login"
 msgstr "Démarrer Bramble à l’ouverture de session"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit Bramble. The key is only kept in memory, so the next start asks once."
+msgstr "Le coffre reste déverrouillé jusqu'à ce que vous le verrouilliez ou quittiez Bramble. La clé n'est conservée qu'en mémoire : vous devrez donc le déverrouiller une fois au prochain démarrage."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit the browser. The key is only kept in memory, so the next start asks once."
+msgstr "Le coffre reste déverrouillé jusqu'à ce que vous le verrouilliez ou quittiez le navigateur. La clé n'est conservée qu'en mémoire : vous devrez donc le déverrouiller une fois au prochain démarrage."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or the app is closed. The key is only kept in memory, so the next start asks once."
+msgstr "Le coffre reste déverrouillé jusqu'à ce que vous le verrouilliez ou que l'application soit fermée. La clé n'est conservée qu'en mémoire : vous devrez donc le déverrouiller une fois au prochain démarrage."
+
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 msgid "Still saving. This is taking longer than it should."
 msgstr "Enregistrement toujours en cours. Cela prend plus de temps que prévu."
