@@ -237,6 +237,8 @@ async function commitCornerUpdate(capture: PendingCapture, chosenEntryId: string
 						id: enc.id,
 						username,
 						password: capture.password,
+						// The old password's result; the detail view re-checks the new one when opened.
+						breach: undefined,
 						updatedAt: v.hlc.wall,
 					} as Entry,
 					{ ...prev, id: enc.id } as Entry,

@@ -186,6 +186,46 @@ describe("commit: update an existing login (password rotation)", () => {
 		expect(fetched.resp.data.username).toBe("alice");
 	});
 
+	it("drops the old password's breach result (#161)", async () => {
+		const written: Record<string, unknown>[] = [];
+		const bg = await loadBackground({
+			sessionSeed: { [TEST_VEK_KEY]: "SEED" },
+			offscreen: (msg) => {
+				if (msg.type === "CRYPTO_DECRYPT") {
+					return {
+						ok: true,
+						data: JSON.stringify({
+							type: "login",
+							name: "Example",
+							urls: ["https://example.com"],
+							username: "alice",
+							password: "pw1",
+							breach: { leaked: true, checkedAt: Date.now() },
+						}),
+					};
+				}
+				if (msg.type === "CRYPTO_ENCRYPT") written.push(JSON.parse(msg.payload.plaintextJson));
+				return commitOffscreen(msg);
+			},
+		});
+		await setAutofillIndex(bg, [LOGIN]);
+		const cap = await bg.send(
+			{ type: "CORNER_PROMPT_CAPTURE", payload: { username: "alice", password: "ROTATED" } },
+			pageSender("example.com", 5),
+		);
+		const res = await bg.send(
+			{
+				type: "CORNER_PROMPT_RESPONSE",
+				payload: { promptId: cap.resp.data.promptId, action: "update", chosenEntryId: "login1" },
+			},
+			pageSender("example.com", 5),
+		);
+		expect(res.resp).toEqual({ ok: true, data: null });
+		expect(written).toHaveLength(1);
+		expect(written[0]?.password).toBe("ROTATED");
+		expect(written[0]).not.toHaveProperty("breach");
+	});
+
 	it("rejects an explicit update action with no chosenEntryId", async () => {
 		const bg = await unlocked();
 		const cap = await bg.send(
