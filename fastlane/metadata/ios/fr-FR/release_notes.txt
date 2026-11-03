@@ -1,11 +1,14 @@
 Nouveautés de cette version :
 
-- Vous avez oublié votre mot de passe principal ? Après avoir déverrouillé l’application avec votre code de récupération, vous pouvez définir un nouveau mot de passe immédiatement, en utilisant ce code au lieu de l’ancien mot de passe.
-- Import de vos identifiants depuis Dashlane et RoboForm.
-- Si la synchronisation cesse de fonctionner sur cet appareil, l’écran Synchronisation vous l’indique désormais et vous explique comment y remédier, au lieu d’afficher « Synchronisé ».
-- L’ajout d’un appareil fonctionne de nouveau après l’expiration d’une invitation précédente.
-- Les mots de passe révélés sont de nouveau masqués lorsque vous quittez l’application.
-- Après la suppression d’un coffre, l’application ouvre celui qui reste.
-- Mises à jour de sécurité des bibliothèques sur lesquelles repose l’application.
+- Les clés de passe enregistrées dans Bramble fonctionnent désormais sur les sites qui les utilisent pour protéger vos données, comme Bitwarden et AliasVault (iOS 18 ou version ultérieure).
+- L’importation depuis Proton Pass récupère désormais vos clés de passe, vos fichiers et tous vos sites web, et l’importation depuis 1Password récupère vos fichiers. L’aperçu de l’importation compte les pièces jointes avant de commencer.
+- Créer des alias e-mail avec Fastmail Masked Email.
+- Les sites web d’un identifiant sont désormais regroupés sous une seule étiquette.
+- Les identifiants dont le site web a été enregistré sans « https:// », comme nas.local:5000, sont désormais remplis automatiquement et retrouvent leurs clés de passe.
+- L’importation depuis Apple Passwords conserve les dates de chaque élément, et l’écran de transfert mentionne désormais Bramble.
+- La création de plusieurs clés de passe à la suite n’en perd plus aucune, et une clé de passe n’est proposée que sur son propre site.
+- L’enregistrement ne se bloque plus lorsque votre connexion est instable, par exemple avec un VPN en mauvais état. Si un enregistrement prend trop de temps, l’application vous le signale.
+- Un fichier que vous étiez en train de joindre lorsque l’application s’est fermée ne subsiste plus dans vos sauvegardes.
+- Améliorations de la sécurité de la synchronisation.
 
-Pas de compte, pas de cloud. Tout reste sur vos appareils.
+Aucun compte, aucun cloud. Tout reste sur vos appareils.

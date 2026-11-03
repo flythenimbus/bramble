@@ -1,11 +1,14 @@
 Neu in dieser Version:
 
-- Master-Passwort vergessen? Nach dem Entsperren mit Ihrem Wiederherstellungscode können Sie sofort ein neues Passwort festlegen, wobei der Code das alte Passwort ersetzt.
-- Importieren Sie Ihre Logins aus Dashlane und RoboForm.
-- Wenn die Synchronisierung auf diesem Gerät nicht mehr funktioniert, zeigt der Synchronisierungsbildschirm dies jetzt an und erklärt, wie Sie das Problem beheben, statt „Synchronisiert“ anzuzeigen.
-- Das Hinzufügen eines Geräts funktioniert wieder, nachdem eine frühere Einladung abgelaufen ist.
-- Angezeigte Passwörter werden wieder ausgeblendet, wenn Sie die App verlassen.
-- Nachdem Sie einen Tresor gelöscht haben, öffnet die App den verbleibenden.
-- Sicherheitsupdates für die Bibliotheken, auf denen die App basiert.
+- In Bramble gespeicherte Passkeys funktionieren jetzt auf Websites, die sie zum Schutz Ihrer Daten verwenden, etwa Bitwarden und AliasVault (iOS 18 oder neuer).
+- Der Import aus Proton Pass übernimmt jetzt Ihre Passkeys, Dateien und alle Websites, und der Import aus 1Password übernimmt Ihre Dateien. Die Importvorschau zählt Anhänge, bevor Sie beginnen.
+- E-Mail-Aliase mit Fastmail Masked Email erstellen.
+- Die Websites eines Logins werden jetzt zusammen unter einem Label aufgeführt.
+- Anmeldedaten, deren Website ohne „https://“ gespeichert wurde, z. B. nas.local:5000, werden jetzt automatisch ausgefüllt und ihre Passkeys werden gefunden.
+- Der Import aus Apple Passwords behält die Datumsangaben jedes Eintrags bei, und der Übertragungsbildschirm nennt jetzt Bramble.
+- Beim Erstellen mehrerer Passkeys hintereinander geht keiner mehr verloren, und ein Passkey wird nur auf seiner eigenen Website angeboten.
+- Das Speichern bleibt nicht mehr hängen, wenn Ihre Verbindung Probleme macht, z. B. bei einem VPN in einem schlechten Zustand. Falls ein Speichern einmal zu lange dauert, weist die App darauf hin.
+- Eine Datei, die Sie beim Schließen der App gerade angehängt hatten, verbleibt nicht länger in Ihren Backups.
+- Sicherheitsverbesserungen bei der Synchronisierung.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

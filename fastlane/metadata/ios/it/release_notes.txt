@@ -1,11 +1,14 @@
-Novità di questa versione:
+Novità in questa versione:
 
-- Ha dimenticato la password principale? Dopo lo sblocco con il codice di recupero, può impostare subito una nuova password, utilizzando il codice al posto della vecchia password.
-- È possibile importare i propri accessi da Dashlane e RoboForm.
-- Se la sincronizzazione smette di funzionare su questo dispositivo, la schermata Sincronizzazione ora lo segnala e spiega come risolvere il problema, invece di mostrare "Sincronizzato".
-- L'aggiunta di un dispositivo torna a funzionare dopo la scadenza di un invito precedente.
-- Le password mostrate vengono nascoste di nuovo quando si esce dall'app.
-- Dopo aver eliminato un vault, l'app apre quello rimasto.
-- Aggiornamenti di sicurezza delle librerie su cui si basa l'app.
+- Le chiavi di accesso salvate in Bramble ora funzionano sui siti che le usano per proteggere i dati, come Bitwarden e AliasVault (iOS 18 e versioni successive).
+- Importare da Proton Pass ora include chiavi di accesso, file e tutti i siti web, mentre l'importazione da 1Password include i file. L'anteprima dell'importazione conta gli allegati prima di iniziare.
+- Creare alias email con Fastmail Masked Email.
+- I siti web di un accesso sono ora elencati insieme sotto un'unica etichetta.
+- Gli accessi il cui sito web è stato salvato senza "https://", come nas.local:5000, ora si compilano automaticamente e trovano le chiavi di accesso corrispondenti.
+- L'importazione da Apple Passwords mantiene le date di ciascun elemento e la schermata di trasferimento ora indica Bramble.
+- La creazione di più chiavi di accesso consecutive non causa più la perdita di nessuna di esse e una chiave di accesso viene offerta solo sul proprio sito.
+- Il salvataggio non si blocca più quando la connessione ha problemi, ad esempio con una VPN in uno stato anomalo. Se un salvataggio dovesse richiedere troppo tempo, l'app lo segnala.
+- Un file che si stava allegando alla chiusura dell'app non rimane più nei backup.
+- Miglioramenti della sicurezza per la sincronizzazione.
 
-Nessun account, nessun cloud. Tutto rimane sui propri dispositivi.
+Nessun account, nessun cloud. Tutto resta sui propri dispositivi.

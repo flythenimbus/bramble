@@ -1,11 +1,14 @@
 Novidades desta versão:
 
-- Esqueceu sua senha mestra? Após desbloquear com seu código de recuperação, você pode definir uma nova senha imediatamente, usando o código em vez da senha antiga.
-- Importe seus logins do Dashlane e do RoboForm.
-- Se a sincronização parar de funcionar neste dispositivo, a tela Sincronização agora informa e explica como corrigir, em vez de mostrar “Sincronizado”.
-- Adicionar um dispositivo volta a funcionar depois que um convite anterior expirou.
-- As senhas reveladas voltam a ficar ocultas quando você sai do app.
-- Depois de excluir um cofre, o app abre o restante.
-- Atualizações de segurança nas bibliotecas usadas pelo app.
+- As chaves de acesso salvas no Bramble agora funcionam em sites que as usam para proteger seus dados, como Bitwarden e AliasVault (iOS 18 ou posterior).
+- A importação do Proton Pass agora inclui suas chaves de acesso, arquivos e todos os sites, e a importação do 1Password inclui seus arquivos. A prévia da importação conta os anexos antes de começar.
+- Criar alias de e-mail com o Fastmail Masked Email.
+- Os sites de um login agora são exibidos juntos sob um único rótulo.
+- Logins cujo site foi salvo sem "https://", como nas.local:5000, agora preenchem automaticamente e encontram suas chaves de acesso.
+- A importação do Apple Passwords mantém as datas de cada item, e a tela de transferência agora exibe o nome Bramble.
+- A criação de várias chaves de acesso em sequência não perde mais nenhuma delas, e uma chave de acesso só é oferecida no site correspondente.
+- O salvamento não fica mais travado quando a conexão apresenta instabilidade, por exemplo, com uma VPN em mau estado. Se um salvamento demorar demais, o app informa.
+- Um arquivo que estava sendo anexado quando o app fechou não permanece mais nos seus backups.
+- Melhorias de segurança na sincronização.
 
-Sem conta, sem nuvem. Tudo fica nos seus dispositivos.
+Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.

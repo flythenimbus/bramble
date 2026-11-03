@@ -1,11 +1,14 @@
 Novedades de esta versión:
 
-- ¿Olvidó su contraseña maestra? Después de desbloquear con su código de recuperación, puede establecer una contraseña nueva de inmediato, usando el código en lugar de la contraseña anterior.
-- Importar sus datos de acceso desde Dashlane y RoboForm.
-- Si la sincronización deja de funcionar en este dispositivo, la pantalla Sincronización ahora lo indica y le explica cómo solucionarlo, en lugar de mostrar «Sincronizado».
-- Agregar un dispositivo vuelve a funcionar después de que una invitación anterior haya caducado.
-- Las contraseñas reveladas se vuelven a ocultar al salir de la aplicación.
-- Después de eliminar una caja fuerte, la aplicación abre la que queda.
-- Actualizaciones de seguridad en las bibliotecas en las que se basa la aplicación.
+- Las claves de acceso guardadas en Bramble ahora funcionan en sitios que las usan para proteger sus datos, como Bitwarden y AliasVault (iOS 18 y versiones posteriores).
+- Importar desde Proton Pass ahora trae sus claves de acceso, archivos y todos los sitios web, e importar desde 1Password trae sus archivos. La vista previa de importación cuenta los archivos adjuntos antes de empezar.
+- Crear alias de correo con Fastmail Masked Email.
+- Los sitios web de un inicio de sesión ahora se muestran agrupados bajo una misma etiqueta.
+- Las credenciales cuyo sitio web se guardó sin "https://", como nas.local:5000, ahora se autocompletan y encuentran sus claves de acceso.
+- Importar desde Apple Passwords conserva las fechas de cada elemento y la pantalla de transferencia ahora muestra el nombre de Bramble.
+- Crear varias claves de acceso seguidas ya no hace que se pierda ninguna, y una clave de acceso solo se ofrece en su propio sitio.
+- Guardar ya no se bloquea cuando su conexión falla, por ejemplo con una VPN en mal estado. Si un guardado tarda demasiado, la aplicación lo indica.
+- Un archivo que estaba adjuntando cuando se cerró la aplicación ya no permanece en sus copias de seguridad.
+- Mejoras de seguridad en la sincronización.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.
