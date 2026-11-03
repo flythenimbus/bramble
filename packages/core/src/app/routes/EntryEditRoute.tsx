@@ -5,6 +5,7 @@ import { type EntryData, type OpenedVersion, useVault } from "../../hooks/useVau
 import { checkPasswordBreach } from "../../util/pwned";
 import { getEntryMode } from "../entry-modes";
 import { usePopOut } from "../hooks/usePopOut";
+import { useRouteBack } from "../hooks/useRouteBack";
 import { takeTotpForEntry } from "../pending-totp";
 import { EntryForm, type EntryFormDraft } from "../screens/CreateEntry/EntryForm";
 import { type EditDraft, readEditDraft } from "./edit-draft";
@@ -16,6 +17,8 @@ export function EntryEditRoute() {
 	const { entries, updateEntry, openVersion } = useVault();
 	const { prefs } = usePrefs();
 	const { registerDraftGetter, takeInitialDraft } = usePopOut();
+	// Cancel and Save leave like the header's back, so the form isn't left in history (#150).
+	const back = useRouteBack();
 	// Pop-out draft takes precedence over the stored entry; consumed once on mount.
 	const [draft] = useState(() => readEditDraft(takeInitialDraft()));
 	const stored = entries.find((e) => e.id === entryId);
@@ -73,7 +76,7 @@ export function EntryEditRoute() {
 				draftValues={draft?.values}
 				registerDraft={registerDraft}
 				submitLabel={`Update ${mode.label}`}
-				onBack={() => navigate({ to: "/vault/$entryId", params: { entryId } })}
+				onBack={back ?? (() => navigate({ to: "/vault/$entryId", params: { entryId } }))}
 				onSave={handleSave}
 			/>
 		</div>

@@ -9,6 +9,7 @@ import { EntryEditRoute } from "./EntryEditRoute";
 
 interface FormProps {
 	onSave: (data: unknown) => Promise<void>;
+	onBack: () => void;
 	draftValues?: unknown;
 	registerDraft?: (getter: (() => unknown) | null) => void;
 }
@@ -20,6 +21,7 @@ const h = vi.hoisted(() => ({
 	initialDraft: undefined as unknown,
 	draftGetter: null as null | (() => unknown),
 	form: null as null | FormProps,
+	back: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -38,6 +40,7 @@ vi.mock("../hooks/usePopOut", () => ({
 		takeInitialDraft: () => h.initialDraft,
 	}),
 }));
+vi.mock("../hooks/useRouteBack", () => ({ useRouteBack: () => h.back }));
 vi.mock("../pending-totp", () => ({ takeTotpForEntry: () => undefined }));
 vi.mock("../entry-modes", () => ({ getEntryMode: () => ({ label: "Login" }) }));
 vi.mock("../screens/CreateEntry/EntryForm", () => ({
@@ -125,4 +128,12 @@ it("saving keeps what the form doesn't edit, and what it cleared stays cleared",
 	const saved = h.updateEntry.mock.calls[0]?.[1] as Record<string, unknown>;
 	expect(saved).toMatchObject({ password: "mine", archivedAt: 5, futureField: { x: 1 } });
 	expect(saved.notes).toBeUndefined();
+});
+
+// #150: pushing the detail after a save left the form in history, so back from the detail
+// reopened it. Cancel and Save leave the way the header's back does.
+it("cancel and save leave through the route's back, not a fresh push", () => {
+	h.entries = [login("p")];
+	render(<EntryEditRoute />);
+	expect(h.form!.onBack).toBe(h.back);
 });

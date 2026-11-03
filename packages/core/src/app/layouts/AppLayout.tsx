@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import { Outlet, useMatches, useNavigate, useParams, useRouter } from "@tanstack/react-router";
+import { Outlet, useNavigate } from "@tanstack/react-router";
 import { ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
@@ -10,10 +10,10 @@ import { PasskeySavedToast } from "../components/PasskeySavedToast";
 import { BackButton } from "../components/ui/back-button";
 import { Button } from "../components/ui/button";
 import { usePopOut } from "../hooks/usePopOut";
+import { useRouteBack } from "../hooks/useRouteBack";
 
 /** App chrome (header with back/lock/theme/settings) wrapping the routed Outlet. */
 export function AppLayout() {
-	const router = useRouter();
 	const navigate = useNavigate();
 	const { lock } = useVault();
 	const { popOut, canPopOut } = usePopOut();
@@ -27,25 +27,7 @@ export function AppLayout() {
 	const vaultLabel =
 		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
 
-	// Back prefers real history (so Edit-from-list returns to the list) and falls
-	// back to the route's staticData.back when there's none (a popped-out window
-	// booted straight onto a deep route). paramKeys resolves the fallback's path
-	// params from current params, since staticData can't hold runtime values.
-	const matches = useMatches();
-	const params = useParams({ strict: false }) as Record<string, string>;
-	const backData = matches.at(-1)?.staticData.back;
-	const onBack = backData
-		? () => {
-				if (router.history.canGoBack()) {
-					router.history.back();
-					return;
-				}
-				navigate({
-					to: backData.to,
-					params: Object.fromEntries((backData.paramKeys ?? []).map((k) => [k, params[k]])),
-				});
-			}
-		: null;
+	const onBack = useRouteBack();
 
 	return (
 		<div className="h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
