@@ -13,6 +13,7 @@ import { memo, type ReactNode, useEffect, useRef, useState } from "react";
 import { usePlatform, useSurface } from "../../context/PlatformContext";
 import { useLongPress } from "../../hooks/useLongPress";
 import type { CopyItem } from "../entry-modes/types";
+import { OpenWebsiteLink } from "./OpenWebsiteLink";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { InlineConfirm } from "./ui/inline-confirm";
@@ -34,6 +35,8 @@ interface EntryRowProps {
 	conflict?: boolean;
 	/** Quick-copy actions; empty hides the copy button. */
 	copyItems: CopyItem[];
+	/** Login-only: an http(s) URL from `launchableUrl`, shown as an open-website button. */
+	launchUrl?: string;
 	onSelect: (id: string) => void;
 	onEdit: (id: string) => void;
 	onDelete: (id: string) => Promise<void>;
@@ -63,6 +66,7 @@ export const EntryRow = memo(function EntryRow({
 	passkeys = 0,
 	conflict = false,
 	copyItems,
+	launchUrl,
 	onSelect,
 	onEdit,
 	onDelete,
@@ -250,6 +254,7 @@ export const EntryRow = memo(function EntryRow({
 								: "row-start-1 col-start-1 justify-self-end self-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
 						}`}
 					>
+						{launchUrl && <OpenWebsiteLink href={launchUrl} onOpen={() => onUse?.(id)} />}
 						{copyItems.length > 0 && (
 							<div className="relative" ref={copyRef}>
 								<Button

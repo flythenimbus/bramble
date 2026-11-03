@@ -2463,6 +2463,10 @@ msgstr "Ouvrez-le depuis la fenêtre contextuelle {0} et déverrouillez-le avec 
 msgid "Open that vault"
 msgstr "Ouvrir ce coffre"
 
+#: packages/core/src/app/components/OpenWebsiteLink.tsx
+msgid "Open website"
+msgstr "Ouvrir le site web"
+
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx

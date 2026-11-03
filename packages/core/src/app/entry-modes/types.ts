@@ -39,6 +39,8 @@ interface EntryRowView {
 	// Login-only: how many passkeys the entry holds, for the row's key marker. Deleting a login
 	// deletes its passkeys with it, so the list has to say which copy is carrying one.
 	passkeys?: number;
+	// Login-only: the first website that opens in a browser, for the row's open button.
+	launchUrl?: string;
 }
 
 /**

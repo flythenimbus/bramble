@@ -108,3 +108,16 @@ describe("loginMode row copy items", () => {
 		expect(items(asEntry(base)).map((i) => i.value)).toEqual(["octocat", "pw"]);
 	});
 });
+
+describe("loginMode row open-website link", () => {
+	const launch = (urls: string[]) => loginMode.row({ ...base, urls, id: "e1" }).launchUrl;
+
+	it("opens the first website that is a web address", () => {
+		expect(launch(["androidapp://com.github.android", "github.com"])).toBe("https://github.com/");
+	});
+
+	it("offers none for an app-only or website-less login", () => {
+		expect(launch(["androidapp://com.github.android"])).toBeUndefined();
+		expect(launch([])).toBeUndefined();
+	});
+});

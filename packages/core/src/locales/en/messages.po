@@ -2463,6 +2463,10 @@ msgstr "Open it from the {0} popup and unlock it with its master password."
 msgid "Open that vault"
 msgstr "Open that vault"
 
+#: packages/core/src/app/components/OpenWebsiteLink.tsx
+msgid "Open website"
+msgstr "Open website"
+
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx

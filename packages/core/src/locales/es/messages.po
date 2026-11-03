@@ -2463,6 +2463,10 @@ msgstr "Ábralo desde la ventana emergente de {0} y desbloquéelo con su contras
 msgid "Open that vault"
 msgstr "Abrir esa bóveda"
 
+#: packages/core/src/app/components/OpenWebsiteLink.tsx
+msgid "Open website"
+msgstr "Abrir sitio web"
+
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx

@@ -2463,6 +2463,10 @@ msgstr "Abra-o a partir do pop-up {0} e desbloqueie-o com sua senha mestra."
 msgid "Open that vault"
 msgstr "Abrir esse cofre"
 
+#: packages/core/src/app/components/OpenWebsiteLink.tsx
+msgid "Open website"
+msgstr "Abrir site"
+
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx

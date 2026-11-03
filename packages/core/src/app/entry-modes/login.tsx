@@ -35,6 +35,8 @@ import type {
 import { formatDate, formatDateTimeExact } from "../../util/format-date";
 import { generate } from "../../util/password-gen";
 import { classifyScannedQr, parseTotp, type QrScanFailure, totpAt } from "../../util/totp";
+import { launchableUrl } from "../../util/url";
+import { OpenWebsiteLink } from "../components/OpenWebsiteLink";
 import { PasswordGeneratorModal } from "../components/PasswordGeneratorModal";
 import { AdvancedDisclosure } from "../components/ui/advanced-disclosure";
 import { Button } from "../components/ui/button";
@@ -743,6 +745,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 					{login.urls.map((url, i) => {
 						// Key combines URL with position so intentional duplicates (e.g. http vs https) don't collide.
 						const copyName = login.urls.length === 1 ? "website" : `website-${i}`;
+						const href = launchableUrl(url);
 						return (
 							<DetailField.Item
 								// biome-ignore lint/suspicious/noArrayIndexKey: index needed to disambiguate accidentally-duplicate URLs
@@ -751,6 +754,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 								copied={copied}
 								copyName={copyName}
 								onCopy={() => copy(copyName, url)}
+								extraAction={href && <OpenWebsiteLink href={href} />}
 							>
 								<div className="flex items-center gap-2 text-sm">
 									<Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -925,6 +929,7 @@ export const loginMode: EntryMode = {
 			],
 			leaked: login.breach?.leaked === true,
 			passkeys: login.passkeys?.length ?? 0,
+			launchUrl: login.urls.map(launchableUrl).find((u) => u !== null) ?? undefined,
 		};
 	},
 

@@ -106,4 +106,11 @@ describe("login detail websites", () => {
 		show(loginMode, login([]));
 		expect(screen.queryByText(/^Websites?$/)).toBeNull();
 	});
+
+	it("opens each web address, but not an app URI (#141)", () => {
+		show(loginMode, login(["example.com:1234", "androidapp://com.bank.app"]));
+		const links = screen.getAllByRole("link", { name: "Open website" });
+		expect(links.map((a) => a.getAttribute("href"))).toEqual(["https://example.com:1234/"]);
+		expect(screen.getAllByRole("button", { name: "Copy website" })).toHaveLength(2);
+	});
 });

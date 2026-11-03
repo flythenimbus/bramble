@@ -246,3 +246,27 @@ describe("EntryRow conflict marker", () => {
 		expect(screen.queryByText("Conflict")).toBeNull();
 	});
 });
+
+// #141: getting to a login's site took Edit, copy the URL, paste it into the browser.
+describe("EntryRow open website", () => {
+	it("links the site in a new tab and counts it as a use", () => {
+		const onUse = vi.fn();
+		renderRow({ launchUrl: "https://github.com/", onUse });
+		const link = screen.getByRole("link", { name: "Open website" });
+		expect(link.getAttribute("href")).toBe("https://github.com/");
+		expect(link.getAttribute("target")).toBe("_blank");
+		expect(link.getAttribute("rel")).toContain("noopener");
+		fireEvent.click(link);
+		expect(onUse).toHaveBeenCalledExactlyOnceWith("e1");
+	});
+
+	it("shows nothing for an entry without a website", () => {
+		renderRow();
+		expect(screen.queryByRole("link", { name: "Open website" })).toBeNull();
+	});
+
+	it("drops out in selection mode with the other actions", () => {
+		renderRow({ launchUrl: "https://github.com/", selectMode: true, onToggleSelect: () => {} });
+		expect(screen.queryByRole("link", { name: "Open website" })).toBeNull();
+	});
+});

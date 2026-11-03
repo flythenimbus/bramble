@@ -33,6 +33,7 @@ export interface VaultListItem {
 	/** Sync kept other versions of it, or a concurrent delete, awaiting a choice. */
 	conflict?: boolean;
 	copyItems: CopyItem[];
+	launchUrl?: string;
 	// Lowercased text the search box matches against.
 	searchText: string;
 	createdAt?: number;
@@ -279,6 +280,7 @@ export function VaultHome({
 											passkeys={item.passkeys}
 											conflict={item.conflict}
 											copyItems={item.copyItems}
+											launchUrl={item.launchUrl}
 											onSelect={onSelectEntry}
 											onEdit={onEditEntry}
 											onDelete={onDeleteEntry}

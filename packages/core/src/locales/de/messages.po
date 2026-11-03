@@ -2463,6 +2463,10 @@ msgstr "Öffnen Sie es aus dem {0}-Popup und entsperren Sie es mit seinem Master
 msgid "Open that vault"
 msgstr "Diesen Tresor öffnen"
 
+#: packages/core/src/app/components/OpenWebsiteLink.tsx
+msgid "Open website"
+msgstr "Website öffnen"
+
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx

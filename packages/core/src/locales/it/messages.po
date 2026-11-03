@@ -2463,6 +2463,10 @@ msgstr "Aprila dal popup {0} e sbloccala con la sua password principale."
 msgid "Open that vault"
 msgstr "Aprire quella cassaforte"
 
+#: packages/core/src/app/components/OpenWebsiteLink.tsx
+msgid "Open website"
+msgstr "Apri sito web"
+
 #: packages/core/src/app/routes/VaultHomeRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
