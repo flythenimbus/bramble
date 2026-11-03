@@ -38,6 +38,10 @@ const EntryEditRoute = lazyRouteComponent(
 	"EntryEditRoute",
 );
 const SettingsRoute = lazyRouteComponent(() => import("./routes/SettingsRoute"), "SettingsRoute");
+const GeneratorRoute = lazyRouteComponent(
+	() => import("./routes/GeneratorRoute"),
+	"GeneratorRoute",
+);
 const PasskeyVerifyRoute = lazyRouteComponent(
 	() => import("./routes/PasskeyVerifyRoute"),
 	"PasskeyVerifyRoute",
@@ -179,6 +183,13 @@ const settingsRoute = createRoute({
 	component: SettingsRoute,
 });
 
+const generatorRoute = createRoute({
+	getParentRoute: () => appLayoutRoute,
+	path: "/generator",
+	staticData: { back: { to: "/vault" } },
+	component: GeneratorRoute,
+});
+
 // The extension's passkey provider opens this in a detached window to confirm it's you.
 const passkeyVerifyRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
@@ -197,6 +208,7 @@ const routeTree = rootRoute.addChildren([
 		entryDetailRoute,
 		entryEditRoute,
 		settingsRoute,
+		generatorRoute,
 		passkeyVerifyRoute,
 	]),
 ]);

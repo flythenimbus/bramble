@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { Outlet, useNavigate } from "@tanstack/react-router";
-import { ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
+import { Dices, ExternalLink, Lock, Settings as SettingsIcon } from "lucide-react";
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
@@ -76,6 +76,15 @@ export function AppLayout() {
 									<ExternalLink className="w-4 h-4" />
 								</Button>
 							)}
+							<Button
+								variant="ghost"
+								size="icon"
+								onClick={() => navigate({ to: "/generator" })}
+								aria-label={t`Generate password`}
+								title={t`Generate password`}
+							>
+								<Dices className="w-4 h-4" />
+							</Button>
 							<Button
 								variant="ghost"
 								size="icon"

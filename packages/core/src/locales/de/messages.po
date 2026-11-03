@@ -1657,6 +1657,8 @@ msgstr "E-Mail-Alias erzeugen"
 
 #: packages/core/src/app/components/PasswordGeneratorModal.tsx
 #: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/layouts/AppLayout.tsx
+#: packages/core/src/app/routes/GeneratorRoute.tsx
 msgid "Generate password"
 msgstr "Passwort generieren"
 

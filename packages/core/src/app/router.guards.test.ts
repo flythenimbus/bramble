@@ -87,6 +87,13 @@ describe("route guards", () => {
 		});
 	});
 
+	it("opens the generator on an unlocked vault and keeps it behind the lock (#162)", async () => {
+		expect(await destination("/generator", { isLocked: false, ready: true, entries: [] })).toBe(
+			"/generator",
+		);
+		expect(await destination("/generator", { isLocked: true, ready: true, entries: [] })).toBe("/");
+	});
+
 	it("makes no guard decision before context is injected (first-paint placeholder)", async () => {
 		// undefined-vault placeholder: guards must skip, not crash or redirect.
 		expect(await destination("/")).toBe("/");
