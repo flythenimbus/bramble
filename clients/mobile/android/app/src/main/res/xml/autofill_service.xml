@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Metadata for Bramble's AutofillService. No compatibility-mode allow-list: we use the
-     real Autofill API, and the searchable unlock list ("show all") covers any site. -->
+     real Autofill API, and the searchable unlock list ("show all") covers any site.
+     supportsInlineSuggestions: without it the keyboard never sends an inline request (API 30+). -->
 <autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:settingsActivity="app.bramble.mobile.MainActivity" />
+    android:settingsActivity="app.bramble.mobile.MainActivity"
+    android:supportsInlineSuggestions="true" />
