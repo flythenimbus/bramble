@@ -28,6 +28,8 @@ export interface VaultSearch {
 	 * list the user searches and fills from.
 	 */
 	archived: boolean;
+	/** Only entries with an attachment (#157). Names are sealed, so this is the whole of it. */
+	attachments: boolean;
 }
 
 export const DEFAULT_SEARCH: VaultSearch = {
@@ -35,6 +37,7 @@ export const DEFAULT_SEARCH: VaultSearch = {
 	type: "all",
 	sort: "name-asc",
 	archived: false,
+	attachments: false,
 };
 
 // Route search-param validator. All-optional (`.catch` drops garbage) so bad
@@ -44,6 +47,7 @@ export const vaultSearchSchema = z.object({
 	type: z.enum(TYPE_FILTERS).optional().catch(undefined),
 	sort: z.enum(SORT_KEYS).optional().catch(undefined),
 	archived: z.boolean().optional().catch(undefined),
+	attachments: z.boolean().optional().catch(undefined),
 });
 
 /** The fields the search reads. A `VaultListItem` satisfies this. */
@@ -59,6 +63,8 @@ export interface SearchableEntry {
 	archived?: boolean;
 	/** Lowercased tag keys, so the filter never re-derives them per keystroke. */
 	tagKeys?: string[];
+	/** Has at least one attachment. */
+	hasFiles?: boolean;
 }
 
 /** Split a raw query into lowercased tokens. */
@@ -166,6 +172,7 @@ export function filterAndSortEntries<T extends SearchableEntry>(
 		// never surface an archived entry, however well it matches.
 		if ((item.archived ?? false) !== search.archived) return false;
 		if (search.type !== "all" && item.type !== search.type) return false;
+		if (search.attachments && !item.hasFiles) return false;
 		// Every tag token must match some tag, as with text tokens: two of them narrow.
 		const keys = item.tagKeys;
 		if (tags.length > 0 && !tags.every((t) => keys?.some((k) => k.startsWith(t)))) return false;

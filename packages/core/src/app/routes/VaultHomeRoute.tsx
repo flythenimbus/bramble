@@ -23,10 +23,11 @@ export function VaultHomeRoute() {
 			type: raw.type ?? DEFAULT_SEARCH.type,
 			sort: raw.sort ?? DEFAULT_SEARCH.sort,
 			archived: raw.archived ?? DEFAULT_SEARCH.archived,
+			attachments: raw.attachments ?? DEFAULT_SEARCH.attachments,
 		}),
-		[raw.q, raw.type, raw.sort, raw.archived],
+		[raw.q, raw.type, raw.sort, raw.archived, raw.attachments],
 	);
-	const { entries, conflicts, ready, deleteEntry, touchEntry } = useVault();
+	const { entries, files, conflicts, ready, deleteEntry, touchEntry } = useVault();
 	const { shell } = usePlatform();
 	const { prefs, update } = usePrefs();
 	// Hide stored breach flags when breach checking is off.
@@ -72,10 +73,12 @@ export function VaultHomeRoute() {
 	const tags = useMemo(() => allTags(entries), [entries]);
 
 	// Project each entry into a list row via its mode descriptor (type-agnostic).
-	const items = useMemo<VaultListItem[]>(
-		() => entries.map((entry) => toListItem(entry, showBreaches, conflicts.get(entry.id))),
-		[entries, showBreaches, conflicts],
-	);
+	const items = useMemo<VaultListItem[]>(() => {
+		const withFiles = new Set(files.map((f) => f.entryId));
+		return entries.map((entry) =>
+			toListItem(entry, showBreaches, conflicts.get(entry.id), withFiles.has(entry.id)),
+		);
+	}, [entries, files, showBreaches, conflicts]);
 
 	// replace: typing shouldn't stack history entries.
 	const onSearchChange = (patch: Partial<VaultSearch>) =>

@@ -5,6 +5,7 @@ import {
 	ChevronDown,
 	ListFilter,
 	type LucideIcon,
+	Paperclip,
 	Search,
 	Tag,
 } from "lucide-react";
@@ -39,6 +40,9 @@ interface VaultSearchBarProps {
 	 * action lives.
 	 */
 	archivedCount: number;
+	/** How many listed entries have an attachment. Like the archive toggle, the attachments
+	 * toggle appears only when that is more than none (or while it is on). */
+	attachedCount: number;
 	/** The vault's tag vocabulary, offered while the user is typing a `#` token. */
 	tags: string[];
 	/** Rendered to the right of the search input (the add-entry control). */
@@ -62,6 +66,38 @@ interface SelectPillProps<T extends string> {
  * the row (leaving the filters stacked one per line). The painted label
  * truncates instead, and tapping anywhere still opens the platform's own picker.
  */
+interface FilterToggleProps {
+	icon: LucideIcon;
+	count: number;
+	pressed: boolean;
+	onToggle: () => void;
+	label: string;
+	title: string;
+}
+
+/** An on/off filter chip. The count is the point of the resting state: it says there is
+ * something to show without the user having to switch it on. */
+function FilterToggle({ icon: Icon, count, pressed, onToggle, label, title }: FilterToggleProps) {
+	return (
+		<Button
+			variant="link"
+			size="none"
+			onClick={onToggle}
+			aria-pressed={pressed}
+			aria-label={label}
+			title={title}
+			className={`shrink-0 flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors pointer-coarse:py-2 ${
+				pressed
+					? "bg-primary/15 border-primary/40 text-foreground"
+					: "border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
+			}`}
+		>
+			<Icon className="w-3.5 h-3.5 shrink-0" />
+			<span className="tabular-nums">{count}</span>
+		</Button>
+	);
+}
+
 function SelectPill<T extends string>({
 	icon: Icon,
 	label,
@@ -100,6 +136,7 @@ export function VaultSearchBar({
 	search,
 	onChange,
 	archivedCount,
+	attachedCount,
 	tags,
 	trailing,
 }: VaultSearchBarProps) {
@@ -316,25 +353,26 @@ export function VaultSearchBar({
 					className="min-w-0 flex-1 sm:flex-none sm:shrink-0"
 				/>
 
+				{(attachedCount > 0 || search.attachments) && (
+					<FilterToggle
+						icon={Paperclip}
+						count={attachedCount}
+						pressed={search.attachments}
+						onToggle={() => onChange({ attachments: !search.attachments })}
+						label={t`Show items with attachments`}
+						title={t`Items with attachments`}
+					/>
+				)}
+
 				{(archivedCount > 0 || search.archived) && (
-					<Button
-						variant="link"
-						size="none"
-						onClick={() => onChange({ archived: !search.archived })}
-						aria-pressed={search.archived}
-						aria-label={t`Show archived items`}
+					<FilterToggle
+						icon={Archive}
+						count={archivedCount}
+						pressed={search.archived}
+						onToggle={() => onChange({ archived: !search.archived })}
+						label={t`Show archived items`}
 						title={t`Archived items`}
-						className={`shrink-0 flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors pointer-coarse:py-2 ${
-							search.archived
-								? "bg-primary/15 border-primary/40 text-foreground"
-								: "border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
-						}`}
-					>
-						<Archive className="w-3.5 h-3.5 shrink-0" />
-						{/* The count is the point of the resting state: it says the archive is not
-							empty without the user having to open it. */}
-						<span className="tabular-nums">{archivedCount}</span>
-					</Button>
+					/>
 				)}
 			</div>
 		</div>

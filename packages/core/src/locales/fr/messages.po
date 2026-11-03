@@ -1918,6 +1918,10 @@ msgstr "éléments"
 msgid "Items ({0})"
 msgstr "Éléments ({0})"
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Items with attachments"
+msgstr "Éléments avec pièces jointes"
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Its credentials were entered in another vault, so this one cannot open them. Edit the target and enter them again to back up now."
 msgstr "Ses identifiants ont été saisis dans un autre coffre, si bien que ce coffre ne peut pas les ouvrir. Modifiez la cible et saisissez-les à nouveau pour sauvegarder maintenant."
@@ -3200,6 +3204,10 @@ msgstr "Afficher le CVV"
 #: packages/core/src/app/entry-modes/tags.tsx
 msgid "Show everything tagged {tag}"
 msgstr "Afficher tout ce qui a l’étiquette {tag}"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Show items with attachments"
+msgstr "Afficher les éléments avec pièces jointes"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Show matching logins above the keyboard for one-tap autofill."

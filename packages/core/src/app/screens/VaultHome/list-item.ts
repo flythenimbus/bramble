@@ -17,6 +17,7 @@ export function toListItem(
 	entry: Entry,
 	showBreaches: boolean,
 	conflict?: EntryConflict,
+	hasFiles = false,
 ): VaultListItem {
 	const mode = getEntryMode(entry.type);
 	const view = mode.row(entry);
@@ -39,5 +40,6 @@ export function toListItem(
 		archived: entry.archivedAt !== undefined,
 		conflict: conflict !== undefined,
 		tagKeys: entry.tags?.map(tagKey),
+		hasFiles,
 	};
 }

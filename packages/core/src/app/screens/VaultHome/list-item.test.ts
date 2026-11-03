@@ -54,6 +54,11 @@ describe("toListItem", () => {
 		expect(toListItem(login({ archivedAt: 5000 }), true).archived).toBe(true);
 	});
 
+	it("carries whether the entry has an attachment, for that filter", () => {
+		expect(toListItem(login(), true, undefined, true).hasFiles).toBe(true);
+		expect(toListItem(login(), true).hasFiles).toBe(false);
+	});
+
 	// The `#tag` filter reads these; a projection that dropped them would silently make
 	// every tag search return nothing.
 	it("projects lowercased tag keys for the search filter", () => {

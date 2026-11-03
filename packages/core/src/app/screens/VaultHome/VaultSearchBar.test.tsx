@@ -13,7 +13,12 @@ beforeAll(() => {
 	i18n.activate("en");
 });
 
-function renderBar(search: Partial<VaultSearch> = {}, archivedCount = 0, tags: string[] = []) {
+function renderBar(
+	search: Partial<VaultSearch> = {},
+	archivedCount = 0,
+	tags: string[] = [],
+	attachedCount = 0,
+) {
 	const onChange = vi.fn();
 	render(
 		<I18nProvider i18n={i18n}>
@@ -21,6 +26,7 @@ function renderBar(search: Partial<VaultSearch> = {}, archivedCount = 0, tags: s
 				search={{ ...DEFAULT_SEARCH, ...search }}
 				onChange={onChange}
 				archivedCount={archivedCount}
+				attachedCount={attachedCount}
 				tags={tags}
 			/>
 		</I18nProvider>,
@@ -149,5 +155,31 @@ describe("VaultSearchBar tag menu", () => {
 		renderBar({ q: "#wo" }, 0, ["work"]);
 		expect(searchInput().getAttribute("aria-expanded")).toBe("true");
 		expect(searchInput().getAttribute("aria-controls")).toBeTruthy();
+	});
+});
+
+// #157: like the archive toggle, the attachments toggle only shows when there is something to find.
+describe("VaultSearchBar attachments toggle", () => {
+	const toggle = () => screen.queryByRole("button", { name: "Show items with attachments" });
+
+	it("stays out of a vault with no attachments", () => {
+		renderBar();
+		expect(toggle()).toBeNull();
+	});
+
+	it("shows the count and switches the filter on", () => {
+		const onChange = renderBar({}, 0, [], 3);
+		const button = toggle();
+		expect(button?.textContent).toBe("3");
+		expect(button?.getAttribute("aria-pressed")).toBe("false");
+		fireEvent.click(button as HTMLElement);
+		expect(onChange).toHaveBeenCalledWith({ attachments: true });
+	});
+
+	it("stays while on, so the filter can always be switched off", () => {
+		const onChange = renderBar({ attachments: true }, 0, [], 0);
+		expect(toggle()?.getAttribute("aria-pressed")).toBe("true");
+		fireEvent.click(toggle() as HTMLElement);
+		expect(onChange).toHaveBeenCalledWith({ attachments: false });
 	});
 });

@@ -70,6 +70,22 @@ describe("filterAndSortEntries", () => {
 		).toEqual(["Old card"]);
 	});
 
+	// #157: the attachments toggle. File names are sealed, so it filters on having one at all.
+	it("keeps only entries with an attachment when the toggle is on", () => {
+		const items = [
+			item({ name: "Passport", hasFiles: true, searchText: "passport" }),
+			item({ name: "Bank", searchText: "bank" }),
+			item({ name: "Old lease", hasFiles: true, archived: true, searchText: "old lease" }),
+		];
+		expect(filterAndSortEntries(items, search({ attachments: true })).map((i) => i.name)).toEqual([
+			"Passport",
+		]);
+		expect(
+			filterAndSortEntries(items, search({ attachments: true, archived: true })).map((i) => i.name),
+		).toEqual(["Old lease"]);
+		expect(filterAndSortEntries(items, search())).toHaveLength(2);
+	});
+
 	it("filters by tag when the query carries a #token", () => {
 		const items = [
 			item({ name: "Payroll", tagKeys: ["work"], searchText: "payroll" }),
@@ -193,20 +209,30 @@ describe("filterAndSortEntries", () => {
 describe("vaultSearchSchema", () => {
 	it("keeps valid params", () => {
 		expect(
-			vaultSearchSchema.parse({ q: "hi", type: "card", sort: "recent-used", archived: true }),
+			vaultSearchSchema.parse({
+				q: "hi",
+				type: "card",
+				sort: "recent-used",
+				archived: true,
+				attachments: true,
+			}),
 		).toEqual({
 			q: "hi",
 			type: "card",
 			sort: "recent-used",
 			archived: true,
+			attachments: true,
 		});
 	});
 
 	it("drops unknown values to undefined instead of throwing", () => {
-		expect(vaultSearchSchema.parse({ type: "folder", sort: "date", archived: "yes" })).toEqual({
+		expect(
+			vaultSearchSchema.parse({ type: "folder", sort: "date", archived: "yes", attachments: 1 }),
+		).toEqual({
 			type: undefined,
 			sort: undefined,
 			archived: undefined,
+			attachments: undefined,
 		});
 	});
 

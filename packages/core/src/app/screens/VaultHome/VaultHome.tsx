@@ -43,6 +43,8 @@ export interface VaultListItem {
 	archived: boolean;
 	/** Lowercased tag keys, for the `#tag` filter. Rows themselves don't show tags. */
 	tagKeys?: string[];
+	/** Has at least one attachment, for the attachments filter. */
+	hasFiles?: boolean;
 }
 
 interface VaultHomeProps {
@@ -131,6 +133,11 @@ export function VaultHome({
 	// password in "At Risk" long after they dealt with it by archiving the account.
 	const live = useMemo(() => items.filter((item) => !item.archived), [items]);
 	const archivedCount = items.length - live.length;
+	// On the side being listed, so the toggle's count is what it would show.
+	const attachedCount = useMemo(
+		() => items.filter((i) => i.hasFiles && i.archived === search.archived).length,
+		[items, search.archived],
+	);
 	// "At Risk" / "Strong" are password-health stats, so they count logins only.
 	const { atRisk, strong } = useMemo(() => {
 		let atRisk = 0;
@@ -161,6 +168,7 @@ export function VaultHome({
 				search={search}
 				onChange={onSearchChange}
 				archivedCount={archivedCount}
+				attachedCount={attachedCount}
 				tags={tags}
 				trailing={<AddDropdown onCreate={onCreate} />}
 			/>
