@@ -1148,7 +1148,7 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 			if let rid = pendingRecordId, let c = creds.first(where: { $0.recordId == rid }) {
 				select(c)
 			} else {
-				let matches = creds.filter { matchesRequested($0) }
+				let matches = closestFirst(creds.filter { matchesRequested($0) })
 				showList(matches: matches, all: creds, requestedHost: pendingHosts.first)
 			}
 		} catch {
@@ -1279,6 +1279,33 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 		return services.contains { s in
 			pendingHosts.contains { w in s == w || s.hasSuffix("." + w) || w.hasSuffix("." + s) }
 		}
+	}
+
+	// How closely hosts fit the requested ones, lower first, for ordering the list (#183): the
+	// same host (0), then parent domains nearest first, then hosts under it. Pure, on hosts
+	// already through normalizeHost. Mirrors Android's VaultReader.hostRank.
+	static func hostRank(_ services: [String], _ requested: [String]) -> Int {
+		let labels = { (host: String) in host.split(separator: ".", omittingEmptySubsequences: false).count }
+		var best = Int.max
+		for s in services {
+			for w in requested {
+				let score: Int
+				if s == w { score = 0 }
+				else if w.hasSuffix("." + s) { score = labels(w) - labels(s) }
+				else if s.hasSuffix("." + w) { score = 100 + labels(s) - labels(w) }
+				else { score = 1000 }
+				best = min(best, score)
+			}
+		}
+		return best
+	}
+
+	// The page's own host first, then the nearest; ties keep vault order.
+	private func closestFirst(_ creds: [Cred]) -> [Cred] {
+		creds.enumerated()
+			.map { (rank: Self.hostRank($0.element.services.map { normalizeHost($0) }, pendingHosts), index: $0.offset, cred: $0.element) }
+			.sorted { ($0.rank, $0.index) < ($1.rank, $1.index) }
+			.map(\.cred)
 	}
 
 	// --- App Group reads ---

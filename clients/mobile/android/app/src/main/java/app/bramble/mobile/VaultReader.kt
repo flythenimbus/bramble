@@ -307,6 +307,35 @@ object VaultReader {
         }
     }
 
+    // How closely hosts fit the requested ones, lower first, for ordering what a page is offered
+    // (#183): the same host (0), then parent domains nearest first, then hosts under it. Pure, on
+    // hosts already through normalizeHost. Mirrors the extension's hostSpecificity.
+    fun hostRank(services: List<String>, requestedHosts: List<String>): Int {
+        var best = Int.MAX_VALUE
+        for (s in services) for (w in requestedHosts) {
+            val score = when {
+                s == w -> 0
+                w.endsWith(".$s") -> labels(w) - labels(s)
+                s.endsWith(".$w") -> 100 + labels(s) - labels(w)
+                else -> 1000
+            }
+            if (score < best) best = score
+        }
+        return best
+    }
+
+    private fun labels(host: String): Int = host.count { it == '.' } + 1
+
+    // A login matched by the calling app's own package ranks with an exact host.
+    fun rank(
+        login: AutofillLogin,
+        requestedHosts: List<String>,
+        callerPackage: String?,
+        callerCertHashes: Set<String> = emptySet(),
+    ): Int =
+        if (callerPackage != null && matchesApp(login, callerPackage, callerCertHashes)) 0
+        else hostRank(login.hostnames.map { normalizeHost(it) }.filter { it.isNotEmpty() }, requestedHosts)
+
     // Exact package equality only: a package name is never reversed into a domain. A pinned
     // android://<hash>@<package> hash must additionally match the caller's facetCertHash
     // exactly - base64url has no spelling to normalize.

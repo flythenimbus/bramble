@@ -145,7 +145,7 @@ class BrambleAutofillService : AutofillService() {
             val matches = logins.filter {
                 VaultReader.matches(it, hosts, matchPackage, callerCerts) &&
                     Datasets.canFill(it, parsed.usernameIds.isNotEmpty(), parsed.passwordIds.isNotEmpty(), parsed.otpIds.isNotEmpty(), now)
-            }
+            }.sortedBy { VaultReader.rank(it, hosts, matchPackage, callerCerts) }
             for (login in matches) {
                 Datasets.fillDataset(
                     this, login, parsed.usernameIds, parsed.passwordIds, parsed.otpIds, now,

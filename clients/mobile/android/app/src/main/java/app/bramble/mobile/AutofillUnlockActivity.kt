@@ -80,7 +80,9 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
                     setError(getString(R.string.af_err_load_logins))
                 } else {
                     logins = sortedByTitle(loaded) { it.displayTitle(this) }
-                    matches = logins.filter { VaultReader.matches(it, hosts, matchPackage, callerCerts) }
+                    matches = logins
+                        .filter { VaultReader.matches(it, hosts, matchPackage, callerCerts) }
+                        .sortedBy { VaultReader.rank(it, hosts, matchPackage, callerCerts) }
                     showList("")
                 }
             }

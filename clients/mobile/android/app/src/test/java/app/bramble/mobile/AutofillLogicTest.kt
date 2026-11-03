@@ -81,6 +81,18 @@ class AutofillLogicTest {
     }
 
     @Test
+    fun `a page is offered its own host's login before its parent's (#183)`() {
+        val page = listOf("stats.example.com")
+        assertEquals(0, VaultReader.hostRank(listOf("stats.example.com"), page))
+        assertEquals(1, VaultReader.hostRank(listOf("example.com"), page))
+        assertEquals(2, VaultReader.hostRank(listOf("example.com"), listOf("a.b.example.com")))
+        assertTrue(VaultReader.hostRank(listOf("a.stats.example.com"), page) > 1)
+        assertEquals(0, VaultReader.hostRank(listOf("d1.example.com", "stats.example.com"), page))
+        val offered = listOf("example.com", "stats.example.com").sortedBy { VaultReader.hostRank(listOf(it), page) }
+        assertEquals(listOf("stats.example.com", "example.com"), offered)
+    }
+
+    @Test
     fun `app matching is exact package equality, never a domain inference`() {
         val entry = login("Instagram", "me@x.y", "instagram.com")
         assertFalse(VaultReader.matchesApp(entry, "com.instagram.android"))
