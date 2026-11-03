@@ -18,6 +18,7 @@ import {
 	dedupeCapture as dedupeCaptureFn,
 	effectivePort,
 	hostnameMatches,
+	hostSpecificity,
 	registrableDomain,
 } from "../dedupe";
 import { api } from "../platform-api";
@@ -283,9 +284,11 @@ function queryResult(
 	const logins: MatchSummary[] = [];
 	const cards: MatchSummary[] = [];
 	const otps: MatchSummary[] = [];
+	const rank = new Map<string, number>();
 	for (const entry of index.values()) {
 		if (entry.type === "login") {
 			if (!hostnameMatches(entry, hostname, port)) continue;
+			rank.set(entry.id, hostSpecificity(entry.hostnames, hostname));
 			if (hasLogin) {
 				logins.push({
 					id: entry.id,
@@ -308,6 +311,11 @@ function queryResult(
 			cards.push({ id: entry.id, name: entry.name, secondary: cardSecondary(entry) });
 		}
 	}
+	// The page's own host first, then the nearest (#183). Stable, so ties keep vault order.
+	const closest = (a: MatchSummary, b: MatchSummary) =>
+		(rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0);
+	logins.sort(closest);
+	otps.sort(closest);
 	return { logins, cards, otps, locked: false, hasPotentialMatch: logins.length > 0 };
 }
 

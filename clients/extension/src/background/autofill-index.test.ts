@@ -462,6 +462,46 @@ describe("exact logins on one host, told apart by port (#131)", () => {
 	});
 });
 
+describe("logins ordered by how closely their host fits the page (#183)", () => {
+	// Saved apex first, as someone adding their sites would: vault order was the offered order.
+	const SITES = toAutofillIndex(
+		[
+			{ id: "apex", urls: ["https://example.com"] },
+			{ id: "d1", urls: ["https://d1.example.com"] },
+			{
+				id: "stats",
+				urls: ["https://stats.example.com"],
+				totp: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+			},
+			{ id: "deep", urls: ["https://a.stats.example.com"] },
+		].map(
+			(e) =>
+				({ type: "login", name: e.id, username: "u", password: e.id, ...e }) as unknown as Entry,
+		),
+	);
+
+	async function query(origin: string) {
+		const bg = await loadBackground({ sessionSeed: { [VEK_KEY]: "SEED" } });
+		await setAutofillIndex(bg, SITES);
+		const { resp } = await bg.send(
+			{ type: "AUTOFILL_QUERY", hasLogin: true, hasOtp: true },
+			{ origin, url: `${origin}/`, tab: { id: 3, windowId: 1, url: `${origin}/` }, frameId: 0 },
+		);
+		return resp.data;
+	}
+
+	it("puts the page's own host first, then its parent, then the rest", async () => {
+		const data = await query("https://stats.example.com");
+		expect(data.logins.map((l: { id: string }) => l.id)).toEqual(["stats", "apex", "deep", "d1"]);
+		expect(data.otps.map((l: { id: string }) => l.id)).toEqual(["stats"]);
+	});
+
+	it("keeps the apex first on the apex, and vault order among equals", async () => {
+		const data = await query("https://example.com");
+		expect(data.logins.map((l: { id: string }) => l.id)).toEqual(["apex", "d1", "stats", "deep"]);
+	});
+});
+
 describe("the tab's last-filled card (hosted-fields carry)", () => {
 	const CARDS = [
 		...ENTRIES,

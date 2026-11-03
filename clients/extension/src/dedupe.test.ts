@@ -6,6 +6,7 @@ import {
 	effectivePort,
 	type HostnameMatchable,
 	hostnameMatches,
+	hostSpecificity,
 	registrableDomain,
 } from "./dedupe";
 
@@ -369,5 +370,28 @@ describe("hostname policy regressions", () => {
 		const entry = { hostnames: ["accounts.example.com"], subdomainMatch: "legacy" };
 		expect(hostnameMatches(entry as unknown as LoginIndexEntry, "mail.example.com")).toBe(true);
 		expect(hostnameMatches(entry as unknown as LoginIndexEntry, "evil.com")).toBe(false);
+	});
+});
+
+describe("hostSpecificity", () => {
+	const page = "stats.example.com";
+
+	it("ranks the page's own host first, then parents nearest first", () => {
+		expect(hostSpecificity(["stats.example.com"], page)).toBe(0);
+		expect(hostSpecificity(["example.com"], page)).toBe(1);
+		expect(hostSpecificity(["example.com"], "a.b.example.com")).toBe(2);
+	});
+
+	it("puts hosts under the page after its parents, and siblings last", () => {
+		const child = hostSpecificity(["a.stats.example.com"], page);
+		const sibling = hostSpecificity(["d1.example.com"], page);
+		expect(child).toBeGreaterThan(hostSpecificity(["example.com"], page));
+		expect(sibling).toBeGreaterThan(child);
+	});
+
+	it("takes the best of a login's hosts, and reads www. as the bare host", () => {
+		expect(hostSpecificity(["d1.example.com", "Stats.Example.com"], page)).toBe(0);
+		expect(hostSpecificity(["www.example.com"], "example.com")).toBe(0);
+		expect(hostSpecificity(["example.com"], "www.example.com")).toBe(0);
 	});
 });

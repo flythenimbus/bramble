@@ -62,6 +62,29 @@ function hostnameMatchesEntry(
 	}
 }
 
+const stripWww = (host: string) => (host.startsWith("www.") ? host.slice(4) : host);
+const labels = (host: string) => host.split(".").length;
+
+/**
+ * How closely a login's saved hosts fit the page, lower first, for ordering the logins a page
+ * is offered (#183): the page's own host (0), then its parent domains, nearest first (1, 2,
+ * ...), then hosts under it (100+), then siblings that only share its registrable domain. A
+ * leading "www." counts as the bare host. Only orders; hostnameMatches decides what is offered.
+ */
+export function hostSpecificity(hostnames: readonly string[], pageHostname: string): number {
+	const page = stripWww(pageHostname.toLowerCase());
+	let best = Number.POSITIVE_INFINITY;
+	for (const raw of hostnames) {
+		const host = stripWww(raw.toLowerCase());
+		let score = 1000;
+		if (host === page) score = 0;
+		else if (page.endsWith(`.${host}`)) score = labels(page) - labels(host);
+		else if (host.endsWith(`.${page}`)) score = 100 + labels(host) - labels(page);
+		best = Math.min(best, score);
+	}
+	return best;
+}
+
 /** Result of matching a captured credential against the index: identical, new, or update-an-existing. */
 export type DedupeOutcome =
 	| { kind: "exact" }
@@ -87,11 +110,14 @@ export function dedupeCapture(
 		candidates.push(entry);
 	}
 	if (candidates.length === 0) return { kind: "save" };
-	// Same-username matches float to the top.
+	// Same-username matches float to the top, then the closest host.
 	candidates.sort((a, b) => {
 		const aMatch = a.username === username ? 0 : 1;
 		const bMatch = b.username === username ? 0 : 1;
-		return aMatch - bMatch;
+		return (
+			aMatch - bMatch ||
+			hostSpecificity(a.hostnames, hostname) - hostSpecificity(b.hostnames, hostname)
+		);
 	});
 	return { kind: "update", candidates };
 }
