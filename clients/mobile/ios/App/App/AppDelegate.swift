@@ -12,14 +12,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    // The launch screen laid over the vault while the app is inactive, so the app switcher shows
+    // it instead of whatever entry was open (#148). Not under Bramble's own Face ID prompt, which
+    // sits over the unlock screen and would make it flash; backgrounding covers regardless.
+    private var privacyCover: UIView?
+
     func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
+        if !BiometricVaultPlugin.isPrompting { showPrivacyCover() }
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+        showPrivacyCover()
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
@@ -27,7 +30,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        privacyCover?.removeFromSuperview()
+        privacyCover = nil
+    }
+
+    private func showPrivacyCover() {
+        guard privacyCover == nil, let window else { return }
+        let cover = UIImageView(image: UIImage(named: "Splash"))
+        cover.frame = window.bounds
+        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        cover.contentMode = .scaleAspectFit
+        cover.backgroundColor = .black
+        window.addSubview(cover)
+        privacyCover = cover
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

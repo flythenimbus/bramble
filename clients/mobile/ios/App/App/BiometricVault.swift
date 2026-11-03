@@ -253,6 +253,21 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		}
 	}
 
+	// Up while this plugin's Face ID / passcode prompt is, which makes the app inactive: the
+	// privacy cover (AppDelegate) leaves the unlock screen under it alone. Set off the main thread.
+	private static let promptLock = NSLock()
+	private static var prompting = false
+	static var isPrompting: Bool {
+		promptLock.lock()
+		defer { promptLock.unlock() }
+		return prompting
+	}
+	private static func setPrompting(_ on: Bool) {
+		promptLock.lock()
+		prompting = on
+		promptLock.unlock()
+	}
+
 	@objc func getSecret(_ call: CAPPluginCall) {
 		guard let vaultId = call.getString("vaultId") else {
 			call.reject("Missing vaultId")
@@ -274,8 +289,10 @@ public class BiometricVaultPlugin: CAPPlugin, CAPBridgedPlugin {
 		let policy: LAPolicy =
 			allowPasscode ? .deviceOwnerAuthentication : .deviceOwnerAuthenticationWithBiometrics
 		Self.keychainQueue.async {
+			Self.setPrompting(true)
 			context.evaluatePolicy(policy, localizedReason: reason) {
 				success, evalError in
+				Self.setPrompting(false)
 				guard success else {
 					let code = (evalError as? LAError)?.code
 					if code == .userCancel || code == .appCancel || code == .userFallback {
