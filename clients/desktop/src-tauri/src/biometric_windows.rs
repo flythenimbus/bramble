@@ -4,10 +4,9 @@
 //! key's hmac-secret to become the KEK that wraps the VEK, with the same verifier, so a slot here
 //! is a webauthn slot with Hello standing in for the authenticator (vault_crypto does the crypto).
 //!
-//! `[unverified]` This needs the signature to come out the same every time. Hello keys are RSA and
-//! PKCS#1 v1.5 signing is deterministic, but nothing has shown it on a real machine yet. If it
-//! were not, every unlock would fail the verifier and report the gate invalidated, which is the
-//! safe failure. See docs/desktop-biometric-unlock.md.
+//! This needs the signature to come out the same every time. Hello keys are RSA, PKCS#1 v1.5 signing
+//! is deterministic, and a Windows 11 check confirmed it (docs/desktop-biometric-unlock.md). Were it
+//! ever not, every unlock would fail the verifier and report the gate invalidated: the safe failure.
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};

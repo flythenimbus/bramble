@@ -7,7 +7,9 @@ extension; that half shipped separately (the extension's passkey unlock gained "
 Status: **built 2026-11-03, untested on hardware.** Core flag and labels, the desktop adapter, the
 Rust module, the macOS gate and the Windows Hello gate. Touch ID needs a signed build to run at
 all (an unsigned one correctly reports the gate unavailable, which a test pins). The Windows gate
-type-checks against the real `windows` crate but has never run. Nothing is released.
+type-checks against the real `windows` crate, and the Hello behaviour it depends on (a stable
+signature) was confirmed on a Windows VM, but the app itself has not run there. Nothing is
+released.
 
 ## What already exists
 
@@ -108,15 +110,21 @@ bound to the Hello check cryptographically rather than trusting a yes/no answer:
 - On unlock, sign the same challenge again (prompt) and hand the signature to
   `unwrap_vek_webauthn`, which checks the verifier before loading the VEK. A verifier mismatch
   means the Hello key changed, reported as `invalidated`.
-- **To verify first:** this relies on the signature being identical every time. Hello keys are
-  RSA and PKCS#1 v1.5 signing is deterministic, and KeePassXC and Bitwarden are believed to do the
-  same `[unverified]`, but the spike has to show a second signature matching the first before
-  anything is built on it.
+- **It relies on the signature being identical every time, and it is.** Checked 2026-11-03 on
+  Windows 11 for Arm (VMware Fusion, virtual TPM) with a local account and a PIN: one 32-byte
+  challenge signed twice, then again through a reopened key, gave the same 256-byte RSA
+  signature all three times. The check was a PowerShell script against `KeyCredentialManager`,
+  not the app. Hello also works for a local account, not only a Microsoft one.
+- Every signature prompts, except one made right after the key is created, which rides on the
+  creation prompt. So arming costs one prompt (new key or existing), and so does each unlock.
 - Hello always accepts its PIN, so there is no passcode-fallback choice to offer: the capability
   is off on Windows and the Settings row hides. The label is "Windows Hello".
 - A reset or removed Hello key fails to open, which surfaces as `invalidated`.
 - Known nuisance: the Hello prompt can appear behind the app's window unless it is parented to it.
-  `[unverified]` which interop interface does that for `KeyCredentialManager`.
+  `[unverified]` which interop interface does that for `KeyCredentialManager`. Seen in the check
+  above: launched from a process without the foreground (a scheduled task), the prompt flashed
+  in the taskbar instead of coming forward, and came forward once its console had focus. Whether
+  the app, which will have just been clicked, gets it in front is the next thing to test.
 
 Crate: `windows` (already in the tree at 0.62) with the `Foundation`, `Security_Credentials`,
 `Security_Cryptography` and `Storage_Streams` features.
