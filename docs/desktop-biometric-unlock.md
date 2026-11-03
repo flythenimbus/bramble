@@ -4,12 +4,12 @@ Plan for unlocking the desktop app with Touch ID on macOS and Windows Hello on W
 the master password. Asked for repeatedly, most recently in #180, which also covered the browser
 extension; that half shipped separately (the extension's passkey unlock gained "Unlock on open").
 
-Status: **built 2026-11-03, untested on hardware.** Core flag and labels, the desktop adapter, the
-Rust module, the macOS gate and the Windows Hello gate. Touch ID needs a signed build to run at
-all (an unsigned one correctly reports the gate unavailable, which a test pins). The Windows gate
-type-checks against the real `windows` crate, and the Hello behaviour it depends on (a stable
-signature) was confirmed on a Windows VM, but the app itself has not run there. Nothing is
-released.
+Status: **built 2026-11-03. Windows Hello works in the app; Touch ID is untested.** Core flag and
+labels, the desktop adapter, the Rust module, the macOS gate and the Windows Hello gate. On a
+Windows 11 VM (unsigned cross-built installer, local account, PIN), the app armed the gate,
+unlocked with it, prompted on open, did not prompt after the Lock button, and brought the Hello
+dialog to the front. Touch ID needs a signed build to run at all (an unsigned one correctly
+reports the gate unavailable, which a test pins). Nothing is released.
 
 ## What already exists
 
