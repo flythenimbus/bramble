@@ -949,6 +949,7 @@ export function BackupSection() {
 									value={String(keep)}
 									onChange={(e) => setKeep(Number(e.target.value))}
 								>
+									<option value="1">{t`Latest only`}</option>
 									<option value="5">{t`Last 5`}</option>
 									<option value="10">{t`Last 10`}</option>
 									<option value="30">{t`Last 30`}</option>

@@ -129,6 +129,19 @@ describe("backup orchestrator", () => {
 		expect(keys.length).toBe(2);
 		expect(keys.every((k) => k.includes("20260103") || k.includes("20260104"))).toBe(true);
 	});
+
+	it("keeps only the snapshot it just uploaded at keep 1", async () => {
+		const { target, store } = mockTarget();
+		for (let day = 1; day <= 3; day++) {
+			await run(target, new TextEncoder().encode(`vault-${day}`), {
+				keep: 1,
+				now: new Date(Date.UTC(2026, 0, day)),
+			});
+		}
+		const keys = [...store.keys()];
+		expect(keys).toHaveLength(1);
+		expect(keys[0]).toContain("20260103");
+	});
 });
 
 // Deleting is the one thing Bramble asks a provider for that can lose the user something, and it
