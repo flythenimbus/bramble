@@ -175,8 +175,11 @@ The counter, PRF and creation-date warnings import the passkey anyway. A dropped
 leaves sign-in working, but a site that used PRF to encrypt data cannot decrypt it again.
 
 **Status:** checked against a real Proton Pass 1.43.0 export (fixture
-`protonpass-passkeys.zip`, a webauthn.io passkey). Signing in to webauthn.io with the imported
-passkey has not been tried yet.
+`protonpass-passkeys.zip`, a webauthn.io passkey). **Verified end to end on 2026-11-02** in the
+Chromium extension: a passkey Proton made, the second of two on one login, imported and signed in
+to webauthn.io through Bramble's prompt. Run it within a day of registering: webauthn.io deletes
+a registration after 24 hours, and then answers "That username has no registered credentials"
+before any authenticator is asked.
 
 ## Where these limits come from, and which are ours to relax
 
