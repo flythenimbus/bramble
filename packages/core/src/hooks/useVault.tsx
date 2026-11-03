@@ -1015,7 +1015,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	/** Lock the vault: clear the VEK, autofill index, and decrypted state. */
 	const lock = useCallback(async () => {
-		await crypto.lock();
+		// Marked first: an adapter can announce the lock from inside crypto.lock (desktop's does),
+		// which shows the unlock screen before this function resumes. Marked after, that screen
+		// took it for an auto-lock and "Unlock on open" prompted at the Lock button.
+		setLockedByUser(true);
+		try {
+			await crypto.lock();
+		} catch (e) {
+			setLockedByUser(false);
+			throw e;
+		}
 		await autofill.clearIndex();
 		vaultStateRef.current = emptyVaultSyncState();
 		setConflicts(NO_CONFLICTS);
