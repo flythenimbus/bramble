@@ -761,6 +761,10 @@ export const OTP_HINT_RE = alternation([
 	"eng(å|a)ngskod",
 ]);
 
+// camelCase glues an abbreviation to the next word (Google's `totpPin`), which the
+// letter-bounded terms above then read as one word, so the hint is split first (#158).
+const splitCamelCase = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2");
+
 // "Code" on its own is far too common (gift, referral, country, area, discount)
 // to accept as a signal, so it only counts when the field is also code-shaped.
 const WEAK_CODE_RE = alternation([
@@ -964,7 +968,7 @@ export function otpInputs(
 	for (const el of scan.editable) {
 		if (!isOtpCandidateType(el)) continue;
 		if (isCardField(card, el)) continue;
-		const hint = attrHint(el);
+		const hint = splitCamelCase(attrHint(el));
 		if (OTP_NEGATIVE_RE.test(hint)) continue;
 		if (OTP_HINT_RE.test(hint) || (WEAK_CODE_RE.test(hint) && isCodeLength(el))) {
 			hinted = el;

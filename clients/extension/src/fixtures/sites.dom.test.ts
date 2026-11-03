@@ -433,6 +433,27 @@ describe("login.microsoftonline.com — password step (two-step SSO)", () => {
 	});
 });
 
+// #158: no one-time-code token, no maxlength, no <label>. Only the name says it, as camelCase.
+describe("accounts.google.com — 2-Step Verification (authenticator app)", () => {
+	it("otpInputs finds the code field through its totpPin name", () => {
+		loadFixture("google-totp");
+		const fields = otpInputs();
+		expect(fields.map((f) => f.id)).toEqual(["totpPin"]);
+	});
+
+	it("candidateKind classifies it as 'otp'", () => {
+		loadFixture("google-totp");
+		expect(candidateKind(document.querySelector<HTMLInputElement>("#totpPin")!)).toBe("otp");
+	});
+
+	it("finds no login or card fields", () => {
+		loadFixture("google-totp");
+		const { password } = detectLoginFields();
+		expect(password).toBeNull();
+		expect(cardFieldsPresent(detectCardFields())).toBe(false);
+	});
+});
+
 describe("github.com — 2FA (TOTP)", () => {
 	// GitHub 2FA has no `one-time-code` token; it uses name="otp", caught by the
 	// hint rung via `\botp\b`.

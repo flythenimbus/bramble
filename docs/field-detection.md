@@ -211,7 +211,9 @@ written is in [autofill.md](autofill.md).
 
 `OTP_HINT_RE` also carries localized terms, and bounds `otp`/`otc`/`totp` on
 letters rather than `\b` so they match inside `idTxtBx_SAOTCC_OTC`, where the
-underscore is a word character and `\b` fails. English "security code" sits there
+underscore is a word character and `\b` fails. The hint is split at camelCase
+boundaries first, since the letter bound reads Google's `totpPin` as one word
+(issue #158). English "security code" sits there
 alongside its German, French, Spanish, Italian and Swedish equivalents, the card
 detector having had first refusal on the phrase. Product names earn a place when
 they are unambiguous: a Symantec VIP Access field (`vip_pin`, `vipCode`)

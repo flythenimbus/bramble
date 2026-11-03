@@ -91,6 +91,16 @@ describe("otp: attribute and label hints", () => {
 		expect(ids('<input id="idTxtBx_SAOTCC_OTC" type="tel">')).toEqual(["idTxtBx_SAOTCC_OTC"]);
 	});
 
+	it("matches an abbreviation glued to the next word by camelCase (#158)", () => {
+		// Google's 2-Step Verification field, verbatim: no token, no maxlength, no <label>.
+		const html =
+			'<input type="tel" pattern="[0-9 ]*" autocomplete="off" aria-label="Enter code"' +
+			' aria-describedby="c4" name="totpPin" id="totpPin">';
+		expect(ids(html)).toEqual(["totpPin"]);
+		// Glued to lowercase it is still one word, and not a code.
+		expect(ids('<input id="a" name="totpotato" type="text">')).toEqual([]);
+	});
+
 	it.each([
 		["en Security code", "Security code"],
 		["de Bestätigungscode", "Bestätigungscode"],
