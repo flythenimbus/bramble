@@ -77,3 +77,33 @@ describe.each(MODES)("%s detail notes", (_, mode, value, copyLabel) => {
 		expect(idle.querySelector(".lucide-check")).toBeNull();
 	});
 });
+
+describe("login detail websites", () => {
+	const login = (urls: string[]) =>
+		entry({ id: "l1", type: "login", name: "Bank", urls, username: "", password: "" });
+
+	it("groups several websites under one label", () => {
+		const urls = ["https://google.com/", "https://test.com/", "example.com:1234"];
+		const copy = show(loginMode, login(urls));
+		expect(screen.getByText("Websites")).toBeTruthy();
+		expect(screen.queryByText("Website")).toBeNull();
+		const buttons = screen.getAllByRole("button", { name: "Copy website" });
+		expect(buttons).toHaveLength(3);
+		buttons.forEach((button, i) => {
+			fireEvent.click(button);
+			expect(copy).toHaveBeenLastCalledWith(`website-${i}`, urls[i]);
+		});
+	});
+
+	it("labels a single website in the singular", () => {
+		const copy = show(loginMode, login(["https://google.com/"]));
+		expect(screen.getByText("Website")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Copy website" }));
+		expect(copy).toHaveBeenCalledWith("website", "https://google.com/");
+	});
+
+	it("shows no label without websites", () => {
+		show(loginMode, login([]));
+		expect(screen.queryByText(/^Websites?$/)).toBeNull();
+	});
+});

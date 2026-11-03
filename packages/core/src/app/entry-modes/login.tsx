@@ -738,25 +738,29 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 
 	return (
 		<>
-			{login.urls.map((url, i) => {
-				// Key combines URL with position so intentional duplicates (e.g. http vs https) don't collide.
-				const copyName = login.urls.length === 1 ? "website" : `website-${i}`;
-				return (
-					<DetailField
-						// biome-ignore lint/suspicious/noArrayIndexKey: index needed to disambiguate accidentally-duplicate URLs
-						key={`${url}-${i}`}
-						label={t`Website`}
-						copied={copied}
-						copyName={copyName}
-						onCopy={() => copy(copyName, url)}
-					>
-						<div className="flex items-center gap-2 text-sm">
-							<Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-							<span className="truncate">{url}</span>
-						</div>
-					</DetailField>
-				);
-			})}
+			{login.urls.length > 0 && (
+				<DetailField.Group label={login.urls.length > 1 ? t`Websites` : t`Website`}>
+					{login.urls.map((url, i) => {
+						// Key combines URL with position so intentional duplicates (e.g. http vs https) don't collide.
+						const copyName = login.urls.length === 1 ? "website" : `website-${i}`;
+						return (
+							<DetailField.Item
+								// biome-ignore lint/suspicious/noArrayIndexKey: index needed to disambiguate accidentally-duplicate URLs
+								key={`${url}-${i}`}
+								label={t`Website`}
+								copied={copied}
+								copyName={copyName}
+								onCopy={() => copy(copyName, url)}
+							>
+								<div className="flex items-center gap-2 text-sm">
+									<Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+									<span className="truncate">{url}</span>
+								</div>
+							</DetailField.Item>
+						);
+					})}
+				</DetailField.Group>
+			)}
 
 			<DetailField
 				label={t`Username`}
