@@ -2,6 +2,7 @@
 	"about.credits_by": "Por {author}",
 	"about.credits_license": "Software libre bajo la Licencia Pública General de GNU v3.0.",
 	"about.website_label": "Código fuente",
+	"biometric.reason": "desbloquear su bóveda",
 	"menu.about": "Acerca de {app}",
 	"menu.check_updates": "Buscar actualizaciones…",
 	"menu.close": "Cerrar",

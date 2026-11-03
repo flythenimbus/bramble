@@ -6,6 +6,7 @@
 
 mod autostart;
 mod backup;
+mod biometric;
 mod crypto;
 mod files;
 mod i18n;
@@ -264,6 +265,11 @@ pub fn run() {
             files::files_delete_vault,
             autostart::autostart_is_enabled,
             autostart::autostart_set_enabled,
+            biometric::biometric_status,
+            biometric::biometric_is_enabled,
+            biometric::biometric_enable,
+            biometric::biometric_unlock,
+            biometric::biometric_disable,
             crypto::crypto_is_locked,
             crypto::crypto_lock,
             crypto::crypto_generate_vek,

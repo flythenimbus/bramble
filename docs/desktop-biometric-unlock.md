@@ -4,7 +4,9 @@ Plan for unlocking the desktop app with Touch ID on macOS and Windows Hello on W
 the master password. Asked for repeatedly, most recently in #180, which also covered the browser
 extension; that half shipped separately (the extension's passkey unlock gained "Unlock on open").
 
-Status: **planned 2026-11-03, building macOS first.** Nothing is released.
+Status: **step 1 built 2026-11-03** (core flag and labels, the desktop adapter, the Rust module and
+its macOS gate). Not yet run on a signed build, so Touch ID itself is untested; an unsigned build
+correctly reports the gate unavailable. Windows next. Nothing is released.
 
 ## What already exists
 

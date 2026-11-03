@@ -2,6 +2,7 @@
 	"about.credits_by": "Von {author}",
 	"about.credits_license": "Freie Software unter der GNU General Public License v3.0.",
 	"about.website_label": "Quellcode",
+	"biometric.reason": "Ihren Tresor zu entsperren",
 	"menu.about": "Über {app}",
 	"menu.check_updates": "Nach Updates suchen…",
 	"menu.close": "Schließen",

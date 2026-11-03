@@ -6,6 +6,7 @@ import "./styles/index.css";
 import "./styles/desktop.css";
 import { desktopAutofill } from "./adapters/autofill";
 import { desktopBackupCreds } from "./adapters/backup-creds";
+import { desktopBiometric } from "./adapters/biometric";
 import { desktopClipboard } from "./adapters/clipboard";
 import { desktopCrypto } from "./adapters/crypto";
 import { desktopFiles, startOpenedCopySweeps } from "./adapters/files";
@@ -35,7 +36,8 @@ const platform: Platform = {
 	backupCreds: desktopBackupCreds,
 	http: desktopHttp,
 	files: desktopFiles,
-	// biometric: Touch ID / Windows Hello is phase 1; nothing on Linux.
+	// Touch ID now, Windows Hello next; Linux reports unavailable. docs/desktop-biometric-unlock.md.
+	biometric: desktopBiometric,
 	// exchange: iOS only.
 };
 

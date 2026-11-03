@@ -2,6 +2,7 @@
 	"about.credits_by": "Par {author}",
 	"about.credits_license": "Logiciel libre sous licence publique générale GNU v3.0.",
 	"about.website_label": "Code source",
+	"biometric.reason": "déverrouiller votre coffre",
 	"menu.about": "À propos de {app}",
 	"menu.check_updates": "Rechercher des mises à jour…",
 	"menu.close": "Fermer",

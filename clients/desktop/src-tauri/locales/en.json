@@ -2,6 +2,7 @@
 	"about.credits_by": "By {author}",
 	"about.credits_license": "Free software under the GNU General Public License v3.0.",
 	"about.website_label": "Source code",
+	"biometric.reason": "unlock your vault",
 	"menu.about": "About {app}",
 	"menu.check_updates": "Check for Updates…",
 	"menu.close": "Close",

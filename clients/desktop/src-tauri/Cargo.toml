@@ -103,6 +103,16 @@ keyring = { version = "3.6.3", features = ["apple-native"] }
 plist = "1.10"
 # Pinning the quick-access panel's window appearance. Already in the tree via tauri.
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSAppearance", "NSResponder", "NSWindow"] }
+# Touch ID unlock: the access-controlled keychain item (security-framework, core-foundation) and
+# the LAContext prompt (objc2, block2, objc2-foundation). All already in the tree via keyring and
+# tauri. See src/biometric_macos.rs.
+# OSX_10_15 is what makes the item, and every search for it, use the data protection keychain;
+# without it macOS falls back to the login keychain, which has no biometric access control.
+security-framework = { version = "3.7", features = ["OSX_10_15"] }
+core-foundation = "0.10"
+objc2 = "0.6.4"
+block2 = "0.6.2"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", features = ["windows-native"] }
