@@ -8,15 +8,20 @@
 //! is deterministic, and a Windows 11 check confirmed it (docs/desktop-biometric-unlock.md). Were it
 //! ever not, every unlock would fail the verifier and report the gate invalidated: the safe failure.
 
+use std::{thread, time::Duration};
+
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use windows::{
-    core::{Array, HSTRING},
+    core::{w, Array, HSTRING, PCWSTR},
     Security::{
         Credentials::{
             KeyCredential, KeyCredentialCreationOption, KeyCredentialManager, KeyCredentialStatus,
         },
         Cryptography::CryptographicBuffer,
+    },
+    Win32::UI::WindowsAndMessaging::{
+        FindWindowW, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE,
     },
 };
 use zeroize::Zeroizing;
@@ -168,10 +173,11 @@ fn open_or_create(vault_id: &str) -> BioResult<KeyCredential> {
     if found.Status().map_err(win_failure)? == KeyCredentialStatus::Success {
         return found.Credential().map_err(win_failure);
     }
-    let made =
+    let op =
         KeyCredentialManager::RequestCreateAsync(&name, KeyCredentialCreationOption::FailIfExists)
-            .and_then(|op| op.join())
             .map_err(win_failure)?;
+    surface_prompt();
+    let made = op.join().map_err(win_failure)?;
     let status = made.Status().map_err(win_failure)?;
     if status != KeyCredentialStatus::Success {
         return Err(hello_error(status));
@@ -182,10 +188,9 @@ fn open_or_create(vault_id: &str) -> BioResult<KeyCredential> {
 /// Hello's prompt, then its signature over `challenge`.
 fn sign(credential: &KeyCredential, challenge: &[u8]) -> BioResult<Zeroizing<Vec<u8>>> {
     let data = CryptographicBuffer::CreateFromByteArray(challenge).map_err(win_failure)?;
-    let result = credential
-        .RequestSignAsync(&data)
-        .and_then(|op| op.join())
-        .map_err(win_failure)?;
+    let op = credential.RequestSignAsync(&data).map_err(win_failure)?;
+    surface_prompt();
+    let result = op.join().map_err(win_failure)?;
     let status = result.Status().map_err(win_failure)?;
     if status != KeyCredentialStatus::Success {
         return Err(hello_error(status));
@@ -194,6 +199,31 @@ fn sign(credential: &KeyCredential, challenge: &[u8]) -> BioResult<Zeroizing<Vec
     let mut bytes = Array::<u8>::new();
     CryptographicBuffer::CopyToByteArray(&signed, &mut bytes).map_err(win_failure)?;
     Ok(Zeroizing::new(bytes.to_vec()))
+}
+
+/// Bring Hello's dialog to the front. Windows opens it without the foreground, minimised and
+/// flashing in the taskbar, and this API takes no owner window to fix that. Bramble is the
+/// foreground app when it asks (the user just clicked, or opened it), which lets it hand the
+/// foreground on, so find the dialog by its window class once it exists and raise it. KeePassXC
+/// does the same.
+fn surface_prompt() {
+    thread::spawn(|| {
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(150));
+            let Ok(dialog) =
+                (unsafe { FindWindowW(w!("Credential Dialog Xaml Host"), PCWSTR::null()) })
+            else {
+                continue;
+            };
+            unsafe {
+                if IsIconic(dialog).as_bool() {
+                    let _ = ShowWindow(dialog, SW_RESTORE);
+                }
+                let _ = SetForegroundWindow(dialog);
+            }
+            return;
+        }
+    });
 }
 
 /// The core's code for a Hello status, by its documented value.

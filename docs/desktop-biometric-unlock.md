@@ -120,11 +120,11 @@ bound to the Hello check cryptographically rather than trusting a yes/no answer:
 - Hello always accepts its PIN, so there is no passcode-fallback choice to offer: the capability
   is off on Windows and the Settings row hides. The label is "Windows Hello".
 - A reset or removed Hello key fails to open, which surfaces as `invalidated`.
-- Known nuisance: the Hello prompt can appear behind the app's window unless it is parented to it.
-  `[unverified]` which interop interface does that for `KeyCredentialManager`. Seen in the check
-  above: launched from a process without the foreground (a scheduled task), the prompt flashed
-  in the taskbar instead of coming forward, and came forward once its console had focus. Whether
-  the app, which will have just been clicked, gets it in front is the next thing to test.
+- Windows opens the Hello dialog without the foreground, so even from the app it sat minimised
+  and flashing in the taskbar, and `KeyCredentialManager` takes no owner window. The fix, as in
+  KeePassXC: once a request starts, find the dialog by its window class
+  (`Credential Dialog Xaml Host`) and raise it, which Bramble may do because it is the foreground
+  app when it asks. Confirmed in the app on the Windows VM: the dialog now comes forward.
 
 Crate: `windows` (already in the tree at 0.62) with the `Foundation`, `Security_Credentials`,
 `Security_Cryptography` and `Storage_Streams` features.

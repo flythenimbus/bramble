@@ -127,7 +127,7 @@ interprocess = "2.4"
 winreg = "0.55"
 # Windows Hello unlock: KeyCredentialManager signs the challenge whose signature wraps the VEK.
 # Already in the tree via tauri. See src/biometric_windows.rs.
-windows = { version = "0.62.2", features = ["Foundation", "Security_Credentials", "Security_Cryptography", "Storage_Streams"] }
+windows = { version = "0.62.2", features = ["Foundation", "Security_Credentials", "Security_Cryptography", "Storage_Streams", "Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 # Building the pipe's DACL. `SecurityDescriptor::deserialize` takes the SDDL string form, and
 # widestring is how interprocess spells the UTF-16 it wants; the version tracks its own.
 widestring = "1"
