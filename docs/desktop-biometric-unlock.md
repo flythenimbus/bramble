@@ -4,12 +4,14 @@ Plan for unlocking the desktop app with Touch ID on macOS and Windows Hello on W
 the master password. Asked for repeatedly, most recently in #180, which also covered the browser
 extension; that half shipped separately (the extension's passkey unlock gained "Unlock on open").
 
-Status: **built 2026-11-03. Windows Hello works in the app; Touch ID is untested.** Core flag and
+Status: **built 2026-11-03; Windows Hello and Touch ID both work in the app.** Core flag and
 labels, the desktop adapter, the Rust module, the macOS gate and the Windows Hello gate. On a
 Windows 11 VM (unsigned cross-built installer, local account, PIN), the app armed the gate,
 unlocked with it, prompted on open, did not prompt after the Lock button, and brought the Hello
-dialog to the front. Touch ID needs a signed build to run at all (an unsigned one correctly
-reports the gate unavailable, which a test pins). Nothing is released.
+dialog to the front. On a Mac, a release build signed by hand with the entitlement and the
+embedded profile armed the gate, unlocked with one Touch ID sheet, and prompted once on open. The
+release build still needs that signing step in `build-macos.ts`; an unsigned build reports the
+gate unavailable, which a test pins. Nothing is released.
 
 ## What already exists
 
@@ -80,6 +82,12 @@ The iOS design (`clients/mobile/ios/App/App/BiometricVault.swift`), in Rust:
   passcode fallback on, `.userPresence` (Touch ID or the Mac's login password).
 - Unlock evaluates an `LAContext` first, so cancel and lockout are told apart, then reads the item
   with that authenticated context, as iOS does.
+- Every other read must not prompt, and on macOS even an attribute read can (its generic "needs
+  to authenticate to continue" sheet). The existence check passes a context with
+  `interactionNotAllowed`, and "would have needed you" counts as present, as iOS's check does.
+- Re-arming deletes the old item, and macOS guards that with Touch ID, so desktop declares
+  arming not silent and the core never re-arms after an unlock. A passcode-fallback change
+  re-arms from Settings, where a prompt is expected.
 - Availability from `LAContext.canEvaluatePolicy`. **Decision:** offered only when Touch ID is
   enrolled. On a Mac without it, the only gate would be the login password, which is mostly a
   weaker master password; iOS offers its passcode-only gate because a phone's passcode is the

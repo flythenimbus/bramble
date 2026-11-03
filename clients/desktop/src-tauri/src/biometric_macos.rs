@@ -44,6 +44,7 @@ const BIOMETRY_TOUCH_ID: isize = 1;
 const ERR_USER_CANCELED: i32 = -128;
 const ERR_AUTH_FAILED: i32 = -25293;
 const ERR_ITEM_NOT_FOUND: i32 = -25300;
+const ERR_INTERACTION_NOT_ALLOWED: i32 = -25308;
 const ERR_MISSING_ENTITLEMENT: i32 = -34018;
 
 fn account(vault_id: &str) -> String {
@@ -93,13 +94,26 @@ fn entitled() -> bool {
     }
 }
 
-/// Attributes only, which never prompts: only the item's data is behind the gate.
+/// Whether the item exists, without ever prompting. Even an attribute read can make macOS ask
+/// (its generic "needs to authenticate to continue" sheet, seen at launch before the real
+/// unlock), so the read carries a context that may not show UI, and "would have needed you"
+/// counts as present, as iOS's check does.
 pub fn has(vault_id: &str) -> bool {
-    search(vault_id)
-        .load_attributes(true)
-        .search()
-        .map(|found| !found.is_empty())
-        .unwrap_or(false)
+    autoreleasepool(|_| {
+        let ctx = la_context();
+        unsafe {
+            let _: () = msg_send![&*ctx, setInteractionNotAllowed: Bool::YES];
+        }
+        let ctx_cf = unsafe { CFType::wrap_under_get_rule(Retained::as_ptr(&ctx) as CFTypeRef) };
+        match search(vault_id)
+            .local_authentication_context(Some(ctx_cf))
+            .load_attributes(true)
+            .search()
+        {
+            Ok(found) => !found.is_empty(),
+            Err(e) => e.code() == ERR_INTERACTION_NOT_ALLOWED,
+        }
+    })
 }
 
 pub fn arm(vault_id: &str, allow_passcode: bool) -> BioResult<()> {
