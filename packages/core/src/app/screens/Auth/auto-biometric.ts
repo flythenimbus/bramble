@@ -28,3 +28,23 @@ export function shouldAutoPromptBiometric(state: AutoPromptState): boolean {
 	if (state.lockedByUser || state.attempted) return false;
 	return state.visible && state.appActive;
 }
+
+/**
+ * Whether the browser's Touch ID / Windows Hello passkey is a gate the screen may present on its
+ * own (#180). Only a platform key registered on this device: a security key's prompt asks for
+ * hardware that may not be plugged in. Never where the ceremony needs its own window (Firefox),
+ * which would open one with every popup, nor where a device gate (mobile) is offered instead.
+ */
+export function platformKeyAutoOffered(state: {
+	keyAvailable: boolean;
+	keyKinds: readonly (string | undefined)[];
+	mustHandOff: boolean;
+	deviceGateOffered: boolean;
+}): boolean {
+	return (
+		state.keyAvailable &&
+		state.keyKinds.includes("platform") &&
+		!state.mustHandOff &&
+		!state.deviceGateOffered
+	);
+}

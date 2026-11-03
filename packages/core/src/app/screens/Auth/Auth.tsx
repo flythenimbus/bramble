@@ -28,7 +28,7 @@ import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
 import { useWebauthnHandoff, type WebauthnHandoff } from "../../hooks/useWebauthnHandoff";
 import { useWebauthnUnlock } from "../../hooks/useWebauthnUnlock";
-import { shouldAutoPromptBiometric } from "./auto-biometric";
+import { platformKeyAutoOffered, shouldAutoPromptBiometric } from "./auto-biometric";
 
 interface FormValues {
 	masterPassword: string;
@@ -51,6 +51,7 @@ export function Auth() {
 		unlock,
 		hasPasswordSlot,
 		hasWebauthnSlot,
+		webauthnKeys,
 		unlockWithWebauthnKey,
 		hasRecoveryCode,
 		unlockWithRecoveryCode,
@@ -146,18 +147,22 @@ export function Auth() {
 		}
 	};
 
-	const runWebauthnUnlock = useCallback(async () => {
-		setBusy(true);
-		try {
-			await unlockWithWebauthnKey();
-			rearm();
-		} catch (e) {
-			// Surface in the same field-error region as a wrong master password.
-			setError("masterPassword", { message: rawError(e) });
-		} finally {
-			setBusy(false);
-		}
-	}, [unlockWithWebauthnKey, rearm, setError]);
+	// `quiet` for the unasked-for attempt: dismissing a prompt nobody tapped for is not an error.
+	const runWebauthnUnlock = useCallback(
+		async (quiet = false) => {
+			setBusy(true);
+			try {
+				await unlockWithWebauthnKey();
+				rearm();
+			} catch (e) {
+				// Surface in the same field-error region as a wrong master password.
+				if (!quiet) setError("masterPassword", { message: rawError(e) });
+			} finally {
+				setBusy(false);
+			}
+		},
+		[unlockWithWebauthnKey, rearm, setError],
+	);
 
 	const couldNotRead = hasVault && vaultError !== null && !hasPasswordSlot && !hasWebauthnSlot;
 	// Hidden where it can't work (mobile): no PRF, so offering it would be a dead end even for
@@ -295,6 +300,40 @@ export function Auth() {
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [prefs.biometricAutoPrompt, showBiometric, lockedByUser, visible, appActive, handleBiometric]);
+	// The same opt-in, under the same rules, for the browser's Touch ID / Windows Hello passkey (#180).
+	const keyAutoOffered = platformKeyAutoOffered({
+		keyAvailable: webauthnKeyAvailable,
+		keyKinds: webauthnKeys.map((k) => k.kind),
+		mustHandOff,
+		deviceGateOffered: showBiometric,
+	});
+	const autoPromptedKeyRef = useRef(false);
+	useEffect(() => {
+		const fire = shouldAutoPromptBiometric({
+			enabled: prefs.biometricAutoPrompt,
+			offered: keyAutoOffered,
+			lockedByUser,
+			visible,
+			appActive,
+			attempted: autoPromptedKeyRef.current,
+		});
+		if (!fire) return;
+		// After a paint, as above: a passkey prompt from a document that isn't up yet is refused.
+		let frame = requestAnimationFrame(() => {
+			frame = requestAnimationFrame(() => {
+				autoPromptedKeyRef.current = true;
+				void runWebauthnUnlock(true);
+			});
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [
+		prefs.biometricAutoPrompt,
+		keyAutoOffered,
+		lockedByUser,
+		visible,
+		appActive,
+		runWebauthnUnlock,
+	]);
 	// Label/icon track the enrolled modality: Face ID gets its own icon, a passcode-only
 	// device (iOS, nothing enrolled) gets the lock, everything else the fingerprint.
 	const isFaceId = biometryType === "faceId" || biometryType === "opticId";

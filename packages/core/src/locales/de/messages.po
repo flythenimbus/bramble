@@ -476,6 +476,10 @@ msgstr "Sobald der Sperrbildschirm angezeigt wird, {brand} abfragen, ohne zu tip
 msgid "Ask for Face ID or a fingerprint as soon as the unlock screen appears, with no tap."
 msgstr "Sobald der Sperrbildschirm angezeigt wird, Face ID oder einen Fingerabdruck abfragen, ohne zu tippen."
 
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Ask for Touch ID or Windows Hello as soon as Bramble opens, with no tap."
+msgstr "Beim Öffnen von Bramble sofort nach Touch ID oder Windows Hello fragen, ohne Tippen."
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Ask for your passcode as soon as the unlock screen appears, with no tap."
 msgstr "Sobald der Sperrbildschirm angezeigt wird, Ihren Passcode abfragen, ohne zu tippen."
@@ -3781,6 +3785,7 @@ msgid "Toggle start at login"
 msgstr "Start bei der Anmeldung umschalten"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Toggle unlock on open"
 msgstr "Entsperren beim Öffnen umschalten"
 
@@ -3866,6 +3871,7 @@ msgid "Unlock"
 msgstr "Entsperren"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Unlock on open"
 msgstr "Beim Öffnen entsperren"
 

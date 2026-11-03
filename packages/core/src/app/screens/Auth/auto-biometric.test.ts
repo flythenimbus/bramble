@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { type AutoPromptState, shouldAutoPromptBiometric } from "./auto-biometric";
+import {
+	type AutoPromptState,
+	platformKeyAutoOffered,
+	shouldAutoPromptBiometric,
+} from "./auto-biometric";
 
 // Everything lined up for the prompt to fire; each case negates one thing.
 const READY: AutoPromptState = {
@@ -44,5 +48,36 @@ describe("shouldAutoPromptBiometric", () => {
 
 	it("does not fire twice", () => {
 		expect(not({ attempted: true })).toBe(false);
+	});
+});
+
+describe("platformKeyAutoOffered", () => {
+	const OFFERED: Parameters<typeof platformKeyAutoOffered>[0] = {
+		keyAvailable: true,
+		keyKinds: ["securityKey", "platform"],
+		mustHandOff: false,
+		deviceGateOffered: false,
+	};
+	const offered = (over: Partial<typeof OFFERED>) =>
+		platformKeyAutoOffered({ ...OFFERED, ...over });
+
+	it("offers Touch ID or Windows Hello registered on this device", () => {
+		expect(platformKeyAutoOffered(OFFERED)).toBe(true);
+	});
+
+	// Its prompt asks for hardware that may not be plugged in.
+	it("never offers a security key, or a key registered elsewhere (no local kind)", () => {
+		expect(offered({ keyKinds: ["securityKey"] })).toBe(false);
+		expect(offered({ keyKinds: [undefined] })).toBe(false);
+	});
+
+	// Firefox: the ceremony moves to its own window, which would open with every popup.
+	it("stays quiet where the ceremony needs its own window", () => {
+		expect(offered({ mustHandOff: true })).toBe(false);
+	});
+
+	it("leaves the field to the device gate where there is one, and needs a usable key", () => {
+		expect(offered({ deviceGateOffered: true })).toBe(false);
+		expect(offered({ keyAvailable: false })).toBe(false);
 	});
 });

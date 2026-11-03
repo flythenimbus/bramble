@@ -1,13 +1,14 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Fingerprint, KeyRound } from "lucide-react";
+import { Fingerprint, KeyRound, Zap } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useCan } from "../../../../context/PlatformContext";
+import { usePrefs } from "../../../../hooks/usePrefs";
 import { useVault } from "../../../../hooks/useVault";
 import type { WebauthnKeyKind } from "../../../../vault/webauthn-ceremony";
 import { Button } from "../../../components/ui/button";
 import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { useWebauthnHandoff, type WebauthnHandoff } from "../../../hooks/useWebauthnHandoff";
-import { Row } from "./primitives";
+import { Row, Toggle } from "./primitives";
 
 /**
  * Touch ID / Windows Hello and security keys in one list, because they are one mechanism: both
@@ -21,6 +22,7 @@ import { Row } from "./primitives";
 export function TapToUnlockSection() {
 	const { webauthnKeys, registerWebauthnKey, revokeWebauthnKey } = useVault();
 	const canSecurityKeys = useCan("securityKeys");
+	const { prefs, update } = usePrefs();
 	const { t } = useLingui();
 	const [adding, setAdding] = useState(false);
 	const [label, setLabel] = useState("");
@@ -142,6 +144,24 @@ export function TapToUnlockSection() {
 						</li>
 					))}
 				</ul>
+			)}
+
+			{/* The unlock screen's auto-prompt (#180), which only ever asks a key of this device's,
+			    and never where the ceremony needs its own window. */}
+			{!mustHandOff && webauthnKeys.some((k) => k.kind === "platform") && (
+				<div className="mt-4">
+					<Row
+						icon={<Zap className="w-4 h-4 text-primary" />}
+						title={t`Unlock on open`}
+						subtitle={t`Ask for Touch ID or Windows Hello as soon as Bramble opens, with no tap.`}
+					>
+						<Toggle
+							checked={prefs.biometricAutoPrompt}
+							onChange={(next) => void update("biometricAutoPrompt", next)}
+							label={t`Toggle unlock on open`}
+						/>
+					</Row>
+				</div>
 			)}
 
 			{adding && (

@@ -476,6 +476,10 @@ msgstr "Demander {brand} dès l’affichage de l’écran de déverrouillage, sa
 msgid "Ask for Face ID or a fingerprint as soon as the unlock screen appears, with no tap."
 msgstr "Demander Face ID ou une empreinte digitale dès l’affichage de l’écran de déverrouillage, sans appui."
 
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Ask for Touch ID or Windows Hello as soon as Bramble opens, with no tap."
+msgstr "Demander Touch ID ou Windows Hello dès l'ouverture de Bramble, sans appui."
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Ask for your passcode as soon as the unlock screen appears, with no tap."
 msgstr "Demander votre code d’accès dès l’affichage de l’écran de déverrouillage, sans appui."
@@ -3781,6 +3785,7 @@ msgid "Toggle start at login"
 msgstr "Activer ou désactiver le démarrage à l’ouverture de session"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Toggle unlock on open"
 msgstr "Activer/désactiver le déverrouillage à l’ouverture"
 
@@ -3866,6 +3871,7 @@ msgid "Unlock"
 msgstr "Déverrouiller"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Unlock on open"
 msgstr "Déverrouiller à l’ouverture"
 
