@@ -84,11 +84,24 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("BiometricSection passcode fallback", () => {
-	it("is iOS only", () => {
+	it("is not offered on Android", () => {
 		// Android's Keystore key is biometry-only already and cannot be told to accept the
 		// device credential without being regenerated, so there is no choice to offer there.
 		mount("android");
 		expect(screen.queryByLabelText(/toggle passcode fallback/i)).toBeNull();
+	});
+
+	it("is offered for Touch ID on a Mac, whose keychain gate has the same two options", () => {
+		h.biometryType = "touchId";
+		mount("desktop");
+		expect(passcodeToggle().getAttribute("aria-pressed")).toBe("false");
+	});
+
+	it("is not offered for Windows Hello, which always takes its PIN", () => {
+		h.biometryType = "windowsHello";
+		mount("desktop");
+		expect(screen.queryByLabelText(/toggle passcode fallback/i)).toBeNull();
+		expect(screen.getByLabelText(/windows hello/i)).toBeTruthy();
 	});
 
 	it("shows on iOS, off by default, so Face ID means Face ID", () => {

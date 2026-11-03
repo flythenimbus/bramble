@@ -9,7 +9,13 @@
 /** Best-effort modality for UI copy/icon. Android can't distinguish the enrolled
  * modality, so it reports "biometric"; iOS maps LAContext.biometryType, and reports
  * "passcode" when nothing is enrolled but the device passcode can still open the gate. */
-export type BiometryType = "faceId" | "touchId" | "opticId" | "passcode" | "biometric";
+export type BiometryType =
+	| "faceId"
+	| "touchId"
+	| "opticId"
+	| "windowsHello"
+	| "passcode"
+	| "biometric";
 
 // iOS only: whether the device passcode may open the gate as well as biometry. The gate is
 // chosen when the VEK is cached, so `enable` writes it and `unlock` has to prompt with a
@@ -41,11 +47,19 @@ export interface BiometricUnlock {
 	 * they did not ask for, and a cancelled one can strand the gate. Default to the cheap mistake.
 	 */
 	enableIsSilent?: boolean;
-	/** Cache the vault's VEK (base64) behind the biometric gate. Call once with the vault unlocked.
-	 * Re-arms in place, so it is also how `allowPasscode` is changed after the fact. */
-	enable(vekB64: string, vaultId: string, allowPasscode: boolean): Promise<void>;
-	/** Biometric-prompt, then return this vault's cached VEK (base64). Rejects on cancel/lockout/invalidation. */
-	unlock(vaultId: string, allowPasscode: boolean): Promise<string>;
+	/**
+	 * The gate reads the VEK from the native crypto session to arm itself, and installs it there
+	 * on unlock, so the key never crosses into JS: `enable` is handed null and `unlock` resolves
+	 * null. Desktop; mobile moves over with item 4 of docs/vek-residency-hardening.md.
+	 */
+	holdsKeyNatively?: boolean;
+	/** Cache the vault's VEK (base64; null where `holdsKeyNatively`) behind the biometric gate.
+	 * Call once with the vault unlocked. Re-arms in place, so it is also how `allowPasscode` is
+	 * changed after the fact. */
+	enable(vekB64: string | null, vaultId: string, allowPasscode: boolean): Promise<void>;
+	/** Biometric-prompt, then return this vault's cached VEK (base64), or install it natively and
+	 * return null where `holdsKeyNatively`. Rejects on cancel/lockout/invalidation. */
+	unlock(vaultId: string, allowPasscode: boolean): Promise<string | null>;
 	/** Remove this vault's cached VEK from the device. */
 	disable(vaultId: string): Promise<void>;
 }

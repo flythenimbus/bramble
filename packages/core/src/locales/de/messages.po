@@ -3943,6 +3943,10 @@ msgstr "Mit Sicherheitsschlüssel entsperren"
 msgid "Unlock with Touch ID"
 msgstr "Mit Master-Passwort entsperren"
 
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Windows Hello"
+msgstr "Mit Windows Hello entsperren"
+
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Unlock your vault to import into it"
 msgstr "Entsperren Sie Ihren Tresor, um zu importieren"
@@ -4194,6 +4198,10 @@ msgstr "Wöchentlich"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Welcome to {appName}"
 msgstr "Willkommen bei {appName}"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Windows Hello"
+msgstr "Windows Hello"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Wipe copied passwords after"

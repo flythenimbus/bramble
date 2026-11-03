@@ -39,11 +39,10 @@ export async function enableBiometricUnlock(
 	// The label names the step that was WAITING, which is not always the step at fault: iOS
 	// dispatches every Capacitor plugin call on one serial queue, so a stall anywhere upstream
 	// surfaces here. Treat it as "a native call stopped answering", not as an accusation.
-	const vek = await withTimeout(
-		crypto.exportVek(),
-		GATE_WRITE_TIMEOUT_MS,
-		"Reading this vault's key",
-	);
+	// A gate that holds the key natively reads it from the session itself.
+	const vek = biometric.holdsKeyNatively
+		? null
+		: await withTimeout(crypto.exportVek(), GATE_WRITE_TIMEOUT_MS, "Reading this vault's key");
 	// Only bounded where the write is silent. On Android `enable` raises a BiometricPrompt and
 	// waits for a finger, so a bound here is a bound on how fast the user reaches the sensor:
 	// on device this fired after ten seconds and reported "timed out" while the prompt was still
@@ -64,6 +63,9 @@ export async function unlockVekWithBiometric(
 	allowPasscode: boolean,
 ): Promise<void> {
 	const vek = await biometric.unlock(vaultId, allowPasscode);
+	// A gate that holds the key natively has already installed it in the session.
+	if (biometric.holdsKeyNatively) return;
+	if (vek === null) throw new Error("The biometric gate returned no key");
 	await crypto.unlockWithVek(vek);
 }
 

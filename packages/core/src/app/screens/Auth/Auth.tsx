@@ -346,9 +346,11 @@ export function Auth() {
 				? t`Unlock with Optic ID`
 				: biometryType === "touchId"
 					? t`Unlock with Touch ID`
-					: biometryType === "passcode"
-						? t`Unlock with passcode`
-						: t`Unlock with biometrics`;
+					: biometryType === "windowsHello"
+						? t`Unlock with Windows Hello`
+						: biometryType === "passcode"
+							? t`Unlock with passcode`
+							: t`Unlock with biometrics`;
 
 	return (
 		<div className="relative h-screen overflow-y-auto bg-linear-to-br from-background via-background to-primary/5">

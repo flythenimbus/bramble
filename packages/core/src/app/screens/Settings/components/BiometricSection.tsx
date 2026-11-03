@@ -45,9 +45,11 @@ export function BiometricSection() {
 				? t`Optic ID`
 				: biometryType === "touchId"
 					? t`Touch ID`
-					: biometryType === "passcode"
-						? t`Device passcode`
-						: t`Biometric unlock`;
+					: biometryType === "windowsHello"
+						? t`Windows Hello`
+						: biometryType === "passcode"
+							? t`Device passcode`
+							: t`Biometric unlock`;
 	// Every sentence below is written out per modality rather than built by dropping a noun into
 	// a template. German (and every other case-marking language) declines the noun after a
 	// preposition, so an interpolated "your passcode" came out as "mit Ihr Passcode" where it
@@ -60,7 +62,9 @@ export function BiometricSection() {
 			? t`Optic ID`
 			: biometryType === "touchId"
 				? t`Touch ID`
-				: t`Face ID`;
+				: biometryType === "windowsHello"
+					? t`Windows Hello`
+					: t`Face ID`;
 	/** Pick the sentence for this device's modality; all three are evaluated so all three extract. */
 	const say = (branded: string, passcode: string, generic: string) =>
 		biometryType === "passcode" ? passcode : biometryType === "biometric" ? generic : branded;
@@ -74,8 +78,13 @@ export function BiometricSection() {
 	);
 	// One gate, one switch. The fallback only means something once a gate is armed AND a biometric
 	// exists to fall back FROM, so it follows the row above rather than sitting inert beside it.
+	// Windows Hello always takes its PIN: there is no gate without it to choose.
 	const showPasscodeFallback =
-		canChoosePasscodeFallback && biometricAvailable && biometricEnabled && biometryEnrolled;
+		canChoosePasscodeFallback &&
+		biometryType !== "windowsHello" &&
+		biometricAvailable &&
+		biometricEnabled &&
+		biometryEnrolled;
 
 	const onToggle = async (next: boolean) => {
 		setError(null);

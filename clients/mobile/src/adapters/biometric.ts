@@ -73,6 +73,8 @@ export const mobileBiometric: BiometricUnlock = {
 		}
 	},
 	async enable(vekB64, vaultId, allowPasscode) {
+		// Never null here: this gate doesn't set holdsKeyNatively, so the core always exports the key.
+		if (vekB64 === null) throw new Error("No key to cache");
 		await Native.setSecret({ vaultId, secret: vekB64, allowPasscode });
 	},
 	async unlock(vaultId, allowPasscode) {

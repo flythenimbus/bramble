@@ -3943,6 +3943,10 @@ msgstr "Desbloquear con Touch ID"
 msgid "Unlock with Touch ID"
 msgstr "Desbloquear con contraseña maestra"
 
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Windows Hello"
+msgstr "Desbloquear con Windows Hello"
+
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Unlock your vault to import into it"
 msgstr "Desbloquee su bóveda para importar"
@@ -4194,6 +4198,10 @@ msgstr "Semanalmente"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Welcome to {appName}"
 msgstr "Bienvenido a {appName}"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Windows Hello"
+msgstr "Windows Hello"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Wipe copied passwords after"

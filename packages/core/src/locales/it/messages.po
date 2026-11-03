@@ -3943,6 +3943,10 @@ msgstr "Sbloccare con il codice di recupero"
 msgid "Unlock with Touch ID"
 msgstr "Sblocca con Touch ID"
 
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Windows Hello"
+msgstr "Sblocca con Windows Hello"
+
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Unlock your vault to import into it"
 msgstr "Sblocchi il caveau per importarci"
@@ -4194,6 +4198,10 @@ msgstr "Settimanale"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Welcome to {appName}"
 msgstr "Benvenuto in {appName}"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Windows Hello"
+msgstr "Windows Hello"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Wipe copied passwords after"

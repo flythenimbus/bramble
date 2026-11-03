@@ -334,3 +334,29 @@ describe("effectiveAllowPasscode", () => {
 		expect(effectiveAllowPasscode(false, true)).toBe(true);
 	});
 });
+
+// Desktop: the gate reads and installs the VEK inside the native process, so it never reaches JS.
+describe("a gate that holds the key natively", () => {
+	it("arms without exporting the VEK to JS", async () => {
+		const crypto = fakeCrypto();
+		const biometric = fakeBiometric({ holdsKeyNatively: true });
+		await enableBiometricUnlock(crypto, biometric, VID, false);
+		expect(crypto.exportVek).not.toHaveBeenCalled();
+		expect(biometric.enable).toHaveBeenCalledWith(null, VID, false);
+	});
+
+	it("unlocks without handing a VEK to the crypto session", async () => {
+		const crypto = fakeCrypto();
+		const biometric = fakeBiometric({ holdsKeyNatively: true, unlock: vi.fn(async () => null) });
+		await unlockVekWithBiometric(crypto, biometric, VID, false);
+		expect(biometric.unlock).toHaveBeenCalledWith(VID, false);
+		expect(crypto.unlockWithVek).not.toHaveBeenCalled();
+	});
+
+	it("refuses a key-less answer from a gate that doesn't hold the key", async () => {
+		const crypto = fakeCrypto();
+		const biometric = fakeBiometric({ unlock: vi.fn(async () => null) });
+		await expect(unlockVekWithBiometric(crypto, biometric, VID, false)).rejects.toThrow(/no key/);
+		expect(crypto.unlockWithVek).not.toHaveBeenCalled();
+	});
+});

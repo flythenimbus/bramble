@@ -149,17 +149,18 @@ export const CAPABILITIES = {
 	// the file to itself and every other device's backup would wait on it. useCanAddFiles turns it on
 	// once linked. Files already there still list and open. See docs/file-attachments.md.
 	addFiles: { chromium: true, firefox: false, android: true, ios: true, desktop: true },
-	// Separate "let the device passcode open the biometric gate" toggle. iOS only: the gate is
-	// a Keychain access control picked at write time, so both options exist there (.userPresence
-	// vs .biometryCurrentSet). Android's Keystore key is biometry-only already - allowing
-	// DEVICE_CREDENTIAL needs the key authorized for it at generation (API 30+, minSdk is 24) -
-	// and no other target has a biometric gate at all. See docs/auth-and-unlock.md.
+	// Separate "let the device passcode open the biometric gate" toggle. iOS and macOS: the gate
+	// is a Keychain access control picked at write time, so both options exist there
+	// (.userPresence vs .biometryCurrentSet). Android's Keystore key is biometry-only already -
+	// allowing DEVICE_CREDENTIAL needs the key authorized for it at generation (API 30+, minSdk is
+	// 24) - and Windows Hello always takes its PIN, so BiometricSection hides the row for it.
+	// See docs/auth-and-unlock.md and docs/desktop-biometric-unlock.md.
 	biometricPasscodeFallback: {
 		chromium: false,
 		firefox: false,
 		android: false,
 		ios: true,
-		desktop: false,
+		desktop: true,
 	},
 	// Separate "lock when the OS screen locks" toggle. Extension only: mobile locks on app
 	// backgrounding via the auto-lock setting, with no distinct screen-lock signal. See issue #6.

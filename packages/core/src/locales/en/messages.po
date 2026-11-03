@@ -3943,6 +3943,10 @@ msgstr "Unlock with recovery code"
 msgid "Unlock with Touch ID"
 msgstr "Unlock with Touch ID"
 
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Windows Hello"
+msgstr "Unlock with Windows Hello"
+
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx
 msgid "Unlock your vault to import into it"
 msgstr "Unlock your vault to import into it"
@@ -4194,6 +4198,10 @@ msgstr "Weekly"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Welcome to {appName}"
 msgstr "Welcome to {appName}"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Windows Hello"
+msgstr "Windows Hello"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Wipe copied passwords after"
