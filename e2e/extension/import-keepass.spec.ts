@@ -281,7 +281,7 @@ test("imports a database's attachments onto the entries that hold them", async (
 	const page = await context.newPage();
 	await createVault(page, extensionId);
 	await openDatabase(page, extensionId, "attachments.kdbx");
-	await expect(page.getByText(/3 attachments go with them/i)).toBeVisible({ timeout: 30_000 });
+	await expect(page.getByText(/· 3 attachments$/)).toBeVisible({ timeout: 30_000 });
 	await page.getByRole("button", { name: /Import 2 items/i }).click();
 	await expect(page.getByText(/3 attachments came with them/i)).toBeVisible();
 
@@ -304,7 +304,7 @@ test("a lock drops a preview that holds attachments, and says why", async ({
 	const page = await context.newPage();
 	await createVault(page, extensionId);
 	await openDatabase(page, extensionId, "attachments.kdbx");
-	await expect(page.getByText(/3 attachments go with them/i)).toBeVisible({ timeout: 30_000 });
+	await expect(page.getByText(/· 3 attachments$/)).toBeVisible({ timeout: 30_000 });
 
 	const popup = await context.newPage();
 	await openPopup(popup, extensionId);

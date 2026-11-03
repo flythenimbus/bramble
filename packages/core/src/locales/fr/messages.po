@@ -96,6 +96,10 @@ msgstr "{affected, plural, one {Retirer l’étiquette de # entrée} other {Reti
 msgid "{appName} recovery code"
 msgstr "Code de récupération {appName}"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{attachments, plural, one {# attachment} other {# attachments}}"
+msgstr "{attachments, plural, one {# pièce jointe} other {# pièces jointes}}"
+
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "{attachments, plural, one {Attachments aren't transferred: # file on these entries won't be in the export.} other {Attachments aren't transferred: # files on these entries won't be in the export.}}"
 msgstr "{attachments, plural, one {Les pièces jointes ne sont pas transférées : # fichier de ces entrées ne sera pas inclus dans l’export.} other {Les pièces jointes ne sont pas transférées : # fichiers de ces entrées ne seront pas inclus dans l’export.}}"
@@ -182,8 +186,8 @@ msgid "{toExisting, plural, one {# attachment will be added to an entry you alre
 msgstr "{toExisting, plural, one {# pièce jointe sera ajoutée à une entrée que vous avez déjà.} other {# pièces jointes seront ajoutées à des entrées que vous avez déjà.}}"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
-msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
-msgstr "{withNew, plural, one {# pièce jointe les accompagne.} other {# pièces jointes les accompagnent.}}"
+#~ msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
+#~ msgstr "{withNew, plural, one {# pièce jointe les accompagne.} other {# pièces jointes les accompagnent.}}"
 
 #. placeholder {0}: result.imported.length
 #: packages/core/src/app/screens/Import/ImportShell.tsx

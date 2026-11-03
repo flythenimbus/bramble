@@ -18,7 +18,7 @@ test("imports a Proton Pass export's files and every website", async ({ context,
 		.filter({ hasText: /Proton Pass/ })
 		.first();
 	await card.locator('input[type="file"]').setInputFiles(FIXTURE);
-	await expect(page.getByText(/2 attachments go with them/i)).toBeVisible();
+	await expect(page.getByText(/· 2 attachments$/)).toBeVisible();
 	await expect(page.getByText(/1 website\(s\) were set to never autofill/i)).toBeVisible();
 	await page.getByRole("button", { name: /Import 2 items/i }).click();
 	await expect(page.getByText(/2 attachments came with them/i)).toBeVisible();

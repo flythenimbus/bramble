@@ -7,13 +7,13 @@ import { getEntryMode } from "../../../entry-modes";
 // silently interpolates without ever being extracted or translated.
 
 /**
- * Pluralized "3 Logins · 1 Payment card · 2 passkeys" summary.
+ * Pluralized "3 Logins · 1 Payment card · 2 passkeys · 4 attachments" summary.
  *
  * Passkeys are counted separately because they ride INSIDE logins, so a transfer that
  * brought five of them would otherwise read as plain "1 Login" and give the user no way to
  * see whether the part they care about arrived.
  */
-export function countLine(result: ImportResult): string {
+export function countLine(result: ImportResult, attachments = 0): string {
 	const parts = Object.entries(result.byType).map(([type, n]) => {
 		const label = getEntryMode(type).label;
 		return `${n} ${label}${n === 1 ? "" : "s"}`;
@@ -23,5 +23,8 @@ export function countLine(result: ImportResult): string {
 		0,
 	);
 	if (passkeys > 0) parts.push(plural(passkeys, { one: "# passkey", other: "# passkeys" }));
+	if (attachments > 0) {
+		parts.push(plural(attachments, { one: "# attachment", other: "# attachments" }));
+	}
 	return parts.join(" · ") || i18n._(msg`Nothing to import`);
 }

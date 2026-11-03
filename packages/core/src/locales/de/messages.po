@@ -96,6 +96,10 @@ msgstr "{affected, plural, one {Tag von # Eintrag entfernen} other {Tag von # Ei
 msgid "{appName} recovery code"
 msgstr "{appName} Wiederherstellungs-Code"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{attachments, plural, one {# attachment} other {# attachments}}"
+msgstr "{attachments, plural, one {# Anhang} other {# Anhänge}}"
+
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "{attachments, plural, one {Attachments aren't transferred: # file on these entries won't be in the export.} other {Attachments aren't transferred: # files on these entries won't be in the export.}}"
 msgstr "{attachments, plural, one {Anhänge werden nicht übertragen: # Datei zu diesen Einträgen wird nicht in den Export aufgenommen.} other {Anhänge werden nicht übertragen: # Dateien zu diesen Einträgen werden nicht in den Export aufgenommen.}}"
@@ -182,8 +186,8 @@ msgid "{toExisting, plural, one {# attachment will be added to an entry you alre
 msgstr "{toExisting, plural, one {# Anhang wird zu einem bereits vorhandenen Eintrag hinzugefügt.} other {# Anhänge werden zu bereits vorhandenen Einträgen hinzugefügt.}}"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
-msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
-msgstr "{withNew, plural, one {# Anhang wird mit ihnen übernommen.} other {# Anhänge werden mit ihnen übernommen.}}"
+#~ msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
+#~ msgstr "{withNew, plural, one {# Anhang wird mit ihnen übernommen.} other {# Anhänge werden mit ihnen übernommen.}}"
 
 #. placeholder {0}: result.imported.length
 #: packages/core/src/app/screens/Import/ImportShell.tsx

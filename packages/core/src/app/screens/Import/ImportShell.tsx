@@ -484,13 +484,11 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							</p>
 						</div>
 						{result.imported.length > 0 && (
-							<p className="text-xs text-muted-foreground">{countLine(result)}</p>
-						)}
-						{attachments.length > 0 && (
 							<p className="text-xs text-muted-foreground">
-								<AttachmentsLine placed={attachments} />
+								{countLine(result, attachments.filter((p) => "item" in p.onto).length)}
 							</p>
 						)}
+						<AttachmentsLine placed={attachments} />
 						{skippedFiles > 0 && (
 							<p className="text-xs text-muted-foreground">
 								<Plural
@@ -656,27 +654,17 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	);
 }
 
-/** What the files an import brings will do: go with new items, or join entries already here. */
+/** Files for entries already here; those for new items are counted in the summary line. */
 function AttachmentsLine({ placed }: { placed: PlacedAttachment[] }) {
-	const withNew = placed.filter((p) => "item" in p.onto).length;
-	const toExisting = placed.length - withNew;
+	const toExisting = placed.filter((p) => !("item" in p.onto)).length;
+	if (toExisting === 0) return null;
 	return (
-		<>
-			{withNew > 0 && (
-				<Plural
-					value={withNew}
-					one="# attachment goes with them."
-					other="# attachments go with them."
-				/>
-			)}
-			{withNew > 0 && toExisting > 0 && " "}
-			{toExisting > 0 && (
-				<Plural
-					value={toExisting}
-					one="# attachment will be added to an entry you already have."
-					other="# attachments will be added to entries you already have."
-				/>
-			)}
-		</>
+		<p className="text-xs text-muted-foreground">
+			<Plural
+				value={toExisting}
+				one="# attachment will be added to an entry you already have."
+				other="# attachments will be added to entries you already have."
+			/>
+		</p>
 	);
 }

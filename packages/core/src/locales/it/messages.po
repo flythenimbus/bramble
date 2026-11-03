@@ -96,6 +96,10 @@ msgstr "{affected, plural, one {Rimuovere tag da # voce} other {Rimuovere tag da
 msgid "{appName} recovery code"
 msgstr "Codice di recupero {appName}"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{attachments, plural, one {# attachment} other {# attachments}}"
+msgstr "{attachments, plural, one {# allegato} other {# allegati}}"
+
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "{attachments, plural, one {Attachments aren't transferred: # file on these entries won't be in the export.} other {Attachments aren't transferred: # files on these entries won't be in the export.}}"
 msgstr "{attachments, plural, one {Gli allegati non vengono trasferiti: # file su queste voci non verrà incluso nell'esportazione.} other {Gli allegati non vengono trasferiti: # file su queste voci non verranno inclusi nell'esportazione.}}"
@@ -182,8 +186,8 @@ msgid "{toExisting, plural, one {# attachment will be added to an entry you alre
 msgstr "{toExisting, plural, one {# allegato verrà aggiunto a una voce già in suo possesso.} other {# allegati verranno aggiunti a voci già in suo possesso.}}"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
-msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
-msgstr "{withNew, plural, one {# allegato va con esse.} other {# allegati vanno con esse.}}"
+#~ msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
+#~ msgstr "{withNew, plural, one {# allegato va con esse.} other {# allegati vanno con esse.}}"
 
 #. placeholder {0}: result.imported.length
 #: packages/core/src/app/screens/Import/ImportShell.tsx

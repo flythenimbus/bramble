@@ -96,6 +96,10 @@ msgstr "{affected, plural, one {Desetiquetar # entrada} other {Desetiquetar # en
 msgid "{appName} recovery code"
 msgstr "Código de recuperación de {appName}"
 
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{attachments, plural, one {# attachment} other {# attachments}}"
+msgstr "{attachments, plural, one {# archivo adjunto} other {# archivos adjuntos}}"
+
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "{attachments, plural, one {Attachments aren't transferred: # file on these entries won't be in the export.} other {Attachments aren't transferred: # files on these entries won't be in the export.}}"
 msgstr "{attachments, plural, one {Los archivos adjuntos no se transfieren: # archivo de estas entradas no se incluirá en la exportación.} other {Los archivos adjuntos no se transfieren: # archivos de estas entradas no se incluirán en la exportación.}}"
@@ -182,8 +186,8 @@ msgid "{toExisting, plural, one {# attachment will be added to an entry you alre
 msgstr "{toExisting, plural, one {# archivo adjunto se añadirá a una entrada que usted ya tiene.} other {# archivos adjuntos se añadirán a las entradas que usted ya tiene.}}"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
-msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
-msgstr "{withNew, plural, one {# archivo adjunto va con ellos.} other {# archivos adjuntos van con ellos.}}"
+#~ msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
+#~ msgstr "{withNew, plural, one {# archivo adjunto va con ellos.} other {# archivos adjuntos van con ellos.}}"
 
 #. placeholder {0}: result.imported.length
 #: packages/core/src/app/screens/Import/ImportShell.tsx

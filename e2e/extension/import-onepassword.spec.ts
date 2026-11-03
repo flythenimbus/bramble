@@ -25,7 +25,7 @@ test("imports a 1Password export's files onto the items that hold them", async (
 		.filter({ hasText: /1Password/ })
 		.first();
 	await card.locator('input[type="file"]').setInputFiles(FIXTURE);
-	await expect(page.getByText(/2 attachments go with them/i)).toBeVisible();
+	await expect(page.getByText(/· 2 attachments$/)).toBeVisible();
 	await page.getByRole("button", { name: /Import 2 items/i }).click();
 	await expect(page.getByText(/2 attachments came with them/i)).toBeVisible();
 
