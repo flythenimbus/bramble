@@ -29,6 +29,7 @@ comments point here instead of repeating it.
 | [passkey-prf.md](passkey-prf.md) | Plan: answer the WebAuthn PRF extension from Bramble's passkeys on every surface, and keep their PRF secrets through every import, export and credential exchange |
 | [dashlane-import.md](dashlane-import.md) | The Dashlane CSV export: a zip of five CSVs known by header, a lone CSV from a Safari unzip, the columns that changed, identities and banks as notes |
 | [lastpass-import.md](lastpass-import.md) | The LastPass CSV export format: two header variants, typed secure notes and their traps, note templates, and the Google signature collision |
+| [protonpass-import.md](protonpass-import.md) | The Proton Pass zip export: each website's autofill rule, Never websites kept out of autofill, and files named by a hash of their vault and file ids |
 | [roboform-import.md](roboform-import.md) | The RoboForm CSV export format: what it leaves out (identities, cards), the spilled fields column, the escaped leading quote |
 | [routing.md](routing.md) | Router guards, back navigation, pop-out handoff |
 | [multiple-vaults.md](multiple-vaults.md) | Plan: parallel vaults on one device (local-id registry, one active vault at a time, active-vault-only sync, a primary vault for autofill/biometric) |

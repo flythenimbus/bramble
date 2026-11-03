@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { testParserContext } from "../exchange/test-crypto";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
 import { parseProtonPass } from "./protonpass";
+import type { ImportAttachment } from "./types";
 
 const ppx = (data: unknown): Uint8Array =>
 	zipSync({ "Proton Pass/data.json": strToU8(JSON.stringify(data)) });
@@ -357,5 +358,192 @@ describe("parseProtonPass passkeys", () => {
 			'"Site" passkey 1 has invalid private-key material and was skipped.',
 			expect.stringMatching(/crypto module is out of date/),
 		]);
+	});
+});
+
+// Proton names each exported file <base>.<hex |hash(shareId)|><hex |hash(fileID)|><ext>, with the
+// Java-style string hash. "hello" hashes to 99162322 (5e918d2); "polygenelubricants" to -2^31.
+const oneVault = (...items: Record<string, unknown>[]) => ({
+	vaults: { v1: { items: items.map((item) => ({ state: 1, ...item })) } },
+});
+const ppxWith = (data: unknown, files: Record<string, string> = {}): Uint8Array =>
+	zipSync({
+		"Proton Pass/data.json": strToU8(JSON.stringify(data)),
+		...Object.fromEntries(
+			Object.entries(files).map(([name, body]) => [`Proton Pass/files/${name}`, strToU8(body)]),
+		),
+	});
+const text = async (a: ImportAttachment | undefined) =>
+	a?.source.kind === "blob" ? await a.source.blob.text() : undefined;
+
+describe("parseProtonPass files", () => {
+	it("carries each item's files across under the names they had in Proton", async () => {
+		const res = await parseProtonPass(
+			ppxWith(
+				oneVault(
+					{
+						shareId: "hello",
+						files: ["sample.5e918d28f86536.pdf", "README.5e918d2431b8ed6"],
+						data: { type: "login", metadata: { name: "Test" }, content: {} },
+					},
+					{
+						shareId: "hello",
+						files: ["notes.5e918d2ff.txt"],
+						data: { type: "note", metadata: { name: "Notes" } },
+					},
+				),
+				{
+					"sample.5e918d28f86536.pdf": "pdf bytes",
+					"README.5e918d2431b8ed6": "readme",
+					"notes.5e918d2ff.txt": "note",
+				},
+			),
+			testParserContext,
+		);
+		const [login, note] = res.imported;
+		expect(res.attachments?.map((a) => [a.entry, a.name, a.mime, a.size])).toEqual([
+			[login, "sample.pdf", "application/pdf", 9],
+			[login, "README", "application/octet-stream", 6],
+			[note, "notes.txt", "text/plain", 4],
+		]);
+		expect(await text(res.attachments?.[0])).toBe("pdf bytes");
+		expect(res.warnings).toEqual([]);
+	});
+
+	it("reads the vault's half of the name with the sign bit set", async () => {
+		const res = await parseProtonPass(
+			ppxWith(
+				oneVault({
+					shareId: "polygenelubricants",
+					files: ["scan.80000000c0ffee.png"],
+					data: { type: "note", metadata: { name: "Scan" } },
+				}),
+				{ "scan.80000000c0ffee.png": "png" },
+			),
+			testParserContext,
+		);
+		expect(res.attachments?.map((a) => a.name)).toEqual(["scan.png"]);
+	});
+
+	it("finds a file Proton renamed on its way into the zip", async () => {
+		const res = await parseProtonPass(
+			ppxWith(
+				oneVault({
+					shareId: "hello",
+					files: ["a\\b.5e918d21.txt"],
+					data: { type: "note", metadata: { name: "Note" } },
+				}),
+				{ "a_b.5e918d21.txt": "slashed" },
+			),
+			testParserContext,
+		);
+		expect(res.attachments?.map((a) => a.name)).toEqual(["a_b.txt"]);
+		expect(await text(res.attachments?.[0])).toBe("slashed");
+	});
+
+	it("keeps the export's name when it doesn't carry the vault's hash", async () => {
+		const res = await parseProtonPass(
+			ppxWith(
+				oneVault({
+					shareId: "hello",
+					files: ["odd.name.txt"],
+					data: { type: "note", metadata: { name: "Note" } },
+				}),
+				{ "odd.name.txt": "odd" },
+			),
+			testParserContext,
+		);
+		expect(res.attachments?.map((a) => a.name)).toEqual(["odd.name.txt"]);
+	});
+
+	it("says so when an item names a file the export does not hold", async () => {
+		const res = await parseProtonPass(
+			ppxWith(
+				oneVault({
+					shareId: "hello",
+					files: ["gone.5e918d21.pdf"],
+					data: { type: "note", metadata: { name: "Note" } },
+				}),
+			),
+			testParserContext,
+		);
+		expect(res.imported).toHaveLength(1);
+		expect(res.attachments).toBeUndefined();
+		expect(res.warnings).toEqual([
+			"1 attachment(s) are named in this export but not stored in it.",
+		]);
+	});
+});
+
+// autofillUrls carries every website with its rule; urls repeats only the Default ones.
+const loginWithUrls = (content: Record<string, unknown>) =>
+	ppxWith(oneVault({ data: { type: "login", metadata: { name: "Site" }, content } }));
+
+describe("parseProtonPass websites", () => {
+	it("keeps every website, whatever Proton's rule for it", async () => {
+		const res = await parseProtonPass(
+			loginWithUrls({
+				autofillUrls: [
+					{ url: "https://default.example.com/", mode: 0 },
+					{ url: "https://exact.example.com/login", mode: 1 },
+					{ url: "https://starts.example.com/app", mode: 3 },
+					{ url: "*.pattern.example.com", mode: 4 },
+					{ url: "^https://regex\\.example\\.com/", mode: 5 },
+					{ url: "https://path.example.com/a/b", mode: 6 },
+				],
+				urls: ["https://default.example.com/"],
+			}),
+			testParserContext,
+		);
+		expect(res.imported[0]).toMatchObject({
+			urls: [
+				"https://default.example.com/",
+				"https://exact.example.com/login",
+				"https://starts.example.com/app",
+				"*.pattern.example.com",
+				"^https://regex\\.example\\.com/",
+				"https://path.example.com/a/b",
+			],
+			subdomainMatch: "exact",
+		});
+		expect(res.warnings).toEqual([
+			"5 website(s) had a Proton autofill rule Bramble doesn't have, so their logins now match the exact site only.",
+		]);
+	});
+
+	it("keeps a never-autofill website out of the login's websites, in a field", async () => {
+		const res = await parseProtonPass(
+			loginWithUrls({
+				autofillUrls: [
+					{ url: "https://youtube.com/", mode: 2 },
+					{ url: "https://yt.com/", mode: 1 },
+				],
+				urls: [],
+			}),
+			testParserContext,
+		);
+		expect(res.imported[0]).toMatchObject({
+			urls: ["https://yt.com/"],
+			subdomainMatch: "exact",
+			customFields: [{ key: "Never autofill on", value: "https://youtube.com/" }],
+		});
+		expect(res.warnings).toEqual([
+			"1 website(s) had a Proton autofill rule Bramble doesn't have, so their logins now match the exact site only.",
+			"1 website(s) were set to never autofill in Proton, so they're kept in a \"Never autofill on\" field instead of the login's websites.",
+		]);
+	});
+
+	it("leaves matching alone on the default rule, and keeps a website only urls lists", async () => {
+		const res = await parseProtonPass(
+			loginWithUrls({
+				autofillUrls: [{ url: "https://a.example.com/", mode: 0 }],
+				urls: ["https://a.example.com/", "https://b.example.com/"],
+			}),
+			testParserContext,
+		);
+		const login = res.imported[0];
+		expect(login).toMatchObject({ urls: ["https://a.example.com/", "https://b.example.com/"] });
+		expect(login?.type === "login" && login.subdomainMatch).toBeUndefined();
+		expect(res.warnings).toEqual([]);
 	});
 });

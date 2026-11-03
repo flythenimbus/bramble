@@ -80,6 +80,10 @@ export function summarize(
 	return placed.length > 0 ? { ...result, attachments: placed } : result;
 }
 
+/** For an export that names files it doesn't hold. */
+export const missingFilesWarning = (n: number) =>
+	`${n} attachment(s) are named in this export but not stored in it.`;
+
 /** Best-effort display name for a row with no title: the URL's host, else the raw URL. */
 export function hostLabel(url: string): string {
 	if (!url) return "";

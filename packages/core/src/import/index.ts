@@ -104,7 +104,8 @@ export const IMPORT_PROVIDERS: readonly ImportProviderInfo[] = [
 	{
 		id: "protonpass",
 		label: "Proton Pass",
-		blurb: "Unencrypted .zip export",
+		// Proton leaves files out of the export, unlisted, unless this is on.
+		blurb: "Unencrypted .zip export, with file attachments turned on",
 		accept: ".zip",
 		reads: "bytes",
 	},

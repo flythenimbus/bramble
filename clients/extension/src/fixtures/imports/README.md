@@ -53,6 +53,14 @@ webauthn.io passkey, and a login with three URLs (one with no scheme and a port)
 item and share ids were replaced with fake ones and every other item was removed. The passkey
 `content` is exactly as Proton wrote it.
 
+`protonpass.zip` is invented data in the shape Proton Pass 1.43.0 writes: a login with an Exact
+website, one with a Never website, a text file on a login and on a note, a card and a note.
+
+`protonpass-files.zip` is a real Proton Pass 1.43.0 export cut down to two logins: `Test` with
+`sample.pdf`, and `youtube.com` with an extensionless `README`, one website set to Never and one
+to Exact. The user, item and share ids are fake, and each file name's share-id hash was
+recomputed for the fake share id; the file-id half is Proton's. The file contents are fake.
+
 `dashlane.zip` is invented data in the layout of a real Dashlane CSV export: five CSVs, one per
 kind of item, with the headers and CRLF line endings Dashlane writes today.
 

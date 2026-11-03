@@ -1,11 +1,18 @@
 import { z } from "zod";
 import type { EntryData } from "../hooks/useVault";
 import { cardBrand } from "../util/card";
+import { mimeFor } from "../vault/mime";
 import { normalizeTags } from "../vault/tags";
 import { type ConversionTally, systemicFailureWarning } from "./passkey-fields";
 import { importProtonPasskeys } from "./protonpass-passkey";
-import { type RawField, readZippedJson, summarize, toCustomFields } from "./shared";
-import type { ImportParserContext, ImportResult } from "./types";
+import {
+	missingFilesWarning,
+	type RawField,
+	readZippedJson,
+	summarize,
+	toCustomFields,
+} from "./shared";
+import type { ImportAttachment, ImportParserContext, ImportResult } from "./types";
 
 // Proton Pass export: a zip holding data.json with a `vaults` map. Schema lenient except `vaults`.
 // `content` is loose so the identity/unknown fold keeps unmodelled keys. State: 1 active, 2 trashed.
@@ -20,6 +27,7 @@ const contentSchema = z.looseObject({
 	username: z.string().nullish(),
 	password: z.string().nullish(),
 	urls: z.array(z.string()).nullish(),
+	autofillUrls: z.array(z.unknown()).nullish(),
 	totpUri: z.string().nullish(),
 	passkeys: z.array(z.unknown()).nullish(),
 	cardholderName: z.string().nullish(),
@@ -32,6 +40,8 @@ const itemSchema = z.object({
 	state: z.number().nullish(),
 	createTime: z.number().nullish(),
 	aliasEmail: z.string().nullish(),
+	shareId: z.string().nullish(),
+	files: z.array(z.unknown()).nullish(),
 	data: z
 		.object({
 			type: z.string().nullish(),
@@ -49,9 +59,59 @@ const exportSchema = z.object({
 });
 
 type PpExtraField = z.infer<typeof extraFieldSchema>;
+type PpContent = z.infer<typeof contentSchema>;
+// Each website carries its autofill rule. `urls` repeats only the Default ones.
+const autofillUrlSchema = z.object({ url: z.string(), mode: z.unknown() });
 
 const FORMAT_ERROR = "This doesn't look like a Proton Pass export.";
 const STATE_TRASHED = 2;
+const MODE_DEFAULT = 0;
+const MODE_NEVER = 2;
+const NEVER_FIELD = "Never autofill on";
+
+/** Every website on a login. A Never one goes to a field so it can't autofill there. */
+function loginUrls(content: PpContent): { urls: string[]; never: RawField[]; ruled: number } {
+	const out = { urls: [] as string[], never: [] as RawField[], ruled: 0 };
+	const seen = new Set<string>();
+	for (const raw of content.autofillUrls ?? []) {
+		const parsed = autofillUrlSchema.safeParse(raw);
+		if (!parsed.success || !parsed.data.url) continue;
+		const { url, mode } = parsed.data;
+		seen.add(url);
+		if (mode === MODE_NEVER) {
+			out.never.push({ key: NEVER_FIELD, value: url });
+			continue;
+		}
+		out.urls.push(url);
+		if (mode != null && mode !== MODE_DEFAULT) out.ruled++;
+	}
+	// An export from before autofillUrls, or one whose lists disagree, loses nothing.
+	for (const url of content.urls ?? []) {
+		if (url && !seen.has(url)) {
+			seen.add(url);
+			out.urls.push(url);
+		}
+	}
+	return out;
+}
+
+/** Proton's getHashCode: the Java string hash, as a 32-bit int. */
+function hashCode(s: string): number {
+	let h = 0;
+	for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+	return h;
+}
+
+/** As Proton's sanitizeFileName does on the way into the zip. */
+const sanitize = (name: string) => name.replace(/[/\\]/g, "_").trim();
+
+/** Undo Proton's `<base>.<hex shareId hash><hex fileID hash><ext>`; a name that doesn't fit is kept. */
+function originalName(exportName: string, shareId: string | null | undefined): string {
+	if (!shareId) return exportName;
+	const shareHash = Math.abs(hashCode(shareId)).toString(16);
+	const m = new RegExp(`^(.*)\\.${shareHash}[0-9a-f]+(\\.[^.]+)?$`).exec(exportName);
+	return (m && `${m[1]}${m[2] ?? ""}`) || exportName;
+}
 
 function mapExtraFields(extra: PpExtraField[] | null | undefined): RawField[] {
 	if (!extra) return [];
@@ -77,7 +137,7 @@ export async function parseProtonPass(
 	raw: string | Uint8Array,
 	context: ImportParserContext,
 ): Promise<ImportResult> {
-	const { data: parsed } = readZippedJson(raw, {
+	const { data: parsed, files } = readZippedJson(raw, {
 		findData: (files) => Object.entries(files).find(([p]) => p.endsWith("data.json"))?.[1],
 		schema: exportSchema,
 		corruptError: "Couldn't read this Proton Pass file. It may be corrupt.",
@@ -88,6 +148,15 @@ export async function parseProtonPass(
 	const warnings: string[] = [];
 	const importedAt = Date.now();
 	const tally: ConversionTally = { converted: 0, failed: 0 };
+	// Files sit in files/ beside data.json, named as the item's `files` lists them.
+	const root =
+		Object.keys(files)
+			.find((p) => p.endsWith("data.json"))
+			?.slice(0, -"data.json".length) ?? "";
+	const attachments: ImportAttachment[] = [];
+	let missingFiles = 0;
+	let ruledUrls = 0;
+	let neverUrls = 0;
 
 	for (const vault of Object.values(parsed.vaults)) {
 		// Proton organises by vault, which is the closest thing its export has to a tag.
@@ -101,6 +170,7 @@ export async function parseProtonPass(
 			const extra = mapExtraFields(d.extraFields);
 			const totpExtra = d.extraFields?.find((f) => f.type === "totp")?.data?.content;
 
+			let entry: EntryData;
 			switch (d.type) {
 				case "login":
 				case "alias": {
@@ -120,25 +190,27 @@ export async function parseProtonPass(
 					const email = content.itemEmail;
 					const emailField: RawField[] =
 						email && email !== username ? [{ key: "email", value: email }] : [];
-					// Keep every non-blank URL so multi-URL logins survive.
-					const urls = (content.urls ?? []).filter(
-						(u): u is string => typeof u === "string" && u.length > 0,
-					);
-					imported.push({
+					const { urls, never, ruled } = loginUrls(content);
+					ruledUrls += ruled;
+					neverUrls += never.length;
+					entry = {
 						type: "login",
 						name,
 						notes,
 						tags,
 						urls,
+						// One rule per login here, so a narrowed website tightens the whole login.
+						...(ruled > 0 ? { subdomainMatch: "exact" as const } : {}),
 						username,
 						password: content.password ?? "",
 						totp: content.totpUri || totpExtra || undefined,
 						customFields: toCustomFields([
 							...emailField,
+							...never,
 							...extra.filter((f) => f.value !== (content.totpUri || totpExtra)),
 						]),
 						passkeys,
-					});
+					};
 					break;
 				}
 				case "creditCard": {
@@ -147,7 +219,7 @@ export async function parseProtonPass(
 					const pin: RawField[] = content.pin
 						? [{ key: "PIN", value: content.pin, hidden: true }]
 						: [];
-					imported.push({
+					entry = {
 						type: "card",
 						name,
 						notes,
@@ -159,21 +231,21 @@ export async function parseProtonPass(
 						expYear,
 						cvv: content.verificationNumber ?? "",
 						customFields: toCustomFields([...pin, ...extra]),
-					});
+					};
 					break;
 				}
 				case "note":
-					imported.push({
+					entry = {
 						type: "note",
 						name,
 						notes,
 						tags,
 						customFields: toCustomFields(extra),
-					});
+					};
 					break;
 				default:
 					// identity / unknown types: a note folding content + extras in.
-					imported.push({
+					entry = {
 						type: "note",
 						name,
 						notes,
@@ -185,13 +257,43 @@ export async function parseProtonPass(
 							})),
 							...extra,
 						]),
-					});
+					};
+			}
+			imported.push(entry);
+
+			for (const listed of item.files ?? []) {
+				const stored = typeof listed === "string" ? sanitize(listed) : "";
+				const bytes = stored ? files[`${root}files/${stored}`] : undefined;
+				if (!bytes) {
+					missingFiles++;
+					continue;
+				}
+				const fileName = originalName(stored, item.shareId);
+				attachments.push({
+					entry,
+					name: fileName,
+					mime: mimeFor(fileName),
+					source: { kind: "blob", blob: new Blob([bytes as BlobPart]) },
+					size: bytes.length,
+				});
 			}
 		}
 	}
 
+	if (ruledUrls > 0) {
+		warnings.push(
+			`${ruledUrls} website(s) had a Proton autofill rule Bramble doesn't have, so their logins now match the exact site only.`,
+		);
+	}
+	if (neverUrls > 0) {
+		warnings.push(
+			`${neverUrls} website(s) were set to never autofill in Proton, so they're kept in a "${NEVER_FIELD}" field instead of the login's websites.`,
+		);
+	}
+	if (missingFiles > 0) warnings.push(missingFilesWarning(missingFiles));
+
 	const systemic = systemicFailureWarning(tally, "export");
 	if (systemic) warnings.push(systemic);
 
-	return summarize(imported, 0, warnings);
+	return summarize(imported, 0, warnings, attachments);
 }

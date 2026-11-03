@@ -4,7 +4,13 @@ import { cardBrand } from "../util/card";
 import { deriveKeyType } from "../util/ssh";
 import { mimeFor } from "../vault/mime";
 import { normalizeTags } from "../vault/tags";
-import { type RawField, readZippedJson, summarize, toCustomFields } from "./shared";
+import {
+	missingFilesWarning,
+	type RawField,
+	readZippedJson,
+	summarize,
+	toCustomFields,
+} from "./shared";
 import type { ImportAttachment, ImportResult } from "./types";
 
 // 1Password .1pux = a zip whose export.data is JSON (accounts > vaults > items), with each file
@@ -318,7 +324,7 @@ export function parseOnePassword(raw: string | Uint8Array): ImportResult {
 
 	const warnings: string[] = [];
 	if (missing > 0) {
-		warnings.push(`${missing} attachment(s) are named in this export but not stored in it.`);
+		warnings.push(missingFilesWarning(missing));
 	}
 	return summarize(imported, 0, warnings, attachments);
 }

@@ -963,6 +963,10 @@ object.
   warning. Proven in `e2e/extension/import-onepassword.spec.ts` against an invented export in
   that layout, not yet against one 1Password wrote. Placement, re-import and the whole-or-nothing
   write are KeePass's, above.
+- **Proton Pass import keeps every file** the export holds, on its item, under the name it had
+  in Proton: the export renames each with a hash of its vault and file ids, and the vault half
+  is recomputed from the item to strip it. Arrives as Blobs, like 1Password's. See
+  [protonpass-import.md](protonpass-import.md).
 - **Sending to another app** (credential exchange) carries no attachments. The row says so
   when the vault has any, and the transfer's first warning repeats it.
 - Issue #98 (local favicon upload) can reuse this store, though at under ~50 KB
