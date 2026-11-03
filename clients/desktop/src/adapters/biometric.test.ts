@@ -38,6 +38,12 @@ describe("desktopBiometric", () => {
 		expect(desktopBiometric.holdsKeyNatively).toBe(true);
 	});
 
+	// Re-arming deletes the old item, which macOS guards with Touch ID: a silent re-arm after every
+	// unlock showed a second, generic Touch ID sheet.
+	it("is never re-armed behind the user's back", () => {
+		expect(desktopBiometric.enableIsSilent).toBe(false);
+	});
+
 	it("arms with the vault id and the gate, never a key", async () => {
 		await desktopBiometric.enable(null, "v1", true);
 		expect(h.calls).toEqual([

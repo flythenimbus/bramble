@@ -20,9 +20,11 @@ const status = () => invoke<Status>("biometric_status").catch(() => NONE);
 
 export const desktopBiometric: BiometricUnlock = {
 	holdsKeyNatively: true,
-	// The macOS keychain write raises no prompt, so the gate may be re-armed after an unlock to
-	// pick up a passcode-fallback change. Windows Hello will sign to derive its key, which prompts.
-	enableIsSilent: navigator.userAgent.includes("Macintosh"),
+	// Re-arming prompts on both: macOS guards deleting the old Touch ID item with Touch ID (its own
+	// "needs to authenticate" sheet, which appeared right after every unlock while this was true),
+	// and Windows Hello signs to derive its key. So the core never re-arms behind the user's back;
+	// a passcode-fallback change re-arms from Settings, where the prompt is expected.
+	enableIsSilent: false,
 	async isAvailable() {
 		return (await status()).available;
 	},
