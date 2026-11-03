@@ -25,7 +25,7 @@ use security_framework::{
 };
 use zeroize::Zeroizing;
 
-use super::{BioError, BioResult, Status};
+use super::{install_vek, session_vek, BioError, BioResult, Status};
 
 #[link(name = "LocalAuthentication", kind = "framework")]
 extern "C" {}
@@ -102,7 +102,15 @@ pub fn has(vault_id: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn store(vault_id: &str, secret: &[u8], allow_passcode: bool) -> BioResult<()> {
+pub fn arm(vault_id: &str, allow_passcode: bool) -> BioResult<()> {
+    store(vault_id, session_vek()?.as_bytes(), allow_passcode)
+}
+
+pub fn unlock(vault_id: &str, allow_passcode: bool) -> BioResult<()> {
+    install_vek(load(vault_id, allow_passcode)?)
+}
+
+fn store(vault_id: &str, secret: &[u8], allow_passcode: bool) -> BioResult<()> {
     // The gate is fixed at write time, so re-arming replaces the item rather than updating it.
     delete(vault_id)?;
     let gate = if allow_passcode {
@@ -124,7 +132,7 @@ pub fn store(vault_id: &str, secret: &[u8], allow_passcode: bool) -> BioResult<(
     set_generic_password_options(secret, opts).map_err(sec_failure)
 }
 
-pub fn load(vault_id: &str, allow_passcode: bool) -> BioResult<Zeroizing<String>> {
+fn load(vault_id: &str, allow_passcode: bool) -> BioResult<Zeroizing<String>> {
     autoreleasepool(|_| {
         // Authenticate first, as iOS does, so a cancel and a lockout are told apart, then read
         // the item with that context rather than letting the keychain prompt a second time.

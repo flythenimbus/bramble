@@ -483,6 +483,7 @@ dependencies = [
  "vault-crypto",
  "widestring",
  "window-vibrancy",
+ "windows",
  "windows-sys 0.61.2",
  "winreg",
  "zeroize",

@@ -12,11 +12,15 @@ use zeroize::Zeroizing;
 #[path = "biometric_macos.rs"]
 mod os;
 
-/// No gate here yet: Windows Hello is next, Linux has no hardware-backed equivalent.
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+#[path = "biometric_windows.rs"]
+mod os;
+
+/// Linux has no hardware-backed equivalent: fprintd behind polkit is a yes/no answer, not
+/// something that protects the key.
+#[cfg(not(any(target_os = "macos", windows)))]
 mod os {
     use super::{BioError, BioResult, Status};
-    use zeroize::Zeroizing;
 
     pub fn status() -> Status {
         Status::default()
@@ -24,10 +28,10 @@ mod os {
     pub fn has(_vault_id: &str) -> bool {
         false
     }
-    pub fn store(_vault_id: &str, _secret: &[u8], _allow_passcode: bool) -> BioResult<()> {
+    pub fn arm(_vault_id: &str, _allow_passcode: bool) -> BioResult<()> {
         Err(BioError::unavailable())
     }
-    pub fn load(_vault_id: &str, _allow_passcode: bool) -> BioResult<Zeroizing<String>> {
+    pub fn unlock(_vault_id: &str, _allow_passcode: bool) -> BioResult<()> {
         Err(BioError::unavailable())
     }
     pub fn delete(_vault_id: &str) -> BioResult<()> {
@@ -61,8 +65,8 @@ impl BioError {
         }
     }
 
-    /// Only the stub answers this way; macOS reports unavailability through `status` instead.
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    /// Only the Linux stub answers this way; the others report unavailability through `status`.
+    #[cfg_attr(any(target_os = "macos", windows), allow(dead_code))]
     pub fn unavailable() -> Self {
         Self::new(
             "unavailable",
@@ -97,22 +101,32 @@ pub fn biometric_is_enabled(vault_id: String) -> bool {
     checked(&vault_id).map(os::has).unwrap_or(false)
 }
 
-/// Cache the open vault's VEK behind the gate. `allow_passcode` picks the gate (macOS: Touch ID
-/// alone, or Touch ID or the login password) and is fixed until the next `enable`.
+/// Cache the open vault's VEK behind the gate. `allow_passcode` picks the gate on macOS (Touch ID
+/// alone, or Touch ID or the login password) and is fixed until the next `enable`; Windows Hello
+/// always takes its PIN and ignores it.
 #[tauri::command(async)]
 pub fn biometric_enable(vault_id: String, allow_passcode: bool) -> BioResult<()> {
-    let vault_id = checked(&vault_id)?;
-    let vek = Zeroizing::new(
-        vault_crypto::export_vek().map_err(|e| BioError::new("failed", e.to_string()))?,
-    );
-    os::store(vault_id, vek.as_bytes(), allow_passcode)
+    os::arm(checked(&vault_id)?, allow_passcode)
 }
 
 /// Prompt, then install the cached VEK in the crypto session. Whether that key still opens the
 /// vault is the caller's next step (loading entries), as it is on mobile.
 #[tauri::command(async)]
 pub fn biometric_unlock(vault_id: String, allow_passcode: bool) -> BioResult<()> {
-    let mut vek = os::load(checked(&vault_id)?, allow_passcode)?;
+    os::unlock(checked(&vault_id)?, allow_passcode)
+}
+
+/// The open vault's VEK, for a gate that stores it whole (macOS).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn session_vek() -> BioResult<Zeroizing<String>> {
+    vault_crypto::export_vek()
+        .map(Zeroizing::new)
+        .map_err(|e| BioError::new("failed", e.to_string()))
+}
+
+/// Load a VEK a gate released into the crypto session (macOS).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn install_vek(mut vek: Zeroizing<String>) -> BioResult<()> {
     vault_crypto::unlock_with_vek(std::mem::take(&mut *vek))
         .map_err(|e| BioError::new("failed", e.to_string()))
 }

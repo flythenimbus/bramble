@@ -4,9 +4,10 @@ Plan for unlocking the desktop app with Touch ID on macOS and Windows Hello on W
 the master password. Asked for repeatedly, most recently in #180, which also covered the browser
 extension; that half shipped separately (the extension's passkey unlock gained "Unlock on open").
 
-Status: **step 1 built 2026-11-03** (core flag and labels, the desktop adapter, the Rust module and
-its macOS gate). Not yet run on a signed build, so Touch ID itself is untested; an unsigned build
-correctly reports the gate unavailable. Windows next. Nothing is released.
+Status: **built 2026-11-03, untested on hardware.** Core flag and labels, the desktop adapter, the
+Rust module, the macOS gate and the Windows Hello gate. Touch ID needs a signed build to run at
+all (an unsigned one correctly reports the gate unavailable, which a test pins). The Windows gate
+type-checks against the real `windows` crate but has never run. Nothing is released.
 
 ## What already exists
 
@@ -99,11 +100,14 @@ lands, an unsigned or dev build gets `errSecMissingEntitlement` (-34018), which 
 Windows Hello's own key API, `Windows.Security.Credentials.KeyCredentialManager`, so the unlock is
 bound to the Hello check cryptographically rather than trusting a yes/no answer:
 
-- On enable, create (or open) a Hello key credential named per vault, sign a fixed per-vault
-  challenge with it (this is the Hello prompt), derive an AES-256 key from the signature with
-  HKDF-SHA256, and encrypt the VEK under it. Store the ciphertext and the challenge beside the
-  vault.
-- On unlock, sign the same challenge again (prompt), derive the same key, and decrypt.
+- On enable, open (or create) a Hello key credential named per vault, and sign a fresh random
+  challenge with it (this is the Hello prompt). The signature is handed to the core's
+  `wrap_vek_webauthn` as if it were a security key's hmac-secret: the same HKDF, verifier and
+  AES-GCM wrap, so this adds no crypto of its own. The challenge, slot id and wrapped VEK go in
+  Credential Manager under the app's service, where the uninstaller's sweep finds them.
+- On unlock, sign the same challenge again (prompt) and hand the signature to
+  `unwrap_vek_webauthn`, which checks the verifier before loading the VEK. A verifier mismatch
+  means the Hello key changed, reported as `invalidated`.
 - **To verify first:** this relies on the signature being identical every time. Hello keys are
   RSA and PKCS#1 v1.5 signing is deterministic, and KeePassXC and Bitwarden are believed to do the
   same `[unverified]`, but the spike has to show a second signature matching the first before
@@ -114,8 +118,8 @@ bound to the Hello check cryptographically rather than trusting a yes/no answer:
 - Known nuisance: the Hello prompt can appear behind the app's window unless it is parented to it.
   `[unverified]` which interop interface does that for `KeyCredentialManager`.
 
-Crate: `windows` (already in the tree at 0.62) with the `Security_Credentials` and
-`Security_Cryptography` features.
+Crate: `windows` (already in the tree at 0.62) with the `Foundation`, `Security_Credentials`,
+`Security_Cryptography` and `Storage_Streams` features.
 
 ## Linux
 
@@ -135,7 +139,8 @@ app would have to trust, not something that protects the key.
 
 1. Core flag and labels, the desktop adapter, and the Rust module's command surface with the
    macOS implementation. Testable end to end only on a signed build.
-2. Windows: the determinism spike, then the implementation, tested on a real Windows machine.
+2. Windows Hello, tested on a real Windows machine: first that two signatures over one challenge
+   match, then the prompt's placement over the app window.
 3. The spotlight prompt.
 
 Paired extension unlock through the desktop ("Deferred: extension unlock delegation" in
