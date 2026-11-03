@@ -1,6 +1,6 @@
 Novità in questa versione:
 
-- Le chiavi di accesso salvate in Bramble ora funzionano sui siti che le usano per proteggere i dati, come Bitwarden e AliasVault (iOS 18 e versioni successive).
+- Le chiavi di accesso salvate in Bramble ora funzionano sui siti che le usano per proteggere i dati (iOS 18 e versioni successive).
 - Importare da Proton Pass ora include chiavi di accesso, file e tutti i siti web, mentre l'importazione da 1Password include i file. L'anteprima dell'importazione conta gli allegati prima di iniziare.
 - Creare alias email con Fastmail Masked Email.
 - I siti web di un accesso sono ora elencati insieme sotto un'unica etichetta.

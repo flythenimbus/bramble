@@ -1,6 +1,6 @@
 Nouveautés de cette version :
 
-- Les clés de passe enregistrées dans Bramble fonctionnent désormais sur les sites qui les utilisent pour protéger vos données, comme Bitwarden et AliasVault (iOS 18 ou version ultérieure).
+- Les clés de passe enregistrées dans Bramble fonctionnent désormais sur les sites qui les utilisent pour protéger vos données (iOS 18 ou version ultérieure).
 - L’importation depuis Proton Pass récupère désormais vos clés de passe, vos fichiers et tous vos sites web, et l’importation depuis 1Password récupère vos fichiers. L’aperçu de l’importation compte les pièces jointes avant de commencer.
 - Créer des alias e-mail avec Fastmail Masked Email.
 - Les sites web d’un identifiant sont désormais regroupés sous une seule étiquette.

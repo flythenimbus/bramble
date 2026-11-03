@@ -1,6 +1,6 @@
 What's new in this release:
 
-- Passkeys saved in Bramble now work on sites that use them to protect your data, like Bitwarden and AliasVault (iOS 18 and later).
+- Passkeys saved in Bramble now work on sites that use them to protect your data (iOS 18 and later).
 - Importing from Proton Pass now brings your passkeys, files and every website across, and importing from 1Password brings your files. The import preview counts attachments before you start.
 - Create email aliases with Fastmail Masked Email.
 - A login's websites are now listed together under one label.
