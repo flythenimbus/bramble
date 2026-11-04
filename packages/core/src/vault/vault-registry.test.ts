@@ -4,6 +4,7 @@ import {
 	displayLabel,
 	EMPTY_REGISTRY,
 	findVault,
+	markSetAside,
 	parseRegistry,
 	removeVault,
 	renameVault,
@@ -87,5 +88,19 @@ describe("parseRegistry", () => {
 		expect(parsed).toEqual({ vaults: [rec("a", "Personal", 1)] });
 		expect("primaryId" in parsed).toBe(false);
 		expect("legacyBlobVaultId" in parsed).toBe(false);
+	});
+});
+
+describe("a vault set aside by linking", () => {
+	const reg = { vaults: [{ id: "v1", label: "Personal", createdAt: 1 }] };
+
+	it("parses a record from before the field existed", () => {
+		expect(parseRegistry(reg).vaults[0]?.setAsideAt).toBeUndefined();
+	});
+
+	it("is marked on this device only, and survives a synced rename", () => {
+		const marked = markSetAside(reg, "v1", 5);
+		expect(parseRegistry(marked).vaults[0]?.setAsideAt).toBe(5);
+		expect(renameVault(marked, "v1", "Personal (renamed)").vaults[0]?.setAsideAt).toBe(5);
 	});
 });

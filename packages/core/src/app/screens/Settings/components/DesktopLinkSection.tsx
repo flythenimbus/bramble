@@ -6,6 +6,7 @@ import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { formatDate } from "../../../../util/format-date";
+import { displayLabel } from "../../../../vault/vault-registry";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
 import { InlineConfirm } from "../../../components/ui/inline-confirm";
@@ -14,7 +15,9 @@ import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
 import { useDesktopLink } from "../../../hooks/useDesktopLink";
 import { usePopOut } from "../../../hooks/usePopOut";
+import { CombineResult } from "./CombineResult";
 import { Row, Section } from "./primitives";
+import { type TwoVaultsChoice, TwoVaultsPrompt } from "./TwoVaultsPrompt";
 
 /** Codes are 8 characters from an alphabet with no lookalikes; see the desktop app's
  * pairing.rs. Anything longer is a paste that picked up whitespace. */
@@ -26,7 +29,7 @@ export function DesktopLinkSection() {
 	const { desktopLink, storage } = usePlatform();
 	const { t } = useLingui();
 	const { entries } = useVault();
-	const { syncKey } = useVaultRegistry();
+	const { syncKey, vaults, activeId } = useVaultRegistry();
 	// The toolbar popup closes the moment the user switches to the desktop app, which a join asks
 	// them to do, and the vault it was receiving goes with it. So that much runs in a window.
 	const { canPopOut, popOut } = usePopOut();
@@ -49,8 +52,8 @@ export function DesktopLinkSection() {
 	/** Guards the local verb, so its wording is read before it is used. */
 	const [confirmUnlink, setConfirmUnlink] = useState(false);
 	const [unlinking, setUnlinking] = useState(false);
-	/** Whether to carry this vault's entries into the shared one rather than leave two apart. */
-	const [alsoMove, setAlsoMove] = useState(false);
+	/** Combine or keep separate, when both sides hold entries. Nothing until the user picks. */
+	const [choice, setChoice] = useState<TwoVaultsChoice | null>(null);
 
 	const refresh = useCallback(async () => {
 		if (!desktopLink) return;
@@ -140,23 +143,15 @@ export function DesktopLinkSection() {
 	 * keeps working when the app is closed.
 	 */
 	const acceptInvite = async () => {
-		// Captured BEFORE the join, while this vault is still the open one. Its entries are already
-		// decrypted in memory here, which is what makes moving them possible at all: the two vaults
-		// have different keys and only one is ever loaded, so the plaintext crossing between them
-		// has to be held over the switch rather than re-wrapped in place.
-		const carry = alsoMove ? entries.map(({ id: _id, ...data }) => data) : undefined;
-		await link.accept(invitePassword, { carry });
+		await link.accept(invitePassword, { choice: choice ?? undefined });
 		setInvitePassword("");
-		setAlsoMove(false);
+		setChoice(null);
 	};
 
-	/** The three things accepting would do, as this screen words them. */
-	const outcome =
-		link.outcome === "switch"
-			? "switch"
-			: link.outcome === "add" || link.outcome === "ask"
-				? "add"
-				: "first";
+	const outcome = link.outcome;
+	const activeIndex = vaults.findIndex((v) => v.id === activeId);
+	const browserName = displayLabel(vaults[activeIndex]?.label ?? "", Math.max(0, activeIndex));
+	const desktopName = link.summary?.name ?? t`the desktop app's vault`;
 	const error = link.error ?? refreshError;
 
 	const emojiConfirm = link.linking && (
@@ -358,6 +353,7 @@ export function DesktopLinkSection() {
 			)}
 
 			{error && <p className="text-xs text-destructive">{error}</p>}
+			{link.combined && <CombineResult link={link} />}
 			<Modal
 				open={link.invite !== null}
 				onClose={() => {
@@ -376,6 +372,8 @@ export function DesktopLinkSection() {
 					<h2 className="text-base font-medium">
 						{outcome === "switch" ? (
 							<Trans>You already share this vault</Trans>
+						) : outcome === "ask" ? (
+							<Trans>You have two vaults</Trans>
 						) : outcome === "add" ? (
 							<Trans>Add the desktop's vault</Trans>
 						) : (
@@ -394,44 +392,43 @@ export function DesktopLinkSection() {
 						</p>
 					) : (
 						<>
-							<p className="text-xs text-muted-foreground">
-								{outcome === "add" ? (
-									<Trans>
-										This adds the desktop's vault to this browser as a separate one. Your existing
-										vaults stay as they are: two vaults cannot be combined automatically, because
-										each is encrypted with its own key.
-									</Trans>
-								) : (
-									<Trans>
-										The desktop app offered to share its vault with this browser. Enter the master
-										password you use there.
-									</Trans>
-								)}
-							</p>
+							{outcome === "ask" ? (
+								<TwoVaultsPrompt
+									browserName={browserName}
+									browserEntries={entries.length}
+									desktopName={desktopName}
+									desktopEntries={link.summary?.entries ?? null}
+									otherDevices={link.otherDevices}
+									choice={choice}
+									onChoice={setChoice}
+								/>
+							) : (
+								<p className="text-xs text-muted-foreground">
+									{outcome === "add" ? (
+										<Trans>
+											This adds the desktop's vault to this browser as a separate one. Your existing
+											vaults stay as they are.
+										</Trans>
+									) : outcome === "combine" ? (
+										<Trans>
+											This browser's entries and files are copied into {desktopName}, and this
+											browser will unlock with its master password. {browserName} is kept, locked,
+											as "{browserName} (before linking)" until you delete it.
+										</Trans>
+									) : (
+										<Trans>
+											The desktop app offered to share its vault with this browser. Enter the master
+											password you use there.
+										</Trans>
+									)}
+								</p>
+							)}
 							<PasswordField
 								label={t`Master password`}
 								value={invitePassword}
 								autoFocus
-								onChange={(e) => {
-									setInvitePassword(e.target.value);
-								}}
+								onChange={(e) => setInvitePassword(e.target.value)}
 							/>
-							{outcome === "add" && entries.length > 0 && (
-								<label className="flex items-start gap-2 text-xs text-muted-foreground">
-									<input
-										type="checkbox"
-										className="mt-0.5"
-										checked={alsoMove}
-										onChange={(e) => setAlsoMove(e.target.checked)}
-									/>
-									<span>
-										<Trans>
-											Also copy this vault's {entries.length} entries into it, so everything is in
-											one place. They stay here too; nothing is deleted.
-										</Trans>
-									</span>
-								</label>
-							)}
 						</>
 					)}
 					{link.inviteError && <p className="text-xs text-destructive">{link.inviteError}</p>}
@@ -450,12 +447,18 @@ export function DesktopLinkSection() {
 						<Button
 							type="submit"
 							size="sm"
-							disabled={link.joining || (outcome !== "switch" && !invitePassword)}
+							disabled={
+								link.joining ||
+								(outcome !== "switch" && !invitePassword) ||
+								(outcome === "ask" && choice === null)
+							}
 						>
 							{link.joining ? (
 								<Trans>Waiting for the desktop app…</Trans>
 							) : outcome === "switch" ? (
 								<Trans>Open that vault</Trans>
+							) : outcome === "ask" ? (
+								<Trans>Continue</Trans>
 							) : (
 								<Trans>Sync</Trans>
 							)}

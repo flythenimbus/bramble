@@ -13,6 +13,7 @@ import { syncKeyFor } from "../sync/sync-keys";
 import {
 	addVault,
 	EMPTY_REGISTRY,
+	markSetAside,
 	parseRegistry,
 	removeVault,
 	renameVault,
@@ -52,6 +53,9 @@ export interface VaultRegistryValue {
 	dropActiveRecord: () => Promise<void>;
 	/** Re-read the registry from storage (after a create/rename/delete elsewhere). */
 	refresh: () => Promise<void>;
+	/** Mark a vault as set aside by linking (local to this device). Reads storage fresh, since a
+	 * join has usually just added a record this render has not seen. */
+	setAside: (id: string) => Promise<void>;
 }
 
 // Value when no provider is mounted (e.g. isolated hook tests): the registry is "ready"
@@ -68,6 +72,7 @@ const DEFAULT: VaultRegistryValue = {
 	rename: async () => {},
 	dropActiveRecord: async () => {},
 	refresh: async () => {},
+	setAside: async () => {},
 };
 
 const VaultRegistryContext = createContext<VaultRegistryValue>(DEFAULT);
@@ -159,6 +164,14 @@ export function VaultRegistryProvider({
 		setActiveId(soleVaultId(next));
 	}, [registry, persist, activeId]);
 
+	const setAside = useCallback(
+		async (id: string) => {
+			const current = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
+			await persist(markSetAside(current, id, Date.now()));
+		},
+		[storage, persist],
+	);
+
 	const value = useMemo<VaultRegistryValue>(
 		() => ({
 			ready,
@@ -171,6 +184,7 @@ export function VaultRegistryProvider({
 			rename,
 			dropActiveRecord,
 			refresh,
+			setAside,
 		}),
 		[
 			ready,
@@ -183,6 +197,7 @@ export function VaultRegistryProvider({
 			rename,
 			dropActiveRecord,
 			refresh,
+			setAside,
 		],
 	);
 

@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { type EntryData, useVault, useVaultActions } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
+import type { PlacedAttachment } from "../../import/types";
 import { decodePairingCode } from "../../sync/enrollment";
 import {
 	type LinkFrom,
@@ -15,6 +16,7 @@ import {
 } from "../../sync/link-outcome";
 import type { PairingSas } from "../../sync/pairing-sas";
 import { syncKeyFor } from "../../sync/sync-keys";
+import { collectCarry, placeCarry } from "../../vault/combine-into";
 import { isVaultEmpty, readVaultContents } from "../../vault/vault-empty";
 
 export interface DesktopVaultSummary {
@@ -31,11 +33,11 @@ export function useDesktopLink({
 	/** Runs once the link is up, before the invite is looked at (Settings refreshes its status). */
 	onLinked?: () => Promise<void> | void;
 }) {
-	const { desktopLink, storage } = usePlatform();
+	const { desktopLink, storage, shell, files: platformFiles } = usePlatform();
 	const { t } = useLingui();
-	const { startJoin, importEntries } = useVaultActions();
-	const { entries } = useVault();
-	const { vaults, activeId } = useVaultRegistry();
+	const { startJoin, importEntries, readEntries } = useVaultActions();
+	const { entries, files } = useVault();
+	const { vaults, activeId, setAside } = useVaultRegistry();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	/** An emoji link waiting on this screen's answer. */
@@ -49,6 +51,13 @@ export function useDesktopLink({
 	const [summary, setSummary] = useState<DesktopVaultSummary | null>(null);
 	const [joining, setJoining] = useState(false);
 	const [inviteError, setInviteError] = useState<string | null>(null);
+	/** Other devices syncing this browser's vault: combining moves only this browser. */
+	const [otherDevices, setOtherDevices] = useState<string[]>([]);
+	/** What a combine left behind: look-alikes held back, and files it could not carry. */
+	const [combined, setCombined] = useState<{
+		heldBack: { items: EntryData[]; attachments: PlacedAttachment[] };
+		uncarried: number;
+	} | null>(null);
 
 	/** What linking does here, from what each side holds. */
 	const outcomeFor = useCallback(
@@ -67,12 +76,19 @@ export function useDesktopLink({
 			if (vaults.length > 0 && activeId) {
 				const contents = await readVaultContents(storage, activeId, entries.length);
 				browser = isVaultEmpty(contents) ? "empty" : "full";
+				const group = await storage.getMeta<{
+					roster?: { devices?: { publicKey: string; label: string }[] };
+				}>(syncKeyFor("sync.group", activeId));
+				const own = await shell.syncDevicePublicKey?.().catch(() => null);
+				setOtherDevices(
+					(group?.roster?.devices ?? []).filter((d) => d.publicKey !== own).map((d) => d.label),
+				);
 			}
 			// An app that will not say is treated as holding something: asking is the safe side.
 			const desktopSide = desktop?.empty === true ? "empty" : "full";
 			return linkOutcome({ from, browser, desktop: desktopSide, sharesGroup });
 		},
-		[vaults, activeId, entries.length, storage, from],
+		[vaults, activeId, entries.length, storage, shell, from],
 	);
 
 	/** The summary first: the app answers it only while its invite is still armed. */
@@ -145,16 +161,34 @@ export function useDesktopLink({
 	 * Join the desktop's vault over the link. The password is the one that vault uses: it wraps
 	 * this browser's own copy, so the browser keeps working when the app is closed. The vault
 	 * arrives under its own synced name.
+	 *
+	 * Combining reads this vault's entries and files BEFORE the switch, because only one vault's
+	 * key is loaded at a time, then copies them in after it. The old vault is kept, set aside.
+	 * Keeping them separate copies nothing.
 	 */
 	const accept = useCallback(
-		async (password: string, opts?: { carry?: EntryData[] }) => {
+		async (password: string, opts?: { choice?: "combine" | "separate"; carry?: EntryData[] }) => {
 			if (!invite) return;
 			setJoining(true);
 			setInviteError(null);
+			const combining = outcome === "combine" || (outcome === "ask" && opts?.choice === "combine");
+			const oldId = activeId;
 			try {
+				const carry =
+					combining && oldId
+						? await collectCarry(entries, files, platformFiles?.forVault(oldId) ?? null)
+						: null;
 				await startJoin(invite, { kind: "password", password }, undefined, { viaLink: true });
 				setInvite(null);
 				setOutcome(null);
+				if (carry && oldId) {
+					const placed = placeCarry(readEntries(), carry);
+					if (placed.items.length || placed.attachments.length) {
+						await importEntries(placed.items, placed.attachments);
+					}
+					await setAside(oldId);
+					setCombined({ heldBack: placed.heldBack, uncarried: carry.uncarried });
+				}
 				// After the join, so the copies land in the vault that is now open.
 				if (opts?.carry?.length) await importEntries(opts.carry);
 			} catch (e) {
@@ -165,8 +199,27 @@ export function useDesktopLink({
 				setJoining(false);
 			}
 		},
-		[invite, startJoin, importEntries, t],
+		[
+			invite,
+			outcome,
+			activeId,
+			entries,
+			files,
+			platformFiles,
+			startJoin,
+			readEntries,
+			importEntries,
+			setAside,
+			t,
+		],
 	);
+
+	/** Copy the look-alikes the dedup held back, as import's "Import them anyway" does. */
+	const copyHeldBack = useCallback(async () => {
+		if (!combined?.heldBack.items.length) return;
+		await importEntries(combined.heldBack.items, combined.heldBack.attachments);
+		setCombined({ ...combined, heldBack: { items: [], attachments: [] } });
+	}, [combined, importEntries]);
 
 	const dismissInvite = useCallback(() => {
 		setInvite(null);
@@ -192,6 +245,9 @@ export function useDesktopLink({
 		pairWithCode,
 		accept,
 		dismissInvite,
+		combined,
+		copyHeldBack,
+		otherDevices,
 		/** For the Settings poller-free path: an invite claimed elsewhere. */
 		afterLinked,
 	};

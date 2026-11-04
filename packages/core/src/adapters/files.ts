@@ -28,6 +28,11 @@ export interface VaultFiles {
 	 * ask, and the row then says only that the file is not here yet.
 	 */
 	transferStatus?(hashes: string[]): Promise<Record<string, FileTransferStatus>>;
+	/**
+	 * Decrypt one attachment into something `sealer.seal` takes again, for carrying it into
+	 * another vault. Absent where a file's plaintext cannot be handed back like this.
+	 */
+	stage?(record: FileRecord): Promise<PickedAttachment & { size: number }>;
 }
 
 /** A file chosen through `VaultFiles.pick`, ready to attach. */

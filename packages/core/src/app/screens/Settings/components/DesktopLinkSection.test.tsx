@@ -55,7 +55,7 @@ vi.mock("../../../hooks/usePopOut", () => ({
 
 vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../../../hooks/useVault")>()),
-	useVault: () => ({ entries: h.entries }),
+	useVault: () => ({ entries: h.entries, files: [] }),
 	useVaultActions: () => ({
 		startJoin: async (
 			_code: string,
@@ -72,6 +72,7 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 			h.steps.push("import");
 			h.imported = items;
 		},
+		readEntries: () => [],
 	}),
 }));
 
@@ -79,6 +80,7 @@ vi.mock("../../../../hooks/useVaultRegistry", () => ({
 	useVaultRegistry: () => ({
 		vaults: h.vaults,
 		activeId: h.vaults.length ? h.activeVault : undefined,
+		setAside: async () => {},
 		syncKey: (k: string) => `${k}:${h.activeVault}`,
 	}),
 }));
@@ -201,15 +203,16 @@ describe("what a desktop connect will do to this browser", () => {
 		expect(screen.queryByLabelText(/master password/i)).toBeNull();
 	});
 
-	it("says a second vault is being added, and why they cannot be combined", async () => {
+	it("asks whether to combine when both sides have entries", async () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
 		mount();
 		await linkAgain();
 
-		expect(await screen.findByText(/add the desktop's vault/i)).toBeTruthy();
-		expect(screen.getByText(/existing vaults stay as they are/i)).toBeTruthy();
+		expect(await screen.findByText(/you have two vaults/i)).toBeTruthy();
+		expect(screen.getByRole("radio", { name: /combine into one/i })).toBeTruthy();
+		expect(screen.getByRole("radio", { name: /keep them separate/i })).toBeTruthy();
 	});
 
 	it("lets the vault arrive under its own name", async () => {
@@ -219,10 +222,11 @@ describe("what a desktop connect will do to this browser", () => {
 		h.invite = "code";
 		mount();
 		await linkAgain();
-		await screen.findByText(/add the desktop's vault/i);
+		await screen.findByText(/you have two vaults/i);
 
-		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
-		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
+		fireEvent.click(screen.getByRole("radio", { name: /keep them separate/i }));
+		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
 		await waitFor(() => expect(h.joinViaLink).toBe(true));
 		expect(h.joinLabel).toBeUndefined();
@@ -234,95 +238,68 @@ describe("what a desktop connect will do to this browser", () => {
 		h.invite = "code";
 		mount();
 		await linkAgain();
-		await screen.findByText(/add the desktop's vault/i);
+		await screen.findByText(/you have two vaults/i);
 
-		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
-		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
+		fireEvent.click(screen.getByRole("radio", { name: /keep them separate/i }));
+		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
 		await waitFor(() => expect(h.joinViaLink).toBe(true));
 	});
 });
 
-describe("carrying this vault's entries across", () => {
-	it("is not offered when there is nothing to carry", async () => {
-		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
-		h.groupOf.set("v1", "OTHER-GROUP");
-		h.invite = "code";
-		mount();
-		await linkAgain();
-		await screen.findByText(/add the desktop's vault/i);
-
-		expect(screen.queryByRole("checkbox")).toBeNull();
-	});
-
-	it("copies the entries in AFTER the join, so they land in the new vault", async () => {
-		// Order is the whole correctness argument: the two vaults have different keys and only one
-		// is loaded at a time, so the entries are read while this vault is open and written once
-		// the other one is. Importing first would put them back where they already were.
+describe("when both sides have entries", () => {
+	function twoVaults() {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.entries = [entry("a"), entry("b")];
 		h.invite = "code";
+	}
+
+	async function choose(name: RegExp) {
 		mount();
 		await linkAgain();
-		await screen.findByText(/add the desktop's vault/i);
+		await screen.findByText(/you have two vaults/i);
+		fireEvent.click(screen.getByRole("radio", { name }));
+		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+	}
 
-		fireEvent.click(screen.getByRole("checkbox"));
-		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
-		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
+	it("asks combine or keep separate, with neither chosen for the user", async () => {
+		twoVaults();
+		mount();
+		await linkAgain();
+		await screen.findByText(/you have two vaults/i);
+
+		for (const radio of screen.getAllByRole("radio"))
+			expect((radio as HTMLInputElement).checked).toBe(false);
+		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
+		expect(
+			(screen.getByRole("button", { name: /^continue$/i }) as HTMLButtonElement).disabled,
+		).toBe(true);
+	});
+
+	it("combines by copying this vault's entries in AFTER the join", async () => {
+		twoVaults();
+		await choose(/combine into one/i);
 
 		await waitFor(() => expect(h.steps).toEqual(["join", "import"]));
 		expect(h.imported).toHaveLength(2);
-	});
-
-	it("strips the ids, so the copies are new entries rather than claims on the originals", async () => {
-		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
-		h.groupOf.set("v1", "OTHER-GROUP");
-		h.entries = [entry("a")];
-		h.invite = "code";
-		mount();
-		await linkAgain();
-		await screen.findByText(/add the desktop's vault/i);
-
-		fireEvent.click(screen.getByRole("checkbox"));
-		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
-		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
-
-		await waitFor(() => expect(h.imported).not.toBeNull());
 		expect(h.imported?.[0]).not.toHaveProperty("id");
 	});
 
-	it("copies nothing when the box is left unticked", async () => {
-		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
-		h.groupOf.set("v1", "OTHER-GROUP");
-		h.entries = [entry("a")];
-		h.invite = "code";
-		mount();
-		await linkAgain();
-		await screen.findByText(/add the desktop's vault/i);
-
-		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
-		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
+	it("keeps them separate by copying nothing", async () => {
+		twoVaults();
+		await choose(/keep them separate/i);
 
 		await waitFor(() => expect(h.steps).toEqual(["join"]));
 		expect(h.imported).toBeNull();
 	});
 
 	it("copies nothing when the join fails, leaving the originals where they are", async () => {
-		// The safe way round: a failed join must not scatter copies into a vault that was never
-		// built, and the entries are still in the vault they came from either way.
-		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
-		h.groupOf.set("v1", "OTHER-GROUP");
-		h.entries = [entry("a")];
-		h.invite = "code";
+		twoVaults();
 		h.joinFails = true;
-		mount();
-		await linkAgain();
-		await screen.findByText(/add the desktop's vault/i);
-
-		fireEvent.click(screen.getByRole("checkbox"));
-		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
-		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
+		await choose(/combine into one/i);
 
 		await waitFor(() => expect(screen.getByText(/join failed/i)).toBeTruthy());
 		expect(h.steps).toEqual(["join"]);

@@ -16,21 +16,39 @@ const h = vi.hoisted(() => ({
 	vaults: [] as { id: string; label: string; createdAt: number }[],
 	summary: { name: "Home", empty: false, entries: 380 } as unknown,
 	start: { id: "L1", sas: { emoji: [0, 1, 2, 3, 4, 5, 6], digits: "1" } } as unknown,
+	steps: [] as string[],
+	entries: [] as unknown[],
+	files: [] as unknown[],
+	desktopEntries: [] as unknown[],
+	imported: [] as unknown[][],
+	failStage: false,
+	meta: new Map<string, unknown>(),
 }));
 
 vi.mock("../../hooks/useVault", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../hooks/useVault")>()),
-	useVault: () => ({ entries: [] }),
+	useVault: () => ({ entries: h.entries, files: h.files }),
 	useVaultActions: () => ({
 		startJoin: async (...args: unknown[]) => {
+			h.steps.push("join");
 			h.joins.push(args);
 		},
-		importEntries: async () => {},
+		importEntries: async (items: unknown[], attachments: unknown[] = []) => {
+			h.steps.push("import");
+			h.imported.push([items, attachments]);
+		},
+		readEntries: () => h.desktopEntries,
 	}),
 }));
 
 vi.mock("../../hooks/useVaultRegistry", () => ({
-	useVaultRegistry: () => ({ vaults: h.vaults, activeId: h.vaults[0]?.id }),
+	useVaultRegistry: () => ({
+		vaults: h.vaults,
+		activeId: h.vaults[0]?.id,
+		setAside: async (id: string) => {
+			h.steps.push(`setAside:${id}`);
+		},
+	}),
 }));
 
 vi.mock("../../sync/enrollment", async (importOriginal) => ({
@@ -39,8 +57,22 @@ vi.mock("../../sync/enrollment", async (importOriginal) => ({
 }));
 
 const platform = {
-	storage: { getMeta: async () => undefined },
-	shell: { onSyncEvent: () => () => {} },
+	storage: { getMeta: async (k: string) => h.meta.get(k) },
+	shell: { onSyncEvent: () => () => {}, syncDevicePublicKey: async () => "me" },
+	files: {
+		forVault: () => ({
+			stage: async () => {
+				h.steps.push("stage");
+				if (h.failStage) throw new Error("not here");
+				return {
+					source: { kind: "bytes", bytes: new Uint8Array([1]) },
+					name: "a.txt",
+					mime: "text/plain",
+					size: 1,
+				};
+			},
+		}),
+	},
 	desktopLink: {
 		status: async () => ({ paired: true }),
 		start: async () => h.start,
@@ -110,5 +142,95 @@ describe("useDesktopLink", () => {
 		});
 		expect(result.current.legacy).toBe(true);
 		h.start = { id: "L1", sas: { emoji: [0, 1, 2, 3, 4, 5, 6], digits: "1" } };
+	});
+});
+
+describe("combining into the desktop's vault", () => {
+	const login = (id: string, site: string) => ({
+		id,
+		type: "login",
+		name: site,
+		username: "u",
+		password: "p",
+		urls: [`https://${site}`],
+	});
+
+	function twoFullVaults() {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.entries = [login("a", "new.com"), login("b", "alike.com")];
+		h.files = [{ id: "f1", entryId: "a", hash: "0".repeat(64) }];
+		h.desktopEntries = [{ ...login("x", "alike.com"), username: "U" }];
+		h.summary = { name: "Home", empty: false, entries: 1 };
+		h.steps = [];
+		h.imported = [];
+		h.failStage = false;
+	}
+
+	it("carries before the join, copies after it, and sets the old vault aside", async () => {
+		twoFullVaults();
+		const result = await linkedFrom("settings");
+		expect(result.current.outcome).toBe("ask");
+		h.steps = [];
+
+		await act(async () => {
+			await result.current.accept("pw", { choice: "combine" });
+		});
+
+		expect(h.steps).toEqual(["stage", "join", "import", "setAside:v1"]);
+		expect(h.imported[0]?.[0]).toHaveLength(1);
+		expect(h.imported[0]?.[1]).toHaveLength(1);
+		expect(result.current.combined?.heldBack.items).toHaveLength(1);
+	});
+
+	it("copies the held-back look-alikes when asked to", async () => {
+		twoFullVaults();
+		const result = await linkedFrom("settings");
+		await act(async () => {
+			await result.current.accept("pw", { choice: "combine" });
+		});
+		h.imported = [];
+
+		await act(async () => {
+			await result.current.copyHeldBack();
+		});
+
+		expect(h.imported[0]?.[0]).toHaveLength(1);
+		expect(result.current.combined?.heldBack.items).toHaveLength(0);
+	});
+
+	it("says how many files it could not carry", async () => {
+		twoFullVaults();
+		h.failStage = true;
+		const result = await linkedFrom("settings");
+		await act(async () => {
+			await result.current.accept("pw", { choice: "combine" });
+		});
+		expect(result.current.combined?.uncarried).toBe(1);
+	});
+
+	it("names the other devices still syncing this browser's vault", async () => {
+		twoFullVaults();
+		h.meta.set("sync.group:v1", {
+			groupKey: "OTHER",
+			roster: {
+				devices: [
+					{ publicKey: "me", label: "Chrome on Mac" },
+					{ publicKey: "phone", label: "Pixel 8" },
+				],
+			},
+		});
+		const result = await linkedFrom("settings");
+		expect(result.current.otherDevices).toEqual(["Pixel 8"]);
+		h.meta.clear();
+	});
+
+	it("keeps them separate when asked to, copying and setting aside nothing", async () => {
+		twoFullVaults();
+		const result = await linkedFrom("settings");
+		h.steps = [];
+		await act(async () => {
+			await result.current.accept("pw", { choice: "separate" });
+		});
+		expect(h.steps).toEqual(["join"]);
 	});
 });

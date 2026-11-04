@@ -13,6 +13,9 @@ const VaultRecordSchema = z.object({
 	/** User-facing label. May be blank; a blank label renders as "Vault N" by position. */
 	label: z.string(),
 	createdAt: z.number(),
+	/** Set when linking combined this vault into the desktop app's. Local to this device: the
+	 * synced name is left alone, so a phone still using the vault sees no change. */
+	setAsideAt: z.number().optional(),
 });
 export type VaultRecord = z.infer<typeof VaultRecordSchema>;
 
@@ -50,6 +53,11 @@ export function removeVault(reg: VaultRegistry, id: string): VaultRegistry {
 /** Rename a vault. A blank label falls back to "Vault N" at display time (see displayLabel). */
 export function renameVault(reg: VaultRegistry, id: string, label: string): VaultRegistry {
 	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, label } : v)) };
+}
+
+/** Mark a vault as the one linking set aside, kept until the user deletes it. */
+export function markSetAside(reg: VaultRegistry, id: string, at: number): VaultRegistry {
+	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, setAsideAt: at } : v)) };
 }
 
 /** Look up a vault record by id. */

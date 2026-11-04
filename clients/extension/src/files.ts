@@ -64,6 +64,28 @@ function createExtensionSealer(vaultId: string): FileSealer {
 	};
 }
 
+/** Decrypt one attachment of this vault into a Blob, through the crypto host's handoff. */
+async function openRecord(vaultId: string, record: FileRecord): Promise<Blob> {
+	const handoff = await dispatch<string>(
+		"CRYPTO_FILE_OPEN",
+		{
+			hash: record.hash,
+			wrappedFek: record.wrappedFek,
+			fekIv: record.fekIv,
+			noncePrefix: record.noncePrefix,
+		},
+		vaultId,
+		FILE_OP_TIMEOUT_MS,
+	);
+	try {
+		const blob = await readHandoff(handoff);
+		if (!blob) throw new Error("the opened file went missing before it could be saved");
+		return blob;
+	} finally {
+		await dropHandoff(handoff).catch(() => {});
+	}
+}
+
 /** Save as a download, under the attachment's own name. */
 function download(name: string, blob: Blob): void {
 	const url = URL.createObjectURL(blob);
@@ -98,24 +120,18 @@ export const extensionFiles: FileAdapter = {
 					)) ?? {},
 				present: async (record: FileRecord) => {
 					const meta = await sealer.describe(record);
-					const handoff = await dispatch<string>(
-						"CRYPTO_FILE_OPEN",
-						{
-							hash: record.hash,
-							wrappedFek: record.wrappedFek,
-							fekIv: record.fekIv,
-							noncePrefix: record.noncePrefix,
-						},
-						vaultId,
-						FILE_OP_TIMEOUT_MS,
-					);
-					try {
-						const blob = await readHandoff(handoff);
-						if (!blob) throw new Error("the opened file went missing before it could be saved");
-						download(meta.name, blob);
-					} finally {
-						await dropHandoff(handoff).catch(() => {});
-					}
+					download(meta.name, await openRecord(vaultId, record));
+				},
+				// Combining into the desktop's vault: the plaintext stays a Blob, never page memory.
+				stage: async (record: FileRecord) => {
+					const meta = await sealer.describe(record);
+					const blob = await openRecord(vaultId, record);
+					return {
+						source: { kind: "blob", blob },
+						name: meta.name,
+						mime: meta.mime,
+						size: blob.size,
+					};
 				},
 			};
 			byVault.set(vaultId, files);
