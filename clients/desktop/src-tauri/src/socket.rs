@@ -852,8 +852,14 @@ fn drive(
                 pairing::cancel_link_window();
             }
         };
-        let Some(frame) = read_frame(stream).map_err(|e| format!("read: {e}"))? else {
+        let frame = if handshake.link_label().is_some() {
+            read_frame_within(stream, Duration::from_millis(LINK_STEP_MS), || false)
+        } else {
+            read_frame(stream).map_err(|e| format!("read: {e}"))?
+        };
+        let Some(frame) = frame else {
             abandon();
+            ipc::shutdown(stream);
             return Ok(());
         };
         let parsed: HandshakeFrame = serde_json::from_slice(&frame).map_err(|e| {
@@ -893,9 +899,62 @@ fn drive(
 
 /// An emoji link waiting on both answers: the desktop's Approve and the browser's "They match".
 struct PendingLink {
+    /** Which link this is, so a finished one cannot clear its successor. */
+    generation: u64,
     sas_hash_b64: String,
     label: String,
     answer: Option<bool>,
+    /** The dialog closed: overrides any approval already given. */
+    cancelled: bool,
+}
+
+static NEXT_PENDING: AtomicU64 = AtomicU64::new(1);
+
+/// How long one emoji-link handshake message may take. Bounds how long a relaying attacker can
+/// spend searching for matching emoji, and frees the window if a browser stalls.
+const LINK_STEP_MS: u64 = if cfg!(test) { 300 } else { 30_000 };
+
+/// Read one frame, giving up at `within` or once `stop` says so. The read runs on its own thread
+/// because a named pipe has no read timeout; it ends when the connection closes.
+fn read_frame_within(
+    stream: &ipc::Stream,
+    within: Duration,
+    stop: impl Fn() -> bool,
+) -> Option<Vec<u8>> {
+    let mut reader = ipc::try_clone(stream).ok()?;
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(read_frame(&mut reader));
+    });
+    let deadline = Instant::now() + within;
+    loop {
+        if stop() {
+            return None;
+        }
+        let now = Instant::now();
+        if now >= deadline {
+            return None;
+        }
+        let slice = (deadline - now).min(Duration::from_millis(50));
+        match rx.recv_timeout(slice) {
+            Ok(Ok(Some(frame))) => return Some(frame),
+            Ok(_) => return None,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => return None,
+        }
+    }
+}
+
+/// Whether the link with this generation is still the live one and was not cancelled.
+fn link_still_wanted(generation: u64) -> bool {
+    pending_link()
+        .0
+        .lock()
+        .map(|slot| {
+            slot.as_ref()
+                .is_some_and(|p| p.generation == generation && !p.cancelled)
+        })
+        .unwrap_or(false)
 }
 
 static PENDING_LINK: OnceLock<(Mutex<Option<PendingLink>>, Condvar)> = OnceLock::new();
@@ -922,7 +981,14 @@ pub fn link_window_begin() {
 #[tauri::command]
 pub fn link_window_cancel() {
     pairing::cancel_link_window();
-    link_pair_answer(false);
+    let (lock, cvar) = pending_link();
+    if let Ok(mut slot) = lock.lock() {
+        if let Some(pending) = slot.as_mut() {
+            pending.cancelled = true;
+            pending.answer = Some(false);
+            cvar.notify_all();
+        }
+    }
     link_clear_sync_invite();
 }
 
@@ -964,8 +1030,12 @@ fn await_desktop_answer() -> bool {
 }
 
 /// Whether the browser's user said the emoji match. A closed connection is a no.
-fn browser_confirms(session_id: u32, stream: &mut ipc::Stream) -> bool {
-    let Ok(Some(frame)) = read_frame(stream) else {
+fn browser_confirms(session_id: u32, stream: &mut ipc::Stream, generation: u64) -> bool {
+    let Some(frame) = read_frame_within(
+        stream,
+        Duration::from_millis(pairing::LINK_WINDOW_MS),
+        || !link_still_wanted(generation),
+    ) else {
         return false;
     };
     let Ok(sealed) = serde_json::from_slice::<SealedFrame>(&frame) else {
@@ -1005,13 +1075,16 @@ fn confirm_link(
     let peer = handshake::handshake_remote_static(session_id)
         .map_err(|e| format!("remote static: {e:?}"))?;
     let hash = handshake::handshake_hash(session_id).map_err(|e| format!("hash: {e:?}"))?;
+    let generation = NEXT_PENDING.fetch_add(1, Ordering::Relaxed);
     {
         let (lock, _) = pending_link();
         if let Ok(mut slot) = lock.lock() {
             *slot = Some(PendingLink {
+                generation,
                 sas_hash_b64: hash.clone(),
                 label: label.to_string(),
                 answer: None,
+                cancelled: false,
             });
         }
     }
@@ -1020,18 +1093,33 @@ fn confirm_link(
         serde_json::json!({ "sasHashB64": hash, "label": label }),
     );
 
-    let confirmed = await_desktop_answer() && browser_confirms(session_id, stream);
+    let confirmed = await_desktop_answer()
+        && browser_confirms(session_id, stream, generation)
+        && link_still_wanted(generation);
+    // Still the dialog's own link? A cancelled one, or one a newer link replaced, must not close
+    // the window or clear the prompt that now belongs to someone else.
+    let mut current = false;
     if let Ok(mut slot) = pending_link().0.lock() {
-        *slot = None;
+        if let Some(p) = slot.as_ref().filter(|p| p.generation == generation) {
+            current = !p.cancelled;
+            *slot = None;
+        }
     }
     if !confirmed {
-        pairing::cancel_link_window();
-        emit("link-pair-done", serde_json::json!({ "paired": false }));
+        if current {
+            pairing::cancel_link_window();
+            emit("link-pair-done", serde_json::json!({ "paired": false }));
+        }
         let _ = write_sealed(
             session_id,
             stream,
             serde_json::json!({ "ok": false, "error": "refused" }),
         );
+        ipc::shutdown(stream);
+        return Ok(());
+    }
+    if !current {
+        ipc::shutdown(stream);
         return Ok(());
     }
     pairing::finish_link(root, &peer, label)?;
@@ -2120,5 +2208,85 @@ mod tests {
         link_clear_sync_invite();
         link_set_vault_summary(None);
         handshake::handshake_close(a.session_id);
+    }
+
+    #[test]
+    fn approving_then_closing_the_dialog_links_nothing_even_if_the_browser_confirms_later() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_window_begin();
+        let mut a = LinkClient::start(&dir).expect("link");
+        await_pending(true);
+        link_pair_answer(true);
+        link_window_cancel();
+
+        a.send(serde_json::json!({ "op": "linkConfirm" }));
+        assert_eq!(a.recv()["ok"], false);
+        assert!(!pairing::paired_peers(dir.path())
+            .unwrap()
+            .iter()
+            .any(|p| p.public_key == a.public_key));
+        handshake::handshake_close(a.session_id);
+    }
+
+    #[test]
+    fn a_cancelled_link_does_not_touch_the_next_one() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        // A: approved here, then the dialog closes while A's browser has not answered yet.
+        link_window_begin();
+        let mut a = LinkClient::start(&dir).expect("link");
+        await_pending(true);
+        link_pair_answer(true);
+        link_window_cancel();
+
+        // B: a new dialog and a new link, waiting on its own answers.
+        link_window_begin();
+        let b = LinkClient::start(&dir).expect("second link");
+        await_pending(true);
+
+        // A's browser says "They match" late. It must not clear B's prompt or be allowlisted.
+        // The app may already have closed A's connection, so the send itself may fail.
+        let sealed = handshake::handshake_encrypt(
+            a.session_id,
+            serde_json::json!({ "op": "linkConfirm" }).to_string(),
+        )
+        .unwrap();
+        let body = serde_json::to_vec(&serde_json::json!({ "sealed": sealed })).unwrap();
+        let _ = a
+            .client
+            .stream
+            .write_all(&(body.len() as u32).to_le_bytes())
+            .and_then(|_| a.client.stream.write_all(&body));
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let pending = link_pair_pending().expect("B still pending");
+        assert_eq!(
+            pending.sas_hash_b64,
+            handshake::handshake_hash(b.session_id).unwrap()
+        );
+        assert!(!pairing::paired_peers(dir.path())
+            .unwrap()
+            .iter()
+            .any(|p| p.public_key == a.public_key));
+        link_window_cancel();
+        handshake::handshake_close(a.session_id);
+        handshake::handshake_close(b.session_id);
+    }
+
+    #[test]
+    fn a_link_handshake_that_stalls_is_dropped() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_window_begin();
+        let mut client = Client::connect(dir.path());
+        client.send(serde_json::json!({ "kind": "link", "v": 1, "label": "slow" }));
+        // No first message. The app must not wait forever on it.
+        let mut len = [0u8; 4];
+        let started_at = std::time::Instant::now();
+        let read = client.stream.read_exact(&mut len);
+        assert!(started_at.elapsed() < std::time::Duration::from_secs(5));
+        // Either a refusal frame or a closed socket; never a hang.
+        let _ = read;
+        link_window_cancel();
     }
 }

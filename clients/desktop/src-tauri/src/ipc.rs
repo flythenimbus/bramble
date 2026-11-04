@@ -284,6 +284,20 @@ pub fn try_clone(stream: &Stream) -> io::Result<Stream> {
     }
 }
 
+/// End the connection for every handle onto it, including one parked in a read on another
+/// thread. Unix only: a pipe handle has no equivalent, and there the reader ends when the
+/// browser side closes.
+pub fn shutdown(stream: &Stream) {
+    #[cfg(unix)]
+    {
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+    }
+    #[cfg(windows)]
+    {
+        let _ = stream;
+    }
+}
+
 /// The pipe itself, which is the half that cannot be reasoned about from a cross-compile.
 ///
 /// Everything here exercises code that only runs on Windows and only fails at runtime: a
