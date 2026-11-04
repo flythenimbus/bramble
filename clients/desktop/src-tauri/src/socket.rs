@@ -19,7 +19,7 @@ use std::{
     path::Path,
     sync::{
         atomic::{AtomicU64, Ordering},
-        mpsc, Mutex, OnceLock,
+        mpsc, Condvar, Mutex, OnceLock,
     },
     thread,
     time::{Duration, Instant},
@@ -60,6 +60,13 @@ enum Hello {
     },
     /// An established browser reconnecting, identified by its allowlisted static key.
     Hello { v: u32, public_key: String },
+    /// First contact with no code: both screens show emoji from the handshake and the user
+    /// confirms on both. Accepted only while a Connect dialog is open.
+    Link {
+        v: u32,
+        /// What the browser calls itself. Attacker-assertable: shown, never trusted.
+        label: String,
+    },
 }
 
 #[derive(Serialize)]
@@ -763,6 +770,10 @@ fn serve(root: &Path, stream: &mut ipc::Stream) -> Result<(), String> {
             check_version(v)?;
             pairing::accept_known(root, &public_key)
         }
+        Hello::Link { v, label } => {
+            check_version(v)?;
+            pairing::accept_link(root, &label)
+        }
     };
     let handshake = match handshake {
         Ok(h) => h,
@@ -790,15 +801,25 @@ fn drive(
     stream: &mut ipc::Stream,
 ) -> Result<(), String> {
     loop {
+        // A link that stops partway closes the dialog's window: it reached the user's screen.
+        let abandon = || {
+            if handshake.link_label().is_some() {
+                pairing::cancel_link_window();
+            }
+        };
         let Some(frame) = read_frame(stream).map_err(|e| format!("read: {e}"))? else {
+            abandon();
             return Ok(());
         };
-        let parsed: HandshakeFrame =
-            serde_json::from_slice(&frame).map_err(|e| format!("bad handshake frame: {e}"))?;
+        let parsed: HandshakeFrame = serde_json::from_slice(&frame).map_err(|e| {
+            abandon();
+            format!("bad handshake frame: {e}")
+        })?;
 
         let step = match pairing::read_message(root, handshake, &parsed.message) {
             Ok(step) => step,
             Err(e) => {
+                abandon();
                 let _ = reply(stream, &Reply::err("refused"));
                 return Err(e);
             }
@@ -806,6 +827,9 @@ fn drive(
         let done = step.done;
         reply(stream, &Reply::step(step.message, done)).map_err(|e| format!("write: {e}"))?;
         if done {
+            if let Some(label) = handshake.link_label() {
+                return confirm_link(root, handshake.session_id, stream, label);
+            }
             if handshake.is_pairing() {
                 let peer = handshake::handshake_remote_static(handshake.session_id)
                     .map_err(|e| format!("remote static: {e:?}"))?;
@@ -817,6 +841,161 @@ fn drive(
             return serve_session(handshake.session_id, stream);
         }
     }
+}
+
+/// An emoji link waiting on both answers: the desktop's Approve and the browser's "They match".
+struct PendingLink {
+    sas_hash_b64: String,
+    label: String,
+    answer: Option<bool>,
+}
+
+static PENDING_LINK: OnceLock<(Mutex<Option<PendingLink>>, Condvar)> = OnceLock::new();
+
+fn pending_link() -> &'static (Mutex<Option<PendingLink>>, Condvar) {
+    PENDING_LINK.get_or_init(|| (Mutex::new(None), Condvar::new()))
+}
+
+/// What the Connect dialog shows for the link in progress, for a window that opened after it.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingLinkView {
+    pub sas_hash_b64: String,
+    pub label: String,
+}
+
+/// Open the Connect dialog's window for an emoji link.
+#[tauri::command]
+pub fn link_window_begin() {
+    pairing::begin_link_window();
+}
+
+/// The dialog closed: refuse any link in progress and drop the invite it armed.
+#[tauri::command]
+pub fn link_window_cancel() {
+    pairing::cancel_link_window();
+    link_pair_answer(false);
+    link_clear_sync_invite();
+}
+
+/// The desktop user's answer to the emoji comparison.
+#[tauri::command]
+pub fn link_pair_answer(approved: bool) {
+    let (lock, cvar) = pending_link();
+    if let Ok(mut slot) = lock.lock() {
+        if let Some(pending) = slot.as_mut() {
+            pending.answer.get_or_insert(approved);
+            cvar.notify_all();
+        }
+    }
+}
+
+/// The link waiting on an answer, if any.
+#[tauri::command]
+pub fn link_pair_pending() -> Option<PendingLinkView> {
+    let slot = pending_link().0.lock().ok()?;
+    slot.as_ref().map(|p| PendingLinkView {
+        sas_hash_b64: p.sas_hash_b64.clone(),
+        label: p.label.clone(),
+    })
+}
+
+/// Wait for the desktop user's answer. No answer within the window is a refusal.
+fn await_desktop_answer() -> bool {
+    let (lock, cvar) = pending_link();
+    let Ok(slot) = lock.lock() else {
+        return false;
+    };
+    let wait = Duration::from_millis(pairing::LINK_WINDOW_MS);
+    let Ok((slot, _)) = cvar.wait_timeout_while(slot, wait, |s| {
+        s.as_ref().is_some_and(|p| p.answer.is_none())
+    }) else {
+        return false;
+    };
+    slot.as_ref().and_then(|p| p.answer).unwrap_or(false)
+}
+
+/// Whether the browser's user said the emoji match. A closed connection is a no.
+fn browser_confirms(session_id: u32, stream: &mut ipc::Stream) -> bool {
+    let Ok(Some(frame)) = read_frame(stream) else {
+        return false;
+    };
+    let Ok(sealed) = serde_json::from_slice::<SealedFrame>(&frame) else {
+        return false;
+    };
+    let Ok(plain) = handshake::handshake_decrypt(session_id, sealed.sealed) else {
+        return false;
+    };
+    serde_json::from_str::<serde_json::Value>(&plain)
+        .map(|v| v["op"] == "linkConfirm")
+        .unwrap_or(false)
+}
+
+fn write_sealed(
+    session_id: u32,
+    stream: &mut ipc::Stream,
+    body: serde_json::Value,
+) -> Result<(), String> {
+    let sealed = handshake::handshake_encrypt(session_id, body.to_string())
+        .map_err(|e| format!("seal: {e:?}"))?;
+    let bytes = serde_json::to_vec(&serde_json::json!({ "sealed": sealed }))
+        .map_err(|e| format!("encode: {e}"))?;
+    write_frame(stream, &bytes).map_err(|e| format!("write: {e}"))
+}
+
+/// Hold a completed emoji link until both people confirm, then allowlist it and serve it.
+///
+/// Nothing is trusted before both answers: the desktop's Approve says the emoji on this screen
+/// match, and the browser's confirmation says the same of its screen. A fake desktop can claim
+/// approval to the browser, which is why the browser's own answer is required too.
+fn confirm_link(
+    root: &Path,
+    session_id: u32,
+    stream: &mut ipc::Stream,
+    label: &str,
+) -> Result<(), String> {
+    let peer = handshake::handshake_remote_static(session_id)
+        .map_err(|e| format!("remote static: {e:?}"))?;
+    let hash = handshake::handshake_hash(session_id).map_err(|e| format!("hash: {e:?}"))?;
+    {
+        let (lock, _) = pending_link();
+        if let Ok(mut slot) = lock.lock() {
+            *slot = Some(PendingLink {
+                sas_hash_b64: hash.clone(),
+                label: label.to_string(),
+                answer: None,
+            });
+        }
+    }
+    emit(
+        "link-pair-pending",
+        serde_json::json!({ "sasHashB64": hash, "label": label }),
+    );
+
+    let confirmed = await_desktop_answer() && browser_confirms(session_id, stream);
+    if let Ok(mut slot) = pending_link().0.lock() {
+        *slot = None;
+    }
+    if !confirmed {
+        pairing::cancel_link_window();
+        emit("link-pair-done", serde_json::json!({ "paired": false }));
+        let _ = write_sealed(
+            session_id,
+            stream,
+            serde_json::json!({ "ok": false, "error": "refused" }),
+        );
+        return Ok(());
+    }
+    pairing::finish_link(root, &peer, label)?;
+    bind_invite(&peer);
+    emit("link-paired", serde_json::json!({ "peerId": peer }));
+    emit("link-pair-done", serde_json::json!({ "paired": true }));
+    write_sealed(
+        session_id,
+        stream,
+        serde_json::json!({ "ok": true, "paired": true }),
+    )?;
+    serve_session(session_id, stream)
 }
 
 /// Bind the endpoint and serve connections until the process exits.
@@ -1066,6 +1245,10 @@ mod tests {
             }
             panic!("peer registered={} never happened", want);
         }
+    }
+
+    fn invite_armed() -> bool {
+        armed().lock().map(|s| s.is_some()).unwrap_or(false)
     }
 
     /// State the lock state this test needs. The vault is process-global, so a test that leaves
@@ -1661,5 +1844,182 @@ mod tests {
         vault_crypto::lock();
         handshake::handshake_close(a.session_id);
         handshake::handshake_close(b.session_id);
+    }
+
+    /// A browser that has run the emoji link handshake and is waiting on both confirmations.
+    struct LinkClient {
+        client: Client,
+        session_id: u32,
+        public_key: String,
+    }
+
+    impl LinkClient {
+        fn start(dir: &TempDir) -> Result<Self, serde_json::Value> {
+            let kp = handshake::handshake_generate_keypair().unwrap();
+            let start = handshake::handshake_link_initiator(kp.private_key.clone()).unwrap();
+            let mut client = Client::connect(dir.path());
+            client.send(serde_json::json!({ "kind": "link", "v": 1, "label": "Chrome on Mac" }));
+            client.send(serde_json::json!({ "message": start.message }));
+            let reply = client.recv();
+            if reply["ok"] != true {
+                return Err(reply);
+            }
+            let msg2 = reply["message"].as_str().expect("msg2").to_string();
+            let msg3 = handshake::handshake_read(start.session_id, msg2)
+                .unwrap()
+                .message
+                .expect("msg3");
+            client.send(serde_json::json!({ "message": msg3 }));
+            assert_eq!(client.recv()["done"], true);
+            Ok(Self {
+                client,
+                session_id: start.session_id,
+                public_key: kp.public_key,
+            })
+        }
+
+        fn send(&mut self, body: serde_json::Value) {
+            let sealed = handshake::handshake_encrypt(self.session_id, body.to_string()).unwrap();
+            self.client.send(serde_json::json!({ "sealed": sealed }));
+        }
+
+        fn recv(&mut self) -> serde_json::Value {
+            let reply = self.client.recv();
+            let plain = handshake::handshake_decrypt(
+                self.session_id,
+                reply["sealed"].as_str().expect("sealed").to_string(),
+            )
+            .unwrap();
+            serde_json::from_str(&plain).unwrap()
+        }
+    }
+
+    fn await_pending(want: bool) {
+        for _ in 0..300 {
+            if link_pair_pending().is_some() == want {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("pending link never became {want}");
+    }
+
+    #[test]
+    fn a_link_hello_with_no_window_open_is_refused() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_window_cancel();
+        let refused = LinkClient::start(&dir).err().expect("refused");
+        assert_eq!(refused["ok"], false);
+    }
+
+    #[test]
+    fn a_second_link_while_one_is_pending_is_refused() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_window_begin();
+        let first = LinkClient::start(&dir).expect("first link");
+        await_pending(true);
+        assert_eq!(
+            LinkClient::start(&dir).err().expect("second refused")["ok"],
+            false
+        );
+        link_window_cancel();
+        handshake::handshake_close(first.session_id);
+    }
+
+    #[test]
+    fn nothing_is_allowlisted_until_both_sides_confirm() {
+        let _g = pairing::test_lock();
+        let dir = started();
+
+        // The desktop approves, the browser walks away.
+        link_window_begin();
+        let a = LinkClient::start(&dir).expect("link");
+        await_pending(true);
+        link_pair_answer(true);
+        let a_key = a.public_key.clone();
+        drop(a);
+        await_pending(false);
+        assert!(!pairing::paired_peers(dir.path())
+            .unwrap()
+            .iter()
+            .any(|p| p.public_key == a_key));
+
+        // The browser confirms, the desktop refuses.
+        link_window_begin();
+        let mut b = LinkClient::start(&dir).expect("link");
+        await_pending(true);
+        b.send(serde_json::json!({ "op": "linkConfirm" }));
+        link_pair_answer(false);
+        assert_eq!(b.recv()["ok"], false);
+        assert!(!pairing::paired_peers(dir.path())
+            .unwrap()
+            .iter()
+            .any(|p| p.public_key == b.public_key));
+        handshake::handshake_close(b.session_id);
+    }
+
+    #[test]
+    fn cancelling_the_window_drops_the_pending_link_and_the_invite() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        link_window_begin();
+        let mut a = LinkClient::start(&dir).expect("link");
+        await_pending(true);
+        a.send(serde_json::json!({ "op": "linkConfirm" }));
+
+        link_window_cancel();
+
+        assert_eq!(a.recv()["ok"], false);
+        assert!(!pairing::paired_peers(dir.path())
+            .unwrap()
+            .iter()
+            .any(|p| p.public_key == a.public_key));
+        assert!(!invite_armed());
+        handshake::handshake_close(a.session_id);
+    }
+
+    #[test]
+    fn a_confirmed_link_is_allowlisted_and_bound_to_the_armed_invite() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        link_window_begin();
+        let mut a = LinkClient::start(&dir).expect("link");
+        await_pending(true);
+        a.send(serde_json::json!({ "op": "linkConfirm" }));
+        link_pair_answer(true);
+
+        let done = a.recv();
+        assert_eq!(done["ok"], true, "{done}");
+        assert_eq!(done["paired"], true);
+        assert!(pairing::paired_peers(dir.path())
+            .unwrap()
+            .iter()
+            .any(|p| p.public_key == a.public_key));
+        a.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(a.recv()["invite"], "the-invite");
+        vault_crypto::lock();
+        handshake::handshake_close(a.session_id);
+    }
+
+    #[test]
+    fn the_pending_link_shows_the_browsers_handshake_hash() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_window_begin();
+        let a = LinkClient::start(&dir).expect("link");
+        await_pending(true);
+        let pending = link_pair_pending().unwrap();
+        assert_eq!(
+            pending.sas_hash_b64,
+            handshake::handshake_hash(a.session_id).unwrap()
+        );
+        assert_eq!(pending.label, "Chrome on Mac");
+        link_window_cancel();
+        handshake::handshake_close(a.session_id);
     }
 }

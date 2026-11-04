@@ -113,6 +113,30 @@ struct PendingCode {
 
 static PENDING: Mutex<Option<PendingCode>> = Mutex::new(None);
 
+/// How long a Connect dialog accepts an emoji link, and how long one link waits on both answers.
+pub const LINK_WINDOW_MS: u64 = 3 * 60 * 1000;
+
+/// An open Connect dialog: emoji links are accepted until it closes or expires, one at a time.
+struct LinkWindow {
+    expires_at: u64,
+    in_flight: bool,
+}
+
+static LINK_WINDOW: Mutex<Option<LinkWindow>> = Mutex::new(None);
+
+/// Open the dialog's window for an emoji link. Replaces any window already open.
+pub fn begin_link_window() {
+    *LINK_WINDOW.lock().unwrap() = Some(LinkWindow {
+        expires_at: now_ms() + LINK_WINDOW_MS,
+        in_flight: false,
+    });
+}
+
+/// Close the window: the dialog went away, a link failed, or one succeeded.
+pub fn cancel_link_window() {
+    *LINK_WINDOW.lock().unwrap() = None;
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -435,12 +459,19 @@ pub struct Handshake {
     pub session_id: u32,
     /// Set only for a pairing handshake; `None` for an established peer.
     paired_label: Option<String>,
+    /// Set only for an emoji link handshake: the label the browser gave itself.
+    link_label: Option<String>,
 }
 
 impl Handshake {
     /// Whether this handshake pairs a new browser, rather than reconnecting a known one.
     pub fn is_pairing(&self) -> bool {
         self.paired_label.is_some()
+    }
+
+    /// The browser's label when this is an emoji link handshake.
+    pub fn link_label(&self) -> Option<&str> {
+        self.link_label.as_deref()
     }
 }
 
@@ -460,6 +491,7 @@ pub fn accept_known(root: &Path, peer_public_key: &str) -> Res<Handshake> {
     Ok(Handshake {
         session_id,
         paired_label: None,
+        link_label: None,
     })
 }
 
@@ -474,7 +506,45 @@ pub fn accept_pairing(root: &Path, label: &str) -> Res<Handshake> {
     Ok(Handshake {
         session_id,
         paired_label: Some(label.to_string()),
+        link_label: None,
     })
+}
+
+/// Begin answering an emoji link. Only inside an open Connect dialog, and one at a time, so
+/// nothing can put a prompt in front of the user that they did not open the dialog for.
+pub fn accept_link(root: &Path, label: &str) -> Res<Handshake> {
+    {
+        let mut window = LINK_WINDOW.lock().unwrap();
+        let open = window
+            .as_mut()
+            .filter(|w| w.expires_at > now_ms())
+            .ok_or("no link window open")?;
+        if open.in_flight {
+            return Err("a link is already in progress".into());
+        }
+        open.in_flight = true;
+    }
+    let started = identity(root).and_then(|(priv_key, _)| {
+        handshake::handshake_link_responder(priv_key)
+            .map_err(|e| format!("start link responder: {e:?}"))
+    });
+    match started {
+        Ok(session_id) => Ok(Handshake {
+            session_id,
+            paired_label: None,
+            link_label: Some(label.to_string()),
+        }),
+        Err(e) => {
+            cancel_link_window();
+            Err(e)
+        }
+    }
+}
+
+/// Allowlist a browser both sides confirmed, and close the window behind it.
+pub fn finish_link(root: &Path, public_key: &str, label: &str) -> Res<()> {
+    cancel_link_window();
+    add_peer(root, public_key, label)
 }
 
 /// Feed a handshake message through. On the message that completes a *pairing* handshake the
