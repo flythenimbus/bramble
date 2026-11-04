@@ -76,6 +76,22 @@ resolve like any setting: the later stamp wins on every device. It is not a `use
 pref, because seeding has to tell "never synced" apart from "synced blank", which a
 pref with a default cannot.
 
+**Device names** (`device.name:<rosterId>`, one key per device) are the second
+non-pref setting. Each device stamps a default ("Firefox on Mac") into its own
+roster entry when it joins, and only that device can re-sign the entry, so a name
+given from another device cannot go there. It goes here instead: any device in the
+group can name any device, this one included, and every device shows the given
+name over the default (`app/hooks/useDeviceNames.ts`). Blank clears it with a
+`null`, which brings the default back. A non-string or blank value reads as no
+name. Nothing is seeded: the default already reaches every device in the roster.
+
+The trade-off is the one every synced setting has: a member of the group can
+rename any device, the way it can already edit every entry. A name is display
+only. "This device", the fingerprint under each name, and every check sync makes
+go by public key, never by name. A device that rejoins gets a new id
+(`rotateDeviceId`), so its old name stays behind on the old id rather than
+following it.
+
 ## Why not the two obvious wire formats
 
 Both were tried on paper and both are wrong, which is worth recording so they are

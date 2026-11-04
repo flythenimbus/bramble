@@ -18,7 +18,7 @@
 
 import { base64ToBytes, bytesToBase64 } from "../../util/bytes";
 import type { BlobReceipt, BlobStore } from "../../vault/blob-store";
-import type { EntriesPayload, RosterPayload } from "..";
+import type { EntriesPayload, RosterEntry, RosterPayload } from "..";
 import { liveFiles } from "../vault-merge";
 import type { Channel } from "./channel";
 import type { PeerSession } from "./mesh";
@@ -90,12 +90,15 @@ export interface BlobSyncSession extends MeshSession {
 	status(hashes: string[]): Promise<Record<string, FileTransferStatus>>;
 }
 
+/** The device a file comes from: its roster id, for the name the user gave it, and its own. */
+export type FileSource = Pick<RosterEntry, "id" | "label">;
+
 /** Why a file this device lacks hasn't arrived, as far as its session can see. See
  * docs/file-attachments.md ("Saying why a file has not arrived"). */
 export type FileTransferStatus =
-	| { state: "downloading"; from: string | null; received: number; size: number }
-	| { state: "queued"; from: string | null }
-	| { state: "retrying"; from: string | null }
+	| { state: "downloading"; from: FileSource | null; received: number; size: number }
+	| { state: "queued"; from: FileSource | null }
+	| { state: "retrying"; from: FileSource | null }
 	| { state: "unreachable" }
 	| { state: "not-on-connected" }
 	| { state: "desktop-only" }
@@ -113,7 +116,7 @@ export interface StatusSnapshot {
 	unreachable: boolean;
 	/** No WebRTC here: only a local link (the desktop app) can bring a file. */
 	linkOnly: boolean;
-	label(pub: string): string | null;
+	device(pub: string): FileSource | null;
 }
 
 /**
@@ -123,12 +126,12 @@ export interface StatusSnapshot {
 export function statusOf(hash: string, s: StatusSnapshot): FileTransferStatus {
 	if (s.active?.hash === hash) {
 		const { from, received, size } = s.active;
-		return { state: "downloading", from: s.label(from), received, size };
+		return { state: "downloading", from: s.device(from), received, size };
 	}
 	const holders = s.peers.filter((p) => p.has.has(hash));
 	const ready = holders.find((p) => (s.passOver.get(`${p.pub}:${hash}`) ?? 0) <= s.now);
-	if (ready) return { state: "queued", from: s.label(ready.pub) };
-	if (holders[0]) return { state: "retrying", from: s.label(holders[0].pub) };
+	if (ready) return { state: "queued", from: s.device(ready.pub) };
+	if (holders[0]) return { state: "retrying", from: s.device(holders[0].pub) };
 	if (s.unreachable) return { state: "unreachable" };
 	if (s.peers.length > 0) return { state: "not-on-connected" };
 	if (s.linkOnly) return { state: "desktop-only" };
@@ -511,7 +514,10 @@ export async function startBlobSync(opts: BlobSyncOptions): Promise<BlobSyncSess
 					(d) => !d.open && now - d.at < SEEN_FOR_MS && now - d.firstAt >= CONNECT_GRACE_MS,
 				),
 				linkOnly: opts.relay === false,
-				label: (pub) => roster.devices.find((d) => d.publicKey === pub)?.label || null,
+				device: (pub) => {
+					const d = roster.devices.find((e) => e.publicKey === pub);
+					return d ? { id: d.id, label: d.label } : null;
+				},
 			};
 			const out: Record<string, FileTransferStatus> = {};
 			for (const hash of hashes) if (!held.has(hash)) out[hash] = statusOf(hash, snapshot);

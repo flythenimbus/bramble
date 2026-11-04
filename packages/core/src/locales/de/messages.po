@@ -1286,6 +1286,10 @@ msgstr "Desktop-Tresor"
 msgid "Details"
 msgstr "Details"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device name"
+msgstr "Gerätename"
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
 msgstr "Gerätecode"
@@ -2797,8 +2801,8 @@ msgstr "Neu laden"
 msgid "Remove"
 msgstr "Entfernen"
 
-#. placeholder {0}: d.label || "device"
 #. placeholder {0}: k.label
+#. placeholder {0}: nameOf(d) || "device"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Remove {0}"
@@ -2847,6 +2851,11 @@ msgstr "Tag {removed} entfernt. {0} Tags."
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Removing…"
 msgstr "Entfernen…"
+
+#. placeholder {0}: nameOf(d) || "device"
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Rename {0}"
+msgstr "Umbenennen: {0}"
 
 #. placeholder {0}: formatDateTimeExact(change.changedAt)
 #: packages/core/src/app/entry-modes/login.tsx

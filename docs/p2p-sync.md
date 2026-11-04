@@ -557,10 +557,14 @@ Source of truth is the persisted `sync.group` roster.
   `sig` (TOFU id↔key binding) and, for a non-initial device, an `admission` from a member's
   password-derived key. Verify-if-present today; enforced in a later release. See
   docs/p2p-sync-revocation-hardening.md.
-- **Rename** (edit `label`, propagate via the roster CRDT) is still TODO.
 - **Device labels.** New enrollments self-label by platform (`defaultDeviceLabel`: "Android device",
   "Firefox on Mac", …) instead of a generic "This device"; the UI marks the current device by
   public-key match, so a label collision is only cosmetic.
+- **Rename, done as a synced setting.** Not by editing `label`: only a device can re-sign its own
+  entry, so a roster rename could only ever name yourself. A given name is the synced setting
+  `device.name:<id>` instead, so any device names any device and the name rides the entries payload.
+  The roster `label` stays the device's own default and shows whenever no name was given. See
+  docs/synced-settings.md ("Device names").
 - **Secure storage, done.** The device keypair (and group key) now live in Keychain/Keystore on
   mobile and `chrome.storage` on the extension (the earlier plaintext-`Preferences` note is
   resolved).

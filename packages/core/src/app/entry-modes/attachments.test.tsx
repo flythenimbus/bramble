@@ -4,8 +4,10 @@ import { I18nProvider } from "@lingui/react";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../context/PlatformContext";
+import { type SyncedSettingsAccess, SyncedSettingsContext } from "../../hooks/synced-settings";
 import type { FileRecord } from "../../sync";
 import type { FileTransferStatus } from "../../sync/transport/blob-sync";
+import { deviceNameKey } from "../hooks/useDeviceNames";
 import { AttachmentsDetail } from "./attachments";
 
 // The line under an attachment that isn't on this device yet: what the file session says, asked
@@ -54,6 +56,9 @@ const platformFor = (target: string, paired?: boolean) =>
 			paired === undefined ? undefined : { status: async () => ({ paired, permitted: true }) },
 	}) as unknown as Platform;
 
+const LAPTOP = { id: "node-laptop", label: "Laptop" };
+const STAMP = { wall: 5, counter: 0, node: "phone" };
+
 const record = (n: number): FileRecord =>
 	({
 		id: `f${n}`,
@@ -92,11 +97,11 @@ describe("a file not on this device yet", () => {
 
 	it.each([
 		[
-			{ state: "downloading", from: "Laptop", received: 40, size: 100 },
+			{ state: "downloading", from: LAPTOP, received: 40, size: 100 },
 			"Downloading from Laptop, 40%",
 		],
 		[{ state: "downloading", from: null, received: 1, size: 3 }, "Downloading, 33%"],
-		[{ state: "queued", from: "Laptop" }, "Laptop has it. Coming next."],
+		[{ state: "queued", from: LAPTOP }, "Laptop has it. Coming next."],
 		[{ state: "retrying", from: null }, "A device has it. Trying again shortly."],
 		[{ state: "unreachable" }, "A device is online but can't connect to this one."],
 		[{ state: "not-on-connected" }, "None of your connected devices has it yet."],
@@ -105,6 +110,25 @@ describe("a file not on this device yet", () => {
 		h.status = { [H]: status };
 		mount();
 		expect(await screen.findByText(line)).toBeTruthy();
+	});
+
+	it("calls the device by the name it was given in the group", async () => {
+		h.status = { [H]: { state: "queued", from: LAPTOP } };
+		const named: SyncedSettingsAccess = {
+			settings: { [deviceNameKey(LAPTOP.id)]: { hlc: STAMP, value: "Work laptop" } },
+			ready: true,
+			set: async () => {},
+		};
+		render(
+			<I18nProvider i18n={i18n}>
+				<PlatformProvider platform={platformFor("chromium")}>
+					<SyncedSettingsContext.Provider value={named}>
+						<AttachmentsDetail entryId="e1" />
+					</SyncedSettingsContext.Provider>
+				</PlatformProvider>
+			</I18nProvider>,
+		);
+		expect(await screen.findByText("Work laptop has it. Coming next.")).toBeTruthy();
 	});
 
 	it("never shows 100% before the file is whole", async () => {

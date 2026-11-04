@@ -822,7 +822,7 @@ learns today: not worth it for one line of copy.
 
 1. **Core, `blob-sync.ts`.** `status(hashes)` on `BlobSyncSession` builds a
    snapshot from state the session already keeps (`active` and its offset, each
-   peer's `has`, `passOver`, `wanted`, labels from `currentRoster`) and asks the
+   peer's `has`, `passOver`, `wanted`, devices from `currentRoster`) and asks the
    pure `statusOf` about each file it doesn't hold. Devices found but never
    connected come from `onPeerState(remote, "found" | "open" | "closed")`, a hook
    on `mesh.ts` passed through `startMeshSession`, so nothing parses status

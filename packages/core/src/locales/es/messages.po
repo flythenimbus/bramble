@@ -1286,6 +1286,10 @@ msgstr "Bóveda del escritorio"
 msgid "Details"
 msgstr "Detalles"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device name"
+msgstr "Nombre del dispositivo"
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
 msgstr "Código del dispositivo"
@@ -2797,8 +2801,8 @@ msgstr "Recargar"
 msgid "Remove"
 msgstr "Eliminar"
 
-#. placeholder {0}: d.label || "device"
 #. placeholder {0}: k.label
+#. placeholder {0}: nameOf(d) || "device"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Remove {0}"
@@ -2847,6 +2851,11 @@ msgstr "Etiqueta {removed} eliminada. {0} etiquetas."
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Removing…"
 msgstr "Quitando…"
+
+#. placeholder {0}: nameOf(d) || "device"
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Rename {0}"
+msgstr "Renombrar {0}"
 
 #. placeholder {0}: formatDateTimeExact(change.changedAt)
 #: packages/core/src/app/entry-modes/login.tsx

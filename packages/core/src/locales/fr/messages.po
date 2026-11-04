@@ -1286,6 +1286,10 @@ msgstr "Coffre du bureau"
 msgid "Details"
 msgstr "Détails"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device name"
+msgstr "Nom de l’appareil"
+
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Device passcode"
 msgstr "Code d’accès de l’appareil"
@@ -2797,8 +2801,8 @@ msgstr "Recharger"
 msgid "Remove"
 msgstr "Supprimer"
 
-#. placeholder {0}: d.label || "device"
 #. placeholder {0}: k.label
+#. placeholder {0}: nameOf(d) || "device"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Remove {0}"
@@ -2847,6 +2851,11 @@ msgstr "Tag supprimé : {removed}. {0} tags."
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
 msgid "Removing…"
 msgstr "Retrait…"
+
+#. placeholder {0}: nameOf(d) || "device"
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Rename {0}"
+msgstr "Renommer {0}"
 
 #. placeholder {0}: formatDateTimeExact(change.changedAt)
 #: packages/core/src/app/entry-modes/login.tsx

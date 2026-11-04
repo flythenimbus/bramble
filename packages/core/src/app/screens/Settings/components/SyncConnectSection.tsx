@@ -1,6 +1,6 @@
 import { i18n } from "@lingui/core";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import { Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
+import { Pencil, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
@@ -23,6 +23,7 @@ import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
+import { useDeviceNames } from "../../../hooks/useDeviceNames";
 import { Row, Section } from "./primitives";
 
 const inputClass =
@@ -54,6 +55,41 @@ const relativeTime = (ms: number): string => {
 	if (abs < 86_400) return rtf.format(Math.round(sec / 3600), "hour");
 	return rtf.format(Math.round(sec / 86_400), "day");
 };
+
+/** A device's name, edited in place. Enter or leaving the field saves; Escape cancels (null). */
+function DeviceNameField({
+	initial,
+	onDone,
+}: {
+	initial: string;
+	onDone: (name: string | null) => void;
+}) {
+	const { t } = useLingui();
+	const [value, setValue] = useState(initial);
+	// Closing the field can blur it, and that blur must not save what Escape threw away.
+	const done = useRef(false);
+	const finish = (name: string | null) => {
+		if (done.current) return;
+		done.current = true;
+		onDone(name);
+	};
+	return (
+		<TextField
+			size="sm"
+			label={t`Device name`}
+			value={value}
+			maxLength={64}
+			autoFocus
+			autoComplete="off"
+			onChange={(e) => setValue(e.target.value)}
+			onKeyDown={(e) => {
+				if (e.key === "Enter") finish(value);
+				if (e.key === "Escape") finish(null);
+			}}
+			onBlur={() => finish(value)}
+		/>
+	);
+}
 
 /**
  * Device sync panel. State-aware: before you're in a group it offers "add a device"
@@ -88,6 +124,9 @@ export function SyncConnectSection() {
 	const [attemptNote, setAttemptNote] = useState<string | null>(null);
 	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 	const [removingId, setRemovingId] = useState<string | null>(null);
+	// Names are synced settings, so any device can name any device. See useDeviceNames.
+	const { nameOf, rename, canRename } = useDeviceNames();
+	const [renamingId, setRenamingId] = useState<string | null>(null);
 	// Master-password gate before adding a device: the re-entered password admission-signs the new
 	// device (Item A). Open only for a password vault; a security-key-only vault skips it (no password
 	// to derive an admission key from, so the joiner is enrolled unsigned). See docs/p2p-sync-revocation-hardening.md.
@@ -324,6 +363,13 @@ export function SyncConnectSection() {
 			note(`error: ${(e as Error).message}`);
 		}
 	};
+	const renameDevice = async (id: string, name: string) => {
+		try {
+			await rename(id, name);
+		} catch (e) {
+			note(`error: ${(e as Error).message}`);
+		}
+	};
 	const disconnect = () =>
 		run("disconnecting…", async () => {
 			setConfirmDisconnect(false);
@@ -400,20 +446,41 @@ export function SyncConnectSection() {
 					<div className="rounded-lg border border-border divide-y divide-border/60">
 						{sortedDevices.map((d: RosterEntry) => (
 							<div key={d.publicKey} className="flex items-center justify-between gap-2 px-3 py-2">
-								<div className="min-w-0">
-									<div className="text-sm truncate flex items-center gap-2">
-										{d.label || t`Unnamed device`}
-										{d.publicKey === myPub && (
-											<span className="text-[10px] uppercase tracking-wide text-primary/80 border border-primary/40 rounded px-1 py-px">
-												<Trans>This device</Trans>
-											</span>
-										)}
-										{!d.sigKey && (
-											<span className="text-[10px] uppercase tracking-wide text-amber-600 border border-amber-500/40 rounded px-1 py-px dark:text-amber-500">
-												<Trans>Unsigned</Trans>
-											</span>
-										)}
-									</div>
+								<div className="min-w-0 flex-1">
+									{renamingId === d.id ? (
+										<DeviceNameField
+											initial={nameOf(d)}
+											onDone={(name) => {
+												setRenamingId(null);
+												if (name !== null && name !== nameOf(d)) void renameDevice(d.id, name);
+											}}
+										/>
+									) : (
+										<div className="text-sm flex items-center gap-2">
+											<span className="truncate">{nameOf(d) || t`Unnamed device`}</span>
+											{canRename && (
+												<Button
+													variant="link"
+													size="none"
+													onClick={() => setRenamingId(d.id)}
+													aria-label={t`Rename ${nameOf(d) || "device"}`}
+													className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+												>
+													<Pencil className="w-3 h-3" />
+												</Button>
+											)}
+											{d.publicKey === myPub && (
+												<span className="shrink-0 text-[10px] uppercase tracking-wide text-primary/80 border border-primary/40 rounded px-1 py-px">
+													<Trans>This device</Trans>
+												</span>
+											)}
+											{!d.sigKey && (
+												<span className="shrink-0 text-[10px] uppercase tracking-wide text-amber-600 border border-amber-500/40 rounded px-1 py-px dark:text-amber-500">
+													<Trans>Unsigned</Trans>
+												</span>
+											)}
+										</div>
+									)}
 									<div className="text-xs text-muted-foreground font-mono">
 										<Trans>
 											{fingerprint(d.publicKey)} · added {addedOn(d.addedAt)}
@@ -432,7 +499,7 @@ export function SyncConnectSection() {
 												variant="link"
 												size="none"
 												onClick={arm}
-												aria-label={t`Remove ${d.label || "device"}`}
+												aria-label={t`Remove ${nameOf(d) || "device"}`}
 												className="shrink-0 p-1 hover:text-red-500 transition-colors"
 											>
 												<Trash2 className="w-4 h-4" />

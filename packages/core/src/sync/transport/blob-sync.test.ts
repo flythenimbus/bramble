@@ -154,6 +154,7 @@ describe("blob sync", () => {
 
 describe("statusOf", () => {
 	const H = "a".repeat(64);
+	const LAPTOP = { id: "node-laptop", label: "Laptop" };
 	const base: StatusSnapshot = {
 		now: 1000,
 		active: null,
@@ -161,7 +162,7 @@ describe("statusOf", () => {
 		passOver: new Map(),
 		unreachable: false,
 		linkOnly: false,
-		label: (pub) => (pub === "aaaa" ? "Laptop" : null),
+		device: (pub) => (pub === "aaaa" ? LAPTOP : null),
 	};
 	const holding = { pub: "aaaa", has: new Set([H]) };
 	const without = { pub: "aaaa", has: new Set<string>() };
@@ -170,7 +171,7 @@ describe("statusOf", () => {
 		const active = { hash: H, from: "aaaa", received: 40, size: 100 };
 		expect(statusOf(H, { ...base, active, peers: [holding] })).toEqual({
 			state: "downloading",
-			from: "Laptop",
+			from: LAPTOP,
 			received: 40,
 			size: 100,
 		});
@@ -180,7 +181,7 @@ describe("statusOf", () => {
 		const active = { hash: "b".repeat(64), from: "aaaa", received: 0, size: 1 };
 		expect(statusOf(H, { ...base, active, peers: [holding] })).toEqual({
 			state: "queued",
-			from: "Laptop",
+			from: LAPTOP,
 		});
 	});
 
@@ -188,7 +189,7 @@ describe("statusOf", () => {
 		const passOver = new Map([[`aaaa:${H}`, 5000]]);
 		expect(statusOf(H, { ...base, peers: [holding], passOver })).toEqual({
 			state: "retrying",
-			from: "Laptop",
+			from: LAPTOP,
 		});
 	});
 

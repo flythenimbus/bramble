@@ -14,6 +14,7 @@ import {
 import { Button } from "../components/ui/button";
 import { InlineConfirm } from "../components/ui/inline-confirm";
 import { useCanAddFiles } from "../hooks/useCanAddFiles";
+import { useDeviceNames } from "../hooks/useDeviceNames";
 import { usePopOut } from "../hooks/usePopOut";
 
 /**
@@ -108,10 +109,11 @@ function useArrivals(records: FileRecord[]): {
 
 /** The line under a file that isn't here yet: why, as far as this device's session can tell. */
 function ArrivalLine({ status }: { status: FileTransferStatus | undefined }) {
+	const { nameOf } = useDeviceNames();
 	switch (status?.state) {
 		case "downloading": {
 			const percent = Math.min(99, Math.floor((status.received / Math.max(status.size, 1)) * 100));
-			const from = status.from;
+			const from = status.from && nameOf(status.from);
 			return from ? (
 				<Trans>
 					Downloading from {from}, {percent}%
@@ -121,7 +123,7 @@ function ArrivalLine({ status }: { status: FileTransferStatus | undefined }) {
 			);
 		}
 		case "queued": {
-			const from = status.from;
+			const from = status.from && nameOf(status.from);
 			return from ? (
 				<Trans>{from} has it. Coming next.</Trans>
 			) : (
@@ -129,7 +131,7 @@ function ArrivalLine({ status }: { status: FileTransferStatus | undefined }) {
 			);
 		}
 		case "retrying": {
-			const from = status.from;
+			const from = status.from && nameOf(status.from);
 			return from ? (
 				<Trans>{from} has it. Trying again shortly.</Trans>
 			) : (
