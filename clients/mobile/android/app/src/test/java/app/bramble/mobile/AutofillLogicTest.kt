@@ -55,6 +55,57 @@ class AutofillLogicTest {
         assertEquals(emptyList<String>(), searchTokens("   "))
     }
 
+    // --- picker rows ---
+
+    private fun describe(rows: List<PickerRow>) = rows.map {
+        when (it) {
+            is PickerRow.Section -> "#${it.kind}"
+            is PickerRow.Login -> it.login.name
+            is PickerRow.Empty -> "!${it.kind}"
+        }
+    }
+
+    private val github = login("GitHub", "me", "github.com")
+    private val gitlab = login("GitLab", "me", "gitlab.com")
+    private val netflix = login("Netflix", "me", "netflix.com")
+    private val vault = listOf(github, gitlab, netflix)
+
+    @Test
+    fun `page matches come first, then every other login once`() {
+        assertEquals(
+            listOf("#MATCHES", "GitHub", "#OTHER_LOGINS", "GitLab", "Netflix"),
+            describe(pickerRows(vault, listOf(github), showAll = false, hasLabel = true, tokens = emptyList())),
+        )
+    }
+
+    @Test
+    fun `no page match or show-all lists the whole vault under one heading`() {
+        assertEquals(
+            listOf("#NO_MATCHES", "GitHub", "GitLab", "Netflix"),
+            describe(pickerRows(vault, emptyList(), showAll = false, hasLabel = true, tokens = emptyList())),
+        )
+        assertEquals(
+            listOf("#ALL_LOGINS", "GitHub", "GitLab", "Netflix"),
+            describe(pickerRows(vault, listOf(github), showAll = true, hasLabel = true, tokens = emptyList())),
+        )
+    }
+
+    @Test
+    fun `a search is one flat list over the whole vault`() {
+        assertEquals(
+            listOf("GitHub", "GitLab"),
+            describe(pickerRows(vault, listOf(netflix), showAll = false, hasLabel = true, tokens = searchTokens("git"))),
+        )
+        assertEquals(
+            listOf("!NO_RESULTS"),
+            describe(pickerRows(vault, emptyList(), showAll = false, hasLabel = false, tokens = searchTokens("zzz"))),
+        )
+        assertEquals(
+            listOf("!NO_LOGINS"),
+            describe(pickerRows(emptyList(), emptyList(), showAll = false, hasLabel = false, tokens = emptyList())),
+        )
+    }
+
     // --- app-URI projection + native-app matching ("fill and save") ---
 
     @Test

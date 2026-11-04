@@ -160,14 +160,13 @@ private enum Theme {
 	static let destructive = Color(rgb: 0xF8_71_71)
 }
 
-private func brambleGlyphImage() -> UIImage? {
-	Data(base64Encoded: brambleGlyphBase64).flatMap { UIImage(data: $0) }
-}
+// Decoded once: the header redraws on every keystroke.
+private let brambleGlyphImage: UIImage? = Data(base64Encoded: brambleGlyphBase64).flatMap { UIImage(data: $0) }
 
 private struct Glyph: View {
 	let size: CGFloat
 	var body: some View {
-		if let img = brambleGlyphImage() {
+		if let img = brambleGlyphImage {
 			Image(uiImage: img).renderingMode(.template).resizable().scaledToFit()
 				.frame(width: size, height: size).foregroundColor(Theme.foreground)
 		} else {
@@ -210,11 +209,37 @@ private struct CredentialListView: View {
 	let onCancel: () -> Void
 	@State private var showAll = false
 	@State private var query = ""
+	// Search text per login, lowercased once here instead of on every keystroke.
+	private let haystacks: [String]
 
-	// Everything that isn't already a domain match (shown under "Show all items").
-	private var others: [Cred] {
-		let ids = Set(matches.map { $0.recordId })
-		return all.filter { !ids.contains($0.recordId) }
+	init(
+		matches: [Cred], all: [Cred], requestedHost: String?, onSelect: @escaping (Cred) -> Void,
+		onCancel: @escaping () -> Void
+	) {
+		self.matches = matches
+		self.all = all
+		self.requestedHost = requestedHost
+		self.onSelect = onSelect
+		self.onCancel = onCancel
+		haystacks = all.map { "\($0.name) \($0.username) \($0.services.joined(separator: " "))".lowercased() }
+		// iOS 15's List is a UITableView with an opaque background; iOS 16+ uses scrollContentBackground.
+		if #unavailable(iOS 16.0) { UITableView.appearance().backgroundColor = .clear }
+	}
+
+	// The list as flat rows, so `List` builds only what is on screen. Building every row at once
+	// got the extension killed at its memory cap (220 MB) on a vault of ~1,800 logins.
+	private enum Item: Identifiable {
+		case label(String)
+		case login(Cred)
+		case showAll(Int)
+
+		var id: String {
+			switch self {
+			case .label(let text): return "label:\(text)"
+			case .login(let cred): return "login:\(cred.recordId)"
+			case .showAll: return "showAll"
+			}
+		}
 	}
 
 	// A search collapses the sections: the point of typing is that the thing you want is not
@@ -223,14 +248,26 @@ private struct CredentialListView: View {
 	// Android's) rather than testing the raw string: "acme staging" found nothing, because no
 	// one field contains that string. The haystack is joined, not searched per field, so the
 	// tokens may land in different ones - which is what makes a name plus a domain work.
-	private var found: [Cred] {
+	private var items: [Item] {
 		let tokens = query.lowercased().split(whereSeparator: { $0.isWhitespace })
-		guard !tokens.isEmpty else { return [] }
-		return all.filter { cred in
-			let haystack =
-				"\(cred.name) \(cred.username) \(cred.services.joined(separator: " "))".lowercased()
-			return tokens.allSatisfy { haystack.contains($0) }
+		if !tokens.isEmpty {
+			let found = zip(all, haystacks).filter { _, hay in tokens.allSatisfy { hay.contains($0) } }.map(\.0)
+			if found.isEmpty { return [.label(loc("No logins matching \(query)"))] }
+			return [.label(loc("Results (\(found.count))"))] + found.map(Item.login)
 		}
+		if matches.isEmpty {
+			// No domain match for this page: show the whole vault.
+			let title = requestedHost.map { loc("No matches for \($0)") } ?? loc("Items (\(all.count))")
+			return [.label(title)] + all.map(Item.login)
+		}
+		// Filter to the page's logins; the rest are one tap away.
+		var rows = [Item.label(requestedHost.map { loc("For \($0)") } ?? loc("Matches"))] + matches.map(Item.login)
+		let matched = Set(matches.map(\.recordId))
+		let others = all.filter { !matched.contains($0.recordId) }
+		if !others.isEmpty {
+			rows += showAll ? [.label(loc("All items"))] + others.map(Item.login) : [.showAll(others.count)]
+		}
+		return rows
 	}
 
 	var body: some View {
@@ -253,47 +290,41 @@ private struct CredentialListView: View {
 				Spacer()
 			} else {
 				searchField
-				ScrollView {
-					VStack(alignment: .leading, spacing: 10) {
-						if !query.split(whereSeparator: { $0.isWhitespace }).isEmpty {
-							if found.isEmpty {
-								sectionLabel(loc("No logins matching \(query)"))
-							} else {
-								sectionLabel(loc("Results (\(found.count))"))
-								ForEach(found) { row($0) }
-							}
-						} else if matches.isEmpty {
-							// No domain match for this page: show the whole vault.
-							sectionLabel(requestedHost.map { loc("No matches for \($0)") } ?? loc("Items (\(all.count))"))
-							ForEach(all) { row($0) }
-						} else {
-							// Filter to the page's logins; the rest are one tap away.
-							sectionLabel(requestedHost.map { loc("For \($0)") } ?? loc("Matches"))
-							ForEach(matches) { row($0) }
-							if !others.isEmpty {
-								if showAll {
-									sectionLabel(loc("All items"))
-									ForEach(others) { row($0) }
-								} else {
-									Button { showAll = true } label: {
-										Text("Show all items (\(others.count) more)")
-											.font(.system(size: 14, weight: .medium))
-											.foregroundColor(Theme.muted)
-											.frame(maxWidth: .infinity, alignment: .leading)
-											.padding(.vertical, 10)
-									}
-									.buttonStyle(.plain)
-								}
-							}
-						}
+				List {
+					ForEach(items) { item in
+						itemView(item)
+							.listRowInsets(EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+							.listRowSeparator(.hidden)
+							.listRowBackground(Theme.background)
 					}
-					.padding(.horizontal, 20)
-					.padding(.bottom, 24)
 				}
+				.listStyle(.plain)
+				.modifier(ClearListBackground())
+				.environment(\.defaultMinListRowHeight, 0)
+				.safeAreaInset(edge: .bottom) { Color.clear.frame(height: 14) }
 			}
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Theme.background.ignoresSafeArea())
+	}
+
+	@ViewBuilder
+	private func itemView(_ item: Item) -> some View {
+		switch item {
+		case .label(let text):
+			sectionLabel(text)
+		case .login(let cred):
+			Button { onSelect(cred) } label: { RowView(cred: cred) }.buttonStyle(.plain)
+		case .showAll(let count):
+			Button { showAll = true } label: {
+				Text("Show all items (\(count) more)")
+					.font(.system(size: 14, weight: .medium))
+					.foregroundColor(Theme.muted)
+					.frame(maxWidth: .infinity, alignment: .leading)
+					.padding(.vertical, 5)
+			}
+			.buttonStyle(.plain)
+		}
 	}
 
 	// Styled to match the master-password field on the unlock screen rather than using
@@ -325,10 +356,13 @@ private struct CredentialListView: View {
 	private func sectionLabel(_ text: String) -> some View {
 		Text(text)
 			.font(.system(size: 13, weight: .medium)).foregroundColor(Theme.muted).padding(.top, 16)
+			.frame(maxWidth: .infinity, alignment: .leading)
 	}
+}
 
-	private func row(_ cred: Cred) -> some View {
-		Button { onSelect(cred) } label: { RowView(cred: cred) }.buttonStyle(.plain)
+private struct ClearListBackground: ViewModifier {
+	func body(content: Content) -> some View {
+		if #available(iOS 16.0, *) { content.scrollContentBackground(.hidden) } else { content }
 	}
 }
 

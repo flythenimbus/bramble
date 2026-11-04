@@ -16,8 +16,9 @@ import android.view.autofill.AutofillId
 import android.view.autofill.AutofillManager
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.BaseAdapter
 import android.widget.LinearLayout
-import android.widget.ScrollView
+import android.widget.ListView
 import android.widget.TextView
 import androidx.annotation.RequiresApi
 
@@ -133,61 +134,85 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
         searchWrap.addView(search)
         outer.addView(searchWrap)
 
-        val listCol = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        // A recycling list: building a row per login at once (thousands, rebuilt per keystroke)
+        // is what got the iOS peer killed at its memory cap.
+        val adapter = RowsAdapter()
+        val list = ListView(this).apply {
+            divider = null
+            dividerHeight = 0
+            selector = ColorDrawable(Color.TRANSPARENT)
             setPadding(dp(20), 0, dp(20), dp(24))
+            clipToPadding = false
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            this.adapter = adapter
         }
-        val scroll = ScrollView(this).apply { addView(listCol) }
-        outer.addView(scroll)
+        outer.addView(list)
 
-        renderRows(listCol, query)
+        adapter.show(query)
         search.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) = renderRows(listCol, s?.toString() ?: "")
+            override fun afterTextChanged(s: Editable?) {
+                adapter.show(s?.toString() ?: "")
+                list.setSelection(0)
+            }
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
         })
         setContent(outer)
     }
 
-    private fun renderRows(container: LinearLayout, query: String) {
-        container.removeAllViews()
-        val tokens = searchTokens(query)
-        if (logins.isEmpty()) {
-            container.addView(emptyLabel(getString(R.string.af_empty_no_logins)))
-            return
+    private inner class RowsAdapter : BaseAdapter() {
+        private var rows: List<PickerRow> = emptyList()
+        private var query = ""
+
+        fun show(query: String) {
+            this.query = query
+            rows = pickerRows(logins, matches, showAll, label.isNotEmpty(), searchTokens(query))
+            notifyDataSetChanged()
         }
-        if (tokens.isNotEmpty()) {
-            val filtered = logins.filter { it.matchesQuery(tokens) }
-            if (filtered.isEmpty()) container.addView(emptyLabel(getString(R.string.af_empty_no_match, query)))
-            else filtered.forEach { container.addView(row(it)) }
-            return
+
+        override fun getCount() = rows.size
+        override fun getItem(position: Int) = rows[position]
+        override fun getItemId(position: Int) = position.toLong()
+        override fun getViewTypeCount() = 3
+        override fun getItemViewType(position: Int) = when (rows[position]) {
+            is PickerRow.Section -> 0
+            is PickerRow.Login -> 1
+            is PickerRow.Empty -> 2
         }
-        if (!showAll && matches.isNotEmpty()) {
-            container.addView(sectionLabel(if (label.isNotEmpty()) getString(R.string.af_section_for, label) else getString(R.string.af_section_matches)))
-            matches.forEach { container.addView(row(it)) }
-            val others = logins.filter { o -> matches.none { it.id == o.id } }
-            if (others.isNotEmpty()) {
-                container.addView(sectionLabel(getString(R.string.af_section_other_logins)))
-                others.forEach { container.addView(row(it)) }
+        // Rows take their own taps; the list itself has nothing to select.
+        override fun areAllItemsEnabled() = false
+        override fun isEnabled(position: Int) = false
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+            when (val r = rows[position]) {
+                is PickerRow.Section -> ((convertView as? TextView) ?: sectionLabel("")).apply { text = sectionText(r.kind) }
+                is PickerRow.Empty -> ((convertView as? TextView) ?: emptyLabel("")).apply {
+                    text = if (r.kind == EmptyKind.NO_LOGINS) getString(R.string.af_empty_no_logins)
+                    else getString(R.string.af_empty_no_match, query)
+                }
+                is PickerRow.Login -> (convertView ?: row()).also { bindRow(it, r.login) }
             }
-        } else {
-            val title = if (matches.isEmpty() && label.isNotEmpty()) getString(R.string.af_section_no_matches, label) else getString(R.string.af_section_logins_count, logins.size)
-            container.addView(sectionLabel(title))
-            logins.forEach { container.addView(row(it)) }
-        }
     }
 
-    private fun row(login: AutofillLogin): View {
+    private fun sectionText(kind: SectionKind): String = when (kind) {
+        SectionKind.MATCHES ->
+            if (label.isNotEmpty()) getString(R.string.af_section_for, label) else getString(R.string.af_section_matches)
+        SectionKind.OTHER_LOGINS -> getString(R.string.af_section_other_logins)
+        SectionKind.NO_MATCHES -> getString(R.string.af_section_no_matches, label)
+        SectionKind.ALL_LOGINS -> getString(R.string.af_section_logins_count, logins.size)
+    }
+
+    private class RowViews(val row: View, val chip: TextView, val title: TextView, val username: TextView)
+
+    private fun row(): View {
         val rowView = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = roundedFill(color(R.color.bramble_af_card), color(R.color.bramble_af_border))
             setPadding(dp(12), dp(12), dp(12), dp(12))
             isClickable = true
-            setOnClickListener { complete(login) }
         }
         val chip = TextView(this).apply {
-            text = initials(login.displayTitle(this@AutofillUnlockActivity))
             setTextColor(color(R.color.bramble_af_foreground))
             textSize = 14f
             gravity = Gravity.CENTER
@@ -197,23 +222,31 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
         }
         rowView.addView(chip)
         val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        texts.addView(TextView(this).apply {
-            text = login.displayTitle(this@AutofillUnlockActivity)
+        val title = TextView(this).apply {
             setTextColor(color(R.color.bramble_af_foreground))
             textSize = 16f
             setTypeface(typeface, Typeface.BOLD)
             maxLines = 1
-        })
-        if (login.username.isNotEmpty()) {
-            texts.addView(TextView(this).apply {
-                text = login.username
-                setTextColor(color(R.color.bramble_af_muted))
-                textSize = 13f
-                maxLines = 1
-            })
         }
+        val username = TextView(this).apply {
+            setTextColor(color(R.color.bramble_af_muted))
+            textSize = 13f
+            maxLines = 1
+        }
+        texts.addView(title)
+        texts.addView(username)
         rowView.addView(texts)
-        return wrapRow(rowView)
+        return wrapRow(rowView).apply { tag = RowViews(rowView, chip, title, username) }
+    }
+
+    private fun bindRow(view: View, login: AutofillLogin) {
+        val v = view.tag as RowViews
+        val title = login.displayTitle(this)
+        v.chip.text = initials(title)
+        v.title.text = title
+        v.username.text = login.username
+        v.username.visibility = if (login.username.isNotEmpty()) View.VISIBLE else View.GONE
+        v.row.setOnClickListener { complete(login) }
     }
 
     private fun complete(login: AutofillLogin) {
@@ -308,6 +341,49 @@ class AutofillUnlockActivity : BrambleUnlockActivity() {
         setPadding(0, dp(5), 0, dp(5))
         addView(view)
     }
+}
+
+/** One row of the autofill picker. Sections are kinds, not strings, so this stays JVM-testable. */
+internal sealed class PickerRow {
+    data class Section(val kind: SectionKind) : PickerRow()
+    class Login(val login: AutofillLogin) : PickerRow()
+    data class Empty(val kind: EmptyKind) : PickerRow()
+}
+
+internal enum class SectionKind { MATCHES, OTHER_LOGINS, NO_MATCHES, ALL_LOGINS }
+
+internal enum class EmptyKind { NO_LOGINS, NO_RESULTS }
+
+/**
+ * The picker's rows: a search is one flat list over the whole vault; otherwise the page's
+ * matches first and every other login after them, or the whole vault when nothing matches
+ * (or the caller asked for all of it).
+ */
+internal fun pickerRows(
+    logins: List<AutofillLogin>,
+    matches: List<AutofillLogin>,
+    showAll: Boolean,
+    hasLabel: Boolean,
+    tokens: List<String>,
+): List<PickerRow> {
+    if (logins.isEmpty()) return listOf(PickerRow.Empty(EmptyKind.NO_LOGINS))
+    if (tokens.isNotEmpty()) {
+        val found = logins.filter { it.matchesQuery(tokens) }
+        return if (found.isEmpty()) listOf(PickerRow.Empty(EmptyKind.NO_RESULTS)) else found.map { PickerRow.Login(it) }
+    }
+    if (!showAll && matches.isNotEmpty()) {
+        val matched = matches.mapTo(HashSet()) { it.id }
+        val others = logins.filter { it.id !in matched }
+        val rows = mutableListOf<PickerRow>(PickerRow.Section(SectionKind.MATCHES))
+        matches.mapTo(rows) { PickerRow.Login(it) }
+        if (others.isNotEmpty()) {
+            rows.add(PickerRow.Section(SectionKind.OTHER_LOGINS))
+            others.mapTo(rows) { PickerRow.Login(it) }
+        }
+        return rows
+    }
+    val title = if (matches.isEmpty() && hasLabel) SectionKind.NO_MATCHES else SectionKind.ALL_LOGINS
+    return listOf<PickerRow>(PickerRow.Section(title)) + logins.map { PickerRow.Login(it) }
 }
 
 /** A to Z by title, ignoring case and accents (#112: it was vault order, newest last). */
