@@ -205,18 +205,61 @@ impl Answer {
     }
 }
 
-/// The page the browser last reported, for the panel to show as a fill target.
-static ACTIVE_TAB: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+/// One browser's reported page: which connection reported it, the page, and report order.
+struct Reported {
+    link: u64,
+    hostname: String,
+    seq: u64,
+}
 
-fn active_tab() -> &'static Mutex<Option<String>> {
-    ACTIVE_TAB.get_or_init(|| Mutex::new(None))
+/// Each browser's last reported page, by peer id. A browser only ever changes its own entry.
+static REPORTED: OnceLock<Mutex<HashMap<String, Reported>>> = OnceLock::new();
+static NEXT_REPORT: AtomicU64 = AtomicU64::new(1);
+
+fn reported() -> &'static Mutex<HashMap<String, Reported>> {
+    REPORTED.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn record_page(peer_id: &str, link: u64, hostname: String) {
+    let Ok(mut map) = reported().lock() else {
+        return;
+    };
+    if hostname.is_empty() {
+        map.remove(peer_id);
+    } else {
+        let seq = NEXT_REPORT.fetch_add(1, Ordering::Relaxed);
+        map.insert(
+            peer_id.to_string(),
+            Reported {
+                link,
+                hostname,
+                seq,
+            },
+        );
+    }
+}
+
+fn forget_page(peer_id: &str, link: u64) {
+    if let Ok(mut map) = reported().lock() {
+        if map.get(peer_id).is_some_and(|r| r.link == link) {
+            map.remove(peer_id);
+        }
+    }
+}
+
+/// The most recent reporter and its page: the browser a panel fill is for.
+fn reported_page() -> Option<(String, String)> {
+    let map = reported().lock().ok()?;
+    map.iter()
+        .max_by_key(|(_, r)| r.seq)
+        .map(|(peer, r)| (peer.clone(), r.hostname.clone()))
 }
 
 /// Where a fill from the panel would land, as the browser last reported it. Empty when no
 /// browser is connected or it is not on a page worth naming.
 #[tauri::command]
 pub fn spotlight_active_tab() -> Option<String> {
-    active_tab().lock().ok().and_then(|t| t.clone())
+    reported_page().map(|(_, host)| host)
 }
 
 /// Fill an entry on the page in front of the user, through a browser that need not be unlocked.
@@ -238,7 +281,7 @@ pub fn spotlight_request_fill(id: String) -> Result<(), String> {
     let entry = index_store::secret_for(&id).ok_or("unknown entry")?;
     // Only where the entry belongs. A login with no hostnames at all is not pinned to anywhere,
     // so it is left to the user's choice rather than refused.
-    if let Some(page) = active_tab().lock().ok().and_then(|t| t.clone()) {
+    if let Some((_, page)) = reported_page() {
         if !entry.hostnames.is_empty()
             && !entry
                 .hostnames
@@ -537,6 +580,7 @@ fn serve_session(session_id: u32, stream: &mut ipc::Stream) -> Result<(), String
             boxes.remove(&peer_id);
         }
     }
+    forget_page(&peer_id, link);
     drop(tx);
     let _ = pump.join();
     emit(
@@ -567,13 +611,7 @@ fn read_loop(
         // all. Everything else is request/response and gets exactly one answer.
         // Reported, not answered: the browser tells us where it is whenever that changes.
         if let Ok(Request::ActiveTab { hostname }) = serde_json::from_str::<Request>(&plaintext) {
-            if let Ok(mut slot) = active_tab().lock() {
-                *slot = if hostname.is_empty() {
-                    None
-                } else {
-                    Some(hostname)
-                };
-            }
+            record_page(peer_id, link, hostname);
             continue;
         }
         if let Ok(Request::Sync { frame }) = serde_json::from_str::<Request>(&plaintext) {
@@ -1416,5 +1454,55 @@ mod tests {
         // What a crash leaves behind.
         std::fs::write(ipc::unix_endpoint(dir.path()), b"stale").unwrap();
         listen(dir.path()).expect("should replace the stale socket");
+    }
+
+    /// Wait until the most recent reporter is `want` (peer id and page), or nobody reported.
+    fn await_reported(want: Option<(&str, &str)>) {
+        for _ in 0..200 {
+            let now = reported_page();
+            if now.as_ref().map(|(p, h)| (p.as_str(), h.as_str())) == want {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!(
+            "reported page never became {want:?}, is {:?}",
+            reported_page()
+        );
+    }
+
+    #[test]
+    fn each_browser_reports_its_own_page() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        let mut a = Linked::open(&dir);
+        let mut b = Linked::open(&dir);
+        a.send(serde_json::json!({ "op": "activeTab", "hostname": "a.com" }));
+        await_reported(Some((&a.public_key, "a.com")));
+        b.send(serde_json::json!({ "op": "activeTab", "hostname": "b.com" }));
+        await_reported(Some((&b.public_key, "b.com")));
+
+        let (b_session, a_key) = (b.session_id, a.public_key.clone());
+        drop(b);
+        await_reported(Some((&a_key, "a.com")));
+        handshake::handshake_close(b_session);
+        handshake::handshake_close(a.session_id);
+    }
+
+    #[test]
+    fn an_empty_report_clears_only_that_browser() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        let mut a = Linked::open(&dir);
+        let mut b = Linked::open(&dir);
+        a.send(serde_json::json!({ "op": "activeTab", "hostname": "a.com" }));
+        await_reported(Some((&a.public_key, "a.com")));
+        b.send(serde_json::json!({ "op": "activeTab", "hostname": "b.com" }));
+        await_reported(Some((&b.public_key, "b.com")));
+
+        b.send(serde_json::json!({ "op": "activeTab", "hostname": "" }));
+        await_reported(Some((&a.public_key, "a.com")));
+        handshake::handshake_close(a.session_id);
+        handshake::handshake_close(b.session_id);
     }
 }
