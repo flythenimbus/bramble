@@ -93,7 +93,10 @@ vi.mock("../../sync/enrollment", async (importOriginal) => ({
 }));
 
 const platform = {
-	storage: { getMeta: async (k: string) => h.meta.get(k) },
+	storage: {
+		getMeta: async (k: string) => h.meta.get(k),
+		readQuarantine: async (id: string) => (h.meta.get(`quarantine:${id}`) as string) ?? null,
+	},
 	shell: {
 		onSyncEvent: (cb: (e: { kind: string; sas?: string; sasEmoji?: number[] }) => void) => {
 			h.syncEvent = cb;
@@ -283,6 +286,17 @@ describe("combining into the desktop's vault", () => {
 		h.importFails = false;
 		expect(result.current.invite).toBeNull();
 		expect(result.current.error).toMatch(/didn't copy/i);
+	});
+
+	it("says how many damaged entries stayed behind in the old vault", async () => {
+		twoFullVaults();
+		h.meta.set("quarantine:v1", JSON.stringify([{ id: "q1" }, { id: "q2" }]));
+		const result = await linkedFrom("settings");
+		await act(async () => {
+			await result.current.accept("pw", { choice: "combine" });
+		});
+		h.meta.clear();
+		expect(result.current.combined?.quarantined).toBe(2);
 	});
 
 	it("keeps them separate when asked to, copying and setting aside nothing", async () => {

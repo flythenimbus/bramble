@@ -23,6 +23,11 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 					</Button>
 				</div>
 			)}
+			{combined.quarantined > 0 && (
+				<p className="text-xs text-muted-foreground">
+					<Trans>{combined.quarantined} damaged entries stayed in the old vault.</Trans>
+				</p>
+			)}
 			{uncarried > 0 && (
 				<p className="text-xs text-destructive">
 					<Trans>

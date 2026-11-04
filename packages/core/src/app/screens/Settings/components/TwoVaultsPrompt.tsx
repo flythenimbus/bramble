@@ -58,8 +58,7 @@ export function TwoVaultsPrompt({
 					</span>
 					<span className="block text-muted-foreground">
 						<Trans>
-							{browserName} is kept, locked, as "{browserName} (before linking)" until you delete
-							it.
+							{browserName} stays, as "{browserName} (before linking)", until you delete it.
 						</Trans>
 					</span>
 					<span className="block text-muted-foreground">

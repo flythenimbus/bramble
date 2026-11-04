@@ -324,8 +324,7 @@ export function DesktopLinkSection() {
 				<div className="space-y-3">
 					<p className="text-sm text-muted-foreground">
 						<Trans>
-							This version of the desktop app links with a code. In its Connect a browser screen,
-							choose to show a code, then enter it here.
+							This desktop app links with a code. Enter the one its Connect a browser screen shows.
 						</Trans>
 					</p>
 					<TextField
@@ -412,8 +411,8 @@ export function DesktopLinkSection() {
 									) : outcome === "combine" ? (
 										<Trans>
 											This browser's entries and files are copied into {desktopName}, and this
-											browser will unlock with its master password. {browserName} is kept, locked,
-											as "{browserName} (before linking)" until you delete it.
+											browser will unlock with its master password. {browserName} stays, as "
+											{browserName} (before linking)", until you delete it.
 										</Trans>
 									) : (
 										<Trans>

@@ -125,8 +125,7 @@ export function DesktopLinkCard({ from, onBack }: { from: LinkFrom; onBack: () =
 			<>
 				<p className="text-sm text-muted-foreground">
 					<Trans>
-						This version of the desktop app links with a code. In its Connect a browser screen,
-						choose to show a code, then enter it here.
+						This desktop app links with a code. Enter the one its Connect a browser screen shows.
 					</Trans>
 				</p>
 				<TextField

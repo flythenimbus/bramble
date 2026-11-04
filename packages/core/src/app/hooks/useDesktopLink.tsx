@@ -19,6 +19,21 @@ import { syncKeyFor } from "../../sync/sync-keys";
 import { collectCarry, placeCarry } from "../../vault/combine-into";
 import { isVaultEmpty, readVaultContents } from "../../vault/vault-empty";
 
+/** How many quarantine records a vault holds (see vault/quarantine.ts). */
+async function countQuarantined(
+	storage: { readQuarantine?(vaultId?: string): Promise<string | null> },
+	vaultId: string,
+): Promise<number> {
+	const raw = await storage.readQuarantine?.(vaultId).catch(() => null);
+	if (!raw) return 0;
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		return Array.isArray(parsed) ? parsed.length : 1;
+	} catch {
+		return 1;
+	}
+}
+
 export interface DesktopVaultSummary {
 	name: string;
 	empty: boolean;
@@ -36,7 +51,7 @@ export function useDesktopLink({
 	const { desktopLink, storage, shell, files: platformFiles } = usePlatform();
 	const { t } = useLingui();
 	const vaultActions = useVaultActions();
-	const { startJoin, importEntries } = vaultActions;
+	const { startJoin } = vaultActions;
 	const { entries, files } = useVault();
 	const registry = useVaultRegistry();
 	const { vaults, activeId } = registry;
@@ -67,6 +82,8 @@ export function useDesktopLink({
 	const [combined, setCombined] = useState<{
 		heldBack: { items: EntryData[]; attachments: PlacedAttachment[] };
 		uncarried: number;
+		/** Entries set aside as unreadable in the old vault: never carried, kept where they are. */
+		quarantined: number;
 	} | null>(null);
 
 	/** What linking does here, from what each side holds. */
@@ -245,7 +262,11 @@ export function useDesktopLink({
 						await now.actions.importEntries(placed.items, placed.attachments);
 					}
 					await now.registry.setAside(oldId);
-					setCombined({ heldBack: placed.heldBack, uncarried: carry.uncarried });
+					setCombined({
+						heldBack: placed.heldBack,
+						uncarried: carry.uncarried,
+						quarantined: await countQuarantined(storage, oldId),
+					});
 				}
 				// After the join, so the copies land in the vault that is now open.
 				if (opts?.carry?.length) await now.actions.importEntries(opts.carry);
@@ -277,6 +298,7 @@ export function useDesktopLink({
 			platformFiles,
 			startJoin,
 			vaultSwitchedFrom,
+			storage,
 			t,
 		],
 	);
