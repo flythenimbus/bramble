@@ -396,6 +396,7 @@ fn vault_summary_for(peer_id: &str) -> Option<VaultSummary> {
         .lock()
         .ok()?
         .as_ref()
+        .filter(|i| Instant::now() <= i.expires_at)
         .and_then(|i| i.bound.clone())?;
     if bound != peer_id {
         return None;
@@ -405,11 +406,16 @@ fn vault_summary_for(peer_id: &str) -> Option<VaultSummary> {
 
 /// Bind the armed invite to the browser that just paired in this dialog. The first pairing wins:
 /// a later one, even a second browser, cannot take it over.
-pub fn bind_invite(peer_id: &str) {
-    if let Ok(mut slot) = armed().lock() {
-        if let Some(invite) = slot.as_mut().filter(|i| i.bound.is_none()) {
+pub fn bind_invite(peer_id: &str) -> bool {
+    let Ok(mut slot) = armed().lock() else {
+        return false;
+    };
+    match slot.as_mut().filter(|i| i.bound.is_none()) {
+        Some(invite) => {
             invite.bound = Some(peer_id.to_string());
+            true
         }
+        None => false,
     }
 }
 
@@ -846,10 +852,11 @@ fn drive(
     stream: &mut ipc::Stream,
 ) -> Result<(), String> {
     loop {
-        // A link that stops partway closes the dialog's window: it reached the user's screen.
+        // A link that stops before its emoji are shown frees the window for the real browser:
+        // nothing reached the user's screen, and a stray probe must not close their dialog.
         let abandon = || {
             if handshake.link_label().is_some() {
-                pairing::cancel_link_window();
+                pairing::end_link_attempt();
             }
         };
         let frame = if handshake.link_label().is_some() {
@@ -884,11 +891,13 @@ fn drive(
             if handshake.is_pairing() {
                 let peer = handshake::handshake_remote_static(handshake.session_id)
                     .map_err(|e| format!("remote static: {e:?}"))?;
-                bind_invite(&peer);
-                emit(
-                    "link-paired",
-                    serde_json::json!({ "peerId": peer, "via": "code" }),
-                );
+                // Rust alone decides which browser the invite is for; the webview follows the event.
+                if bind_invite(&peer) {
+                    emit(
+                        "link-paired",
+                        serde_json::json!({ "peerId": peer, "via": "code" }),
+                    );
+                }
             }
             // Authenticated from here, so the same connection carries application traffic,
             // sealed under the session the handshake just established.
@@ -1183,11 +1192,12 @@ fn confirm_link(
         return Ok(());
     }
     pairing::finish_link(root, &peer, label)?;
-    bind_invite(&peer);
-    emit(
-        "link-paired",
-        serde_json::json!({ "peerId": peer, "via": "emoji" }),
-    );
+    if bind_invite(&peer) {
+        emit(
+            "link-paired",
+            serde_json::json!({ "peerId": peer, "via": "emoji" }),
+        );
+    }
     emit("link-pair-done", serde_json::json!({ "paired": true }));
     write_sealed(
         session_id,
@@ -2412,5 +2422,50 @@ mod tests {
         assert_eq!(link.recv()["ok"], false);
         assert!(link_pair_pending().is_none());
         handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn a_malformed_link_attempt_leaves_the_window_open() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_window_begin();
+        let mut probe = Client::connect(dir.path());
+        probe.send(serde_json::json!({ "kind": "link", "v": 1, "label": "probe" }));
+        probe.send(serde_json::json!({ "message": "bm90IGEgaGFuZHNoYWtl" }));
+        let _ = probe.recv();
+
+        // Nothing reached the user's screen, so the dialog still accepts the real browser.
+        let real = LinkClient::start(&dir).expect("window still open");
+        link_window_cancel();
+        handshake::handshake_close(real.session_id);
+    }
+
+    #[test]
+    fn only_the_first_pairing_binds_the_invite() {
+        let _g = pairing::test_lock();
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        assert!(bind_invite("first"));
+        assert!(!bind_invite("second"));
+        link_clear_sync_invite();
+        assert!(!bind_invite("third"));
+    }
+
+    #[test]
+    fn no_summary_after_the_invite_expires() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_set_vault_summary(Some(summary()));
+        link_arm_sync_invite("the-invite".into(), 1).unwrap();
+        let mut a = Linked::open(&dir);
+        bind_invite(&a.public_key);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        a.send(serde_json::json!({ "op": "vaultSummary" }));
+        assert_eq!(a.recv()["ok"], false);
+        link_clear_sync_invite();
+        link_set_vault_summary(None);
+        vault_crypto::lock();
+        handshake::handshake_close(a.session_id);
     }
 }

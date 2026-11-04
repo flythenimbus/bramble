@@ -132,6 +132,13 @@ pub fn begin_link_window() {
     });
 }
 
+/// A link attempt ended before reaching the user's screen: free the window for the next one.
+pub fn end_link_attempt() {
+    if let Some(window) = LINK_WINDOW.lock().unwrap().as_mut() {
+        window.in_flight = false;
+    }
+}
+
 /// Close the window: the dialog went away, a link failed, or one succeeded.
 pub fn cancel_link_window() {
     *LINK_WINDOW.lock().unwrap() = None;
