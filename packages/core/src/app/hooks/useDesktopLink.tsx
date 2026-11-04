@@ -230,9 +230,12 @@ export function useDesktopLink({
 	/** Copy the look-alikes the dedup held back, as import's "Import them anyway" does. */
 	const copyHeldBack = useCallback(async () => {
 		if (!combined?.heldBack.items.length) return;
-		await importEntries(combined.heldBack.items, combined.heldBack.attachments);
+		await latest.current.actions.importEntries(
+			combined.heldBack.items,
+			combined.heldBack.attachments,
+		);
 		setCombined({ ...combined, heldBack: { items: [], attachments: [] } });
-	}, [combined, importEntries]);
+	}, [combined]);
 
 	const dismissInvite = useCallback(() => {
 		setInvite(null);

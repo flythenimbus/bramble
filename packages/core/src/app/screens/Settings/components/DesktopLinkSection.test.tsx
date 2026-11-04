@@ -67,6 +67,8 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 			h.steps.push("join");
 			h.joinLabel = label;
 			if (h.joinFails) throw new Error("join failed");
+			// The desktop's vault is now the open one, as after a real join.
+			h.activeVault = "joined";
 		},
 		importEntries: async (items: unknown[]) => {
 			h.steps.push("import");
