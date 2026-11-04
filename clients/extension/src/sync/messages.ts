@@ -73,6 +73,8 @@ export const EnrollJoinMsgSchema = z.object({
 	inviterPub: z.string(),
 	ownEntry: RosterEntrySchema,
 	password: z.string().optional(),
+	/** The invite came from the desktop app over the link: join over the link's enroll room. */
+	viaLink: z.boolean().optional(),
 });
 
 /** offscreen -> background: a peer's entries payload (JSON) to merge locally. */

@@ -463,13 +463,23 @@ export interface VaultActions {
 	/** Start adding a device: returns a one-time pairing code and listens for the joiner. `password`
 	 * is the re-entered master password (Item A) that admission-signs the joiner; a vault without
 	 * one may not pair (MasterPasswordRequiredError). */
-	inviteDevice(relayUrl: string, iceUrl: string | undefined, password: string): Promise<string>;
+	inviteDevice(
+		relayUrl: string,
+		iceUrl: string | undefined,
+		password: string,
+		opts?: { viaLink?: boolean },
+	): Promise<string>;
 	/** Join an existing group from a pairing code; rebuilds this device's vault under the chosen unlock method. */
-	joinGroup(pairingCode: string, unlock: JoinUnlock): Promise<void>;
+	joinGroup(pairingCode: string, unlock: JoinUnlock, opts?: { viaLink?: boolean }): Promise<void>;
 	/** Setup-flow join: create a NEW vault from a pairing code (dedups to an existing vault if already
 	 * a member), then run the join in that vault's context and unlock into it. Resolves when the join
 	 * completes. Drives `joining` / `joinError`. See docs/multiple-vaults.md. */
-	startJoin(pairingCode: string, unlock: JoinUnlock, label?: string): Promise<void>;
+	startJoin(
+		pairingCode: string,
+		unlock: JoinUnlock,
+		label?: string,
+		opts?: { viaLink?: boolean },
+	): Promise<void>;
 	/** Revoke a device from the sync group (roster tombstone); propagates over ongoing sync. */
 	removeDevice(deviceId: string): Promise<void>;
 }
@@ -1964,6 +1974,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		code: string;
 		method: JoinUnlock;
 		targetId: string;
+		viaLink?: boolean;
 	} | null>(null);
 	const [joinError, setJoinError] = useState<string | null>(null);
 	const joinResolverRef = useRef<{ resolve: () => void; reject: (e: unknown) => void } | null>(
@@ -1979,7 +1990,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// can only ever fire for the newest attempt. Assigned before the first await, so a double tap
 	// rides the in-flight join instead. See docs/multiple-vaults.md.
 	const startJoin = useCallback(
-		(pairingCode: string, method: JoinUnlock, label?: string): Promise<void> => {
+		(
+			pairingCode: string,
+			method: JoinUnlock,
+			label?: string,
+			opts?: { viaLink?: boolean },
+		): Promise<void> => {
 			if (joinInFlightRef.current) return joinInFlightRef.current;
 			const run = (async () => {
 				setJoinError(null);
@@ -1998,7 +2014,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				await shell.setActiveVault?.(newId);
 				return new Promise<void>((resolve, reject) => {
 					joinResolverRef.current = { resolve, reject };
-					setPendingJoin({ code: pairingCode, method, targetId: newId });
+					setPendingJoin({ code: pairingCode, method, targetId: newId, viaLink: opts?.viaLink });
 				});
 			})();
 			joinInFlightRef.current = run;
@@ -2022,10 +2038,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		)
 			return;
 		joinRunningRef.current = true;
-		const { code, method } = pendingJoin;
+		const { code, method, viaLink } = pendingJoin;
 		void (async () => {
 			try {
-				await joinGroup(code, method); // writes + unlocks the new active vault
+				await joinGroup(code, method, { viaLink }); // writes + unlocks the new active vault
 				setHasVault(true);
 				setPendingJoin(null);
 				joinResolverRef.current?.resolve();

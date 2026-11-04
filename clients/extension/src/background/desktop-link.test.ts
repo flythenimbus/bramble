@@ -209,7 +209,7 @@ describe("the held sync link", () => {
 		await vi.waitFor(() => expect(frames).toEqual(["from-app"]));
 	});
 
-	it("routes a pushed frame with its room", async () => {
+	it("keeps the vault copy's frames away from sync", async () => {
 		const mod = await load();
 		const got: [string, string | undefined][] = [];
 		const opening = mod.openSyncLink((f, room) => got.push([f, room]));
@@ -220,12 +220,7 @@ describe("the held sync link", () => {
 		deliver({ sealed: `sealed:${JSON.stringify({ sync: "e", room: "enroll" })}` });
 		pushSync("s");
 
-		await vi.waitFor(() =>
-			expect(got).toEqual([
-				["e", "enroll"],
-				["s", undefined],
-			]),
-		);
+		await vi.waitFor(() => expect(got).toEqual([["s", undefined]]));
 	});
 
 	it("sends a sync frame tagged with its room", async () => {
@@ -241,6 +236,20 @@ describe("the held sync link", () => {
 			frame: "x",
 			room: "enroll",
 		});
+	});
+
+	it("routes an enroll frame even when sync is not running", async () => {
+		const mod = await load();
+		const got: string[] = [];
+		mod.setEnrollFrameSink((f) => got.push(f));
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		expect(await opening).toBe(true);
+
+		deliver({ sealed: `sealed:${JSON.stringify({ sync: "e", room: "enroll" })}` });
+
+		await vi.waitFor(() => expect(got).toEqual(["e"]));
 	});
 
 	it("does not answer a request with a frame the app pushed", async () => {

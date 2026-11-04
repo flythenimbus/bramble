@@ -19,10 +19,12 @@ import type {
 import { canonicalRosterEntry, RosterEntrySchema } from "@core/sync/roster";
 import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
+import { listen } from "@tauri-apps/api/event";
 import { desktopCrypto } from "../adapters/crypto";
 import { desktopSyncCrypto } from "../sync-crypto";
 import { emit, report } from "./bus";
 import { clearSyncIdentity, deviceKeypair, syncAdmissionSign } from "./keys";
+import { linkPeerSourceFor } from "./link-peers";
 import { addToLocalRoster, clearGroupState, stopRosterSync, syncTargetVaultId } from "./roster";
 
 /** The inviter's material for admitting a joiner: a re-entered password and who is admitting. */
@@ -76,6 +78,8 @@ async function admitJoiner(
 // ---- the enrollment approval ----
 
 let session: MeshSession | null = null;
+/** Stops listening for the browser a link invite was bound to. */
+let stopLinkPaired: (() => void) | null = null;
 
 /**
  * The approval the host is parked on. Held at module scope rather than in a component because
@@ -121,6 +125,9 @@ export async function startEnrollInvite(opts: {
 	recoverySlots?: WireRecoverySlot[];
 	/** Lets this process admit the joiner itself rather than relying on the window. See admitJoiner. */
 	admission?: Admission;
+	/** Delivered to a browser over the link: the copy runs on the link, only with the browser
+	 * that paired in this dialog, and needs no second check. Never set for a phone's invite. */
+	viaLink?: boolean;
 }): Promise<void> {
 	const { privateKey, publicKey } = await deviceKeypair();
 	// Pinned now, for the same reason the VEK is: an invite stays open as long as the code is on
@@ -137,16 +144,29 @@ export async function startEnrollInvite(opts: {
 	// A new invite supersedes any prompt left over from the last one.
 	settleApproval(false);
 
+	// The browser Rust bound this invite to when it paired; the copy is offered to it alone.
+	let boundPeer: string | undefined;
+	stopLinkPaired?.();
+	stopLinkPaired = opts.viaLink
+		? await listen<{ peerId: string }>("link-paired", (e) => {
+				boundPeer ??= e.payload.peerId;
+			})
+		: null;
+
 	session = await startEnroll("inviter", {
 		vekB64,
 		devicePubB64: publicKey,
 		devicePrivB64: privateKey,
-		// Park the transfer on the user's answer: authenticated is not authorized.
-		approve: (sas, label) =>
-			new Promise<boolean>((resolve) => {
-				pendingApproval = { sas: sas.digits, sasEmoji: sas.emoji, label, settle: resolve };
-				emit({ kind: "enroll-approval", sas: sas.digits, sasEmoji: sas.emoji, label });
-			}),
+		peerSource: opts.viaLink ? linkPeerSourceFor("enroll", () => boundPeer) : undefined,
+		// Park the transfer on the user's answer: authenticated is not authorized. A link invite was
+		// already answered: only the browser that paired in this dialog can hold its key.
+		approve: opts.viaLink
+			? async () => true
+			: (sas, label) =>
+					new Promise<boolean>((resolve) => {
+						pendingApproval = { sas: sas.digits, sasEmoji: sas.emoji, label, settle: resolve };
+						emit({ kind: "enroll-approval", sas: sas.digits, sasEmoji: sas.emoji, label });
+					}),
 		// The window closed: refuse anything parked on the prompt, and say so rather than
 		// leaving a dead prompt on screen.
 		onInviteExpired: () => {
@@ -216,6 +236,8 @@ export async function stopEnrollInvite(): Promise<void> {
 	settleApproval(false);
 	session?.stop();
 	session = null;
+	stopLinkPaired?.();
+	stopLinkPaired = null;
 	report("invite closed");
 }
 

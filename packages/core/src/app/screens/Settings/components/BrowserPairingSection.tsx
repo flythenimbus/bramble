@@ -129,7 +129,7 @@ export function BrowserPairingSection() {
 			const iceUrl = (await storage.getMeta<string>("sync.iceUrl")) ?? undefined;
 			// The same string the user would otherwise carry by hand. Armed for as long as the
 			// code is on screen, so the two windows cannot disagree.
-			const invite = await inviteDevice(relay, iceUrl || undefined, password);
+			const invite = await inviteDevice(relay, iceUrl || undefined, password, { viaLink: true });
 			await pairing.armSyncInvite(invite, CODE_TTL_SECONDS * 1000);
 		} catch (e) {
 			// The link may be up even though the invite failed. Say so rather than looking as if

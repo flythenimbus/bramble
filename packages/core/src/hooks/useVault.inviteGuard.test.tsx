@@ -119,6 +119,17 @@ describe("inviting from this device", () => {
 		expect(startEnrollInvite).toHaveBeenCalledTimes(1);
 	});
 
+	it("asks the host for a link invite when the browser link is delivering it", async () => {
+		const { platform, startEnrollInvite } = makePlatform(CURRENT_PUB);
+		const actions = await mount(platform);
+		await act(async () => {
+			await actions().inviteDevice("wss://relay.example", undefined, "master password", {
+				viaLink: true,
+			});
+		});
+		expect(startEnrollInvite).toHaveBeenCalledWith(expect.objectContaining({ viaLink: true }));
+	});
+
 	it("is refused when its own entry carries a key it no longer has", async () => {
 		const { platform, startEnrollInvite } = makePlatform("b2xk");
 		const actions = await mount(platform);

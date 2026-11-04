@@ -261,7 +261,9 @@ export function DesktopLinkSection() {
 		try {
 			// Named, so a vault that appears in the list is recognisably the desktop's rather than
 			// an unexplained "Vault 2".
-			await startJoin(invite, { kind: "password", password: invitePassword }, t`Desktop vault`);
+			await startJoin(invite, { kind: "password", password: invitePassword }, t`Desktop vault`, {
+				viaLink: true,
+			});
 			setInvite(null);
 			setInvitePassword("");
 			setJoinSas(null);

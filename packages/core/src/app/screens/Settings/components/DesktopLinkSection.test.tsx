@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
 	steps: [] as string[],
 	imported: null as unknown[] | null,
 	joinLabel: null as string | undefined | null,
+	joinViaLink: undefined as boolean | undefined,
 	joinFails: false,
 	invite: null as string | null,
 	activeVault: "v1",
@@ -51,7 +52,13 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../../../hooks/useVault")>()),
 	useVault: () => ({ entries: h.entries }),
 	useVaultActions: () => ({
-		startJoin: async (_code: string, _unlock: unknown, label?: string) => {
+		startJoin: async (
+			_code: string,
+			_unlock: unknown,
+			label?: string,
+			opts?: { viaLink?: boolean },
+		) => {
+			h.joinViaLink = opts?.viaLink;
 			h.steps.push("join");
 			h.joinLabel = label;
 			if (h.joinFails) throw new Error("join failed");
@@ -144,6 +151,7 @@ afterEach(() => {
 	h.steps.length = 0;
 	h.imported = null;
 	h.joinLabel = null;
+	h.joinViaLink = undefined;
 	h.joinFails = false;
 	h.invite = null;
 	h.activeVault = "v1";
@@ -194,6 +202,19 @@ describe("what a desktop connect will do to this browser", () => {
 		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
 
 		await waitFor(() => expect(h.joinLabel).toBe("Desktop vault"));
+	});
+
+	it("joins over the link, never the relay", async () => {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.groupOf.set("v1", "OTHER-GROUP");
+		h.invite = "code";
+		mount();
+		await screen.findByText(/add the desktop's vault/i);
+
+		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
+
+		await waitFor(() => expect(h.joinViaLink).toBe(true));
 	});
 });
 

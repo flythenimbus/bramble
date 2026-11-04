@@ -62,6 +62,7 @@ import {
 	openSyncLink,
 	sendBlobFrame,
 	sendSyncFrame,
+	setEnrollFrameSink,
 } from "./desktop-link";
 import { keepEventPageAlive, releaseEventPage } from "./event-page-keepalive";
 import { sendToOffscreen, setInProcessSyncBridge, useOffscreenDoc } from "./offscreen-client";
@@ -348,8 +349,8 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 			void sendToOffscreen({ type: "LINK_BLOB_POKE" }).catch(() => {});
 		},
 	);
-	void openSyncLink((frame, room) => {
-		void sendToOffscreen({ type: "LINK_SYNC_FRAME", payload: { frame, room } }).catch(() => {});
+	void openSyncLink((frame) => {
+		void sendToOffscreen({ type: "LINK_SYNC_FRAME", payload: { frame } }).catch(() => {});
 	}).catch(() => {});
 }
 
@@ -596,6 +597,13 @@ on(
 		return { ok: true };
 	}),
 );
+
+// The vault copy from the desktop app, which can arrive before any sync session exists.
+setEnrollFrameSink((frame) => {
+	void sendToOffscreen({ type: "LINK_SYNC_FRAME", payload: { frame, room: "enroll" } }).catch(
+		() => {},
+	);
+});
 
 // Firefox: no offscreen document, so the roster-sync host runs in this event page
 // and calls these directly instead of round-tripping through runtime messaging.

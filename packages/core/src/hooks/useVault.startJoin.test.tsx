@@ -160,3 +160,27 @@ describe("joining is master-password only", () => {
 		expect(create).not.toHaveBeenCalled();
 	});
 });
+
+describe("a join handed over by the desktop app", () => {
+	it("asks the host to join over the link", async () => {
+		const { platform } = makePlatform();
+		Object.assign(platform.shell, {
+			syncDevicePublicKey: vi.fn(async () => "bWU="),
+			onSyncEvent: vi.fn(() => () => {}),
+		});
+		Object.assign(platform.storage, { removeMeta: vi.fn(async () => {}) });
+		const getActions = mountVaultActions(platform);
+		await act(async () => {});
+
+		await act(async () => {
+			void getActions()
+				.joinGroup(CODE, { kind: "password", password: "pw" }, { viaLink: true })
+				.catch(() => {});
+		});
+		await act(async () => {});
+
+		expect(platform.shell.startEnrollJoin).toHaveBeenCalledWith(
+			expect.objectContaining({ viaLink: true }),
+		);
+	});
+});

@@ -257,7 +257,12 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	// joiner, so anyone holding it while this invite is live can be handed the vault.
 	// The invite is short-lived, single-use, and gated on the user confirming the SAS.
 	const inviteDevice = useCallback(
-		async (relayUrl: string, iceUrl: string | undefined, password: string): Promise<string> => {
+		async (
+			relayUrl: string,
+			iceUrl: string | undefined,
+			password: string,
+			opts?: { viaLink?: boolean },
+		): Promise<string> => {
 			// Before any sync state is touched: a vault without a master password may not pair.
 			const { blob } = await readDecodedBlob();
 			const pwSlot = findPasswordSlot(blob);
@@ -336,6 +341,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				// Let the sync HOST admission-sign + roster the joiner itself; the enrolled-event handler
 				// above does the same, but the host is reliable when the popup has closed (Firefox).
 				admission: admit ?? undefined,
+				viaLink: opts?.viaLink,
 			});
 			// Omit iceUrl from the code when empty (the joiner then derives it from the relay).
 			return encodePairingCode({
@@ -363,7 +369,11 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	// vault around the shared VEK, then hands back the (VEK-wrapped) blob. We add
 	// this device to the roster, write the blob, and unlock with the new password.
 	const joinGroup = useCallback(
-		async (pairingCode: string, method: JoinUnlock): Promise<void> => {
+		async (
+			pairingCode: string,
+			method: JoinUnlock,
+			opts?: { viaLink?: boolean },
+		): Promise<void> => {
 			const code = decodePairingCode(pairingCode.trim()); // validate before any prompt
 			// Refuse a stale code up front, before a security-key tap or a device-id rotation. The
 			// inviter has already torn its side down by now, so proceeding would just hang.
@@ -407,6 +417,7 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				inviterPub: code.inviterPub,
 				ownEntry,
 				password: method.password,
+				viaLink: opts?.viaLink,
 			});
 			let vaultBlobB64: string;
 			let roster: RosterPayload;

@@ -337,6 +337,8 @@ static ARMED_INVITE: OnceLock<Mutex<Option<ArmedInvite>>> = OnceLock::new();
 struct ArmedInvite {
     payload: String,
     expires_at: Instant,
+    /// The browser that paired while this invite was armed: the only one that may claim it.
+    bound: Option<String>,
 }
 
 fn armed() -> &'static Mutex<Option<ArmedInvite>> {
@@ -351,8 +353,19 @@ pub fn link_arm_sync_invite(payload: String, ttl_ms: u64) -> Result<(), String> 
     *slot = Some(ArmedInvite {
         payload,
         expires_at: Instant::now() + Duration::from_millis(ttl_ms),
+        bound: None,
     });
     Ok(())
+}
+
+/// Bind the armed invite to the browser that just paired in this dialog. The first pairing wins:
+/// a later one, even a second browser, cannot take it over.
+pub fn bind_invite(peer_id: &str) {
+    if let Ok(mut slot) = armed().lock() {
+        if let Some(invite) = slot.as_mut().filter(|i| i.bound.is_none()) {
+            invite.bound = Some(peer_id.to_string());
+        }
+    }
 }
 
 /// Disarm, for a dialog the user closed. Dismissing is a refusal.
@@ -365,8 +378,11 @@ pub fn link_clear_sync_invite() {
 
 /// Take the armed invite, if there is a live one. Single-use: claiming it disarms it, so a second
 /// browser racing for the same code gets nothing.
-fn claim_invite() -> Option<String> {
+fn claim_invite(peer_id: &str) -> Option<String> {
     let mut slot = armed().lock().ok()?;
+    if slot.as_ref()?.bound.as_deref() != Some(peer_id) {
+        return None;
+    }
     let invite = slot.take()?;
     if Instant::now() > invite.expires_at {
         return None; // expired: dropped by the take above
@@ -631,7 +647,7 @@ fn read_loop(
             // Before the lock gate in answer_for: what a connection speaks says nothing about
             // any vault, and a browser reconnecting to a locked app still needs to learn it.
             Ok(Request::Caps { caps }) => answer_caps(peer_id, link, &caps),
-            Ok(request) => answer_for(request),
+            Ok(request) => answer_for(request, peer_id),
             Err(e) => Answer::error(&format!("bad request: {e}")),
         };
         let body = serde_json::to_string(&answer).map_err(|e| format!("encode answer: {e}"))?;
@@ -648,7 +664,7 @@ fn read_loop(
     }
 }
 
-fn answer_for(request: Request) -> Answer {
+fn answer_for(request: Request, peer_id: &str) -> Answer {
     // Locked means locked, for metadata as much as for secrets: which sites you hold accounts
     // for is worth protecting on its own. SyncIdentity is the one exception, handled first,
     // because it says nothing about any vault.
@@ -666,7 +682,7 @@ fn answer_for(request: Request) -> Answer {
                 None => Answer::error("no identity"),
             };
         }
-        Request::SyncInvite => match claim_invite() {
+        Request::SyncInvite => match claim_invite(peer_id) {
             Some(payload) => Answer {
                 invite: Some(payload),
                 ..Answer::ok()
@@ -790,6 +806,12 @@ fn drive(
         let done = step.done;
         reply(stream, &Reply::step(step.message, done)).map_err(|e| format!("write: {e}"))?;
         if done {
+            if handshake.is_pairing() {
+                let peer = handshake::handshake_remote_static(handshake.session_id)
+                    .map_err(|e| format!("remote static: {e:?}"))?;
+                bind_invite(&peer);
+                emit("link-paired", serde_json::json!({ "peerId": peer }));
+            }
             // Authenticated from here, so the same connection carries application traffic,
             // sealed under the session the handshake just established.
             return serve_session(handshake.session_id, stream);
@@ -1090,6 +1112,8 @@ mod tests {
         assert_eq!(link.recv()["ok"], false, "answered with no invite armed");
 
         link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        // As if this browser had just paired in the dialog that armed it.
+        bind_invite(&link.public_key);
         link.send(serde_json::json!({ "op": "syncInvite" }));
         let answer = link.recv();
         assert_eq!(answer["ok"], true, "refused an armed invite: {answer}");
@@ -1602,5 +1626,40 @@ mod tests {
             "an untagged frame grew a room: {plain}"
         );
         handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn an_unbound_invite_is_claimable_by_nobody() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        let mut a = Linked::open(&dir);
+        // Armed after A paired, so no pairing in this dialog has bound it.
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        a.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(a.recv()["error"], "no invite");
+        link_clear_sync_invite();
+        vault_crypto::lock();
+        handshake::handshake_close(a.session_id);
+    }
+
+    #[test]
+    fn only_the_bound_browser_can_claim() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        let mut a = Linked::open(&dir); // pairs while armed: bound to A
+        let mut b = Linked::open(&dir); // a later pairing does not move it
+
+        b.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(b.recv()["error"], "no invite");
+        a.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(a.recv()["invite"], "the-invite");
+        a.send(serde_json::json!({ "op": "syncInvite" }));
+        assert_eq!(a.recv()["error"], "no invite");
+        vault_crypto::lock();
+        handshake::handshake_close(a.session_id);
+        handshake::handshake_close(b.session_id);
     }
 }

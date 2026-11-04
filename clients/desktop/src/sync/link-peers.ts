@@ -71,9 +71,10 @@ export type LinkRoom = "sync" | "enroll";
 
 export const linkPeerSource: PeerSource = (handlers) => linkPeerSourceFor("sync")(handlers);
 
-/** Browsers on the link as peers of one room. `onlyPeer` limits it to one browser. */
+/** Browsers on the link as peers of one room. `onlyPeer` limits it to one browser; as a function
+ * it is asked each time, and offers nobody while it returns undefined. */
 export const linkPeerSourceFor =
-	(room: LinkRoom, onlyPeer?: string): PeerSource =>
+	(room: LinkRoom, onlyPeer?: string | (() => string | undefined)): PeerSource =>
 	async ({ onPeer, report }) => {
 		/** Live peers, by the browser's Noise static key. */
 		const live = new Map<string, Live>();
@@ -103,7 +104,10 @@ export const linkPeerSourceFor =
 
 		const offer = (peerId: string, link: number) => {
 			if (stopped) return;
-			if (onlyPeer !== undefined && peerId !== onlyPeer) return;
+			if (onlyPeer !== undefined) {
+				const want = typeof onlyPeer === "function" ? onlyPeer() : onlyPeer;
+				if (peerId !== want) return;
+			}
 			const existing = live.get(peerId);
 			// A duplicate event for the connection we already serve. Offering again would mean two
 			// roster-auth handshakes racing on one pipe, each reading the other's frames.

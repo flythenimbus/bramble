@@ -306,6 +306,9 @@ export interface ShellAdapter {
 		 * joiner ("not in roster"). Idempotent with the UI write (deterministic Ed25519). Omitted
 		 * when this device can't admit (security-key-only). See docs/multiple-vaults.md. */
 		admission?: { password: string; saltB64: string; adminId: string };
+		/** Delivered to a browser over the desktop link: the copy stays on the link and needs no
+		 * second check, because only the browser that paired in that dialog can claim it. */
+		viaLink?: boolean;
 	}): Promise<void>;
 	/** Enrollment (joiner): connect to the inviter from a decoded pairing code; the offscreen rebuilds the vault, unlocked by a password or a security-key slot (exactly one). `ownEntry` is handed to the inviter so both rosters end up symmetric. */
 	startEnrollJoin(opts: {
@@ -317,6 +320,8 @@ export interface ShellAdapter {
 		ownEntry: RosterEntry;
 		password?: string;
 		webauthn?: { hmacSecretB64: string; credentialIdB64: string; saltB64: string };
+		/** The invite came from the desktop app over the link: join over the link, not the relay. */
+		viaLink?: boolean;
 	}): Promise<void>;
 	/** Subscribe to structured enrollment events from the sync host (e.g. the joiner's rebuilt vault). Returns an unsubscribe function. */
 	onSyncEvent(callback: (event: SyncEvent) => void): () => void;

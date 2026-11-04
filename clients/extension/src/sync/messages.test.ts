@@ -90,6 +90,11 @@ describe("EnrollJoinMsgSchema", () => {
 		expect(EnrollJoinMsgSchema.parse(ok)).toEqual(ok);
 	});
 
+	it("keeps viaLink, so an invite from the desktop app joins over the link", () => {
+		const ok = { ...base, ownEntry: rosterEntry, viaLink: true };
+		expect(EnrollJoinMsgSchema.parse(ok).viaLink).toBe(true);
+	});
+
 	it("drops a webauthn block, so the removed keyless join cannot be driven through it", () => {
 		// Joining by key is gone. Zod strips unknown keys rather than rejecting, so a payload
 		// carrying one still parses - but the field does not survive, and the receiving side has

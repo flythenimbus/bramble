@@ -470,6 +470,12 @@ let onBlobPoke: (() => void) | null = null;
 
 /** Where a frame from the app goes. Set while sync is running. */
 let onSyncFrame: ((frame: string, room?: string) => void) | null = null;
+/** Where the vault copy's frames go. Set once at startup: a first-run join has no sync running. */
+let onEnrollFrame: ((frame: string) => void) | null = null;
+
+export function setEnrollFrameSink(sink: (frame: string) => void): void {
+	onEnrollFrame = sink;
+}
 
 /**
  * Whether this browser should be holding the pipe open at all.
@@ -742,6 +748,10 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 	} catch {
 		// An unopenable frame means this session is out of step; rebuilding is the only recovery.
 		await dropHeld();
+		return;
+	}
+	if (typeof parsed.sync === "string" && parsed.room === "enroll") {
+		onEnrollFrame?.(parsed.sync);
 		return;
 	}
 	if (typeof parsed.sync === "string") {

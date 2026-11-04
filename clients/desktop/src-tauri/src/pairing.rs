@@ -437,6 +437,13 @@ pub struct Handshake {
     paired_label: Option<String>,
 }
 
+impl Handshake {
+    /// Whether this handshake pairs a new browser, rather than reconnecting a known one.
+    pub fn is_pairing(&self) -> bool {
+        self.paired_label.is_some()
+    }
+}
+
 /// Begin answering a connection from an established peer.
 #[allow(dead_code)]
 pub fn accept_known(root: &Path, peer_public_key: &str) -> Res<Handshake> {

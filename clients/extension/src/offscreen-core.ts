@@ -983,10 +983,18 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				const inviteVaultId = role === "inviter" ? (opts as EnrollInviteMsg).vaultId : undefined;
 				enrollSession?.stop();
 				settleApproval(false); // a new enroll supersedes any prompt left over from the last one
+				// Joiner of an invite the desktop app handed over the link: the copy stays on the link.
+				const viaLink = role === "joiner" && (opts as { viaLink?: boolean }).viaLink === true;
 				enrollSession = await startEnroll(role, {
 					...opts,
 					wasm: w,
 					report: reportSyncStatus,
+					peerSource: viaLink
+						? makeLinkPeerSource({
+								send: (frame) => bridge.linkSend?.(frame, "enroll") ?? Promise.resolve(false),
+								subscribe: (onFrame) => subscribeLinkFrames("enroll", onFrame),
+							})
+						: undefined,
 					// Inviter: park the transfer on the user's answer. The joiner is connected and
 					// authenticated at this point, but nothing has been sent, and nothing will be
 					// unless this resolves true. See docs/p2p-sync.md "Pairing code".
