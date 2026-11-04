@@ -1665,7 +1665,6 @@ msgstr "Generar alias de correo"
 
 #: packages/core/src/app/components/PasswordGeneratorModal.tsx
 #: packages/core/src/app/entry-modes/login.tsx
-#: packages/core/src/app/layouts/AppLayout.tsx
 #: packages/core/src/app/routes/GeneratorRoute.tsx
 msgid "Generate password"
 msgstr "Generar contraseña"
@@ -2594,6 +2593,10 @@ msgstr "Contraseña para el archivo"
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Password found in a known data breach"
 msgstr "Contraseña encontrada en una violación de datos conocida"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Password generator"
+msgstr "Generador de contraseñas"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Password strength"
