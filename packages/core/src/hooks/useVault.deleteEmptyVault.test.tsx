@@ -40,12 +40,12 @@ function makePlatform(meta: Record<string, unknown> = {}) {
 	return { platform, storage, registry: () => registry };
 }
 
-async function deleteEmpty(platform: Platform, id: string, count = 0) {
+async function deleteEmpty(platform: Platform, id: string, count = 0, files = 0) {
 	const getActions = mountVaultActions(platform);
 	await act(async () => {});
 	let ok: boolean | undefined;
 	await act(async () => {
-		ok = await getActions().deleteEmptyVault(id, count);
+		ok = await getActions().deleteEmptyVault(id, count, files);
 	});
 	return ok;
 }
@@ -61,6 +61,18 @@ describe("deleteEmptyVault", () => {
 	it("refuses a vault that gained an entry since the check", async () => {
 		const { platform, storage } = makePlatform();
 		expect(await deleteEmpty(platform, "old", 1)).toBe(false);
+		expect(storage.deleteVaultBlob).not.toHaveBeenCalled();
+	});
+
+	it("refuses a vault that still holds a file", async () => {
+		const { platform, storage } = makePlatform();
+		expect(await deleteEmpty(platform, "old", 0, 1)).toBe(false);
+		expect(storage.deleteVaultBlob).not.toHaveBeenCalled();
+	});
+
+	it("refuses a vault with an alias provider", async () => {
+		const { platform, storage } = makePlatform({ "alias.configured:old": true });
+		expect(await deleteEmpty(platform, "old")).toBe(false);
 		expect(storage.deleteVaultBlob).not.toHaveBeenCalled();
 	});
 

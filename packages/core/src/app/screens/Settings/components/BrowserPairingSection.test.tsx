@@ -22,7 +22,7 @@ vi.mock("../../../../hooks/useVaultRegistry", () => ({
 
 vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../../../hooks/useVault")>()),
-	useVault: () => ({ hasPasswordSlot: true, entries: [{ id: "a" }, { id: "b" }] }),
+	useVault: () => ({ hasPasswordSlot: true, entries: [{ id: "a" }, { id: "b" }], files: [] }),
 	useVaultActions: () => ({
 		verifyMasterPassword: async () => true,
 		inviteDevice: async () => "invite",

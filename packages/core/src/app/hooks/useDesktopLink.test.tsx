@@ -63,7 +63,7 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 				h.imported.push([items, attachments]);
 			},
 			readEntries: () => h.desktopEntries,
-			deleteEmptyVault: async (id: string) => {
+			deleteEmptyVault: async (id: string, _entries?: number, _files?: number) => {
 				h.steps.push(`deleteEmpty:${id}@${at}`);
 				return at !== id;
 			},

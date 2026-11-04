@@ -352,7 +352,7 @@ export interface VaultActions {
 	 */
 	deleteVault(auth: DeleteVaultAuth): Promise<boolean>;
 	/** Remove a vault linking left empty (never the open one; re-checks emptiness). */
-	deleteEmptyVault(id: string, entryCount: number): Promise<boolean>;
+	deleteEmptyVault(id: string, entryCount: number, fileCount: number): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	/** Save a backup file. Resolves with any attachments it had to leave out. */
 	/** Throws BackupIncompleteError rather than save a backup missing any of the vault. */
@@ -2210,9 +2210,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * the caller: `entryCount` is what the vault held when it was last open.
 	 */
 	const deleteEmptyVault = useCallback(
-		async (id: string, entryCount: number): Promise<boolean> => {
+		async (id: string, entryCount: number, fileCount: number): Promise<boolean> => {
 			if (id === activeId) return false;
-			if (!isVaultEmpty(await readVaultContents(storage, id, entryCount))) return false;
+			if (!isVaultEmpty(await readVaultContents(storage, id, entryCount, fileCount))) return false;
 			await eraseVaultData(id);
 			await forgetEmptyRecord(id);
 			return true;

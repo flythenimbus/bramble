@@ -30,7 +30,7 @@ export function BrowserPairingSection() {
 	const { pairing, storage } = usePlatform();
 	const { t } = useLingui();
 	const { inviteDevice, verifyMasterPassword } = useVaultActions();
-	const { hasPasswordSlot, entries } = useVault();
+	const { hasPasswordSlot, entries, files } = useVault();
 	const { vaults, activeId } = useVaultRegistry();
 	const [browsers, setBrowsers] = useState<PairedBrowser[]>([]);
 	const [code, setCode] = useState<string | null>(null);
@@ -180,7 +180,7 @@ export function BrowserPairingSection() {
 	const publishSummary = async () => {
 		if (!pairing.setVaultSummary || !activeId) return;
 		const index = vaults.findIndex((v) => v.id === activeId);
-		const contents = await readVaultContents(storage, activeId, entries.length);
+		const contents = await readVaultContents(storage, activeId, entries.length, files.length);
 		await pairing.setVaultSummary({
 			name: displayLabel(vaults[index]?.label ?? "", Math.max(0, index)),
 			empty: isVaultEmpty(contents),

@@ -80,7 +80,7 @@ export function useDesktopLink({
 			}
 			let browser: LinkSide = "none";
 			if (vaults.length > 0 && activeId) {
-				const contents = await readVaultContents(storage, activeId, entries.length);
+				const contents = await readVaultContents(storage, activeId, entries.length, files.length);
 				browser = isVaultEmpty(contents) ? "empty" : "full";
 				const group = await storage.getMeta<{
 					roster?: { devices?: { publicKey: string; label: string }[] };
@@ -94,7 +94,7 @@ export function useDesktopLink({
 			const desktopSide = desktop?.empty === true ? "empty" : "full";
 			return linkOutcome({ from, browser, desktop: desktopSide, sharesGroup });
 		},
-		[vaults, activeId, entries.length, storage, shell, from],
+		[vaults, activeId, entries.length, files.length, storage, shell, from],
 	);
 
 	/** The summary first: the app answers it only while its invite is still armed. */
@@ -195,6 +195,7 @@ export function useDesktopLink({
 			const oldId = activeId;
 			// Counted now, while the old vault is the one open; the re-check before removal uses it.
 			const oldCount = entries.length;
+			const oldFiles = files.length;
 			try {
 				const carry =
 					combining && oldId
@@ -215,7 +216,8 @@ export function useDesktopLink({
 				// After the join, so the copies land in the vault that is now open.
 				if (opts?.carry?.length) await now.actions.importEntries(opts.carry);
 				// Only once the desktop's vault is here, and only if it is still empty: nothing lost.
-				if (outcome === "take" && oldId) await now.actions.deleteEmptyVault(oldId, oldCount);
+				if (outcome === "take" && oldId)
+					await now.actions.deleteEmptyVault(oldId, oldCount, oldFiles);
 			} catch (e) {
 				setInviteError(
 					e instanceof Error && e.message ? e.message : t`Could not sync with the desktop app.`,
