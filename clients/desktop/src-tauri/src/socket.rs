@@ -279,17 +279,17 @@ pub fn spotlight_request_fill(id: String) -> Result<(), String> {
         return Err("locked".into());
     }
     let entry = index_store::secret_for(&id).ok_or("unknown entry")?;
+    // The browser that last reported a page is the one being filled; with none, nothing is sent.
+    let (peer_id, page) = reported_page().ok_or("no browser page")?;
     // Only where the entry belongs. A login with no hostnames at all is not pinned to anywhere,
     // so it is left to the user's choice rather than refused.
-    if let Some((_, page)) = reported_page() {
-        if !entry.hostnames.is_empty()
-            && !entry
-                .hostnames
-                .iter()
-                .any(|h| h.eq_ignore_ascii_case(&page) || page.ends_with(&format!(".{h}")))
-        {
-            return Err(format!("that entry is not for {page}"));
-        }
+    if !entry.hostnames.is_empty()
+        && !entry
+            .hostnames
+            .iter()
+            .any(|h| h.eq_ignore_ascii_case(&page) || page.ends_with(&format!(".{h}")))
+    {
+        return Err(format!("that entry is not for {page}"));
     }
     let frame = serde_json::json!({
         "fill": {
@@ -297,23 +297,10 @@ pub fn spotlight_request_fill(id: String) -> Result<(), String> {
             "password": entry.password,
             "totp": entry.totp,
         }
-    })
-    .to_string();
-    let sent = {
-        let boxes = outboxes().lock().map_err(|_| "outbox lock poisoned")?;
-        // Every connected browser is asked. Only the one whose page has a matching field and
-        // hostname will act, and that decision is deliberately not made here.
-        boxes
-            .values()
-            .filter(|outbox| outbox.tx.send(frame.clone()).is_ok())
-            .count()
-    };
-    log::info!("panel fill: asked {sent} browser(s)");
-    if sent > 0 {
-        Ok(())
-    } else {
-        Err("no browser connected".into())
-    }
+    });
+    queue(&peer_id, frame, false)?;
+    log::info!("panel fill: asked the browser on {page}");
+    Ok(())
 }
 
 /// This device's sync public key, published by the webview at startup.
@@ -1504,5 +1491,85 @@ mod tests {
         await_reported(Some((&a.public_key, "a.com")));
         handshake::handshake_close(a.session_id);
         handshake::handshake_close(b.session_id);
+    }
+
+    fn github_indexed() {
+        unlocked();
+        index_store::set(vec![index_store::IndexEntry {
+            id: "gh".into(),
+            kind: "login".into(),
+            name: "GitHub".into(),
+            hostnames: vec!["github.com".into()],
+            username: "octocat".into(),
+            password: "hunter2".into(),
+            totp: None,
+        }]);
+    }
+
+    /// The next frame this browser gets, proving nothing was queued for it before `marker`.
+    fn next_after_marker(link: &mut Linked, marker: &str) -> serde_json::Value {
+        link_sync_send(link.public_key.clone(), marker.into()).expect("marker");
+        link.recv()
+    }
+
+    #[test]
+    fn a_fill_reaches_only_the_reporting_browser() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        github_indexed();
+        let mut a = Linked::open(&dir);
+        let mut b = Linked::open(&dir);
+        b.await_registered(true);
+        a.send(serde_json::json!({ "op": "activeTab", "hostname": "github.com" }));
+        await_reported(Some((&a.public_key, "github.com")));
+
+        spotlight_request_fill("gh".into()).expect("fill");
+
+        assert_eq!(a.recv()["fill"]["password"], "hunter2");
+        assert_eq!(next_after_marker(&mut b, "marker")["sync"], "marker");
+        index_store::clear();
+        vault_crypto::lock();
+        handshake::handshake_close(a.session_id);
+        handshake::handshake_close(b.session_id);
+    }
+
+    #[test]
+    fn no_reported_page_means_no_fill() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        github_indexed();
+        let mut a = Linked::open(&dir);
+        let mut b = Linked::open(&dir);
+        a.await_registered(true);
+        b.await_registered(true);
+        await_reported(None);
+
+        assert!(spotlight_request_fill("gh".into()).is_err());
+
+        assert_eq!(next_after_marker(&mut a, "ma")["sync"], "ma");
+        assert_eq!(next_after_marker(&mut b, "mb")["sync"], "mb");
+        index_store::clear();
+        vault_crypto::lock();
+        handshake::handshake_close(a.session_id);
+        handshake::handshake_close(b.session_id);
+    }
+
+    #[test]
+    fn the_hostname_check_uses_the_target_browser_page() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        github_indexed();
+        let mut a = Linked::open(&dir);
+        a.send(serde_json::json!({ "op": "activeTab", "hostname": "evil.com" }));
+        await_reported(Some((&a.public_key, "evil.com")));
+
+        assert_eq!(
+            spotlight_request_fill("gh".into()),
+            Err("that entry is not for evil.com".to_string())
+        );
+        assert_eq!(next_after_marker(&mut a, "m")["sync"], "m");
+        index_store::clear();
+        vault_crypto::lock();
+        handshake::handshake_close(a.session_id);
     }
 }
