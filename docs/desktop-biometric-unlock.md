@@ -8,10 +8,11 @@ Status: **built 2026-11-03; Windows Hello and Touch ID both work in the app.** C
 labels, the desktop adapter, the Rust module, the macOS gate and the Windows Hello gate. On a
 Windows 11 VM (unsigned cross-built installer, local account, PIN), the app armed the gate,
 unlocked with it, prompted on open, did not prompt after the Lock button, and brought the Hello
-dialog to the front. On a Mac, a release build signed by hand with the entitlement and the
-embedded profile armed the gate, unlocked with one Touch ID sheet, and prompted once on open. The
-release build still needs that signing step in `build-macos.ts`; an unsigned build reports the
-gate unavailable, which a test pins. Nothing is released.
+dialog to the front. On a Mac, a build made by `scripts/build-macos.ts` (Developer ID, the
+entitlement and the embedded profile; see docs/release-signing.md) armed the gate, unlocked with
+one Touch ID sheet, and prompted once on open. An unsigned build reports the gate unavailable,
+which a test pins. CI needs the `APPLE_PROVISIONING_PROFILE` secret before the next desktop
+release. Nothing is released.
 
 ## What already exists
 
@@ -98,12 +99,11 @@ control, `objc2-local-authentication` for `LAContext`.
 
 **Signing is a hard requirement.** The data protection keychain needs the app signed with a
 `keychain-access-groups` entitlement and its provisioning profile embedded in the bundle.
-`clients/desktop/macos/profiles/Bramble.provisionprofile` already grants the entitlement
-(`BHGR3PP64J.*`), but `scripts/build-macos.ts` does not embed a profile or pass entitlements yet.
-That step is shared with the macOS credential provider
-([macos-credential-provider.md](macos-credential-provider.md)) and is handled separately. Until it
-lands, an unsigned or dev build gets `errSecMissingEntitlement` (-34018), which the module reads as
-"unavailable".
+`scripts/build-macos.ts` does both for a Developer ID signed build, and moves the browser-link
+helper to `Contents/Helpers` so Tauri cannot sign the entitlement onto it; the details are in
+[release-signing.md](release-signing.md). The same profile serves the macOS credential provider
+([macos-credential-provider.md](macos-credential-provider.md)). An unsigned or dev build gets
+`errSecMissingEntitlement` (-34018), which the module reads as "unavailable".
 
 ## Windows
 

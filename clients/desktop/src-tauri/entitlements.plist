@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Signed builds only: Touch ID unlock keeps each vault's key in the data protection keychain,
+     under this group (src/biometric_macos.rs). keychain-access-groups is restricted, so macOS
+     refuses to launch an app carrying it without the provisioning profile that grants it embedded
+     beside it. scripts/build-macos.ts adds this file and that profile together or not at all. -->
+<plist version="1.0">
+<dict>
+	<key>com.apple.application-identifier</key>
+	<string>BHGR3PP64J.app.bramble.desktop</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>BHGR3PP64J</string>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>BHGR3PP64J.app.bramble.desktop</string>
+	</array>
+</dict>
+</plist>

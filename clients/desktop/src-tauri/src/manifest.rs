@@ -286,6 +286,11 @@ fn manifest_for(proxy: &Path, schema: Schema) -> HostManifest {
 /// `/usr/bin` from the `.deb`. Every packaging path now puts it there, which the .deb, Nix and
 /// cask tests each assert, and the shipped 0.2.0 disk image carries it.
 ///
+/// A Developer ID signed macOS bundle is the exception that moved: its proxy is in
+/// `Contents/Helpers/`. Tauri signs whatever it bundles beside the app binary with the app's
+/// entitlements, and macOS kills a proxy that carries Touch ID's restricted keychain entitlement
+/// without a profile of its own, so scripts/build-macos.ts ships a pre-signed copy there instead.
+///
 /// The AppImage is the exception, and it is why this is not simply a join: it runs from a mount
 /// point whose name changes on every launch, so the path beside the binary is one that stops
 /// existing the moment the app does. A manifest naming it works until the next start and then
@@ -300,6 +305,10 @@ pub fn proxy_path() -> Option<PathBuf> {
     } else {
         "bramble-proxy"
     };
+    #[cfg(target_os = "macos")]
+    if let Some(helper) = signed_helper(&exe) {
+        return Some(helper);
+    }
     let beside = exe.parent()?.join(name);
     #[cfg(target_os = "linux")]
     {
@@ -309,6 +318,17 @@ pub fn proxy_path() -> Option<PathBuf> {
         }
     }
     Some(beside)
+}
+
+/// The pre-signed proxy a signed macOS bundle carries in `Contents/Helpers/`, if this is one.
+#[cfg(target_os = "macos")]
+fn signed_helper(exe: &Path) -> Option<PathBuf> {
+    let helper = exe
+        .parent()?
+        .parent()?
+        .join("Helpers")
+        .join("bramble-proxy");
+    helper.is_file().then_some(helper)
 }
 
 /// Put the proxy where it will still be next launch, next to the socket it dials.
@@ -692,8 +712,10 @@ mod tests_common {
     #[test]
     fn the_purge_command_names_the_binary_the_installer_installs() {
         let hooks = include_str!("../windows/hooks.nsh");
-        let expected =
-            format!(r#"nsExec::Exec '"$INSTDIR\{}.exe" --purge-secrets'"#, env!("CARGO_PKG_NAME"));
+        let expected = format!(
+            r#"nsExec::Exec '"$INSTDIR\{}.exe" --purge-secrets'"#,
+            env!("CARGO_PKG_NAME")
+        );
         assert!(
             hooks.contains(&expected),
             "hooks.nsh purges through `{expected}`, which is not what the installer installs"
@@ -1013,5 +1035,28 @@ mod tests {
             .join(FIRST.1)
             .join("NativeMessagingHosts")
             .is_dir());
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod signed_helper_tests {
+    use super::signed_helper;
+    use std::fs;
+
+    #[test]
+    fn finds_the_signed_bundles_helper_and_nothing_else() {
+        let root = tempfile::tempdir().unwrap();
+        let contents = root.path().join("Bramble.app/Contents");
+        fs::create_dir_all(contents.join("MacOS")).unwrap();
+        let exe = contents.join("MacOS/bramble-desktop");
+        fs::write(&exe, b"").unwrap();
+        // An unsigned or older bundle: the proxy is beside the app binary, found the usual way.
+        assert_eq!(signed_helper(&exe), None);
+        fs::create_dir_all(contents.join("Helpers")).unwrap();
+        fs::write(contents.join("Helpers/bramble-proxy"), b"").unwrap();
+        assert_eq!(
+            signed_helper(&exe),
+            Some(contents.join("Helpers/bramble-proxy"))
+        );
     }
 }

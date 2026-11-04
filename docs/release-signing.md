@@ -612,6 +612,37 @@ For desktop it also writes the line users are most likely to read. The in-app up
 you wrote, skipping headings and bullets, and falls back to `Bramble <version>` when the notes are
 a bare changelog. Write a first line that answers "why would I take this update".
 
+**Touch ID needs a provisioning profile.** Desktop Touch ID unlock keeps each vault's key in the
+data protection keychain, which takes the `keychain-access-groups` entitlement
+(`clients/desktop/src-tauri/entitlements.plist`). That entitlement is restricted: macOS refuses to
+launch an app that carries it unless the provisioning profile granting it is embedded as
+`Contents/embedded.provisionprofile`. `scripts/build-macos.ts` adds both to a Developer ID signed
+build or neither to any other, and refuses a signed build with no profile rather than ship one
+without Touch ID.
+
+That moves the browser-link helper. Tauri signs every binary it bundles beside the app with the
+app's entitlements, with no per-binary option, and macOS kills a helper carrying a restricted
+entitlement without a profile of its own (SIGKILL on launch: "Code has restricted entitlements,
+but the validation of its code signature failed"), which leaves the browser link dead. So a signed
+build drops the sidecar, pre-signs the staged proxy itself (Developer ID, hardened runtime, secure
+timestamp, no entitlements; in CI from `APPLE_CERTIFICATE`, imported into a throwaway keychain), and
+ships it as a plain file in `Contents/Helpers/bramble-proxy`, which Tauri copies without signing.
+`manifest.rs` looks there first. The proxy's `[[bin]]` copy never reaches a bundle on any platform
+(its `proxy-bin` feature is not passed to Tauri), so the sidecar is the only copy everywhere,
+Linux included. After bundling the script checks the profile, the app's entitlement, the helper's
+place and lack of entitlement, and a strict deep `codesign --verify`. The profile is the "Bramble Desktop Developer ID" profile for
+`BHGR3PP64J.app.bramble.desktop` (Developer ID, all devices, valid to 2044), kept out of git like
+every `*.provisionprofile`: locally at `clients/desktop/macos/profiles/Bramble.provisionprofile`,
+and in CI as the `desktop-release` environment secret `APPLE_PROVISIONING_PROFILE`, base64:
+
+```sh
+base64 -i clients/desktop/macos/profiles/Bramble.provisionprofile \
+  | gh secret set APPLE_PROVISIONING_PROFILE --env desktop-release
+```
+
+The same profile also grants the App Group and AutoFill entitlements the planned credential
+provider needs (docs/macos-credential-provider.md).
+
 `pnpm release desktop <version>` requires notarization credentials as well as the signing key; it
 reuses the App Store Connect API key the iOS release uses
 ([iOS](#ios-testflight-and-the-app-store)). On publish, CI

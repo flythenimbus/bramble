@@ -25,7 +25,8 @@
 // handed over. Locally they run back to back, so a local build exercises the same two steps.
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,6 +104,194 @@ function loadNotarization(): { expected: boolean; cleanup?: () => void } {
 	return { expected: true, cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
 }
 
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ENTITLEMENTS = join(ROOT, "clients/desktop/src-tauri/entitlements.plist");
+/** Where a Mac that signs releases keeps the profile; CI passes it in APPLE_PROVISIONING_PROFILE. */
+const PROFILE = join(ROOT, "clients/desktop/macos/profiles/Bramble.provisionprofile");
+
+/**
+ * The Touch ID gate's entitlement, the profile that grants it, and a pre-signed browser-link
+ * helper, as a bundle-step `--config`, or nothing for a build that is not Developer ID signed.
+ *
+ * Touch ID unlock keeps each vault's key in the data protection keychain
+ * (src-tauri/src/biometric_macos.rs), which takes the keychain-access-groups entitlement. That one
+ * is restricted: macOS refuses to launch an app that carries it without the provisioning profile
+ * granting it, embedded as Contents/embedded.provisionprofile. So the two go in together or not at
+ * all. An ad-hoc build gets neither, still launches, and reports Touch ID unavailable.
+ *
+ * The helper is the catch. Tauri signs every binary it bundles beside the app with the app's
+ * entitlements, and macOS kills (SIGKILL, on launch) a helper carrying a restricted entitlement
+ * with no profile of its own, which would leave the browser link dead. So this build drops the
+ * sidecar and ships the staged proxy pre-signed without entitlements in Contents/Helpers, a file
+ * Tauri copies but does not sign; manifest.rs finds it there. The proxy's [[bin]] copy is already
+ * out of every bundle (Cargo.toml, `proxy-bin`).
+ *
+ * The profile is signing material kept out of git (.gitignore). A signed build with no profile is
+ * refused rather than shipped without Touch ID, which nothing else would point out.
+ */
+function keychainEntitlement(): { config?: string; cleanup?: () => void } {
+	if (process.platform !== "darwin") return {};
+	const identity = process.env.APPLE_SIGNING_IDENTITY;
+	if (!identity) {
+		if (process.env.APPLE_CERTIFICATE)
+			fail(
+				"APPLE_CERTIFICATE is set without APPLE_SIGNING_IDENTITY, which the helper is signed as.",
+			);
+		console.error("note: not Developer ID signed, so no keychain entitlement and no Touch ID.");
+		return {};
+	}
+	const tmp = mkdtempSync(join(tmpdir(), "bramble-sign-"));
+	const undo: (() => void)[] = [() => rmSync(tmp, { recursive: true, force: true })];
+	const cleanup = () => {
+		for (const step of undo.reverse()) step();
+	};
+
+	let profile = PROFILE;
+	const encoded = process.env.APPLE_PROVISIONING_PROFILE;
+	if (encoded) {
+		profile = join(tmp, "Bramble.provisionprofile");
+		writeFileSync(profile, Buffer.from(encoded, "base64"), { mode: 0o600 });
+	} else if (!existsSync(PROFILE)) {
+		cleanup();
+		fail(
+			`no provisioning profile: expected APPLE_PROVISIONING_PROFILE (base64) or ${PROFILE}.\n` +
+				"Without it the app ships with Touch ID unlock unavailable. See docs/release-signing.md.",
+		);
+	}
+
+	const staged = join(ROOT, "clients/desktop/src-tauri/binaries", `bramble-proxy-${proxyTriple()}`);
+	if (!existsSync(staged)) {
+		cleanup();
+		fail(`no staged proxy at ${staged}; stage-proxy.mjs runs before the compile step.`);
+	}
+	const helper = join(tmp, "bramble-proxy");
+	copyFileSync(staged, helper);
+	presign(helper, identity, tmp, undo);
+
+	const config = JSON.stringify({
+		bundle: {
+			externalBin: null,
+			macOS: {
+				entitlements: ENTITLEMENTS,
+				files: { "embedded.provisionprofile": profile, "Helpers/bramble-proxy": helper },
+			},
+		},
+	});
+	return { config, cleanup };
+}
+
+/** Which staged proxy this build ships: the same target the app is built for. */
+function proxyTriple(): string {
+	const at = forwarded.indexOf("--target");
+	if (at >= 0 && forwarded[at + 1]) return forwarded[at + 1] as string;
+	if (universal) return "universal-apple-darwin";
+	const host = /host: (\S+)/.exec(execFileSync("rustc", ["-vV"], { encoding: "utf8" }))?.[1];
+	return host ?? fail("could not read the host target from rustc -vV");
+}
+
+/**
+ * Sign the helper as the bundle needs it and Tauri would not: Developer ID, hardened runtime and a
+ * secure timestamp (notarization requires all three on nested code), and no entitlements.
+ *
+ * Locally the identity is in the login keychain. In CI it arrives as APPLE_CERTIFICATE, which Tauri
+ * imports into a keychain of its own only once bundling starts, so it is imported here the same way
+ * into a throwaway keychain, searched first and removed with the build.
+ */
+function presign(path: string, identity: string, tmp: string, undo: (() => void)[]): void {
+	const cert = process.env.APPLE_CERTIFICATE;
+	if (cert) {
+		const security = (...args: string[]) =>
+			execFileSync("security", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+		const keychain = join(tmp, "presign.keychain-db");
+		const password = randomBytes(24).toString("hex");
+		const p12 = join(tmp, "certificate.p12");
+		writeFileSync(p12, Buffer.from(cert, "base64"), { mode: 0o600 });
+		const searched = security("list-keychains", "-d", "user")
+			.split("\n")
+			.map((line) => line.trim().replace(/^"|"$/g, ""))
+			.filter(Boolean);
+		security("create-keychain", "-p", password, keychain);
+		undo.push(() => {
+			security("list-keychains", "-d", "user", "-s", ...searched);
+			security("delete-keychain", keychain);
+		});
+		security("set-keychain-settings", "-lut", "3600", keychain);
+		security("unlock-keychain", "-p", password, keychain);
+		security(
+			"import",
+			p12,
+			"-k",
+			keychain,
+			"-P",
+			process.env.APPLE_CERTIFICATE_PASSWORD ?? "",
+			"-T",
+			"/usr/bin/codesign",
+		);
+		security(
+			"set-key-partition-list",
+			"-S",
+			"apple-tool:,apple:,codesign:",
+			"-s",
+			"-k",
+			password,
+			keychain,
+		);
+		security("list-keychains", "-d", "user", "-s", keychain, ...searched);
+	}
+	execFileSync(
+		"codesign",
+		["--force", "--options", "runtime", "--timestamp", "--sign", identity, path],
+		{ stdio: "inherit" },
+	);
+}
+
+/** The .app the bundler just made. */
+function builtApp(): string {
+	const bundle = join(
+		ROOT,
+		"clients/desktop/src-tauri/target",
+		universal ? "universal-apple-darwin/release/bundle" : "release/bundle",
+		"macos",
+	);
+	const apps = readdirSync(bundle).filter((f) => f.endsWith(".app"));
+	if (apps.length !== 1) fail(`expected one .app in ${bundle}, found ${apps.length}`);
+	return join(bundle, apps[0] as string);
+}
+
+/**
+ * That the entitlement, its profile and the helper all landed as they must. Each mistake here is
+ * one macOS reports only at launch: an entitled app without the profile does not open, and an
+ * entitled helper (which has no profile of its own) is killed when a browser starts it.
+ */
+function assertKeychainEntitled(): void {
+	const app = builtApp();
+	const entitlements = (path: string) =>
+		execFileSync("codesign", ["-d", "--entitlements", "-", "--xml", path], {
+			stdio: ["ignore", "pipe", "pipe"],
+		}).toString();
+	if (!existsSync(join(app, "Contents/embedded.provisionprofile")))
+		fail(
+			`${app} has no embedded.provisionprofile; with the keychain entitlement it would not open.`,
+		);
+	if (!entitlements(app).includes("keychain-access-groups"))
+		fail(`${app} was signed without the keychain entitlement; Touch ID would be unavailable.`);
+	const beside = join(app, "Contents/MacOS/bramble-proxy");
+	if (existsSync(beside))
+		fail(`${beside} is bundled beside the app, where Tauri signs it with the app's entitlements.`);
+	const helper = join(app, "Contents/Helpers/bramble-proxy");
+	if (!existsSync(helper))
+		fail(`${app} has no Contents/Helpers/bramble-proxy; the browser link is dead.`);
+	if (entitlements(helper).includes("keychain-access-groups"))
+		fail(
+			`${helper} carries the keychain entitlement with no profile of its own; macOS would kill it.`,
+		);
+	try {
+		execFileSync("codesign", ["--verify", "--strict", "--deep", app], { stdio: "pipe" });
+	} catch (e) {
+		fail(`${app} does not verify: ${(e as { stderr?: Buffer }).stderr?.toString() ?? e}`);
+	}
+}
+
 // Universal unless asked otherwise, and only on macOS: `universal-apple-darwin` is a lipo of two
 // Apple slices, which is meaningless anywhere else and would fail the build outright. Elsewhere
 // the host target is the right and only answer, so Linux produces a .deb and an AppImage for the
@@ -120,21 +309,12 @@ function loadNotarization(): { expected: boolean; cleanup?: () => void } {
  * rather than for the intent.
  */
 function assertNotarized(): void {
-	const bundle = join(
-		resolve(dirname(fileURLToPath(import.meta.url)), ".."),
-		"clients/desktop/src-tauri/target",
-		universal ? "universal-apple-darwin/release/bundle" : "release/bundle",
-		"macos",
-	);
-	const app = readdirSync(bundle)
-		.filter((f) => f.endsWith(".app"))
-		.map((f) => join(bundle, f));
-	if (app.length !== 1) fail(`expected one .app in ${bundle}, found ${app.length}`);
+	const app = builtApp();
 	try {
-		execFileSync("xcrun", ["stapler", "validate", app[0] as string], { stdio: "pipe" });
+		execFileSync("xcrun", ["stapler", "validate", app], { stdio: "pipe" });
 	} catch {
 		fail(
-			`${app[0]} is not notarized, though the credentials to notarize it were present.\n` +
+			`${app} is not notarized, though the credentials to notarize it were present.\n` +
 				"Gatekeeper blocks it on every machine that did not build it, so this is not shippable.",
 		);
 	}
@@ -203,6 +383,7 @@ if (!bundleOnly) {
 
 if (!compileOnly) {
 	const notarization = loadNotarization();
+	const entitlement = keychainEntitlement();
 	try {
 		const key = signingKey(fail);
 		if (!key) {
@@ -222,15 +403,16 @@ if (!compileOnly) {
 		// tools from the network mid-build, and the packer's failure is a silent fallback rather
 		// than an error. See appimage-tools.ts.
 		if (process.platform === "linux") await ensureTools();
-		tauri("bundle", [], env);
+		tauri("bundle", entitlement.config ? ["--config", entitlement.config] : [], env);
+		if (entitlement.config) assertKeychainEntitled();
 		if (notarization.expected) assertNotarized();
 
 		if (process.platform === "linux") {
-			const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-			makeAppImagePortable(join(root, "clients/desktop/src-tauri/target/release/bundle"), env);
+			makeAppImagePortable(join(ROOT, "clients/desktop/src-tauri/target/release/bundle"), env);
 		}
 	} finally {
 		// Whatever the bundler did, the decrypted key must not outlive it.
 		notarization.cleanup?.();
+		entitlement.cleanup?.();
 	}
 }
