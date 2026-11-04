@@ -30,6 +30,27 @@ describe("authenticatePeer skipPeer", () => {
 		expect(reports).toContain("bbbb is on the local link, not over the relay");
 	});
 
+	it("skips it for good where the transport can, so its next hello does not reconnect", async () => {
+		const { a, b, closed } = peerPipe();
+		const skip = vi.fn();
+		b.channel.send("bbbb");
+
+		await authenticatePeer(
+			{
+				devicePrivB64: "priv-aaaa",
+				devicePubB64: "aaaa",
+				roster: rosterOf(["aaaa", "bbbb"]),
+				wasm: identityWasm(),
+				report: () => {},
+				skipPeer: (pub) => pub === "bbbb",
+			},
+			{ ...a, skip },
+		);
+
+		expect(skip).toHaveBeenCalledOnce();
+		expect(closed()).toBe(0);
+	});
+
 	it("authenticates a peer skipPeer does not name", async () => {
 		const { a, b } = peerPipe();
 		const side = (pub: string, peer: typeof a) =>

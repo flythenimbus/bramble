@@ -73,7 +73,8 @@ export async function authenticatePeer(
 		const peerPub = await withTimeout(channel.recv(), HANDSHAKE_TIMEOUT_MS, "roster-auth");
 		if (opts.skipPeer?.(peerPub)) {
 			opts.report(`${peerPub.slice(0, 8)} is on the local link, not over the relay`);
-			peer.close();
+			if (peer.skip) peer.skip();
+			else peer.close();
 			return null;
 		}
 		// Gate on the CURRENT roster (read fresh), so a device revoked since this session started

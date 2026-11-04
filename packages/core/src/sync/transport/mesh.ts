@@ -32,6 +32,10 @@ export interface PeerSession {
 	initiator: boolean;
 	channel: Channel;
 	close(): void;
+	/** Close it and never connect to it again in this session: it is reachable on the local link.
+	 * A plain close lets its next hello reconnect, which for a skipped peer is a relay round trip
+	 * every few seconds. */
+	skip?(): void;
 }
 
 export interface MeshOptions {
@@ -128,6 +132,8 @@ class Mesh {
 		{ receive: (f: DataFrame) => void; close: () => void }
 	>();
 	private readonly known = new Set<string>();
+	/** Peers the caller skipped. See PeerSession.skip. */
+	private readonly skipped = new Set<string>();
 	private socket!: WebSocket;
 	private client!: SignalingClient;
 	private epoch = 0;
@@ -356,7 +362,7 @@ class Mesh {
 	// Deterministic role: lower pubkey offers. Re-announce once per new peer so a
 	// late joiner still learns us over the store-nothing relay.
 	private async discover(remote: string, remoteRtc: boolean): Promise<void> {
-		if (this.known.has(remote)) return;
+		if (this.known.has(remote) || this.skipped.has(remote)) return;
 		this.known.add(remote);
 		this.opts.onPeerState?.(remote, "found");
 		this.sendHello();
@@ -386,6 +392,7 @@ class Mesh {
 	}
 
 	private async routeSignal(remote: string, signal: PeerSignal): Promise<void> {
+		if (this.skipped.has(remote)) return;
 		let peer = this.peers.get(remote);
 		if (!peer) {
 			// Only an offer bootstraps a responder, but candidates arriving during its
@@ -429,7 +436,16 @@ class Mesh {
 			onMessage: push,
 			onOpen: () => {
 				this.opts.onPeerState?.(remote, "open");
-				this.opts.onPeer({ remotePubkey: remote, initiator, channel, close: () => peer.close() });
+				this.opts.onPeer({
+					remotePubkey: remote,
+					initiator,
+					channel,
+					close: () => peer.close(),
+					skip: () => {
+						this.skipped.add(remote);
+						peer.close();
+					},
+				});
 			},
 			onClose: () => {
 				this.opts.onPeerState?.(remote, "closed");
@@ -449,6 +465,7 @@ class Mesh {
 	// relay as chunked, group-key-encrypted "data" events; the relay only sees ciphertext.
 	// Idempotent + lazy so it works whichever arrives first, a peer's hello or its data.
 	private routeData(remote: string, frame: DataFrame): void {
+		if (this.skipped.has(remote)) return;
 		this.ensureRelayPeer(remote, this.opts.signer.pubkeyHex < remote).receive(frame);
 	}
 
@@ -475,7 +492,16 @@ class Mesh {
 			},
 		};
 		this.relayPeers.set(remote, entry);
-		this.opts.onPeer({ remotePubkey: remote, initiator, channel, close: entry.close });
+		this.opts.onPeer({
+			remotePubkey: remote,
+			initiator,
+			channel,
+			close: entry.close,
+			skip: () => {
+				this.skipped.add(remote);
+				entry.close();
+			},
+		});
 		return entry;
 	}
 }
