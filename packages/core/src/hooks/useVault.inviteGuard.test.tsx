@@ -1,18 +1,32 @@
 /** @vitest-environment happy-dom */
 import { act, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Platform } from "../context/PlatformContext";
 import type { RosterPayload } from "../sync";
 import { mountVaultActions } from "../test/vault-harness";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
-import { UnrecognizedDeviceError } from "./useSyncEnrollment";
+import { SLOT_KIND_PASSWORD } from "../vault-format";
+import { MasterPasswordRequiredError, UnrecognizedDeviceError } from "./useSyncEnrollment";
+
+const PASSWORD_SLOT = {
+	kind: SLOT_KIND_PASSWORD,
+	slotId: new Uint8Array(16),
+	salt: new Uint8Array(16),
+	verifier: new Uint8Array(32),
+	wrapIv: new Uint8Array(12),
+	wrappedVek: new Uint8Array(48),
+};
+const h = vi.hoisted(() => ({ slots: [] as object[] }));
 
 afterEach(cleanup);
+beforeEach(() => {
+	h.slots = [PASSWORD_SLOT];
+});
 
 vi.mock("../vault-format", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../vault-format")>()),
 	decodeVaultBlob: () => ({
-		slots: [],
+		slots: h.slots,
 		entriesIv: new Uint8Array(12),
 		entriesCiphertext: new Uint8Array(0),
 	}),
@@ -100,7 +114,7 @@ describe("inviting from this device", () => {
 		const { platform, startEnrollInvite } = makePlatform(CURRENT_PUB);
 		const actions = await mount(platform);
 		await act(async () => {
-			await actions().inviteDevice("wss://relay.example");
+			await actions().inviteDevice("wss://relay.example", undefined, "master password");
 		});
 		expect(startEnrollInvite).toHaveBeenCalledTimes(1);
 	});
@@ -109,9 +123,38 @@ describe("inviting from this device", () => {
 		const { platform, startEnrollInvite } = makePlatform("b2xk");
 		const actions = await mount(platform);
 		await act(async () => {
-			await expect(actions().inviteDevice("wss://relay.example")).rejects.toBeInstanceOf(
-				UnrecognizedDeviceError,
-			);
+			await expect(
+				actions().inviteDevice("wss://relay.example", undefined, "master password"),
+			).rejects.toBeInstanceOf(UnrecognizedDeviceError);
+		});
+		expect(startEnrollInvite).not.toHaveBeenCalled();
+	});
+});
+
+describe("inviting needs a master password", () => {
+	// Pairing hands over the vault, and the re-entered password is what admission-signs the joiner.
+	// A vault unlocked by keys alone has no password to sign with, so it may not pair at all.
+	it("is refused on a vault with no master password, before touching any sync state", async () => {
+		h.slots = [];
+		const { platform, startEnrollInvite, setMeta } = makePlatform(CURRENT_PUB);
+		const actions = await mount(platform);
+		setMeta.mockClear();
+		await act(async () => {
+			await expect(
+				actions().inviteDevice("wss://relay.example", undefined, "anything"),
+			).rejects.toBeInstanceOf(MasterPasswordRequiredError);
+		});
+		expect(startEnrollInvite).not.toHaveBeenCalled();
+		expect(setMeta).not.toHaveBeenCalled();
+	});
+
+	it("is refused when the password was not re-entered", async () => {
+		const { platform, startEnrollInvite } = makePlatform(CURRENT_PUB);
+		const actions = await mount(platform);
+		await act(async () => {
+			await expect(
+				actions().inviteDevice("wss://relay.example", undefined, ""),
+			).rejects.toBeInstanceOf(MasterPasswordRequiredError);
 		});
 		expect(startEnrollInvite).not.toHaveBeenCalled();
 	});
@@ -135,7 +178,7 @@ describe("adding the device that joined", () => {
 		const { platform, setMeta, enrolled } = makePlatform(CURRENT_PUB);
 		const actions = await mount(platform);
 		await act(async () => {
-			await actions().inviteDevice("wss://relay.example");
+			await actions().inviteDevice("wss://relay.example", undefined, "master password");
 		});
 		setMeta.mockClear();
 

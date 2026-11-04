@@ -114,10 +114,9 @@ export function BrowserPairingSection() {
 	 *
 	 * The invite is ARMED rather than sent. The browser claims it over the link once it has
 	 * paired, and the app answers only while this window is open, so an old pairing cannot be
-	 * used to take the vault later. `password` admission-signs the joiner; without one the
-	 * browser is enrolled unsigned, which is the security-key-only vault's case.
+	 * used to take the vault later. `password` admission-signs the joiner.
 	 */
-	const start = async (password?: string) => {
+	const start = async (password: string) => {
 		setError(null);
 		setConnected(null);
 		knownBefore.current = new Set(browsers.map((b) => b.publicKey));
@@ -145,9 +144,14 @@ export function BrowserPairingSection() {
 		}
 	};
 
-	/** A password vault confirms first, since the confirmation is what signs the admission. */
+	/** Confirm the master password first: it signs the admission. A vault without one may not pair. */
 	const begin = () => {
-		if (!hasPasswordSlot) return void start();
+		if (!hasPasswordSlot) {
+			setError(
+				t`Connecting a browser needs a master password. Turn one on in Settings → Security first.`,
+			);
+			return;
+		}
 		setGatePassword("");
 		setGateError(null);
 		setGateOpen(true);

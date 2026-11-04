@@ -345,6 +345,10 @@ msgstr "Tag {added} hinzugefügt. {0} Tags."
 msgid "Added when you create a passkey on a site with Bramble. Remove to delete."
 msgstr "Hinzugefügt, wenn Sie auf einer Website mit Bramble ein Passkey erstellen. Entfernen zum Löschen."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Adding a device needs a master password"
+msgstr "Zum Hinzufügen eines Geräts ist ein Master-Passwort erforderlich"
+
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Addy needs a domain before it can create an alias."
 msgstr "Addy benötigt eine Domain, bevor ein Alias erstellt werden kann."
@@ -1005,6 +1009,10 @@ msgstr "Verbunden."
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Connected. {0} of {1} aliases used."
 msgstr "Verbunden. {0} von {1} Aliassen verwendet."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Connecting a browser needs a master password. Turn one on in Settings → Security first."
+msgstr "Zum Verbinden eines Browsers ist ein Master-Passwort erforderlich. Aktivieren Sie zuerst eines unter Einstellungen → Sicherheit."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Connecting continues in a window, which stays open while you switch to the desktop app."
@@ -2531,6 +2539,10 @@ msgstr "Kopplungscode"
 msgid "Pairing didn't complete."
 msgstr "Die Kopplung wurde nicht abgeschlossen."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Pairing gives the new device your vault, so it has to be authorized with your master password. Turn one on in Security, then come back to add the device."
+msgstr "Beim Koppeln erhält das neue Gerät Ihren Tresor, daher muss es mit Ihrem Master-Passwort autorisiert werden. Aktivieren Sie zuerst eines unter Sicherheit und kehren Sie dann zurück, um das Gerät hinzuzufügen."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Panda"
 msgstr "Panda"
@@ -3856,6 +3868,10 @@ msgstr "Erneut versuchen"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "TURN / ICE servers URL"
 msgstr "TURN/ICE-Server-URL"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Turn on master password"
+msgstr "Master-Passwort aktivieren"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Turtle"

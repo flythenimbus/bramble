@@ -345,6 +345,10 @@ msgstr "Etiqueta {added} añadida. {0} etiquetas."
 msgid "Added when you create a passkey on a site with Bramble. Remove to delete."
 msgstr "Añadida al crear una clave de acceso en un sitio con Bramble. Elimine para borrarla."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Adding a device needs a master password"
+msgstr "Añadir un dispositivo requiere una contraseña maestra"
+
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Addy needs a domain before it can create an alias."
 msgstr "Addy necesita un dominio antes de poder crear un alias."
@@ -1005,6 +1009,10 @@ msgstr "Conectado."
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Connected. {0} of {1} aliases used."
 msgstr "Conectado. {0} de {1} alias utilizados."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Connecting a browser needs a master password. Turn one on in Settings → Security first."
+msgstr "Conectar un navegador requiere una contraseña maestra. Active primero una en Ajustes → Seguridad."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Connecting continues in a window, which stays open while you switch to the desktop app."
@@ -2531,6 +2539,10 @@ msgstr "Código de emparejamiento"
 msgid "Pairing didn't complete."
 msgstr "No se completó el emparejamiento."
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Pairing gives the new device your vault, so it has to be authorized with your master password. Turn one on in Security, then come back to add the device."
+msgstr "La vinculación da al nuevo dispositivo su bóveda, por lo que debe autorizarse con su contraseña maestra. Active una en Seguridad y, después, vuelva para añadir el dispositivo."
+
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Panda"
 msgstr "Panda"
@@ -3856,6 +3868,10 @@ msgstr "Intentar de nuevo"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "TURN / ICE servers URL"
 msgstr "URL de servidores TURN / ICE"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Turn on master password"
+msgstr "Activar contraseña maestra"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Turtle"

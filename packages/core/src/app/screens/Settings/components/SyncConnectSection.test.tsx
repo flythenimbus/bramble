@@ -13,19 +13,30 @@ import type { SyncedSettings } from "../../../../sync";
 import { deviceNameKey } from "../../../hooks/useDeviceNames";
 import { SyncConnectSection } from "./SyncConnectSection";
 
+const h = vi.hoisted(() => ({
+	hasPasswordSlot: true,
+	inviteDevice: vi.fn(),
+	navigate: vi.fn(),
+}));
 vi.mock("../../../../hooks/useVault", () => ({
-	useVault: () => ({ hasPasswordSlot: true }),
+	useVault: () => ({ hasPasswordSlot: h.hasPasswordSlot }),
 	useVaultActions: () => ({
-		inviteDevice: vi.fn(),
+		inviteDevice: h.inviteDevice,
 		removeDevice: vi.fn(),
 		verifyMasterPassword: vi.fn(),
 	}),
 }));
+vi.mock("@tanstack/react-router", () => ({ useNavigate: () => h.navigate }));
 vi.mock("../../../../hooks/useVaultRegistry", () => ({
 	useVaultRegistry: () => ({ syncKey: (k: string) => k }),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	h.hasPasswordSlot = true;
+	h.inviteDevice.mockClear();
+	h.navigate.mockClear();
+});
 
 beforeAll(() => {
 	i18n.load("en", {});
@@ -105,6 +116,22 @@ describe("the approval prompt", () => {
 
 		emit({ kind: "enroll-expired" } as SyncEvent);
 		expect(screen.queryByText("Is this your device?")).toBeNull();
+	});
+});
+
+// Pairing hands over the vault, and the re-entered master password is what signs the new device in.
+describe("adding a device without a master password", () => {
+	it("asks for a master password first instead of pairing", async () => {
+		h.hasPasswordSlot = false;
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: "Add a device" }));
+
+		expect(await screen.findByText(/Adding a device needs a master password/)).toBeTruthy();
+		expect(h.inviteDevice).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole("button", { name: "Turn on master password" }));
+		expect(h.navigate).toHaveBeenCalledWith(
+			expect.objectContaining({ to: "/settings", search: { tab: "security" } }),
+		);
 	});
 });
 

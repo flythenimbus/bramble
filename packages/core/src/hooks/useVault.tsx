@@ -461,9 +461,9 @@ export interface VaultActions {
 	/** Re-probe biometric availability + enabled (e.g. when Settings opens). */
 	refreshBiometric(): Promise<void>;
 	/** Start adding a device: returns a one-time pairing code and listens for the joiner. `password`
-	 * is the re-entered master password (Item A) that admission-signs the joiner; omit it (or pass it
-	 * for a security-key-only vault, where it's ignored) to enroll without an admission signature. */
-	inviteDevice(relayUrl: string, iceUrl?: string, password?: string): Promise<string>;
+	 * is the re-entered master password (Item A) that admission-signs the joiner; a vault without
+	 * one may not pair (MasterPasswordRequiredError). */
+	inviteDevice(relayUrl: string, iceUrl: string | undefined, password: string): Promise<string>;
 	/** Join an existing group from a pairing code; rebuilds this device's vault under the chosen unlock method. */
 	joinGroup(pairingCode: string, unlock: JoinUnlock): Promise<void>;
 	/** Setup-flow join: create a NEW vault from a pairing code (dedups to an existing vault if already

@@ -362,8 +362,8 @@ published on its own re-stamped + re-signed entry) and, when the joiner's entry 
 admission-signs it (`roster_admission_sign` -> `admission: { by, sig }`). Shell ops
 `syncAdmissionPublicKey` / `syncAdmissionSign` route popup -> background -> offscreen; the admission
 signing key is derived transiently in the offscreen and **never persisted** (unlike the Ed25519
-device signing key). Core's `inviteDevice` gained an optional `password`; a security-key-only vault
-(no password slot) skips the gate and enrolls the joiner unsigned (phase-1 tolerated). The core
+device signing key). Core's `inviteDevice` requires the re-entered `password`; a vault with no
+password slot may not invite at all (`MasterPasswordRequiredError`, see below). The core
 producer is platform-agnostic, so mobile signs + admits automatically once its shell exposes the four
 methods (`syncSigningPublicKey` / `signRoster` / `syncAdmissionPublicKey` / `syncAdmissionSign`).
 
@@ -396,19 +396,14 @@ deferred); the accepted residual is that a revoked device keeps its offline data
 further access, and is not notified (every survivor refuses it, so a tombstone has no path to reach
 it).
 
-**Security-key-only vaults can't admit (residual + the path to close it).** Admission is
-password-derived (`Ed25519(HKDF(KEK, ...))`, `KEK = Argon2(password, salt)`), so a vault unlocked by a
-security key only has no password to derive from: it enrolls joiners unsigned (tolerated in phase 1),
-and the "Add device" flow currently skips any re-auth for a key-only vault. The symmetric fix is to
-derive the admission key from the WebAuthn **PRF secret** the key already produces:
-`adm_key = Ed25519(HKDF(prf_secret, "roster/admission/v1"))`. The required tap then does double duty
-exactly like the password re-prompt - it proves the physical key is present (defeats an
-unlocked-session hijack that lacks the key) AND mints a stable, pinnable admission key an attacker
-without the key cannot derive. That closes the residual and makes the two unlock modes symmetric.
-Needs: a Rust `roster_admission_from_secret` (HKDF over the PRF secret instead of Argon2 over a
-password), shell methods that run a WebAuthn assertion for the PRF secret, and a key-vs-password
-branch in the Add-device gate. Follow-up, not phase 1; extension-only (iOS/Android don't do security
-keys).
+**Pairing requires a master password (decided 2026-11-04).** Admission is password-derived
+(`Ed25519(HKDF(KEK, ...))`, `KEK = Argon2(password, salt)`), and a vault unlocked by keys alone has
+no password to derive from. It used to enroll joiners unsigned with no re-auth; it now may not
+invite at all: `inviteDevice` throws `MasterPasswordRequiredError`, and "Add a device" (and the
+desktop's "Connect a browser") asks the user to turn a master password on first. A PRF-derived
+admission key (`HKDF(prf_secret, "roster/admission/v1")`) was the alternative; it is not pursued,
+because pairing is a master-password action by decision (it would also have needed one admission key
+per device across a password and several keys, each deriving a different one).
 
 ## Sync transport fixes surfaced during device testing (2026-07-09)
 

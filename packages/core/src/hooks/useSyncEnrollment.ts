@@ -48,11 +48,20 @@ export class UnrecognizedDeviceError extends Error {
 	}
 }
 
+/** Pairing needs the master password: re-entering it is what admission-signs the joiner, so a vault
+ * unlocked by keys alone has nothing to sign with and may not pair. */
+export class MasterPasswordRequiredError extends Error {
+	constructor() {
+		super("adding a device needs this vault's master password");
+		this.name = "MasterPasswordRequiredError";
+	}
+}
+
 /** What the inviter needs, after re-entering the master password, to admission-sign a joiner's entry
  * (Item A rogue-injection close): the password + this device's password-slot salt (to re-derive the
  * admission signing key transiently) and this device's id (the `admission.by`). Held only for the
- * duration of one invite. Null when the device can't admit (security-key-only, or host without
- * password-authority admission). See docs/p2p-sync-revocation-hardening.md. */
+ * duration of one invite. Null when the host has no password-authority admission.
+ * See docs/p2p-sync-revocation-hardening.md. */
 interface AdmissionContext {
 	password: string;
 	saltB64: string;
@@ -166,17 +175,15 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	// Publish this device's admission key on its own roster entry, derived from the re-entered master
 	// password + this device's password-slot salt (Item A rogue-injection close), and return the
 	// context to admission-sign the joiner. The admissionKey is deterministic from (password, salt),
-	// so a repeat invite re-derives the same value and is a no-op. Returns null when this device can't
-	// admit: no password re-entered, no password slot (security-key-only), or a host without
-	// password-authority admission — the joiner's new id is then tolerated only through phase 1.
+	// so a repeat invite re-derives the same value and is a no-op. Returns null on a host without
+	// password-authority admission: the joiner's new id is then tolerated only through phase 1.
 	const publishAdmissionKey = useCallback(
 		async (
 			inviterPub: string,
-			password: string | undefined,
-			pwSlot: PasswordSlot | null,
+			password: string,
+			pwSlot: PasswordSlot,
 		): Promise<AdmissionContext | null> => {
-			if (!password || !pwSlot || !shell.syncAdmissionPublicKey || !shell.syncAdmissionSign)
-				return null;
+			if (!shell.syncAdmissionPublicKey || !shell.syncAdmissionSign) return null;
 			const saltB64 = bytesToBase64(pwSlot.salt);
 			const admissionKey = await shell.syncAdmissionPublicKey(password, saltB64);
 			const group = await storage.getMeta<{ groupKey: string; roster: RosterPayload }>(
@@ -250,7 +257,11 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 	// joiner, so anyone holding it while this invite is live can be handed the vault.
 	// The invite is short-lived, single-use, and gated on the user confirming the SAS.
 	const inviteDevice = useCallback(
-		async (relayUrl: string, iceUrl?: string, password?: string): Promise<string> => {
+		async (relayUrl: string, iceUrl: string | undefined, password: string): Promise<string> => {
+			// Before any sync state is touched: a vault without a master password may not pair.
+			const { blob } = await readDecodedBlob();
+			const pwSlot = findPasswordSlot(blob);
+			if (!pwSlot || !password) throw new MasterPasswordRequiredError();
 			// Persist + propagate (via the pairing code) both relays so a joiner adopts them.
 			await storage.setMeta("sync.relay", relayUrl);
 			await storage.setMeta("sync.iceUrl", iceUrl ?? "");
@@ -264,17 +275,13 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 			}
 			const psk = randomKeyB64();
 			const entries = await readEntriesPayload();
-			const { blob } = await readDecodedBlob();
 			// Ship our password-slot verifier so the joiner can PROVE its typed password
-			// matches this device's. Omitted when this device unlocks by security key only.
-			const pwSlot = findPasswordSlot(blob);
-			const passwordCheck = pwSlot
-				? {
-						saltB64: bytesToBase64(pwSlot.salt),
-						slotIdB64: bytesToBase64(pwSlot.slotId),
-						verifierB64: bytesToBase64(pwSlot.verifier),
-					}
-				: undefined;
+			// matches this device's.
+			const passwordCheck = {
+				saltB64: bytesToBase64(pwSlot.salt),
+				slotIdB64: bytesToBase64(pwSlot.slotId),
+				verifierB64: bytesToBase64(pwSlot.verifier),
+			};
 			// Forward our recovery slot(s) so the joiner shares this group's recovery code (they wrap
 			// the same VEK). Empty when this device has no recovery code.
 			const recoverySlots = findRecoverySlots(blob).map((s) => ({

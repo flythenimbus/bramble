@@ -171,3 +171,32 @@ test("a key-only vault can confirm a sensitive action with its platform key", as
 	await expect(popup.getByRole("heading", { name: "Your new recovery code" })).toBeVisible();
 	await expect(popup.getByText(/Couldn't verify your key/i)).toHaveCount(0);
 });
+
+test("a key-only vault is asked for a master password before it can add a device", async ({
+	context,
+	extensionId,
+}) => {
+	// Pairing hands over the vault and the re-entered master password signs the new device in, so a
+	// vault unlocked by keys alone must turn a password on first rather than pair unsigned.
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+
+	const popup = await context.newPage();
+	await addVirtualAuthenticator(popup, { hasPrf: true });
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+
+	await addTapToUnlockKey(popup, "This device", "Only key");
+	await expect(popup.getByText("Only key")).toBeVisible();
+	await popup.getByRole("button", { name: /Require master password to unlock/i }).click();
+	await popup.getByRole("button", { name: "Disable master password" }).click();
+	await expect(popup.getByText(/Off\. You unlock by tapping a key/i)).toBeVisible();
+
+	await popup.getByRole("button", { name: "Sync", exact: true }).click();
+	await popup.getByRole("button", { name: "Add a device", exact: true }).first().click();
+	await expect(popup.getByText("Adding a device needs a master password")).toBeVisible();
+	await expect(popup.getByText(/bramble-pair-1\./)).toHaveCount(0);
+
+	await popup.getByRole("button", { name: "Turn on master password" }).click();
+	await expect(popup.getByText(/Off\. You unlock by tapping a key/i)).toBeVisible();
+});

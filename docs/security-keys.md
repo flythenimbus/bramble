@@ -238,9 +238,9 @@ briefly offered in the UI; both are gone. It skipped a joiner-side password chec
 not to gate anything (see [p2p-sync.md](p2p-sync.md)), and the only case that needed it was a
 password-less vault.
 
-So a vault with no password slot **cannot add a device**. The intended answer is a per-invite
-temporary password, which only works if the INVITER withholds the VEK until the joiner answers a
-challenge, before `sendBundle`. Not built.
+So pairing requires a master password, on both sides. A vault with no password slot cannot add a
+device: "Add a device" asks the user to turn one on first, and core's `inviteDevice` refuses with
+`MasterPasswordRequiredError`. See [p2p-sync-revocation-hardening.md](p2p-sync-revocation-hardening.md).
 
 ## Unlock with several keys: one prompt
 

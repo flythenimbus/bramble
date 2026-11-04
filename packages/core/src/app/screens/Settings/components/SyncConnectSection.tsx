@@ -1,5 +1,6 @@
 import { i18n } from "@lingui/core";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { useNavigate } from "@tanstack/react-router";
 import { Pencil, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -100,6 +101,7 @@ export function SyncConnectSection() {
 	const { shell, storage } = usePlatform();
 	const { inviteDevice, removeDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot } = useVault();
+	const navigate = useNavigate();
 	const { syncKey } = useVaultRegistry();
 	const canPerVaultSync = useCan("perVaultSync");
 	const { t } = useLingui();
@@ -128,9 +130,9 @@ export function SyncConnectSection() {
 	const { nameOf, rename, canRename } = useDeviceNames();
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	// Master-password gate before adding a device: the re-entered password admission-signs the new
-	// device (Item A). Open only for a password vault; a security-key-only vault skips it (no password
-	// to derive an admission key from, so the joiner is enrolled unsigned). See docs/p2p-sync-revocation-hardening.md.
+	// device (Item A). A vault without one may not pair. See docs/p2p-sync-revocation-hardening.md.
 	const [pwGateOpen, setPwGateOpen] = useState(false);
+	const [pwRequiredOpen, setPwRequiredOpen] = useState(false);
 	const [gatePassword, setGatePassword] = useState("");
 	const [gateError, setGateError] = useState<string | null>(null);
 	const [gateBusy, setGateBusy] = useState(false);
@@ -321,7 +323,7 @@ export function SyncConnectSection() {
 		a.publicKey === myPub ? -1 : b.publicKey === myPub ? 1 : b.addedAt - a.addedAt,
 	);
 
-	const addDevice = (password?: string) =>
+	const addDevice = (password: string) =>
 		run("creating pairing code…", async () => {
 			// A fresh invite; clear the previous one's expiry/failure.
 			setHostExpired(false);
@@ -330,10 +332,9 @@ export function SyncConnectSection() {
 			setPairingCode(await inviteDevice(relayUrl.trim(), iceUrl.trim() || undefined, password));
 			await refreshGroup();
 		});
-	// "Add device" entry point: a password vault confirms the master password first (it admission-signs
-	// the joiner); a security-key-only vault has no password to re-enter, so it enrolls directly.
+	// "Add device" entry point: confirm the master password first (it admission-signs the joiner).
 	const beginAddDevice = () => {
-		if (!hasPasswordSlot) return void addDevice();
+		if (!hasPasswordSlot) return void setPwRequiredOpen(true);
 		setGatePassword("");
 		setGateError(null);
 		setPwGateOpen(true);
@@ -581,6 +582,35 @@ export function SyncConnectSection() {
 					)}
 				</>
 			)}
+
+			<Modal open={pwRequiredOpen} onClose={() => setPwRequiredOpen(false)} className="max-w-sm">
+				<div className="p-5 space-y-4">
+					<h2 className="text-base font-medium">
+						<Trans>Adding a device needs a master password</Trans>
+					</h2>
+					<p className="text-xs text-muted-foreground">
+						<Trans>
+							Pairing gives the new device your vault, so it has to be authorized with your master
+							password. Turn one on in Security, then come back to add the device.
+						</Trans>
+					</p>
+					<div className="flex justify-end gap-2">
+						<Button variant="secondary" size="sm" onClick={() => setPwRequiredOpen(false)}>
+							<Trans>Cancel</Trans>
+						</Button>
+						<Button
+							variant="primary"
+							size="sm"
+							onClick={() => {
+								setPwRequiredOpen(false);
+								void navigate({ to: "/settings", search: { tab: "security" } });
+							}}
+						>
+							<Trans>Turn on master password</Trans>
+						</Button>
+					</div>
+				</div>
+			</Modal>
 
 			<Modal
 				open={pwGateOpen}
