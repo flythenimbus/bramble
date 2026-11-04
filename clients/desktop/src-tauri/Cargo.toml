@@ -163,6 +163,17 @@ keyring = { version = "3.6.3", features = [
 [[bin]]
 name = "bramble-proxy"
 path = "src/bin/proxy.rs"
+required-features = ["proxy-bin"]
+
+# Gates the proxy's [[bin]], on by default so cargo build, test and the staging script are
+# unchanged. Tauri bundles a crate's binaries only when their required features are passed on its
+# command line (tauri.conf.json's build.features does not count), so bundles carry the proxy as
+# the staged sidecar instead. That is what lets a Developer ID signed macOS bundle leave it out:
+# Tauri signs every bundled binary with the app's entitlements, and macOS kills a helper carrying
+# Touch ID's restricted keychain entitlement without a profile of its own.
+[features]
+default = ["proxy-bin"]
+proxy-bin = []
 
 # Dependencies are optimised even in dev builds. Argon2 is the reason: opening a default
 # KeePassXC database (64 MiB, 106 rounds) costs ~51s unoptimised against ~3s optimised, which

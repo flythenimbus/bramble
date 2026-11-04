@@ -89,6 +89,15 @@ rustPlatform.buildRustPackage (finalAttrs: {
     xdotool # the global shortcut
   ];
 
+  # The proxy ships as the staged sidecar (stage-proxy.mjs, run by beforeBuildCommand). If staging
+  # did not run, build.rs's empty placeholder is what lands here: a browser link that does nothing.
+  postInstall = ''
+    test -s "$out/bin/bramble-proxy" || {
+      echo "bramble-proxy is missing or empty: stage-proxy.mjs did not run" >&2
+      exit 1
+    }
+  '';
+
   # Autostart records this rather than current_exe(), the wrapped binary, which starts without
   # the environment set here.
   preFixup = ''

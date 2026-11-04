@@ -16,14 +16,13 @@
  * arch produces a universal app whose proxy is Apple Silicon only, and the browser link would
  * simply not work on an Intel Mac.
  *
- * Tauri does not combine them for us. It lipos the app's MAIN binary and nothing else, and the
- * proxy is both a [[bin]] in this crate and an externalBin, so a universal build wants it in two
- * places: `binaries/bramble-proxy-universal-apple-darwin` for the sidecar copy, and
- * `target/universal-apple-darwin/release/bramble-proxy` for the binary copy. Missing either one
- * fails at the bundling step, after everything has been compiled twice.
- *
- * Linux ships the binary copy alone (tauri.linux.conf.json empties externalBin): both copies would
- * land on /usr/bin/bramble-proxy, and the .rpm builder refuses a path added twice.
+ * Tauri does not combine them for us. It lipos the app's MAIN binary and nothing else, so the
+ * universal proxy is lipo'd here into `binaries/bramble-proxy-universal-apple-darwin`, the sidecar
+ * every platform ships. The [[bin]] copy is staged in `target/universal-apple-darwin/release/` as
+ * well, though no bundle carries it any more: its `proxy-bin` feature is never passed to Tauri
+ * (see Cargo.toml), so the sidecar is the only copy on every platform. That is what lets a signed
+ * macOS bundle leave it out and ship a pre-signed one instead (scripts/build-macos.ts), and on
+ * Linux it is also why there is no second /usr/bin/bramble-proxy for the .rpm builder to refuse.
  *
  * Run automatically by beforeBuildCommand; safe to run by hand.
  */
