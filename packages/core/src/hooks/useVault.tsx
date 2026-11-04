@@ -16,6 +16,7 @@ import type { PickedAttachment } from "../adapters/files";
 import { buildBackup } from "../backup/archive";
 import { usePlatform } from "../context/PlatformContext";
 import type { PlacedAttachment } from "../import/types";
+import { isVaultEmpty, readVaultContents } from "../vault/vault-empty";
 import {
 	decodeVaultBlob,
 	type EncryptedEntry,
@@ -350,6 +351,8 @@ export interface VaultActions {
 	 * security-key ceremony errors.
 	 */
 	deleteVault(auth: DeleteVaultAuth): Promise<boolean>;
+	/** Remove a vault linking left empty (never the open one; re-checks emptiness). */
+	deleteEmptyVault(id: string, entryCount: number): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	/** Save a backup file. Resolves with any attachments it had to leave out. */
 	/** Throws BackupIncompleteError rather than save a backup missing any of the vault. */
@@ -546,6 +549,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		syncKey,
 		createRecord,
 		dropActiveRecord,
+		forgetEmptyRecord,
 		selectVault,
 		refresh: refreshRegistry,
 	} = useVaultRegistry();
@@ -2120,6 +2124,56 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	/** Delete the active vault after re-auth. The single in-app path that erases a vault's blob:
 	 * verification and deletion are inseparable here, so no caller can delete without re-authing. */
+	/**
+	 * Erase everything keyed to one vault: blob, files, keys and settings. Callers gate it:
+	 * deleteVault on a re-auth, deleteEmptyVault on the vault holding nothing.
+	 */
+	const eraseVaultData = useCallback(
+		async (id: string) => {
+			// The only place a vault's (encrypted) bytes are erased, gated on the re-auth above.
+			await storage.deleteVaultBlob(id).catch(() => {});
+			// Its attachments too: sealed, but they are this vault's contents, and a deleted vault
+			// must not leave copies of them behind.
+			await fileAdapter?.deleteVault(id).catch(() => {});
+			// Everything else keyed to this vault, or the blob is gone while copies of its
+			// contents and its key material live on. Each is best-effort: a native or storage
+			// failure here must not abort a delete whose bytes are already erased.
+			await biometric?.disable(id).catch(() => {});
+			for (const k of PER_VAULT_SYNC_KEYS) {
+				await storage.removeMeta(syncKeyFor(k, id)).catch(() => {});
+			}
+			// Its gate settings, alongside its sync keys. Vault ids are UUIDs and never reused, so
+			// these would only ever be dead weight rather than something a later vault could
+			// inherit - but a delete that leaves a vault's settings behind is the kind of gap the
+			// vault-scoping rule exists to close. See CONTEXT.md.
+			for (const k of PER_VAULT_PREF_KEYS) {
+				await storage.removeMeta(syncKeyFor(k, id)).catch(() => {});
+			}
+			// Its backup targets, and the credentials they name. The list itself is VEK-wrapped
+			// state that nothing can read once the vek is gone, but where the platform keeps
+			// credentials OUTSIDE the vault (the desktop's OS credential store) they are plaintext
+			// and would outlive the vault with no path left to reach them, because the list that
+			// named them is about to be deleted. So erase those first, then the list.
+			const doomed =
+				(await storage.getMeta<{ id: string }[]>(backupTargetsKeyFor(id)).catch(() => undefined)) ??
+				[];
+			for (const t of doomed) {
+				await backupCreds?.remove(id, t.id).catch(() => {});
+			}
+			await storage.removeMeta(backupTargetsKeyFor(id)).catch(() => {});
+			// Its alias provider, whose API key can spend the user's allowance at a third party and
+			// delete the aliases already made. VEK-wrapped, so it is unreadable the moment the blob
+			// above is gone, but the same rule applies as to the settings above: a delete leaves
+			// nothing of the vault behind.
+			// The configuration itself dies with the blob, since it is a synced setting inside it.
+			// These two are what live outside: the pre-sync key a migration may not have reached,
+			// and the device-local hint that a provider exists here.
+			await storage.removeMeta(aliasConfigKeyFor(id)).catch(() => {});
+			await storage.removeMeta(aliasConfiguredHintKeyFor(id)).catch(() => {});
+		},
+		[storage, biometric, backupCreds, fileAdapter],
+	);
+
 	const deleteVault = useCallback(
 		async (auth: DeleteVaultAuth): Promise<boolean> => {
 			const ok =
@@ -2128,48 +2182,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					: await verifyWithWebauthnKey();
 			if (!ok || !activeId) return false;
 			await lock();
-			// The only place a vault's (encrypted) bytes are erased, gated on the re-auth above.
-			await storage.deleteVaultBlob(activeId).catch(() => {});
-			// Its attachments too: sealed, but they are this vault's contents, and a deleted vault
-			// must not leave copies of them behind.
-			await fileAdapter?.deleteVault(activeId).catch(() => {});
-			// Everything else keyed to this vault, or the blob is gone while copies of its
-			// contents and its key material live on. Each is best-effort: a native or storage
-			// failure here must not abort a delete whose bytes are already erased.
 			await autofill.clearProviderData?.().catch(() => {});
-			await biometric?.disable(activeId).catch(() => {});
-			for (const k of PER_VAULT_SYNC_KEYS) {
-				await storage.removeMeta(syncKeyFor(k, activeId)).catch(() => {});
-			}
-			// Its gate settings, alongside its sync keys. Vault ids are UUIDs and never reused, so
-			// these would only ever be dead weight rather than something a later vault could
-			// inherit - but a delete that leaves a vault's settings behind is the kind of gap the
-			// vault-scoping rule exists to close. See CONTEXT.md.
-			for (const k of PER_VAULT_PREF_KEYS) {
-				await storage.removeMeta(syncKeyFor(k, activeId)).catch(() => {});
-			}
-			// Its backup targets, and the credentials they name. The list itself is VEK-wrapped
-			// state that nothing can read once the vek is gone, but where the platform keeps
-			// credentials OUTSIDE the vault (the desktop's OS credential store) they are plaintext
-			// and would outlive the vault with no path left to reach them, because the list that
-			// named them is about to be deleted. So erase those first, then the list.
-			const doomed =
-				(await storage
-					.getMeta<{ id: string }[]>(backupTargetsKeyFor(activeId))
-					.catch(() => undefined)) ?? [];
-			for (const t of doomed) {
-				await backupCreds?.remove(activeId, t.id).catch(() => {});
-			}
-			await storage.removeMeta(backupTargetsKeyFor(activeId)).catch(() => {});
-			// Its alias provider, whose API key can spend the user's allowance at a third party and
-			// delete the aliases already made. VEK-wrapped, so it is unreadable the moment the blob
-			// above is gone, but the same rule applies as to the settings above: a delete leaves
-			// nothing of the vault behind.
-			// The configuration itself dies with the blob, since it is a synced setting inside it.
-			// These two are what live outside: the pre-sync key a migration may not have reached,
-			// and the device-local hint that a provider exists here.
-			await storage.removeMeta(aliasConfigKeyFor(activeId)).catch(() => {});
-			await storage.removeMeta(aliasConfiguredHintKeyFor(activeId)).catch(() => {});
+			await eraseVaultData(activeId);
 			await dropActiveRecord();
 			// Clear the recorded active vault: it is sticky (the effect above only ever writes it),
 			// so after a delete it still named the vault we just erased. Mobile's sync resolves its
@@ -2183,14 +2197,27 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			verifyWithWebauthnKey,
 			activeId,
 			lock,
-			storage,
 			dropActiveRecord,
 			shell,
 			autofill,
-			biometric,
-			backupCreds,
-			fileAdapter,
+			eraseVaultData,
 		],
+	);
+
+	/**
+	 * Remove a vault linking left empty, once the desktop's vault has arrived. The one path that
+	 * removes a vault other than the open one, so it checks emptiness itself rather than trusting
+	 * the caller: `entryCount` is what the vault held when it was last open.
+	 */
+	const deleteEmptyVault = useCallback(
+		async (id: string, entryCount: number): Promise<boolean> => {
+			if (id === activeId) return false;
+			if (!isVaultEmpty(await readVaultContents(storage, id, entryCount))) return false;
+			await eraseVaultData(id);
+			await forgetEmptyRecord(id);
+			return true;
+		},
+		[activeId, storage, eraseVaultData, forgetEmptyRecord],
 	);
 
 	// Every action is referentially stable (state reads route through latestRef), so this
@@ -2201,6 +2228,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			lock,
 			createVault,
 			deleteVault,
+			deleteEmptyVault,
 			exportVault,
 			exportKdbx,
 			exportToApp,
@@ -2252,6 +2280,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			lock,
 			createVault,
 			deleteVault,
+			deleteEmptyVault,
 			exportVault,
 			exportKdbx,
 			exportToApp,

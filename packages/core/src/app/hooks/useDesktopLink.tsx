@@ -35,7 +35,7 @@ export function useDesktopLink({
 }) {
 	const { desktopLink, storage, shell, files: platformFiles } = usePlatform();
 	const { t } = useLingui();
-	const { startJoin, importEntries, readEntries } = useVaultActions();
+	const { startJoin, importEntries, readEntries, deleteEmptyVault } = useVaultActions();
 	const { entries, files } = useVault();
 	const { vaults, activeId, setAside } = useVaultRegistry();
 	const [busy, setBusy] = useState(false);
@@ -173,6 +173,8 @@ export function useDesktopLink({
 			setInviteError(null);
 			const combining = outcome === "combine" || (outcome === "ask" && opts?.choice === "combine");
 			const oldId = activeId;
+			// Counted now, while the old vault is the one open; the re-check before removal uses it.
+			const oldCount = entries.length;
 			try {
 				const carry =
 					combining && oldId
@@ -191,6 +193,8 @@ export function useDesktopLink({
 				}
 				// After the join, so the copies land in the vault that is now open.
 				if (opts?.carry?.length) await importEntries(opts.carry);
+				// Only once the desktop's vault is here, and only if it is still empty: nothing lost.
+				if (outcome === "take" && oldId) await deleteEmptyVault(oldId, oldCount);
 			} catch (e) {
 				setInviteError(
 					e instanceof Error && e.message ? e.message : t`Could not sync with the desktop app.`,
@@ -210,6 +214,7 @@ export function useDesktopLink({
 			readEntries,
 			importEntries,
 			setAside,
+			deleteEmptyVault,
 			t,
 		],
 	);

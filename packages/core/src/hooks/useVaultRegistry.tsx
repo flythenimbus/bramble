@@ -56,6 +56,9 @@ export interface VaultRegistryValue {
 	/** Mark a vault as set aside by linking (local to this device). Reads storage fresh, since a
 	 * join has usually just added a record this render has not seen. */
 	setAside: (id: string) => Promise<void>;
+	/** Forget the record of a vault deleteEmptyVault has erased. Never the active one: that is
+	 * dropActiveRecord's, behind a re-auth. */
+	forgetEmptyRecord: (id: string) => Promise<void>;
 }
 
 // Value when no provider is mounted (e.g. isolated hook tests): the registry is "ready"
@@ -73,6 +76,7 @@ const DEFAULT: VaultRegistryValue = {
 	dropActiveRecord: async () => {},
 	refresh: async () => {},
 	setAside: async () => {},
+	forgetEmptyRecord: async () => {},
 };
 
 const VaultRegistryContext = createContext<VaultRegistryValue>(DEFAULT);
@@ -172,6 +176,15 @@ export function VaultRegistryProvider({
 		[storage, persist],
 	);
 
+	const forgetEmptyRecord = useCallback(
+		async (id: string) => {
+			if (id === activeId) return;
+			const current = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
+			await persist(removeVault(current, id));
+		},
+		[activeId, storage, persist],
+	);
+
 	const value = useMemo<VaultRegistryValue>(
 		() => ({
 			ready,
@@ -185,6 +198,7 @@ export function VaultRegistryProvider({
 			dropActiveRecord,
 			refresh,
 			setAside,
+			forgetEmptyRecord,
 		}),
 		[
 			ready,
@@ -198,6 +212,7 @@ export function VaultRegistryProvider({
 			dropActiveRecord,
 			refresh,
 			setAside,
+			forgetEmptyRecord,
 		],
 	);
 

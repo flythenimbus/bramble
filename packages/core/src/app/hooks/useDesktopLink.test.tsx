@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
 	imported: [] as unknown[][],
 	failStage: false,
 	meta: new Map<string, unknown>(),
+	joinFails: false,
 }));
 
 vi.mock("../../hooks/useVault", async (importOriginal) => ({
@@ -32,12 +33,17 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 		startJoin: async (...args: unknown[]) => {
 			h.steps.push("join");
 			h.joins.push(args);
+			if (h.joinFails) throw new Error("join failed");
 		},
 		importEntries: async (items: unknown[], attachments: unknown[] = []) => {
 			h.steps.push("import");
 			h.imported.push([items, attachments]);
 		},
 		readEntries: () => h.desktopEntries,
+		deleteEmptyVault: async (id: string) => {
+			h.steps.push(`deleteEmpty:${id}`);
+			return true;
+		},
 	}),
 }));
 
@@ -232,5 +238,41 @@ describe("combining into the desktop's vault", () => {
 			await result.current.accept("pw", { choice: "separate" });
 		});
 		expect(h.steps).toEqual(["join"]);
+	});
+});
+
+describe("an empty browser vault", () => {
+	function emptyBrowserVault() {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.entries = [];
+		h.files = [];
+		h.meta.clear();
+		h.summary = { name: "Home", empty: false, entries: 380 };
+		h.steps = [];
+		h.joinFails = false;
+	}
+
+	it("is removed only after the desktop's vault has arrived", async () => {
+		emptyBrowserVault();
+		const result = await linkedFrom("settings");
+		expect(result.current.outcome).toBe("take");
+		h.steps = [];
+		await act(async () => {
+			await result.current.accept("pw");
+		});
+		expect(h.steps).toEqual(["join", "deleteEmpty:v1"]);
+	});
+
+	it("is kept when the join fails, and the failure is shown", async () => {
+		emptyBrowserVault();
+		const result = await linkedFrom("settings");
+		h.steps = [];
+		h.joinFails = true;
+		await act(async () => {
+			await result.current.accept("pw");
+		});
+		expect(h.steps).toEqual(["join"]);
+		expect(result.current.inviteError).toMatch(/join failed/i);
+		h.joinFails = false;
 	});
 });
