@@ -1029,6 +1029,57 @@ fn await_desktop_answer() -> bool {
     slot.as_ref().and_then(|p| p.answer).unwrap_or(false)
 }
 
+/// What the link emoji derive from: the handshake hash and both nonces. Must match
+/// `linkSasMaterial` in @core/sync/link-sas byte for byte.
+fn sas_material(handshake_hash: &[u8], desktop_nonce: &[u8], browser_nonce: &[u8]) -> Vec<u8> {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(b"bramble/link/sas-input/v1");
+    h.update(handshake_hash);
+    h.update(desktop_nonce);
+    h.update(browser_nonce);
+    h.finalize().to_vec()
+}
+
+/// One sealed request from the browser with this op, within the link's step deadline.
+fn read_sealed_op(session_id: u32, stream: &ipc::Stream, op: &str) -> Option<serde_json::Value> {
+    let frame = read_frame_within(stream, Duration::from_millis(LINK_STEP_MS), || false)?;
+    let sealed = serde_json::from_slice::<SealedFrame>(&frame).ok()?;
+    let plain = handshake::handshake_decrypt(session_id, sealed.sealed).ok()?;
+    let value = serde_json::from_str::<serde_json::Value>(&plain).ok()?;
+    (value["op"] == op).then_some(value)
+}
+
+/// The browser commits to a nonce, learns ours, then reveals its own. Neither side can pick its
+/// nonce after seeing the other's, so a relay in the middle cannot make both screens' emoji
+/// agree. Returns what the emoji derive from, or None when the browser broke the exchange.
+fn exchange_nonces(session_id: u32, stream: &mut ipc::Stream) -> Option<String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use sha2::{Digest, Sha256};
+    let commit = read_sealed_op(session_id, stream, "linkCommit")?["commit"]
+        .as_str()
+        .and_then(|c| STANDARD.decode(c).ok())?;
+    let mut ours = [0u8; 32];
+    getrandom::fill(&mut ours).ok()?;
+    write_sealed(
+        session_id,
+        stream,
+        serde_json::json!({ "ok": true, "nonce": STANDARD.encode(ours) }),
+    )
+    .ok()?;
+    let theirs = read_sealed_op(session_id, stream, "linkReveal")?["nonce"]
+        .as_str()
+        .and_then(|n| STANDARD.decode(n).ok())?;
+    if Sha256::digest(&theirs).as_slice() != commit.as_slice() {
+        return None;
+    }
+    write_sealed(session_id, stream, serde_json::json!({ "ok": true })).ok()?;
+    let hash = STANDARD
+        .decode(handshake::handshake_hash(session_id).ok()?)
+        .ok()?;
+    Some(STANDARD.encode(sas_material(&hash, &ours, &theirs)))
+}
+
 /// Whether the browser's user said the emoji match. A closed connection is a no.
 fn browser_confirms(session_id: u32, stream: &mut ipc::Stream, generation: u64) -> bool {
     let Some(frame) = read_frame_within(
@@ -1074,7 +1125,16 @@ fn confirm_link(
 ) -> Result<(), String> {
     let peer = handshake::handshake_remote_static(session_id)
         .map_err(|e| format!("remote static: {e:?}"))?;
-    let hash = handshake::handshake_hash(session_id).map_err(|e| format!("hash: {e:?}"))?;
+    let Some(hash) = exchange_nonces(session_id, stream) else {
+        pairing::cancel_link_window();
+        let _ = write_sealed(
+            session_id,
+            stream,
+            serde_json::json!({ "ok": false, "error": "refused" }),
+        );
+        ipc::shutdown(stream);
+        return Ok(());
+    };
     let generation = NEXT_PENDING.fetch_add(1, Ordering::Relaxed);
     {
         let (lock, _) = pending_link();
@@ -1990,6 +2050,18 @@ mod tests {
         client: Client,
         session_id: u32,
         public_key: String,
+        /// What its emoji derive from, computed on the browser's side.
+        material: String,
+    }
+
+    fn b64(bytes: &[u8]) -> String {
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        STANDARD.encode(bytes)
+    }
+
+    fn sha(bytes: &[u8]) -> Vec<u8> {
+        use sha2::{Digest, Sha256};
+        Sha256::digest(bytes).to_vec()
     }
 
     impl LinkClient {
@@ -2010,11 +2082,28 @@ mod tests {
                 .expect("msg3");
             client.send(serde_json::json!({ "message": msg3 }));
             assert_eq!(client.recv()["done"], true);
-            Ok(Self {
+            let mut this = Self {
                 client,
                 session_id: start.session_id,
                 public_key: kp.public_key,
-            })
+                material: String::new(),
+            };
+            // Commit to a nonce, learn the app's, then reveal ours.
+            let nb = [7u8; 32];
+            this.send(serde_json::json!({ "op": "linkCommit", "commit": b64(&sha(&nb)) }));
+            let answer = this.recv();
+            let nd = answer["nonce"].as_str().ok_or(answer.clone())?.to_string();
+            this.send(serde_json::json!({ "op": "linkReveal", "nonce": b64(&nb) }));
+            let ack = this.recv();
+            if ack["ok"] != true {
+                return Err(ack);
+            }
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            let h = STANDARD
+                .decode(handshake::handshake_hash(this.session_id).unwrap())
+                .unwrap();
+            this.material = b64(&sas_material(&h, &STANDARD.decode(nd).unwrap(), &nb));
+            Ok(this)
         }
 
         fn send(&mut self, body: serde_json::Value) {
@@ -2153,10 +2242,7 @@ mod tests {
         let a = LinkClient::start(&dir).expect("link");
         await_pending(true);
         let pending = link_pair_pending().unwrap();
-        assert_eq!(
-            pending.sas_hash_b64,
-            handshake::handshake_hash(a.session_id).unwrap()
-        );
+        assert_eq!(pending.sas_hash_b64, a.material);
         assert_eq!(pending.label, "Chrome on Mac");
         link_window_cancel();
         handshake::handshake_close(a.session_id);
@@ -2260,10 +2346,7 @@ mod tests {
             .and_then(|_| a.client.stream.write_all(&body));
         std::thread::sleep(std::time::Duration::from_millis(200));
         let pending = link_pair_pending().expect("B still pending");
-        assert_eq!(
-            pending.sas_hash_b64,
-            handshake::handshake_hash(b.session_id).unwrap()
-        );
+        assert_eq!(pending.sas_hash_b64, b.material);
         assert!(!pairing::paired_peers(dir.path())
             .unwrap()
             .iter()
@@ -2288,5 +2371,46 @@ mod tests {
         // Either a refusal frame or a closed socket; never a hang.
         let _ = read;
         link_window_cancel();
+    }
+
+    #[test]
+    fn sas_material_matches_the_browser() {
+        // The same vector is asserted in @core/sync/link-sas.test.ts.
+        assert_eq!(
+            b64(&sas_material(&[1; 32], &[2; 32], &[3; 32])),
+            "S8naVfRk7bIlPFMxZJojFyQc+1fyQSEaCA2PzZ4RjDs="
+        );
+    }
+
+    #[test]
+    fn a_browser_that_reveals_another_nonce_is_refused() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_window_begin();
+        let kp = handshake::handshake_generate_keypair().unwrap();
+        let start = handshake::handshake_link_initiator(kp.private_key.clone()).unwrap();
+        let mut client = Client::connect(dir.path());
+        client.send(serde_json::json!({ "kind": "link", "v": 1, "label": "liar" }));
+        client.send(serde_json::json!({ "message": start.message }));
+        let reply = client.recv();
+        let msg3 =
+            handshake::handshake_read(start.session_id, reply["message"].as_str().unwrap().into())
+                .unwrap()
+                .message
+                .unwrap();
+        client.send(serde_json::json!({ "message": msg3 }));
+        assert_eq!(client.recv()["done"], true);
+        let mut link = LinkClient {
+            client,
+            session_id: start.session_id,
+            public_key: kp.public_key,
+            material: String::new(),
+        };
+        link.send(serde_json::json!({ "op": "linkCommit", "commit": b64(&sha(&[1; 32])) }));
+        assert!(link.recv()["nonce"].is_string());
+        link.send(serde_json::json!({ "op": "linkReveal", "nonce": b64(&[2; 32]) }));
+        assert_eq!(link.recv()["ok"], false);
+        assert!(link_pair_pending().is_none());
+        handshake::handshake_close(link.session_id);
     }
 }

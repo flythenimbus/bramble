@@ -16,8 +16,9 @@
 // The crypto lives in the offscreen document, because MV3's service worker has no WASM host.
 // This module owns the port and the persistence and relays handshake messages across.
 
-import { linkSas } from "@core/sync/link-sas";
+import { linkNonceCommit, linkSas, linkSasMaterial } from "@core/sync/link-sas";
 import type { PairingSas } from "@core/sync/pairing-sas";
+import { bytesToBase64 } from "@core/util/bytes";
 import { defaultDeviceLabel } from "@core/util/device-label";
 import { api, disconnectReason } from "../platform-api";
 import { isExtensionSender } from "../sender";
@@ -376,6 +377,30 @@ export async function startDesktopLink(): Promise<
 		const done = await session.request({ message: next.message });
 		if (!done?.done) throw new Error("The desktop app refused.");
 
+		// Commit to a nonce, learn the app's, then reveal ours, so a relay in the middle cannot pick
+		// its inputs to make both screens' emoji agree.
+		const sealedRequest = async (message: Record<string, unknown>) => {
+			const sealed = (await offscreen("LINK_SEAL", {
+				sessionId: start.sessionId,
+				plaintext: JSON.stringify(message),
+			})) as string;
+			const answer = await session.request({ sealed });
+			const plain = (await offscreen("LINK_OPEN", {
+				sessionId: start.sessionId,
+				sealed: answer?.sealed,
+			})) as string;
+			return JSON.parse(plain) as { ok?: boolean; nonce?: string };
+		};
+		const browserNonce = bytesToBase64(crypto.getRandomValues(new Uint8Array(32)));
+		const appNonce = await sealedRequest({
+			op: "linkCommit",
+			commit: await linkNonceCommit(browserNonce),
+		});
+		if (appNonce.ok !== true || typeof appNonce.nonce !== "string") {
+			throw new Error("The desktop app refused.");
+		}
+		const revealed = await sealedRequest({ op: "linkReveal", nonce: browserNonce });
+		if (revealed.ok !== true) throw new Error("The desktop app refused.");
 		const hash = (await offscreen("LINK_HANDSHAKE_HASH", { sessionId: start.sessionId })) as string;
 		const appPublicKey = (await offscreen("LINK_REMOTE_STATIC", {
 			sessionId: start.sessionId,
@@ -388,7 +413,7 @@ export async function startDesktopLink(): Promise<
 			publicKey: kp.publicKey,
 			appPublicKey,
 		});
-		return { id, sas: await linkSas(hash) };
+		return { id, sas: await linkSas(await linkSasMaterial(hash, appNonce.nonce, browserNonce)) };
 	} catch (e) {
 		await fail();
 		throw e;

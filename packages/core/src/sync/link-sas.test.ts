@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { base64ToBytes, bytesToBase64 } from "../util/bytes";
-import { linkSas } from "./link-sas";
+import { linkSas, linkSasMaterial } from "./link-sas";
 import { sasFromBits } from "./pairing-sas";
 
 /** The 64 bits the link emoji come from, computed here independently of link-sas.ts. */
@@ -41,5 +41,22 @@ describe("linkSas", () => {
 
 	it("differs for a different handshake", async () => {
 		expect((await linkSas(HASH_A)).digits).not.toBe((await linkSas(HASH_B)).digits);
+	});
+});
+
+describe("linkSasMaterial", () => {
+	it("binds the handshake hash and both nonces, matching the desktop app byte for byte", async () => {
+		const fill = (n: number) => bytesToBase64(new Uint8Array(32).fill(n));
+		// The same vector is asserted in the desktop's socket.rs tests.
+		expect(await linkSasMaterial(fill(1), fill(2), fill(3))).toBe(
+			"S8naVfRk7bIlPFMxZJojFyQc+1fyQSEaCA2PzZ4RjDs=",
+		);
+	});
+
+	it("changes with either nonce", async () => {
+		const fill = (n: number) => bytesToBase64(new Uint8Array(32).fill(n));
+		const base = await linkSasMaterial(fill(1), fill(2), fill(3));
+		expect(await linkSasMaterial(fill(1), fill(9), fill(3))).not.toBe(base);
+		expect(await linkSasMaterial(fill(1), fill(2), fill(9))).not.toBe(base);
 	});
 });

@@ -1,3 +1,4 @@
+import { linkNonceCommit } from "@core/sync/link-sas";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // The held-open link to the desktop app, which sync needs and delegation did not.
@@ -651,8 +652,31 @@ describe("pairing borrows the page's native transport", () => {
 		page.deliver({ ok: true, message: "xl2" });
 		await vi.waitFor(() => expect(page.sent.length).toBe(4));
 		page.deliver({ ok: true, done: true });
+		// The nonce exchange: the browser commits, the app answers with its nonce, the browser reveals.
+		await vi.waitFor(() => expect(page.sent.length).toBe(5));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, nonce: APP_NONCE })}` });
+		await vi.waitFor(() => expect(page.sent.length).toBe(6));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true })}` });
 		return started;
 	}
+
+	const APP_NONCE = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
+	const opened = (page: ReturnType<typeof lend>, i: number) =>
+		JSON.parse(
+			h.sealed.get((page.sent[i] as { frame: { sealed: string } }).frame.sealed) ?? "{}",
+		) as { op?: string; commit?: string; nonce?: string };
+
+	it("commits to its nonce before it learns the app's, then reveals that same nonce", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+		await linkOver(mod, page);
+
+		const commit = opened(page, 4);
+		const reveal = opened(page, 5);
+		expect(commit.op).toBe("linkCommit");
+		expect(reveal.op).toBe("linkReveal");
+		expect(await linkNonceCommit(reveal.nonce ?? "")).toBe(commit.commit);
+	});
 
 	it("links by emoji, storing the app only after the user confirms and the app agrees", async () => {
 		const mod = await load();
@@ -664,8 +688,8 @@ describe("pairing borrows the page's native transport", () => {
 		expect(started.sas.emoji).toHaveLength(7);
 
 		const confirmed = mod.confirmDesktopLink(started.id, true);
-		await vi.waitFor(() => expect(page.sent.length).toBe(5));
-		const sealed = (page.sent[4] as { frame: { sealed: string } }).frame.sealed;
+		await vi.waitFor(() => expect(page.sent.length).toBe(7));
+		const sealed = (page.sent[6] as { frame: { sealed: string } }).frame.sealed;
 		expect(JSON.parse(h.sealed.get(sealed) ?? "{}")).toEqual({ op: "linkConfirm" });
 		expect(h.setCalls).toEqual([]);
 		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, paired: true })}` });
@@ -693,7 +717,7 @@ describe("pairing borrows the page's native transport", () => {
 		if (!("id" in started)) throw new Error("expected a link in progress");
 
 		const confirmed = mod.confirmDesktopLink(started.id, true);
-		await vi.waitFor(() => expect(page.sent.length).toBe(5));
+		await vi.waitFor(() => expect(page.sent.length).toBe(7));
 		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: false, error: "refused" })}` });
 
 		await expect(confirmed).rejects.toThrow();
