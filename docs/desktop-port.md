@@ -912,7 +912,7 @@ the only answer. On Linux `tauri build` produces three things, and the differenc
 
 Unlike the `.deb` and `.rpm`, which link what the user's distribution ships, the AppImage carries
 the build image's libraries, so every one of them is a compatibility claim about hosts older and
-newer than bookworm. linuxdeploy gets three of those wrong, and Tauri has no option to change what
+newer than bookworm. linuxdeploy gets some of those wrong, and Tauri has no option to change what
 it bundles (tauri-apps/tauri#15665, #15976). So `build-macos.ts` edits the AppDir after
 `tauri build`, repacks with the same `linuxdeploy-plugin-appimage` out of Tauri's tool cache, and
 re-signs the result, because the bundler's signature covers the bytes before the edit
@@ -923,6 +923,8 @@ re-signs the result, because the bundler's signature covers the bytes before the
 | Drop `libwayland-client.so.0` | Bundled 1.21 shadows the user's. Mesa 24.1+ wants symbols from 1.23+ (`wl_display_create_queue_with_name`, `wl_display_dispatch_queue_timeout`, `wl_fixes_interface`), so libglvnd cannot load the Mesa EGL vendor at all, WebKitWebProcess aborts with `Could not create default EGL display: EGL_BAD_PARAMETER`, and the window stays blank (issue #100) |
 | Drop `libcups.so.2` and the cups print backend | The only bundled library needing `GLIBC_2.36`, which is above the floor everything else holds. The app has no print feature, so it buys nothing and costs the oldest distribution |
 | Add `libharfbuzz.so.0` | linuxdeploy's excludelist keeps harfbuzz out but bundles pango, and bookworm's pango calls harfbuzz 4.0+. On Ubuntu 22.04 (harfbuzz 2.7.4) that is `undefined symbol: hb_ot_layout_get_horizontal_baseline_tag_for_script` at startup, before any window |
+| Add `libfreetype.so.6` | The excludelist keeps FreeType out too, but WebKit's Skia is compiled against bookworm's 2.12 headers, and 2.13 changed the color glyph structs (`FT_ColorStop.stop_offset` went from 2 bytes to 8, `FT_ColorStopIterator` grew a field). Skia keeps an `FT_ColorStop` on its stack and a host's 2.13+ writes past it, so the page process aborts with `stack smashing detected` the first time it draws a COLRv1 gradient glyph. On Fedora that is any emoji, the `⚠` on the setup screen first: the window freezes, then goes white |
+| Add bookworm's CBDT Noto Color Emoji, and a hook that selects it | 2.12 cannot read Fedora's COLRv1 Noto Color Emoji at all, so with the bundled FreeType every emoji there is blank, and pairing shows its SAS as emoji. `apprun-hooks/bramble-fontconfig.sh` sets `FONTCONFIG_FILE` to a config that includes the host's `/etc/fonts/fonts.conf`, adds the bundled font, and rejects every other color font. It stands down when the host has no `/etc/fonts/fonts.conf` or the user set `FONTCONFIG_FILE`. Like the GTK hook's variables, it is inherited by anything the app launches |
 
 The blank window is not Wayland-specific: it reproduces under X11 too, and on Arch, Fedora 44 and
 Ubuntu 26.04. The other Wayland libraries (`-cursor`, `-egl`, `-server`) stay bundled, because
@@ -930,10 +932,14 @@ Mesa asks them for nothing the bundled versions lack.
 
 Checked under Xvfb on Ubuntu 26.04 (Mesa 26, wayland 1.24) and Ubuntu 22.04 (glibc 2.35, harfbuzz
 2.7.4), which is the floor `test:apt` claims: the stock AppImage aborts on the first and fails to
-start on the second, and the repacked one renders on both.
+start on the second, and the repacked one renders on both. The FreeType and emoji rules were checked
+the same way on Fedora 45 (FreeType 2.14.3, `Noto-COLRv1.ttf`): the stock 0.14.0 AppImage aborts on
+"Create your vault", and the repacked one draws the setup screen, with the SAS emoji typed into a
+field in color.
 
 Debian's WebKit links 30 optional libraries Ubuntu's did not (AV1 codecs, abseil, flite), and
-linuxdeploy follows them all in, which is most of the AppImage's jump from 85 MB to 100 MB.
+linuxdeploy follows them all in, which is most of the AppImage's jump from 85 MB to 100 MB. The
+emoji font adds about 11 MB more.
 
 The `.deb` is also published to an APT repository, which is how most Linux users will install and
 update: see [apt-releases.md](apt-releases.md).

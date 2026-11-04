@@ -2,8 +2,18 @@
 // Why each rule: docs/desktop-port.md, "What the AppImage may and may not bundle".
 
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, lstatSync, readdirSync, realpathSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import {
+	copyFileSync,
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { basename, join } from "node:path";
 import { packerMatchesPin, packerPath } from "./appimage-tools.ts";
 
 /** Bundled copies that break the app on hosts newer or older than the builder. */
@@ -19,7 +29,44 @@ const DROP = [
 const ADD = [
 	// Bundled pango calls harfbuzz 4.0+, so an older host's copy is a missing symbol at startup.
 	"libharfbuzz.so.0",
+	// WebKit's Skia is built against this one's headers. 2.13 changed the color glyph structs, so a
+	// newer host's copy overruns Skia's stack on the first COLRv1 emoji and kills the page.
+	"libfreetype.so.6",
 ];
+
+// The bundled FreeType cannot read COLRv1 fonts (Fedora's Noto Color Emoji is one), which leaves
+// every emoji blank, the pairing SAS included. So the build host's CBDT copy goes in, and a hook
+// points fontconfig at a config that draws emoji with it and nothing else.
+const EMOJI_FONT = "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf";
+const FONT_DIR = "usr/share/bramble/fonts";
+const FONTS_CONF = "usr/share/bramble/fonts.conf";
+const HOOK = "bramble-fontconfig.sh";
+
+// The bundled font is tagged at scan time and accepted by that tag, because a file glob in
+// acceptfont does not protect a font from a pattern in rejectfont.
+const FONTS_CONF_XML = `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+	<include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+	<dir prefix="relative">fonts</dir>
+	<match target="scan">
+		<test name="file" compare="contains"><string>/${FONT_DIR}/</string></test>
+		<edit name="foundry" mode="assign"><string>bramble</string></edit>
+	</match>
+	<selectfont>
+		<acceptfont><pattern><patelt name="foundry"><string>bramble</string></patelt></pattern></acceptfont>
+		<rejectfont><pattern><patelt name="color"><bool>true</bool></patelt></pattern></rejectfont>
+	</selectfont>
+</fontconfig>
+`;
+
+// Without the host's own fonts.conf to include there would be no text fonts at all.
+const HOOK_SH = `#! /usr/bin/env bash
+
+if [ -z "\${FONTCONFIG_FILE:-}" ] && [ -f /etc/fonts/fonts.conf ]; then
+	export FONTCONFIG_FILE="$APPDIR/${FONTS_CONF}"
+fi
+`;
 
 const SEARCH = [
 	"/usr/lib/x86_64-linux-gnu",
@@ -59,6 +106,7 @@ export function makeAppImagePortable(bundleDir: string, env: NodeJS.ProcessEnv):
 		copyFileSync(realpathSync(source), join(appDir, "usr/lib", name));
 		changes.add(`+${name}`);
 	}
+	bundleEmojiFont(appDir, changes);
 	if (changes.size === 0) {
 		console.log("AppImage bundle already as intended; left as built.");
 		return;
@@ -90,6 +138,31 @@ export function makeAppImagePortable(bundleDir: string, env: NodeJS.ProcessEnv):
 		["--filter", "@vault/platform-desktop", "exec", "tauri", "signer", "sign", image],
 		{ stdio: ["ignore", "ignore", "inherit"], env },
 	);
+}
+
+/** The emoji font, its fontconfig file, and the AppRun line that sources the hook selecting it. */
+function bundleEmojiFont(appDir: string, changes: Set<string>): void {
+	const font = join(appDir, FONT_DIR, basename(EMOJI_FONT));
+	if (!existsSync(font)) {
+		if (!existsSync(EMOJI_FONT)) {
+			throw new Error(`${EMOJI_FONT} is not on this build host (fonts-noto-color-emoji)`);
+		}
+		mkdirSync(join(appDir, FONT_DIR), { recursive: true });
+		copyFileSync(EMOJI_FONT, font);
+		writeFileSync(join(appDir, FONTS_CONF), FONTS_CONF_XML);
+		changes.add(`+${basename(EMOJI_FONT)}`);
+	}
+
+	// linuxdeploy's AppRun sources each hook by name, so a new one needs its own line.
+	const appRun = join(appDir, "AppRun");
+	const script = readFileSync(appRun, "utf8");
+	const source = `source "$this_dir"/apprun-hooks/"${HOOK}"`;
+	if (script.includes(source)) return;
+	const exec = 'exec "$this_dir"/AppRun.wrapped';
+	if (!script.includes(exec)) throw new Error(`no \`${exec}\` in ${appRun} to hook in front of`);
+	writeFileSync(join(appDir, "apprun-hooks", HOOK), HOOK_SH, { mode: 0o755 });
+	writeFileSync(appRun, script.replace(exec, `${source}\n\n${exec}`));
+	changes.add(`+${HOOK}`);
 }
 
 /**

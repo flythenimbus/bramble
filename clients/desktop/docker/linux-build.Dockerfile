@@ -16,8 +16,8 @@
 #
 # The AppImage is the artifact that feels a base change, because it carries this image's libraries:
 # it bundles webkit2gtk from here (bookworm's is a stable series behind trixie, and the price of
-# the low floor), and scripts/appimage-portability.ts fixes the three libraries linuxdeploy gets
-# wrong for hosts older or newer than this one. See docs/desktop-port.md.
+# the low floor), and scripts/appimage-portability.ts fixes what linuxdeploy gets wrong for hosts
+# older or newer than this one. See docs/desktop-port.md.
 #
 # What is deliberately NOT here: signing. The updater key arrives through the environment for the
 # one build that needs it, and the APT repository's GPG key never comes near a container at all —
@@ -32,11 +32,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # libxdo (tray and global shortcut), rsync (see the workspace copy in build-linux.ts), and
 # xdg-utils, which the deb bundler copies xdg-open OUT of for tauri-plugin-opener. GitHub runners
 # ship that already, so a clean container is the only place its absence shows up.
+# fonts-noto-color-emoji is the CBDT emoji font the AppImage carries (appimage-portability.ts).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential \
       ca-certificates \
       curl \
       file \
+      fonts-noto-color-emoji \
       git \
       libayatana-appindicator3-dev \
       libdbus-1-dev \

@@ -337,14 +337,15 @@ jobs:
         with:
           workspaces: clients/desktop/src-tauri
 
-      # Tauri's Linux prerequisites plus two of ours: libdbus for the Secret Service backend of
-      # the credential store, libxdo for the tray and the global shortcut.
+      # Tauri's Linux prerequisites plus three of ours: libdbus for the Secret Service backend of
+      # the credential store, libxdo for the tray and the global shortcut, and the CBDT emoji font
+      # the AppImage carries.
       - name: Install system deps
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
-            libdbus-1-dev libxdo-dev libssl-dev xdg-utils
+            libdbus-1-dev libxdo-dev libssl-dev xdg-utils fonts-noto-color-emoji
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
@@ -371,10 +372,11 @@ jobs:
       - name: Show what was produced
         run: ls -la clients/desktop/src-tauri/target/release/bundle/*/
 
-      # The AppImage carries the build host's libraries, and three of them decide whether it starts
+      # The AppImage carries the build host's libraries, and some of them decide whether it starts
       # on a machine that is not the builder: a bundled libwayland-client is a blank window on any
-      # current Mesa (issue #100), and a missing libharfbuzz is a dead process on an older host.
-      # scripts/appimage-portability.ts fixes all three after `tauri build`; this asserts it ran, so
+      # current Mesa (issue #100), a missing libharfbuzz is a dead process on an older host, and a
+      # missing libfreetype is a page that dies at its first COLRv1 emoji on a newer one.
+      # scripts/appimage-portability.ts fixes them after `tauri build`; this asserts it ran, so
       # that a Tauri upgrade quietly changing the bundle is a red job rather than a broken release.
       - name: Assert the AppImage bundles what it should
         run: |
@@ -389,11 +391,17 @@ jobs:
               exit 1
             fi
           done
-          if ! find "$appdir" -name libharfbuzz.so.0 | grep -q .; then
-            echo "::error::$appdir does not bundle libharfbuzz.so.0"
+          for wanted in libharfbuzz.so.0 libfreetype.so.6 NotoColorEmoji.ttf; do
+            if ! find "$appdir" -name "$wanted" | grep -q .; then
+              echo "::error::$appdir does not bundle $wanted"
+              exit 1
+            fi
+          done
+          if ! grep -q 'apprun-hooks/"bramble-fontconfig.sh"' "$appdir/AppRun"; then
+            echo "::error::$appdir/AppRun does not source the fontconfig hook"
             exit 1
           fi
-          echo "ok: libwayland-client and libcups are out, libharfbuzz is in"
+          echo "ok: libwayland-client and libcups are out; harfbuzz, freetype and the emoji font are in"
 
       # The .deb carries the APT keyring, which is how a new signing key reaches installed machines
       # before it ever signs anything (docs/apt-releases.md). A wrong relative path in
