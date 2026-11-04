@@ -1,6 +1,6 @@
 # End-to-end tests (Playwright)
 
-Four suites, each with its own config, because they need different things attached. Only the first
+Five suites, each with its own config, because they need different things attached. Only the first
 two are CI-safe.
 
 | Suite | Command | Needs | What it reaches |
@@ -9,6 +9,7 @@ two are CI-safe.
 | `extension/transport-race/` | `pnpm test:transport-race` | `FIREFOX_BINARY` for the Firefox project | the browser's own request/reply primitive |
 | `sync/` | `pnpm test:e2e:sync` | nothing (servers auto-start) | two peers pairing over real WebRTC |
 | `android/` | `pnpm test:e2e:android` | a device attached | the **shipped** app: uniffi Rust core, native storage |
+| `desktop-link/` | `pnpm test:e2e:desktop-link` | macOS (builds the desktop app) | the real desktop app and extension, linked over native messaging |
 
 `perf/page-blocking.mjs` is not a suite: it is a plain script (`node
 e2e/perf/page-blocking.mjs [url]`) that loads a real site twice, once with the built Chromium
@@ -186,6 +187,54 @@ merge delivers it. Measured, not assumed.
 
 **Not covered:** mobile's native layer. In a desktop browser Capacitor falls back to the WASM
 crypto core and the web Filesystem/Preferences — that's what `android/` is for.
+
+---
+
+## `desktop-link/`: the desktop app and the extension, linked
+
+The desktop app's debug build and the extension in Chromium, linked on one machine as
+docs/desktop-link-onboarding.md describes: the first-run banner, Settings with Combine (a file
+included), approving and then leaving the screen, and linking again after backing out. Each test is
+a flow that once failed when run this way.
+
+```sh
+pnpm test:e2e:desktop-link
+```
+
+The script builds the extension and the desktop app (`cargo build`, a few minutes from clean), and
+the config starts the local relay (port 7400) and the desktop's Vite dev server on port 1420. Neither
+is reused if something already holds the port: the debug build loads its window from 1420, so a dev
+server already there is someone else's. macOS only; the tests skip elsewhere.
+
+**What it touches.** The desktop app runs with `HOME` and `CFFIXED_USER_HOME` pointed at a scratch
+directory under `/tmp`, with a throwaway keychain as its default, so its data, socket,
+native-messaging manifests and keychain items stay out of your own install. The fixture refuses to
+start if `security` would still read your keychain settings under the scratch HOME, and fails the run
+if they differ afterwards. The desktop window appears on screen and is raised before each desktop
+step, as a person would; the browser is headless. The desktop's update check is the one request that
+leaves the machine. The extension's are asserted to stay local, and the vault copy to finish before
+the extension touches the relay at all.
+
+**How it drives the desktop.** Through the dev-only bridge
+(`clients/desktop/scripts/vite-e2e-bridge.mjs`): the config mints a per-run token, Vite mounts
+`/__bramble_e2e` only when given it, and the window runs what is posted there. None of it reaches a
+release build (`clients/desktop/src/e2e-bridge.test.ts`).
+
+**What bit while building it,** each handled in `fixtures.ts`:
+
+- A window behind others counts as hidden. WebKit stops rendering it, so `innerText` comes back
+  empty and work the window does in the background slows down. The helpers read `textContent` too,
+  and each desktop step raises the window first.
+- The app's socket path must fit in 104 bytes, hence the short scratch path under `/tmp`.
+- Vite listens on `[::1]` only, so the bridge client calls `localhost`, not `127.0.0.1`.
+- The extension asks for native messaging as an optional permission, and nothing can answer the
+  prompt here, so the fixture loads a copy that requires it.
+- Playwright cannot see the offscreen document, where sync runs. A raw CDP connection watches the
+  extension's contexts instead; a failing test gets its lines as `extension.log`, beside the
+  desktop's `desktop-sync.log`.
+
+**Not covered:** Firefox, Windows and Linux, and an older build on either side. To try main's
+extension against this app, build it in a worktree and load its `dist-chromium` by hand.
 
 ---
 
