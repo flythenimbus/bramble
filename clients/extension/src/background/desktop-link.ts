@@ -324,8 +324,8 @@ interface PendingLink {
 
 const pendingLinks = new Map<string, PendingLink>();
 
-/** Why the app did not take the link hello: not installed, or not showing its Connect dialog. */
-const HOST_MISSING = /not found/i;
+/** A native host that is not installed, in Chrome's words and in Firefox's. */
+const HOST_MISSING = /not found|no such native application/i;
 
 /**
  * Start linking with the desktop app by emoji. Resolves with the emoji to show once the

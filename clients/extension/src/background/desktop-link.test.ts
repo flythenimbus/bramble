@@ -735,6 +735,17 @@ describe("pairing borrows the page's native transport", () => {
 		await expect(started).resolves.toEqual({ legacy: true });
 	});
 
+	it("says the app is missing on Firefox too, rather than offering the code", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+		const started = mod.startDesktopLink();
+		await vi.waitFor(() => expect(page.sent.length).toBe(3));
+		// Firefox's wording for a native host that is not installed.
+		page.die("No such native application app.bramble.desktop");
+
+		await expect(started).rejects.toThrow(/No such native application/);
+	});
+
 	it("says to open the app's Connect dialog when the app refuses the hello", async () => {
 		const mod = await load();
 		const page = lend(EXT_SENDER);
