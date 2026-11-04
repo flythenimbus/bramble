@@ -3,11 +3,12 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { linguiMacroPlugin } from "../../scripts/vite-lingui.mjs";
+import { e2eBridge } from "./scripts/vite-e2e-bridge.mjs";
 
 // Single-page app that mounts @core's App with the desktop (Tauri) adapters.
 // frontendDist for Tauri is the build output (dist).
 export default defineConfig({
-	plugins: [linguiMacroPlugin(), react(), tailwindcss()],
+	plugins: [linguiMacroPlugin(), react(), tailwindcss(), e2eBridge()],
 	resolve: {
 		alias: {
 			"@core": resolve(import.meta.dirname, "../../packages/core/src"),

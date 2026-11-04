@@ -21,6 +21,9 @@ import { initRosterSync } from "./sync/roster";
 import { listenForMenuUpdateCheck, promptForUpdateOnLaunch } from "./updates-prompt";
 import { installWindowShortcuts, syncTrayTheme } from "./window-chrome";
 
+// The e2e harness's bridge: dev server only, opt-in. See scripts/vite-e2e-bridge.mjs.
+if (import.meta.env.DEV && import.meta.env.VITE_E2E_BRIDGE === "1") void import("./e2e-bridge");
+
 // Decrypted attachment copies (opened in another app) are deleted at startup and on every lock,
 // so none outlives the session it was opened in. See ./adapters/files.ts.
 startOpenedCopySweeps();
