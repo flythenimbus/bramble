@@ -77,10 +77,13 @@ vault.registry   -> [{ id: uuid, label: string, createdAt: number }, ...]
 vault.primaryId  -> uuid            // the primary vault (autofill / biometric / default pick)
 ```
 
-Both are device-local preferences, not synced and not in any blob. The label lives
-here (not in the header) for two reasons: the header is the one readable-at-rest
-part of a vault, so a label there would leak vault names; and a label is a local
-preference (a vault synced as "Work" on one device can be "Company" on another).
+Both are device-local, and neither is in a blob header: the header is the one
+readable-at-rest part of a vault, so a label there would leak vault names. The label
+was also a per-device preference at first. Since 2026-11 it follows the vault
+instead: the name is a synced setting inside the encrypted payload (`vault.name`, see
+[synced-settings.md](synced-settings.md)), renaming renames it on every device, and a
+joining device receives it. The registry label is the cached copy the locked screens
+show.
 
 Label policy: labels are **optional** and **need not be unique** (the id
 disambiguates). A vault with a blank label is displayed as "Vault N" by its position

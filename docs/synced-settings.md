@@ -64,6 +64,18 @@ That is why the alias provider is a good first one. It is only ever used behind 
 unlock: the entry form, and an in-page row that a locked vault already replaces
 with the unlock prompt.
 
+**The vault's name** (`vault.name`) is the one value that is both: the picker and the
+unlock screen show it while the vault is locked, and it belongs to the vault rather
+than the device. So it is synced and *cached*. The synced setting is the source of
+truth; the device registry keeps a copy for the locked screens, which
+`app/hooks/useVaultName.ts` brings in line whenever the vault is open. Renaming writes
+the synced value first. A vault named before this existed publishes its local name
+once, and a joining device gets the name in the enrollment bundle's entries payload
+with every other synced setting, so no wire field was added. Concurrent renames
+resolve like any setting: the later stamp wins on every device. It is not a `usePrefs`
+pref, because seeding has to tell "never synced" apart from "synced blank", which a
+pref with a default cannot.
+
 ## Why not the two obvious wire formats
 
 Both were tried on paper and both are wrong, which is worth recording so they are

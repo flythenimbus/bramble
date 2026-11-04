@@ -1,6 +1,7 @@
-// Device-local registry of the vaults on this device. Not synced, and never inside a
-// vault blob: a vault's label is a local preference, and the readable blob header would
-// leak vault names if it lived there. See docs/multiple-vaults.md.
+// Device-local registry of the vaults on this device, never inside a vault blob: the readable
+// blob header would leak vault names. The label here is a cached copy of the vault's synced
+// name (app/hooks/useVaultName.ts), kept for the screens that show it while the vault is locked.
+// See docs/multiple-vaults.md.
 
 import { z } from "zod";
 

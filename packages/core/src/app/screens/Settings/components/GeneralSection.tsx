@@ -20,6 +20,7 @@ import { toAutofillIndex } from "../../../../vault/autofill-index";
 import { Button } from "../../../components/ui/button";
 import { SelectField } from "../../../components/ui/select-field";
 import { TextField } from "../../../components/ui/text-field";
+import { useRenameVault } from "../../../hooks/useVaultName";
 import { Row, Section, Toggle } from "./primitives";
 
 // Auto-lock timeout values: -1 = Immediate, >0 = minutes, 0 = Never. "Immediate" locks the
@@ -46,8 +47,9 @@ export function GeneralSection() {
 	// the browser's WebAuthn proxy), so the switch reverts and says why.
 	const [passkeyProviderError, setPasskeyProviderError] = useState<string | null>(null);
 
-	// The current vault's name, edited inline. rename() only ever touches the active vault.
-	const { vaults, activeId, rename } = useVaultRegistry();
+	// The current vault's name, edited inline, and renamed on every device in its sync group.
+	const { vaults, activeId } = useVaultRegistry();
+	const rename = useRenameVault();
 	const currentVault = vaults.find((v) => v.id === activeId);
 	const [vaultName, setVaultName] = useState("");
 	useEffect(() => {

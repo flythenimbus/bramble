@@ -11,6 +11,7 @@ import { BackButton } from "../components/ui/back-button";
 import { Button } from "../components/ui/button";
 import { usePopOut } from "../hooks/usePopOut";
 import { useRouteBack } from "../hooks/useRouteBack";
+import { useVaultNameSync } from "../hooks/useVaultName";
 
 /** App chrome (header with back/lock/theme/settings) wrapping the routed Outlet. */
 export function AppLayout() {
@@ -23,6 +24,7 @@ export function AppLayout() {
 	// Show which vault is open next to the brand. Falls back to "Vault N" for an unnamed vault,
 	// matching the picker.
 	const { activeId, vaults } = useVaultRegistry();
+	useVaultNameSync();
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
 	const vaultLabel =
 		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;

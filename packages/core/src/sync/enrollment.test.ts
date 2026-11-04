@@ -137,4 +137,18 @@ describe("enrollment bundle", () => {
 	it("rejects a malformed bundle", () => {
 		expect(() => decodeEnrollmentBundle(JSON.stringify({ vek: "v" }))).toThrow();
 	});
+
+	// The vault's name is a synced setting, so a joining device gets it from the bundle's entries
+	// payload with no field of its own (app/hooks/useVaultName.ts).
+	it("carries the vault's synced settings, its name among them, to the joiner", () => {
+		const named: EnrollmentBundle = {
+			...bundle,
+			entries: {
+				...bundle.entries,
+				settings: { "vault.name": { hlc: { wall: 3, counter: 0, node: "d1" }, value: "Family" } },
+			},
+		};
+		const received = decodeEnrollmentBundle(encodeEnrollmentBundle(named));
+		expect(received.entries.settings?.["vault.name"]?.value).toBe("Family");
+	});
 });
