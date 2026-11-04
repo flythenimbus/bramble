@@ -42,6 +42,8 @@ export interface DesktopLinkAdapter {
 	/** The user's answer to the emoji. Resolves once the app has approved too; nothing is stored
 	 * otherwise. */
 	confirm?(id: string, matches: boolean): Promise<void>;
+	/** Let go of a link the user walked away from. */
+	cancel?(id: string): Promise<void>;
 	/** What the desktop app's vault holds, asked right after linking and before claiming its
 	 * invite: the app answers only the browser that just linked. Null when it will not say. */
 	vaultSummary?(): Promise<{ name: string; empty: boolean; entries: number } | null>;

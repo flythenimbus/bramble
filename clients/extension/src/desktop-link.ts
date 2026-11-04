@@ -181,6 +181,13 @@ const adapter: DesktopLinkAdapter = {
 		if ("legacy" in started) releaseLinkProxy();
 		return started;
 	},
+	cancel: async (id) => {
+		try {
+			await dispatch("DESKTOP_LINK_CANCEL", { id });
+		} finally {
+			releaseLinkProxy();
+		}
+	},
 	confirm: async (id, matches) => {
 		try {
 			await dispatch("DESKTOP_LINK_CONFIRM", { id, matches });

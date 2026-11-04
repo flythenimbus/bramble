@@ -121,6 +121,9 @@ const platform = {
 		confirm: async () => {
 			h.calls.push("confirm");
 		},
+		cancel: async (id: string) => {
+			h.calls.push(`cancel:${id}`);
+		},
 		vaultSummary: async () => {
 			h.calls.push("summary");
 			return h.summary;
@@ -363,5 +366,18 @@ describe("an older desktop app, linked with the code", () => {
 		expect(result.current.joinSas?.digits).toBe("1234 5678 9012");
 		act(() => h.syncEvent?.({ kind: "joined" }));
 		expect(result.current.joinSas).toBeNull();
+	});
+});
+
+describe("walking away", () => {
+	it("lets go of a link nobody answered when the screen goes away", async () => {
+		h.vaults = [];
+		h.calls = [];
+		const { result, unmount } = renderHook(() => useDesktopLink({ from: "setup" }), { wrapper });
+		await act(async () => {
+			await result.current.start();
+		});
+		unmount();
+		expect(h.calls).toContain("cancel:L1");
 	});
 });

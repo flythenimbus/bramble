@@ -169,6 +169,17 @@ export function useDesktopLink({
 		}
 	}, [desktopLink, code, afterLinked, t]);
 
+	// A link nobody answered is let go when this screen goes away, rather than held open.
+	const linkingRef = useRef(linking);
+	linkingRef.current = linking;
+	useEffect(
+		() => () => {
+			const open = linkingRef.current;
+			if (open) void desktopLink?.cancel?.(open.id);
+		},
+		[desktopLink],
+	);
+
 	// An older desktop app copies over the relay behind its own emoji prompt; show this side's.
 	useEffect(
 		() =>

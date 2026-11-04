@@ -40,6 +40,7 @@ const h = vi.hoisted(() => ({
 	slowSeal: null as string | null,
 	/** What was written to storage.local, in order. */
 	setCalls: [] as Record<string, unknown>[],
+	linkCloses: 0,
 }));
 
 /** The native port chrome.runtime.connectNative hands back. */
@@ -140,6 +141,7 @@ vi.mock("./offscreen-client", () => ({
 				return { ok: true, data: plain };
 			}
 			case "LINK_CLOSE":
+				h.linkCloses++;
 				return { ok: true, data: undefined };
 			default:
 				return { ok: false, error: `unexpected ${msg.type}` };
@@ -733,6 +735,31 @@ describe("pairing borrows the page's native transport", () => {
 		page.die("Native host has exited.");
 
 		await expect(started).resolves.toEqual({ legacy: true });
+	});
+
+	it("lets go of a link the user walks away from", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+
+		const before = h.linkCloses;
+		await mod.cancelDesktopLink(started.id);
+
+		expect(h.linkCloses).toBe(before + 1);
+		await expect(mod.confirmDesktopLink(started.id, true)).rejects.toThrow(/no longer in progress/);
+	});
+
+	it("drops an unanswered link once the app's window has closed anyway", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(Date.now() + 3 * 60_000 + 1);
+		await expect(mod.confirmDesktopLink(started.id, true)).rejects.toThrow(/no longer in progress/);
+		vi.useRealTimers();
 	});
 
 	it("says the app is missing on Firefox too, rather than offering the code", async () => {

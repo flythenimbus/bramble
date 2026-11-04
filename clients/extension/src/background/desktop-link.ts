@@ -320,9 +320,22 @@ interface PendingLink {
 	privateKey: string;
 	publicKey: string;
 	appPublicKey: string;
+	startedAt: number;
 }
 
 const pendingLinks = new Map<string, PendingLink>();
+
+/** As long as the app's Connect window: an answer after that has nothing left to confirm. */
+const LINK_PENDING_MS = 3 * 60_000;
+
+/** Let go of a link the user walked away from: its pipe, and the session in the crypto host. */
+export async function cancelDesktopLink(id: string): Promise<void> {
+	const pending = pendingLinks.get(id);
+	if (!pending) return;
+	pendingLinks.delete(id);
+	await offscreen("LINK_CLOSE", { sessionId: pending.sessionId }).catch(() => {});
+	pending.session.close();
+}
 
 /** A native host that is not installed, in Chrome's words and in Firefox's. */
 const HOST_MISSING = /not found|no such native application/i;
@@ -412,7 +425,9 @@ export async function startDesktopLink(): Promise<
 			privateKey: kp.privateKey,
 			publicKey: kp.publicKey,
 			appPublicKey,
+			startedAt: Date.now(),
 		});
+		setTimeout(() => void cancelDesktopLink(id), LINK_PENDING_MS);
 		return { id, sas: await linkSas(await linkSasMaterial(hash, appNonce.nonce, browserNonce)) };
 	} catch (e) {
 		await fail();
@@ -426,7 +441,10 @@ export async function startDesktopLink(): Promise<
  */
 export async function confirmDesktopLink(id: string, matches: boolean): Promise<LinkState> {
 	const pending = pendingLinks.get(id);
-	if (!pending) throw new Error("That link is no longer in progress.");
+	if (!pending || Date.now() - pending.startedAt > LINK_PENDING_MS) {
+		await cancelDesktopLink(id);
+		throw new Error("That link is no longer in progress.");
+	}
 	pendingLinks.delete(id);
 	const close = async () => {
 		await offscreen("LINK_CLOSE", { sessionId: pending.sessionId }).catch(() => {});
@@ -1083,6 +1101,15 @@ on(
 on(
 	"DESKTOP_LINK_START",
 	extensionOnly(async () => ({ ok: true, data: await startDesktopLink() })),
+);
+
+on(
+	"DESKTOP_LINK_CANCEL",
+	extensionOnly(async (message) => {
+		const { id } = message as { id?: unknown };
+		if (typeof id === "string") await cancelDesktopLink(id);
+		return { ok: true };
+	}),
 );
 
 on(
