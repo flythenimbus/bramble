@@ -111,7 +111,7 @@ export interface SyncBridge {
 	/** Frames to the desktop app over the native link, which the background owns. Bridged rather
 	 * than messaged, because on Firefox this host IS the background, and a page's own
 	 * runtime.sendMessage never reaches its own listeners. False when the link is down. */
-	linkSend?: (frame: string) => Promise<boolean>;
+	linkSend?: (frame: string, room?: string) => Promise<boolean>;
 	linkBlobSend?: (stream: number, frame: string) => Promise<boolean>;
 	/** Whether a link is up to an app that speaks files. */
 	linkBlobUp?: () => Promise<boolean>;
@@ -255,10 +255,7 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 		},
 		peerSource: makeLinkPeerSource({
 			send: (frame) => bridge.linkSend?.(frame) ?? Promise.resolve(false),
-			subscribe: (onFrame) => {
-				linkFrameSinks.add(onFrame);
-				return () => linkFrameSinks.delete(onFrame);
-			},
+			subscribe: (onFrame) => subscribeLinkFrames("sync", onFrame),
 		}),
 	});
 	blobSession = await startBlobSync({
@@ -288,7 +285,15 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 }
 
 /** Sinks for frames the desktop app sends, delivered here by the background. */
-const linkFrameSinks = new Set<(frame: string) => void>();
+const linkFrameSinks = new Map<string, Set<(frame: string) => void>>();
+
+/** Receive the desktop's link frames for one room. Returns an unsubscribe. */
+function subscribeLinkFrames(room: string, onFrame: (frame: string) => void): () => void {
+	const sinks = linkFrameSinks.get(room) ?? new Set();
+	linkFrameSinks.set(room, sinks);
+	sinks.add(onFrame);
+	return () => sinks.delete(onFrame);
+}
 /** The same for its file frames and pokes. */
 const linkBlobSinks = new Set<{ frame(stream: number, frame: string): void; poke(): void }>();
 
@@ -864,9 +869,11 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 			}
 			case "LINK_SYNC_FRAME": {
 				// A frame the desktop app pushed, relayed in by the background, which owns the port.
-				const frame = (payload as { frame?: unknown } | null)?.frame;
+				const { frame, room } = (payload ?? {}) as { frame?: unknown; room?: unknown };
 				if (typeof frame !== "string") throw new Error("LINK_SYNC_FRAME requires a frame");
-				for (const sink of linkFrameSinks) sink(frame);
+				for (const sink of linkFrameSinks.get(typeof room === "string" ? room : "sync") ?? []) {
+					sink(frame);
+				}
 				return { ok: true };
 			}
 			case "LINK_BLOB_FRAME": {

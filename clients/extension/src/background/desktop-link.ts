@@ -469,7 +469,7 @@ let onBlobFrame: ((stream: number, frame: string) => void) | null = null;
 let onBlobPoke: (() => void) | null = null;
 
 /** Where a frame from the app goes. Set while sync is running. */
-let onSyncFrame: ((frame: string) => void) | null = null;
+let onSyncFrame: ((frame: string, room?: string) => void) | null = null;
 
 /**
  * Whether this browser should be holding the pipe open at all.
@@ -580,7 +580,9 @@ function startKeepalive(): void {
 }
 
 /** Route the app's sync frames to `onFrame`, and make sure the pipe is up to carry them. */
-export async function openSyncLink(onFrame: (frame: string) => void): Promise<boolean> {
+export async function openSyncLink(
+	onFrame: (frame: string, room?: string) => void,
+): Promise<boolean> {
 	onSyncFrame = onFrame;
 	return openDesktopLink();
 }
@@ -602,8 +604,8 @@ export async function closeSyncLink(): Promise<void> {
 
 /** Hand one sync frame to the app. False when the link is down, which is not an error: the
  * desktop app may simply not be running, and sync carries on over the relay. */
-export async function sendSyncFrame(frame: string): Promise<boolean> {
-	return pushFrame(await ensureHeld(), { op: "sync", frame });
+export async function sendSyncFrame(frame: string, room?: string): Promise<boolean> {
+	return pushFrame(await ensureHeld(), { op: "sync", frame, ...(room ? { room } : {}) });
 }
 
 /** Push one unanswered frame. False with no link, or when the send fails, which drops the link
@@ -743,7 +745,7 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 		return;
 	}
 	if (typeof parsed.sync === "string") {
-		onSyncFrame?.(parsed.sync);
+		onSyncFrame?.(parsed.sync, typeof parsed.room === "string" ? parsed.room : undefined);
 		return;
 	}
 	if (typeof parsed.blob === "string" && typeof parsed.stream === "number") {
@@ -869,9 +871,12 @@ on(
 	// False rather than an error when the link is down: the app may simply not be running, and
 	// sync carries on over the relay.
 	extensionOnly(async (message) => {
-		const frame = (message.payload as { frame?: unknown } | undefined)?.frame;
+		const { frame, room } = (message.payload ?? {}) as { frame?: unknown; room?: unknown };
 		if (typeof frame !== "string") return { ok: false, error: "LINK_SYNC_SEND requires a frame" };
-		return { ok: true, data: await sendSyncFrame(frame) };
+		return {
+			ok: true,
+			data: await sendSyncFrame(frame, typeof room === "string" ? room : undefined),
+		};
 	}),
 );
 

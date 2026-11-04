@@ -7,12 +7,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
 	/** Tauri event listeners, by event name. */
-	listeners: new Map<string, (e: { payload: unknown }) => void>(),
+	listeners: new Map<string, ((e: { payload: unknown }) => void)[]>(),
 	unlistened: 0,
 	/** Browsers the Rust side reports as connected. */
 	connected: [] as { peerId: string; link: number }[],
 	/** Frames handed to the Rust side for delivery, and whether that delivery fails. */
-	sent: [] as { peerId: string; frame: string }[],
+	sent: [] as { peerId: string; frame: string; room?: string }[],
 	sendFails: false,
 }));
 
@@ -30,7 +30,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
 	listen: async (name: string, cb: (e: { payload: unknown }) => void) => {
-		h.listeners.set(name, cb);
+		h.listeners.set(name, [...(h.listeners.get(name) ?? []), cb]);
 		return () => {
 			h.unlistened++;
 		};
@@ -38,9 +38,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 const fire = (name: string, payload: unknown) => {
-	const cb = h.listeners.get(name);
-	if (!cb) throw new Error(`nothing listening for ${name}`);
-	cb({ payload });
+	const cbs = h.listeners.get(name);
+	if (!cbs?.length) throw new Error(`nothing listening for ${name}`);
+	for (const cb of cbs) cb({ payload });
 };
 
 async function start() {
@@ -200,5 +200,49 @@ describe("teardown", () => {
 
 		expect(h.unlistened).toBe(3);
 		expect(peers).toHaveLength(1);
+	});
+});
+
+describe("rooms on the link", () => {
+	const nothingWithin = <T>(p: Promise<T>, ms = 50) =>
+		Promise.race([p.then(() => "got"), new Promise((r) => setTimeout(() => r("nothing"), ms))]);
+
+	async function both() {
+		vi.resetModules();
+		const { linkPeerSourceFor } = await import("./link-peers");
+		const sync: PeerSession[] = [];
+		const enroll: PeerSession[] = [];
+		await linkPeerSourceFor("sync")({ onPeer: (p) => sync.push(p), report: () => {} });
+		await linkPeerSourceFor("enroll", "p1")({ onPeer: (p) => enroll.push(p), report: () => {} });
+		return { sync, enroll };
+	}
+
+	it("keeps enrollment frames apart from sync frames", async () => {
+		h.connected = [{ peerId: "p1", link: 1 }];
+		const { sync, enroll } = await both();
+		fire("link-sync-frame", { peerId: "p1", link: 1, frame: "e", room: "enroll" });
+		expect(await enroll[0]!.channel.recv()).toBe("e");
+		expect(await nothingWithin(sync[0]!.channel.recv())).toBe("nothing");
+	});
+
+	it("treats a frame with no room as sync, as older browsers send", async () => {
+		h.connected = [{ peerId: "p1", link: 1 }];
+		const { sync, enroll } = await both();
+		fire("link-sync-frame", { peerId: "p1", link: 1, frame: "s" });
+		expect(await sync[0]!.channel.recv()).toBe("s");
+		expect(await nothingWithin(enroll[0]!.channel.recv())).toBe("nothing");
+	});
+
+	it("offers only the named browser for enrollment, and tags what it sends", async () => {
+		h.connected = [
+			{ peerId: "p1", link: 1 },
+			{ peerId: "p2", link: 2 },
+		];
+		const { enroll } = await both();
+		expect(enroll.map((p) => p.remotePubkey)).toEqual(["p1"]);
+		enroll[0]!.channel.send("out");
+		await vi.waitFor(() =>
+			expect(h.sent).toContainEqual({ peerId: "p1", frame: "out", room: "enroll" }),
+		);
 	});
 });

@@ -209,6 +209,40 @@ describe("the held sync link", () => {
 		await vi.waitFor(() => expect(frames).toEqual(["from-app"]));
 	});
 
+	it("routes a pushed frame with its room", async () => {
+		const mod = await load();
+		const got: [string, string | undefined][] = [];
+		const opening = mod.openSyncLink((f, room) => got.push([f, room]));
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		expect(await opening).toBe(true);
+
+		deliver({ sealed: `sealed:${JSON.stringify({ sync: "e", room: "enroll" })}` });
+		pushSync("s");
+
+		await vi.waitFor(() =>
+			expect(got).toEqual([
+				["e", "enroll"],
+				["s", undefined],
+			]),
+		);
+	});
+
+	it("sends a sync frame tagged with its room", async () => {
+		const mod = await load();
+		await open(mod, []);
+		h.posted.length = 0;
+
+		expect(await mod.sendSyncFrame("x", "enroll")).toBe(true);
+
+		const sent = h.posted.at(-1) as { sealed: string };
+		expect(JSON.parse(h.sealed.get(sent.sealed) ?? "")).toEqual({
+			op: "sync",
+			frame: "x",
+			room: "enroll",
+		});
+	});
+
 	it("does not answer a request with a frame the app pushed", async () => {
 		// The bug this exists for: the pushed frame arrives between the request and its answer.
 		// Handed back as the answer, every later request would return the previous one's result.

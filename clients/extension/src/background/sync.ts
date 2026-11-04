@@ -348,8 +348,8 @@ export async function maybeStartSync(expectedVekEpoch?: number): Promise<void> {
 			void sendToOffscreen({ type: "LINK_BLOB_POKE" }).catch(() => {});
 		},
 	);
-	void openSyncLink((frame) => {
-		void sendToOffscreen({ type: "LINK_SYNC_FRAME", payload: { frame } }).catch(() => {});
+	void openSyncLink((frame, room) => {
+		void sendToOffscreen({ type: "LINK_SYNC_FRAME", payload: { frame, room } }).catch(() => {});
 	}).catch(() => {});
 }
 

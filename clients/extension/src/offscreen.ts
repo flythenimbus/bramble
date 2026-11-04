@@ -43,7 +43,7 @@ const chromeBridge: SyncBridge = {
 	blobArrived: () => {
 		void api.runtime.sendMessage({ type: "BLOB_ARRIVED" }).catch(() => {});
 	},
-	linkSend: (frame) => askBackground("LINK_SYNC_SEND", { frame }),
+	linkSend: (frame, room) => askBackground("LINK_SYNC_SEND", { frame, room }),
 	linkBlobSend: (stream, frame) => askBackground("LINK_BLOB_SEND", { stream, frame }),
 	linkBlobUp: () => askBackground("LINK_BLOB_UP"),
 	linkDesktopSyncKey: async () => {

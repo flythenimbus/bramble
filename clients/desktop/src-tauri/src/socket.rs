@@ -144,7 +144,12 @@ enum Request {
     /// is Noise inside Noise, deliberately: the outer session authenticates this browser
     /// INSTALL to this app, the inner one authenticates a roster DEVICE to the group, and only
     /// the inner identity is the one revocation acts on. See docs/desktop-port.md.
-    Sync { frame: String },
+    Sync {
+        frame: String,
+        /// Which session the frame belongs to: absent is ongoing sync, `enroll` the vault copy.
+        #[serde(default)]
+        room: Option<String>,
+    },
     /// What this browser speaks beyond the original protocol, answered with what this app does.
     ///
     /// The one way a capability is learned, because both ends have an older self in the wild
@@ -413,8 +418,12 @@ fn emit(event: &str, payload: serde_json::Value) {
 /// Hand a frame from the webview's sync host to one browser. Errors when that browser is not
 /// connected, which is ordinary: a peer that went away is not a failure of the caller.
 #[tauri::command]
-pub fn link_sync_send(peer_id: String, frame: String) -> Result<(), String> {
-    queue(&peer_id, serde_json::json!({ "sync": frame }), false)
+pub fn link_sync_send(peer_id: String, frame: String, room: Option<String>) -> Result<(), String> {
+    let mut body = serde_json::json!({ "sync": frame });
+    if let Some(room) = room {
+        body["room"] = serde_json::Value::String(room);
+    }
+    queue(&peer_id, body, false)
 }
 
 /// Queue a frame for one browser. A file frame goes only to a connection that said it speaks
@@ -601,10 +610,10 @@ fn read_loop(
             record_page(peer_id, link, hostname);
             continue;
         }
-        if let Ok(Request::Sync { frame }) = serde_json::from_str::<Request>(&plaintext) {
+        if let Ok(Request::Sync { frame, room }) = serde_json::from_str::<Request>(&plaintext) {
             emit(
                 "link-sync-frame",
-                serde_json::json!({ "peerId": peer_id, "link": link, "frame": frame }),
+                serde_json::json!({ "peerId": peer_id, "link": link, "frame": frame, "room": room }),
             );
             continue;
         }
@@ -1163,7 +1172,7 @@ mod tests {
         let mut link = Linked::open(&dir);
         link.await_registered(true);
 
-        link_sync_send(link.public_key.clone(), "hello-from-app".into()).expect("push");
+        link_sync_send(link.public_key.clone(), "hello-from-app".into(), None).expect("push");
 
         assert_eq!(link.recv()["sync"], "hello-from-app");
         handshake::handshake_close(link.session_id);
@@ -1242,7 +1251,7 @@ mod tests {
     fn pushing_to_a_browser_that_is_not_connected_fails_rather_than_hanging() {
         let _g = pairing::test_lock();
         let _dir = started();
-        assert!(link_sync_send("not-a-peer".into(), "frame".into()).is_err());
+        assert!(link_sync_send("not-a-peer".into(), "frame".into(), None).is_err());
     }
 
     #[test]
@@ -1508,7 +1517,7 @@ mod tests {
 
     /// The next frame this browser gets, proving nothing was queued for it before `marker`.
     fn next_after_marker(link: &mut Linked, marker: &str) -> serde_json::Value {
-        link_sync_send(link.public_key.clone(), marker.into()).expect("marker");
+        link_sync_send(link.public_key.clone(), marker.into(), None).expect("marker");
         link.recv()
     }
 
@@ -1571,5 +1580,27 @@ mod tests {
         index_store::clear();
         vault_crypto::lock();
         handshake::handshake_close(a.session_id);
+    }
+
+    #[test]
+    fn a_pushed_sync_frame_carries_its_room() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        let mut link = Linked::open(&dir);
+        link.await_registered(true);
+
+        link_sync_send(link.public_key.clone(), "e".into(), Some("enroll".into())).expect("push");
+        let tagged = link.recv();
+        assert_eq!(tagged["sync"], "e");
+        assert_eq!(tagged["room"], "enroll");
+
+        link_sync_send(link.public_key.clone(), "s".into(), None).expect("push");
+        let plain = link.recv();
+        assert_eq!(plain["sync"], "s");
+        assert!(
+            plain.get("room").is_none(),
+            "an untagged frame grew a room: {plain}"
+        );
+        handshake::handshake_close(link.session_id);
     }
 }
