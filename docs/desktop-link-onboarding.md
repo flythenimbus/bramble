@@ -4,7 +4,9 @@ Design for making it easier to link the desktop app and the browser extension. I
 pieces: piece 1 (setup and one vault) and piece 2 (one check instead of two: emoji only, no
 code).
 
-**Status (2026-11-04):** design only, nothing built. Both pieces decided.
+**Status (2026-11-04):** built on a worktree off main (`eaa0df5a`), not merged. Unit, component
+and Rust tests and the extension e2e suite pass. Not yet run end to end with the real desktop app
+and extension together, on any platform.
 
 Read [desktop-port.md](desktop-port.md) first for how the link works, and
 [p2p-sync.md](p2p-sync.md) "Pairing code" for what the vault copy hands over.
@@ -230,9 +232,14 @@ The flow:
 What it has to guarantee:
 
 - **No code, nothing to crack.** The link handshake drops the PSK (`Noise_XXpsk3` becomes plain
-  XX or equivalent), and the emoji are derived from both static keys and the handshake, like the
-  sync SAS (`pairing-sas.ts`). That removes the offline brute force
-  (pairing-hardening.md item 4) instead of patching it.
+  `Noise_XX`). That removes the offline brute force (pairing-hardening.md item 4) instead of
+  patching it.
+- **Nothing to steer, either.** After the handshake the browser commits to a random nonce (sends
+  its SHA-256), the app answers with its own nonce, and the browser reveals its nonce, which the app
+  checks against the commitment. The emoji come from SHA-256 over the handshake hash and both nonces
+  (`link-sas.ts`, `sas_material` in `socket.rs`). Neither side picks its nonce after seeing the
+  other's, so a relay in the middle cannot search for inputs that make both screens agree. Each
+  handshake message has a deadline, so a stalled or stalling peer cannot hold the window open.
 - **The extension trusts the desktop only after the user confirms on the extension.** A fake
   desktop can claim approval itself, so the desktop's word is not enough. The extension writes the
   app's key (`desktopLink.appPublicKey`) only after **They match** on its own screen. This closes
