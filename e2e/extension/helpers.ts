@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs";
-import { type BrowserContext, expect, type Page, type Worker } from "@playwright/test";
+import {
+	type BrowserContext,
+	type CDPSession,
+	expect,
+	type Page,
+	type Worker,
+} from "@playwright/test";
 
 export const optionsUrl = (id: string) => `chrome-extension://${id}/options.html`;
 export const popupUrl = (id: string) => `chrome-extension://${id}/popup.html`;
@@ -245,7 +251,7 @@ export async function localStorageKeys(context: BrowserContext): Promise<string[
 export async function addVirtualAuthenticator(
 	page: Page,
 	opts: { hasPrf?: boolean; transport?: "internal" | "usb" } = {},
-): Promise<{ authenticatorId: string; remove: () => Promise<void> }> {
+): Promise<{ authenticatorId: string; cdp: CDPSession; remove: () => Promise<void> }> {
 	const { hasPrf = true, transport = "internal" } = opts;
 	const cdp = await page.context().newCDPSession(page);
 	await cdp.send("WebAuthn.enable");
@@ -264,6 +270,7 @@ export async function addVirtualAuthenticator(
 	});
 	return {
 		authenticatorId,
+		cdp,
 		remove: () => cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId }),
 	};
 }

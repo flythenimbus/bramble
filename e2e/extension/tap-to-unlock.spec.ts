@@ -106,3 +106,43 @@ test("falls back to the other rpID when the first one has nothing to offer", asy
 	await popup.getByRole("button", { name: /Tap to unlock/i }).click();
 	await expectUnlocked(popup);
 });
+
+test("tapping a key that is not the vault's first still unlocks in one prompt", async ({
+	context,
+	extensionId,
+}) => {
+	// Every key has its own PRF salt. Unlock used to send only the first slot's salt, so tapping
+	// any other key returned the wrong secret and cost a second prompt. Removing the first key's
+	// credential makes the second one the only possible answer.
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+
+	const popup = await context.newPage();
+	const { authenticatorId, cdp } = await addVirtualAuthenticator(popup, { hasPrf: true });
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+
+	await addTapToUnlockKey(popup, "This device", "First key");
+	await expect(popup.getByText("First key")).toBeVisible();
+	const [first] = (await cdp.send("WebAuthn.getCredentials", { authenticatorId })).credentials;
+	await addTapToUnlockKey(popup, "This device", "Second key");
+	await expect(popup.getByText("Second key")).toBeVisible();
+	await cdp.send("WebAuthn.removeCredential", {
+		authenticatorId,
+		credentialId: first!.credentialId,
+	});
+
+	await lock(popup);
+	// Count prompts, not CTAP traffic: Chrome probes silently before asserting against a list.
+	await popup.evaluate(() => {
+		const get = navigator.credentials.get.bind(navigator.credentials);
+		(window as unknown as { prompts: number }).prompts = 0;
+		navigator.credentials.get = (opts) => {
+			(window as unknown as { prompts: number }).prompts++;
+			return get(opts);
+		};
+	});
+	await popup.getByRole("button", { name: /Tap to unlock/i }).click();
+	await expectUnlocked(popup);
+	expect(await popup.evaluate(() => (window as unknown as { prompts: number }).prompts)).toBe(1);
+});

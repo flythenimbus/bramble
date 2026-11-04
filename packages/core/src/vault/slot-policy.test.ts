@@ -20,7 +20,6 @@ import {
 	addWebauthnSlot,
 	describeWebauthnKeys,
 	matchSlotByCredentialId,
-	needsSaltMismatchRetry,
 	removePasswordSlot,
 	removeWebauthnSlot,
 	type StoredKeyLabel,
@@ -102,25 +101,6 @@ describe("matchSlotByCredentialId", () => {
 		b.credentialId = a.credentialId;
 		const found = matchSlotByCredentialId([a, b], a.credentialId);
 		expect(found?.slotId).toEqual(a.slotId);
-	});
-});
-
-describe("needsSaltMismatchRetry", () => {
-	it("returns false when the used slot's salt matches the salt passed", () => {
-		const slot = makeWebauthnSlot(0x10, 64, 0x30);
-		expect(needsSaltMismatchRetry(slot, slot.salt)).toBe(false);
-	});
-
-	it("returns true when the used slot's salt differs", () => {
-		const a = makeWebauthnSlot(0x10, 64, 0x30);
-		const b = makeWebauthnSlot(0x80, 64, 0xa0);
-		expect(needsSaltMismatchRetry(b, a.salt)).toBe(true);
-	});
-
-	it("returns true when the salt has the same length but different bytes", () => {
-		const slot = makeWebauthnSlot(0x10);
-		const otherSalt = fillBytes(LEN_HMAC_SECRET_SALT, 0xff);
-		expect(needsSaltMismatchRetry(slot, otherSalt)).toBe(true);
 	});
 });
 

@@ -242,19 +242,19 @@ So a vault with no password slot **cannot add a device**. The intended answer is
 temporary password, which only works if the INVITER withholds the VEK until the joiner answers a
 challenge, before `sendBundle`. Not built.
 
-## Unlock and the salt-mismatch retry
+## Unlock with several keys: one prompt
 
-When several keys are registered, the first `get()` offers all credentials in
-`allowCredentials` but can only pass one salt: slot[0]'s. PRF output depends on
-the salt passed to `navigator.credentials.get()`, so if the user taps a
-*different* key whose stored salt differs, the first attempt produced the wrong
-secret.
+Every slot has its own PRF salt, and the PRF output depends on the salt. Unlock
+offers all credentials in `allowCredentials` and hands each its own salt through
+the PRF extension's `evalByCredential` (keyed by base64url credential id), so
+whichever key the user taps answers with the right secret on the first prompt.
+The tapped slot is identified by matching the response `rawId` against the
+stored `credentialId` (`matchSlotByCredentialId`).
 
-`needsSaltMismatchRetry` (in `slot-policy.ts`) detects this by comparing the
-tapped slot's salt against the salt used in the first call. When they differ, a
-second `get()` is issued, narrowed to that one credential with its own salt. The
-tapped slot is identified by matching the authenticator's response `rawId`
-against the stored `credentialId` (`matchSlotByCredentialId`).
+This used to pass only slot[0]'s salt and re-prompt, narrowed to the tapped key,
+whenever another key answered. A mixed vault can still cost two prompts, but only
+for the rpID split above: one `get()` names a single rpID, so a security key
+tapped while the platform rpID is being tried misses and the other rpID follows.
 
 ## Revocation
 

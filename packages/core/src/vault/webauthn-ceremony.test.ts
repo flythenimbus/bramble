@@ -148,6 +148,29 @@ describe("explicit rpID (Firefox)", () => {
 	});
 });
 
+describe("several keys, one prompt", () => {
+	it("hands each credential its own salt, so tapping any of them needs no second prompt", async () => {
+		const api = stubCredentials();
+		const a = { credentialId: new Uint8Array([0xfb, 0xff]), salt: new Uint8Array(32).fill(1) };
+		const b = { credentialId: new Uint8Array([0x01]), salt: new Uint8Array(32).fill(2) };
+		await getPrfSecret([a, b], a.salt, { forUnlock: true });
+
+		const prf = publicKeyArg(api.get).extensions.prf;
+		// Keys are base64url, as WebAuthn requires: "+/" here would be a SyntaxError.
+		expect(Object.keys(prf.evalByCredential)).toEqual(["-_8", "AQ"]);
+		expect(prf.evalByCredential["-_8"].first).toEqual(a.salt);
+		expect(prf.evalByCredential.AQ.first).toEqual(b.salt);
+		expect(api.get).toHaveBeenCalledOnce();
+	});
+
+	it("sends no per-credential map when the caller has no salts to give", async () => {
+		const api = stubCredentials();
+		await getPrfSecret([{ credentialId: new Uint8Array([9]) }], new Uint8Array(32));
+
+		expect(publicKeyArg(api.get).extensions.prf.evalByCredential).toBeUndefined();
+	});
+});
+
 describe("providers that cannot unlock the vault", () => {
 	it("fails immediately when the provider reports prf disabled, without asking for a second tap", async () => {
 		const create = vi.fn(async () => credential({ prf: { enabled: false } }));

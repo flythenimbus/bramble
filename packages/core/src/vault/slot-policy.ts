@@ -41,14 +41,6 @@ export function matchSlotByCredentialId(
 	return slots.find((s) => uint8Equal(s.credentialId, rawId)) ?? null;
 }
 
-/** True if the tapped key's salt differs from the one used in the first get(), needing a retry. */
-export function needsSaltMismatchRetry(
-	usedSlot: WebauthnSlot,
-	saltUsedInFirstCall: Uint8Array,
-): boolean {
-	return !uint8Equal(usedSlot.salt, saltUsedInFirstCall);
-}
-
 /** Append a security-key slot. Refuses at the slot ceiling. */
 /** Local, non-secret display data for a slot. Kept out of the vault file. */
 export interface StoredKeyLabel {

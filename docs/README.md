@@ -12,7 +12,7 @@ comments point here instead of repeating it.
 | [cryptography.md](cryptography.md) | The VEK / slot / KEK wrapping model, key derivation, verifier-based unlock, the password-change vs rotation tradeoff |
 | [vek-residency-hardening.md](vek-residency-hardening.md) | Plan: shrink where the in-memory VEK exists outside the Rust core (drop unused returns, MTE, mlock, native-only biometric gate, enrollment last) and why allocator hardening is declined |
 | [auth-and-unlock.md](auth-and-unlock.md) | Unlock flows, the slot-policy invariant (always one primary method), verify-without-unlock, error sanitization |
-| [security-keys.md](security-keys.md) | WebAuthn PRF / hmac-secret unlock, two-ceremony registration, salt-mismatch retry |
+| [security-keys.md](security-keys.md) | WebAuthn PRF / hmac-secret unlock, two-ceremony registration, one-prompt unlock across keys |
 | [totp.md](totp.md) | Stored authenticator keys: accepted input shapes and the "only digits reach the page" model |
 | [totp-uri-handler.md](totp-uri-handler.md) | Appearing in iOS's "Set Up Codes In" and Android's chooser by handling inbound `otpauth://` URIs, and why an arriving URI is both untrusted and a secret |
 | [recovery-codes.md](recovery-codes.md) | High-entropy offline recovery codes: format, entropy, normalization |

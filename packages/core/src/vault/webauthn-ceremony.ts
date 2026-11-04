@@ -2,6 +2,7 @@
 // with one (enrollment). Chromium honours only the `prf` extension (not raw hmacGetSecret),
 // so the option objects are cast. See docs/security-keys.md, docs/p2p-sync.md.
 
+import { bytesToBase64Url } from "../util/bytes";
 import { LEN_HMAC_SECRET_SALT } from "../vault-format";
 
 /** True where the platform can do WebAuthn at all (false in mobile webviews, etc.). */
@@ -166,15 +167,26 @@ function noPrfError(kind: WebauthnKeyKind): Error {
 const UNLOCK_FAILED =
 	"No key was used to unlock. If you dismissed the prompt, try again. Keys are registered per browser, so one added in a different browser won't work here - add a key in this browser, or use your master password.";
 
-/** get() with a salt against the allowed credentials; returns the tapped rawId + PRF secret. */
+/** A credential get() may answer with; its own `salt`, when known, overrides the shared one. */
+export interface PrfAllow {
+	credentialId: Uint8Array;
+	salt?: Uint8Array;
+}
+
+/**
+ * get() against the allowed credentials; returns the tapped rawId + PRF secret. Each key has its
+ * own salt, so they go per credential (`evalByCredential`): whichever key the user picks answers
+ * with its own salt, and a vault with several keys still costs one prompt.
+ */
 export async function getPrfSecret(
-	allow: { credentialId: Uint8Array }[],
+	allow: PrfAllow[],
 	salt: Uint8Array,
 	opts: { rpId?: string; forUnlock?: boolean } = {},
 ): Promise<{ rawId: Uint8Array; hmacSecret: Uint8Array }> {
 	const challenge = new Uint8Array(32);
 	globalThis.crypto.getRandomValues(challenge);
 	const rpId = opts.rpId;
+	const perCredential = allow.filter((s) => s.salt);
 	const publicKey = {
 		challenge: challenge as BufferSource,
 		...(rpId ? { rpId } : {}),
@@ -183,7 +195,21 @@ export async function getPrfSecret(
 			id: s.credentialId as BufferSource,
 		})),
 		userVerification: "preferred",
-		extensions: { prf: { eval: { first: salt as BufferSource } } },
+		extensions: {
+			prf: {
+				eval: { first: salt as BufferSource },
+				...(perCredential.length > 0
+					? {
+							evalByCredential: Object.fromEntries(
+								perCredential.map((s) => [
+									bytesToBase64Url(s.credentialId),
+									{ first: s.salt as BufferSource },
+								]),
+							),
+						}
+					: {}),
+			},
+		},
 	} as unknown as PublicKeyCredentialRequestOptions;
 	let credential: PublicKeyCredential | null;
 	try {
@@ -219,7 +245,7 @@ export async function getPrfSecret(
  * is rethrown immediately rather than burning the user's second prompt on it.
  */
 export async function getPrfSecretAcrossRpIds(
-	allow: { credentialId: Uint8Array }[],
+	allow: PrfAllow[],
 	salt: Uint8Array,
 	candidates: (string | undefined)[],
 ): Promise<{ rawId: Uint8Array; hmacSecret: Uint8Array; rpId: string | undefined }> {

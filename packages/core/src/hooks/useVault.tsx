@@ -258,7 +258,6 @@ import {
 	addWebauthnSlot,
 	describeWebauthnKeys,
 	matchSlotByCredentialId,
-	needsSaltMismatchRetry,
 	removePasswordSlot,
 	removeWebauthnSlot,
 	type StoredKeyLabel,
@@ -1069,7 +1068,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, openUnlocked, shell, activeId, t],
 	);
 
-	/** Unlock via a registered security key (one tap, two if the salt mismatches). */
+	/** Unlock via a registered security key: one tap, whichever key it is. */
 	const unlockWithWebauthnKey = useCallback(async () => {
 		setError(null);
 		let slots: WebauthnSlot[];
@@ -1098,28 +1097,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			(k) => k.kind === "platform",
 		);
 
-		// First tap uses slot[0]'s salt; if a different credential with a
-		// different salt is tapped, re-ask narrowed to it with its own salt.
-		const firstSalt = slots[0]!.salt;
-		const firstAttempt = await getPrfSecretAcrossRpIds(
+		// Slots carry their salts, so whichever key is tapped answers with its own: one prompt.
+		const attempt = await getPrfSecretAcrossRpIds(
 			slots,
-			firstSalt,
+			slots[0]!.salt,
 			unlockRpIdOrder(hasPlatformKey),
 		);
-		const rpId = firstAttempt.rpId;
-		let used = matchSlotByCredentialId(slots, firstAttempt.rawId);
+		const used = matchSlotByCredentialId(slots, attempt.rawId);
 		if (!used) {
 			throw new Error(t`Authenticator returned an unknown credential.`);
 		}
-		let hmacSecret = firstAttempt.hmacSecret;
-		if (needsSaltMismatchRetry(used, firstSalt)) {
-			const second = await getPrfSecret([used], used.salt, { rpId });
-			used = matchSlotByCredentialId([used], second.rawId);
-			if (!used) throw new Error(t`Authenticator returned an unknown credential.`);
-			hmacSecret = second.hmacSecret;
-		}
 
-		await finishWebauthnUnlock(used, hmacSecret);
+		await finishWebauthnUnlock(used, attempt.hmacSecret);
 	}, [readDecodedBlob, finishWebauthnUnlock, storage, t]);
 
 	/**
