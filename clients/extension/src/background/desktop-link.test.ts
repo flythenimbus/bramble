@@ -37,6 +37,8 @@ const h = vi.hoisted(() => ({
 	appCaps: ["files"] as string[] | null,
 	/** A seal whose plaintext contains this takes a while, as a busy crypto host's might. */
 	slowSeal: null as string | null,
+	/** What was written to storage.local, in order. */
+	setCalls: [] as Record<string, unknown>[],
 }));
 
 /** The native port chrome.runtime.connectNative hands back. */
@@ -91,7 +93,9 @@ vi.mock("../platform-api", () => ({
 		storage: {
 			local: {
 				get: async (key: string) => ({ [key]: h.stored[key] }),
-				set: async () => {},
+				set: async (v: Record<string, unknown>) => {
+					h.setCalls.push(v);
+				},
 				remove: async () => {},
 			},
 		},
@@ -111,6 +115,10 @@ vi.mock("./offscreen-client", () => ({
 				return { ok: true, data: { privateKey: "priv", publicKey: "pub" } };
 			case "LINK_ENROLL_INITIATOR":
 				return { ok: true, data: { sessionId: 9, message: "xx1" } };
+			case "LINK_PAIR_INITIATOR":
+				return { ok: true, data: { sessionId: 11, message: "xl1" } };
+			case "LINK_HANDSHAKE_HASH":
+				return { ok: true, data: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=" };
 			case "LINK_REMOTE_STATIC":
 				return { ok: true, data: "app-pub" };
 			// The KK path ignores this; the pairing path reads `message` off it.
@@ -618,6 +626,83 @@ describe("pairing borrows the page's native transport", () => {
 		page.die("Specified native messaging host not found.");
 
 		await expect(paired).rejects.toThrow(/not found/);
+	});
+
+	/** Run the emoji link handshake over `page`, resolving what startDesktopLink returned. */
+	async function linkOver(mod: Awaited<ReturnType<typeof load>>, page: ReturnType<typeof lend>) {
+		const started = mod.startDesktopLink();
+		await vi.waitFor(() => expect(page.sent.length).toBe(3));
+		page.deliver({ ok: true, message: "xl2" });
+		await vi.waitFor(() => expect(page.sent.length).toBe(4));
+		page.deliver({ ok: true, done: true });
+		return started;
+	}
+
+	it("links by emoji, storing the app only after the user confirms and the app agrees", async () => {
+		const mod = await load();
+		h.setCalls.length = 0;
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		expect(page.sent[1]).toMatchObject({ frame: { kind: "link" } });
+		if (!("id" in started)) throw new Error("expected a link in progress");
+		expect(started.sas.emoji).toHaveLength(7);
+
+		const confirmed = mod.confirmDesktopLink(started.id, true);
+		await vi.waitFor(() => expect(page.sent.length).toBe(5));
+		const sealed = (page.sent[4] as { frame: { sealed: string } }).frame.sealed;
+		expect(JSON.parse(h.sealed.get(sealed) ?? "{}")).toEqual({ op: "linkConfirm" });
+		expect(h.setCalls).toEqual([]);
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, paired: true })}` });
+
+		await expect(confirmed).resolves.toMatchObject({ appPublicKey: "app-pub" });
+		expect(h.setCalls).toHaveLength(1);
+	});
+
+	it("stores nothing when the user says the emoji do not match", async () => {
+		const mod = await load();
+		h.setCalls.length = 0;
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+
+		await expect(mod.confirmDesktopLink(started.id, false)).rejects.toThrow();
+		expect(h.setCalls).toEqual([]);
+	});
+
+	it("stores nothing when the app refuses after the user confirms", async () => {
+		const mod = await load();
+		h.setCalls.length = 0;
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+
+		const confirmed = mod.confirmDesktopLink(started.id, true);
+		await vi.waitFor(() => expect(page.sent.length).toBe(5));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: false, error: "refused" })}` });
+
+		await expect(confirmed).rejects.toThrow();
+		expect(h.setCalls).toEqual([]);
+	});
+
+	it("falls back to the code for an app that does not know the link hello", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+		const started = mod.startDesktopLink();
+		await vi.waitFor(() => expect(page.sent.length).toBe(3));
+		// An older app closes the connection on an unknown hello without a word.
+		page.die("Native host has exited.");
+
+		await expect(started).resolves.toEqual({ legacy: true });
+	});
+
+	it("says to open the app's Connect dialog when the app refuses the hello", async () => {
+		const mod = await load();
+		const page = lend(EXT_SENDER);
+		const started = mod.startDesktopLink();
+		await vi.waitFor(() => expect(page.sent.length).toBe(3));
+		page.deliver({ ok: false, error: "refused" });
+
+		await expect(started).rejects.toThrow(/Connect a browser/);
 	});
 });
 

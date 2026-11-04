@@ -16,6 +16,8 @@
 // The crypto lives in the offscreen document, because MV3's service worker has no WASM host.
 // This module owns the port and the persistence and relays handshake messages across.
 
+import { linkSas } from "@core/sync/link-sas";
+import type { PairingSas } from "@core/sync/pairing-sas";
 import { defaultDeviceLabel } from "@core/util/device-label";
 import { api, disconnectReason } from "../platform-api";
 import { isExtensionSender } from "../sender";
@@ -307,6 +309,129 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 	} finally {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		session.close();
+	}
+}
+
+/** A link the user has not answered yet: the open pipe and handshake, waiting on "They match". */
+interface PendingLink {
+	session: LinkTransport;
+	sessionId: number;
+	privateKey: string;
+	publicKey: string;
+	appPublicKey: string;
+}
+
+const pendingLinks = new Map<string, PendingLink>();
+
+/** Why the app did not take the link hello: not installed, or not showing its Connect dialog. */
+const HOST_MISSING = /not found/i;
+
+/**
+ * Start linking with the desktop app by emoji. Resolves with the emoji to show once the
+ * handshake is done, or `{ legacy: true }` for an app that predates this and only knows the code.
+ *
+ * Nothing is stored here: the app is trusted only after `confirmDesktopLink` with the user's
+ * "They match" AND the app's own approval.
+ */
+export async function startDesktopLink(): Promise<
+	{ id: string; sas: PairingSas } | { legacy: true }
+> {
+	const kp = (await offscreen("SYNC_GENERATE_KEYPAIR")) as {
+		privateKey: string;
+		publicKey: string;
+	};
+	const start = (await offscreen("LINK_PAIR_INITIATOR", { privateKey: kp.privateKey })) as {
+		sessionId: number;
+		message: string;
+	};
+	if (!proxyPort && !(await canOpenNativePipe())) {
+		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
+		throw new Error("This browser cannot reach the desktop app yet.");
+	}
+	const session: LinkTransport = proxyPort ? new ProxiedSession(proxyPort) : new NativeSession();
+	const fail = async () => {
+		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
+		session.close();
+	};
+	try {
+		session.send({ kind: "link", v: PROTOCOL_VERSION, label: defaultDeviceLabel() });
+		let reply: { ok?: boolean; message?: string } | undefined;
+		try {
+			reply = await session.request({ message: start.message });
+		} catch (e) {
+			// An older app closes on a hello it does not know, without a word. A host that is not
+			// installed at all is a different failure, and says so.
+			if (e instanceof Error && HOST_MISSING.test(e.message)) throw e;
+			await fail();
+			return { legacy: true };
+		}
+		if (!reply?.ok || !reply.message) {
+			throw new Error("Open Connect a browser in the desktop app, then try again.");
+		}
+		const next = (await offscreen("LINK_READ", {
+			sessionId: start.sessionId,
+			message: reply.message,
+		})) as { message?: string };
+		if (!next.message) throw new Error("Linking did not complete.");
+		const done = await session.request({ message: next.message });
+		if (!done?.done) throw new Error("The desktop app refused.");
+
+		const hash = (await offscreen("LINK_HANDSHAKE_HASH", { sessionId: start.sessionId })) as string;
+		const appPublicKey = (await offscreen("LINK_REMOTE_STATIC", {
+			sessionId: start.sessionId,
+		})) as string;
+		const id = crypto.randomUUID();
+		pendingLinks.set(id, {
+			session,
+			sessionId: start.sessionId,
+			privateKey: kp.privateKey,
+			publicKey: kp.publicKey,
+			appPublicKey,
+		});
+		return { id, sas: await linkSas(hash) };
+	} catch (e) {
+		await fail();
+		throw e;
+	}
+}
+
+/**
+ * The user's answer to the emoji. On a match, tell the app and wait for its own approval; only
+ * then is the app's key stored. Anything else closes the link and stores nothing.
+ */
+export async function confirmDesktopLink(id: string, matches: boolean): Promise<LinkState> {
+	const pending = pendingLinks.get(id);
+	if (!pending) throw new Error("That link is no longer in progress.");
+	pendingLinks.delete(id);
+	const close = async () => {
+		await offscreen("LINK_CLOSE", { sessionId: pending.sessionId }).catch(() => {});
+		pending.session.close();
+	};
+	try {
+		if (!matches) throw new Error("The symbols did not match, so nothing was linked.");
+		const sealed = (await offscreen("LINK_SEAL", {
+			sessionId: pending.sessionId,
+			plaintext: JSON.stringify({ op: "linkConfirm" }),
+		})) as string;
+		const answer = await pending.session.request({ sealed });
+		const plain = (await offscreen("LINK_OPEN", {
+			sessionId: pending.sessionId,
+			sealed: answer?.sealed,
+		})) as string;
+		const verdict = JSON.parse(plain) as { ok?: boolean; paired?: boolean };
+		if (verdict.ok !== true || verdict.paired !== true) {
+			throw new Error("The desktop app did not approve the link.");
+		}
+		const state: LinkState = {
+			privateKey: pending.privateKey,
+			publicKey: pending.publicKey,
+			appPublicKey: pending.appPublicKey,
+			pairedAt: Date.now(),
+		};
+		await api.storage.local.set({ [STORAGE_KEY]: state });
+		return state;
+	} finally {
+		await close();
 	}
 }
 
@@ -905,6 +1030,23 @@ on(
 on(
 	"LINK_BLOB_UP",
 	extensionOnly(async () => ({ ok: true, data: blobLinkUp() })),
+);
+
+on(
+	"DESKTOP_LINK_START",
+	extensionOnly(async () => ({ ok: true, data: await startDesktopLink() })),
+);
+
+on(
+	"DESKTOP_LINK_CONFIRM",
+	extensionOnly(async (message) => {
+		const { id, matches } = message as { id?: unknown; matches?: unknown };
+		if (typeof id !== "string") return { ok: false, error: "no link id" };
+		const state = await confirmDesktopLink(id, matches === true);
+		// As after a code pairing: the link is usable from this moment.
+		void openDesktopLink().catch(() => {});
+		return { ok: true, data: { publicKey: state.publicKey, pairedAt: state.pairedAt } };
+	}),
 );
 
 on(

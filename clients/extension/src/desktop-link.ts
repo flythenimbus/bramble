@@ -5,6 +5,7 @@
 // See background/desktop-link.ts.
 
 import type { DesktopLinkAdapter, DesktopLinkStatus } from "@core/adapters/desktop-link";
+import type { PairingSas } from "@core/sync/pairing-sas";
 import { api, disconnectReason } from "./platform-api";
 
 async function dispatch<T = unknown>(type: string, extra?: Record<string, unknown>): Promise<T> {
@@ -153,10 +154,40 @@ async function withNativeProxy<T>(run: () => Promise<T>): Promise<T> {
 	}
 }
 
+/** The port lent for an emoji link in progress, held between start and confirm. */
+let linkProxy: ReturnType<typeof openNativeProxy> = null;
+
+function releaseLinkProxy(): void {
+	linkProxy?.close();
+	linkProxy = null;
+}
+
 const adapter: DesktopLinkAdapter = {
 	status: () => dispatch<DesktopLinkStatus>("DESKTOP_LINK_STATUS"),
 	// The code goes straight through to the background and is never stored here.
 	pair: (code) => withNativeProxy(async () => void (await dispatch("DESKTOP_LINK_PAIR", { code }))),
+	// The emoji link spans two calls on one pipe, so the lent port stays open until the answer.
+	start: async () => {
+		linkProxy?.close();
+		const needed = await dispatch<boolean>("DESKTOP_LINK_TRANSPORT_NEEDED").catch(() => true);
+		linkProxy = needed ? openNativeProxy() : null;
+		await linkProxy?.ready;
+		const started = await dispatch<{ id: string; sas: PairingSas } | { legacy: true }>(
+			"DESKTOP_LINK_START",
+		).catch((e) => {
+			releaseLinkProxy();
+			throw e;
+		});
+		if ("legacy" in started) releaseLinkProxy();
+		return started;
+	},
+	confirm: async (id, matches) => {
+		try {
+			await dispatch("DESKTOP_LINK_CONFIRM", { id, matches });
+		} finally {
+			releaseLinkProxy();
+		}
+	},
 	connect: () => withNativeProxy(() => dispatch<boolean>("DESKTOP_LINK_CONNECT")),
 	query: async (hostname) => {
 		const answer = await dispatch<{ ok: boolean; error?: string; matches?: unknown[] }>(

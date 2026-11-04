@@ -77,7 +77,11 @@ export async function pairingSas(pskB64: string, pubA: string, pubB: string): Pr
 		base,
 		64,
 	);
-	const bytes = new Uint8Array(bits);
+	return sasFromBits(new Uint8Array(bits));
+}
+
+/** The two representations of 64 derived bits. Shared with the browser link's SAS. */
+export function sasFromBits(bytes: Uint8Array): PairingSas {
 	let n = 0n;
 	for (const byte of bytes) n = (n << 8n) | BigInt(byte);
 	// Slight modulo bias (~1 part in 18M), irrelevant for a value with one attempt at it.

@@ -350,6 +350,8 @@ interface LinkWasm {
 	handshake_close(sessionId: number): void;
 	handshake_encrypt(sessionId: number, plaintext: string): string;
 	handshake_decrypt(sessionId: number, ciphertextB64: string): string;
+	handshake_link_initiator(privateKeyB64: string): { sessionId: number; message: string };
+	handshake_hash(sessionId: number): string;
 }
 
 type HostWasm = LinkWasm &
@@ -920,6 +922,18 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 				const w = await getWasm();
 				const { sessionId, message } = payload as { sessionId: number; message: string };
 				return { ok: true, data: w.handshake_read(sessionId, message) };
+			}
+			case "LINK_PAIR_INITIATOR": {
+				// Linking with the desktop app by emoji: plain XX, no code. See background/desktop-link.ts.
+				const w = await getWasm();
+				const { privateKey } = payload as { privateKey: string };
+				return { ok: true, data: w.handshake_link_initiator(privateKey) };
+			}
+			case "LINK_HANDSHAKE_HASH": {
+				// What the link emoji derive from; the desktop app derives the same from its side.
+				const w = await getWasm();
+				const { sessionId } = payload as { sessionId: number };
+				return { ok: true, data: w.handshake_hash(sessionId) };
 			}
 			case "LINK_REMOTE_STATIC": {
 				// The desktop app's static key, learned during pairing so later KK handshakes

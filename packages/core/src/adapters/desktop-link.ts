@@ -9,6 +9,8 @@
  * where the Settings section then does not render.
  */
 
+import type { PairingSas } from "../sync/pairing-sas";
+
 export interface DesktopLinkStatus {
 	paired: boolean;
 	/** Epoch ms, when paired. */
@@ -32,6 +34,14 @@ export interface DesktopLinkAdapter {
 	 * deliberately does not say which, so this cannot report it either.
 	 */
 	pair(code: string): Promise<void>;
+	/**
+	 * Start linking by emoji: resolves with the emoji to show once the handshake is done, or
+	 * `{ legacy: true }` for an app that only knows the code. Absent where only the code exists.
+	 */
+	start?(): Promise<{ id: string; sas: PairingSas } | { legacy: true }>;
+	/** The user's answer to the emoji. Resolves once the app has approved too; nothing is stored
+	 * otherwise. */
+	confirm?(id: string, matches: boolean): Promise<void>;
 	/** Reconnect over the established keys. True when the desktop app accepted. */
 	connect(): Promise<boolean>;
 	/**
