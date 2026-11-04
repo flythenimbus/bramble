@@ -125,6 +125,10 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 				if (onComplete) onComplete();
 				else setDone(addedNew ? "added" : "opened");
 			}}
+			onDesktopLinked={() => {
+				if (onComplete) onComplete();
+				else setDone("opened");
+			}}
 		/>
 	);
 }

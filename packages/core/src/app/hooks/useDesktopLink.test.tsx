@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
 	joins: [] as unknown[][],
 	vaults: [] as { id: string; label: string; createdAt: number }[],
 	summary: { name: "Home", empty: false, entries: 380 } as unknown,
+	/** What claiming the desktop's invite returns; null when it hands over none. */
+	invite: "invite" as string | null,
 	start: { id: "L1", sas: { emoji: [0, 1, 2, 3, 4, 5, 6], digits: "1" } } as unknown,
 	steps: [] as string[],
 	entries: [] as unknown[],
@@ -136,7 +138,7 @@ const platform = {
 		},
 		claimSyncInvite: async () => {
 			h.calls.push("claim");
-			return "invite";
+			return h.invite;
 		},
 	},
 } as unknown as Platform;
@@ -171,9 +173,12 @@ describe("useDesktopLink", () => {
 		const result = await linkedFrom("setup");
 		expect(result.current.outcome).toBe("take");
 
+		let done: boolean | undefined;
 		await act(async () => {
-			await result.current.accept("pw");
+			done = await result.current.accept("pw");
 		});
+		// The setup screen moves on only on this, so a join that worked must say so.
+		expect(done).toBe(true);
 		expect(h.joins).toEqual([
 			["invite", { kind: "password", password: "pw" }, undefined, { viaLink: true }],
 		]);
@@ -184,6 +189,20 @@ describe("useDesktopLink", () => {
 		h.calls = [];
 		await linkedFrom("setup");
 		expect(h.calls).toEqual(["confirm", "summary", "claim"]);
+	});
+
+	it("says so when the desktop sends no vault after an emoji link", async () => {
+		// An app that links by emoji always arms one. Without this the screen went back to its
+		// first step with nothing said, as if the link had never happened.
+		h.vaults = [];
+		h.invite = null;
+		try {
+			const result = await linkedFrom("setup");
+			expect(result.current.invite).toBeNull();
+			expect(result.current.error).toBeTruthy();
+		} finally {
+			h.invite = "invite";
+		}
 	});
 
 	it("falls back to the code for a desktop app that predates the emoji", async () => {
@@ -337,9 +356,11 @@ describe("an empty browser vault", () => {
 		const result = await linkedFrom("settings");
 		h.steps = [];
 		h.joinFails = true;
+		let done: boolean | undefined;
 		await act(async () => {
-			await result.current.accept("pw");
+			done = await result.current.accept("pw");
 		});
+		expect(done).toBe(false);
 		expect(h.steps).toEqual(["join"]);
 		expect(result.current.inviteError).toMatch(/join failed/i);
 		h.joinFails = false;
@@ -370,6 +391,16 @@ describe("an older desktop app, linked with the code", () => {
 			await result.current.accept("pw");
 		});
 		expect(h.joins[0]?.[3]).toEqual({ viaLink: false });
+	});
+
+	it("says nothing when it sends no vault, which an app from before invites never does", async () => {
+		h.invite = null;
+		try {
+			const result = await linkedByCode();
+			expect(result.current.error).toBeNull();
+		} finally {
+			h.invite = "invite";
+		}
 	});
 
 	it("shows the emoji the older app asks to compare during the copy", async () => {

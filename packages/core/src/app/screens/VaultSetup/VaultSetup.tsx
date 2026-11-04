@@ -41,6 +41,8 @@ interface VaultSetupProps {
 	 * Called on success so the parent drives the terminal screen; `addedNew` marks a restored-into-new
 	 * locked vault vs the first vault unlocked in place. Absent where restore isn't supported (mobile). */
 	onRestore?: (result: { addedNew: boolean }) => void;
+	/** The desktop app's vault has arrived over the link; the parent drives the terminal screen. */
+	onDesktopLinked?: () => void;
 	/** Compact presentation for the single-window mobile host. */
 	mobile?: boolean;
 	/** Adding a parallel vault (vaults already exist): shows a name field and the "Add a vault"
@@ -63,6 +65,7 @@ export function VaultSetup({
 	joinSas,
 	joinSasEmoji,
 	onRestore,
+	onDesktopLinked,
 	mobile,
 	adding,
 	onBack,
@@ -178,6 +181,7 @@ export function VaultSetup({
 					<DesktopLinkCard
 						from={adding ? "add" : "setup"}
 						onBack={() => handleModeChange("create")}
+						onLinked={onDesktopLinked}
 					/>
 				) : effectiveMode === "restore" && onRestore ? (
 					<RestoreShell embedded onRestored={onRestore} />

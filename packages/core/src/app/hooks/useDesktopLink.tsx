@@ -118,16 +118,18 @@ export function useDesktopLink({
 		[vaults, activeId, entries.length, files.length, storage, shell, from],
 	);
 
-	/** The summary first: the app answers it only while its invite is still armed. */
-	const afterLinked = useCallback(async () => {
+	/** The summary first: the app answers it only while its invite is still armed. False when
+	 * the app handed over no invite. */
+	const afterLinked = useCallback(async (): Promise<boolean> => {
 		await onLinked?.();
 		const desktop = (await desktopLink?.vaultSummary?.().catch(() => null)) ?? null;
 		setSummary(desktop);
 		const claimed = await desktopLink?.claimSyncInvite?.().catch(() => null);
-		if (!claimed) return;
+		if (!claimed) return false;
 		setInviteError(null);
 		setOutcome(await outcomeFor(claimed, desktop));
 		setInvite(claimed);
+		return true;
 	}, [desktopLink, onLinked, outcomeFor]);
 
 	const start = useCallback(async () => {
@@ -155,7 +157,8 @@ export function useDesktopLink({
 				await desktopLink.confirm(linking.id, matches);
 				setLinking(null);
 				setLinkedBy("emoji");
-				await afterLinked();
+				// An app that links by emoji always arms an invite, so none is a fault.
+				if (!(await afterLinked())) setError(t`The desktop app didn't send its vault.`);
 			} catch (e) {
 				setLinking(null);
 				setError(e instanceof Error && e.message ? e.message : t`Nothing was linked.`);
@@ -231,8 +234,11 @@ export function useDesktopLink({
 	 * Keeping them separate copies nothing.
 	 */
 	const accept = useCallback(
-		async (password: string, opts?: { choice?: "combine" | "separate"; carry?: EntryData[] }) => {
-			if (!invite) return;
+		async (
+			password: string,
+			opts?: { choice?: "combine" | "separate"; carry?: EntryData[] },
+		): Promise<boolean> => {
+			if (!invite) return false;
 			setJoining(true);
 			setInviteError(null);
 			const combining = outcome === "combine" || (outcome === "ask" && opts?.choice === "combine");
@@ -273,6 +279,7 @@ export function useDesktopLink({
 				// Only once the desktop's vault is here, and only if it is still empty: nothing lost.
 				if (outcome === "take" && oldId)
 					await now.actions.deleteEmptyVault(oldId, oldCount, oldFiles);
+				return true;
 			} catch (e) {
 				const message = e instanceof Error && e.message ? e.message : null;
 				if (copying) {
@@ -284,6 +291,7 @@ export function useDesktopLink({
 				} else {
 					setInviteError(message ?? t`Could not sync with the desktop app.`);
 				}
+				return false;
 			} finally {
 				setJoining(false);
 			}

@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../../context/PlatformContext";
 import { initialSetupMode } from "./types";
@@ -9,32 +9,48 @@ import { VaultSetup, type VaultSetupMode } from "./VaultSetup";
 
 // Option B from the design: a card above today's tabs for people who already use the desktop app.
 
+const h = vi.hoisted(() => ({
+	/** The desktop's invite, once claimed; null before. */
+	invite: null as string | null,
+	/** What joining the desktop's vault reports. */
+	joined: true,
+}));
+
 vi.mock("../../hooks/useDesktopLink", () => ({
 	useDesktopLink: () => ({
 		busy: false,
 		error: null,
 		linking: null,
 		legacy: false,
-		invite: null,
+		invite: h.invite,
 		outcome: null,
 		start: async () => {},
+		accept: async () => h.joined,
 	}),
 }));
 
-vi.mock("../../hooks/usePopOut", () => ({
-	usePopOut: () => ({ canPopOut: false, popOut: () => {} }),
-}));
+// No PopOutProvider here on purpose: OptionsApp, the setup screen's only host, has none.
 
 const withLink = {
 	desktopLink: { status: async () => ({ paired: false }) },
 } as unknown as Platform;
 const withoutLink = {} as unknown as Platform;
 
-function mount(platform: Platform, mode: VaultSetupMode, onModeChange = vi.fn()) {
+function mount(
+	platform: Platform,
+	mode: VaultSetupMode,
+	onModeChange = vi.fn(),
+	onDesktopLinked = vi.fn(),
+) {
 	render(
 		<I18nProvider i18n={i18n}>
 			<PlatformProvider platform={platform}>
-				<VaultSetup mode={mode} onModeChange={onModeChange} onCreate={async () => {}} />
+				<VaultSetup
+					mode={mode}
+					onModeChange={onModeChange}
+					onCreate={async () => {}}
+					onDesktopLinked={onDesktopLinked}
+				/>
 			</PlatformProvider>
 		</I18nProvider>,
 	);
@@ -65,6 +81,37 @@ describe("the desktop link on the setup screen", () => {
 		expect(screen.getByText(/connect a browser/i)).toBeTruthy();
 		fireEvent.click(screen.getByRole("button", { name: /back/i }));
 		expect(onModeChange).toHaveBeenCalledWith("create");
+	});
+
+	it("hands over to the host once the desktop's vault has arrived", async () => {
+		// Without this the card fell back to its first step with the vault already here, as if
+		// nothing had happened.
+		h.invite = "invite";
+		const onDesktopLinked = vi.fn();
+		try {
+			mount(withLink, "desktop", vi.fn(), onDesktopLinked);
+			fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
+			fireEvent.click(screen.getByRole("button", { name: /^link$/i }));
+			await waitFor(() => expect(onDesktopLinked).toHaveBeenCalledOnce());
+		} finally {
+			h.invite = null;
+		}
+	});
+
+	it("stays on the card when joining fails, where the error shows", async () => {
+		h.invite = "invite";
+		h.joined = false;
+		const onDesktopLinked = vi.fn();
+		try {
+			mount(withLink, "desktop", vi.fn(), onDesktopLinked);
+			fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
+			fireEvent.click(screen.getByRole("button", { name: /^link$/i }));
+			await new Promise((r) => setTimeout(r, 20));
+			expect(onDesktopLinked).not.toHaveBeenCalled();
+		} finally {
+			h.invite = null;
+			h.joined = true;
+		}
 	});
 
 	it("comes back to the link card after the permission reload", () => {

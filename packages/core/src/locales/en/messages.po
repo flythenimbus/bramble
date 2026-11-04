@@ -1110,7 +1110,6 @@ msgid "Continue"
 msgstr "Continue"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Continue in a window"
 msgstr "Continue in a window"
 
@@ -2227,8 +2226,8 @@ msgid "Linked to this browser, but the app shares a different vault, not this on
 msgstr "Linked to this browser, but the app shares a different vault, not this one."
 
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
-msgid "Linking continues in a window, which stays open while you switch to the desktop app."
-msgstr "Linking continues in a window, which stays open while you switch to the desktop app."
+#~ msgid "Linking continues in a window, which stays open while you switch to the desktop app."
+#~ msgstr "Linking continues in a window, which stays open while you switch to the desktop app."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Lion"
@@ -3702,6 +3701,10 @@ msgstr "The browser was not linked."
 #: packages/core/src/app/hooks/useDesktopLink.tsx
 msgid "The desktop app did not accept that code."
 msgstr "The desktop app did not accept that code."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "The desktop app didn't send its vault."
+msgstr "The desktop app didn't send its vault."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app is showing the same symbols and waiting for you to approve there. Approve only if they match."

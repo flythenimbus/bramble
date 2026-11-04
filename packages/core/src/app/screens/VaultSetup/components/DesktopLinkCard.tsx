@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import type { LinkFrom } from "../../../../sync/link-outcome";
@@ -9,20 +8,28 @@ import { Button } from "../../../components/ui/button";
 import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
 import { useDesktopLink } from "../../../hooks/useDesktopLink";
-import { usePopOut } from "../../../hooks/usePopOut";
 
 /** Codes are 8 characters; see the desktop app's pairing.rs. Only an older app uses one. */
 const CODE_LENGTH = 8;
 
 /**
  * Link the desktop app from the setup screen, so its vault becomes this browser's vault.
- * The same flow as Settings > Desktop app, through useDesktopLink.
+ * The same flow as Settings > Desktop app, through useDesktopLink. No pop-out: the setup screen
+ * is a full tab that stays open while the user switches to the desktop app.
  */
-export function DesktopLinkCard({ from, onBack }: { from: LinkFrom; onBack: () => void }) {
+export function DesktopLinkCard({
+	from,
+	onBack,
+	onLinked,
+}: {
+	from: LinkFrom;
+	onBack: () => void;
+	/** The desktop's vault has arrived and opened. */
+	onLinked?: () => void;
+}) {
 	const { desktopLink } = usePlatform();
 	const { t } = useLingui();
 	const link = useDesktopLink({ from });
-	const { canPopOut, popOut } = usePopOut();
 	const [allowed, setAllowed] = useState<boolean | undefined>(undefined);
 	const [password, setPassword] = useState("");
 
@@ -41,21 +48,7 @@ export function DesktopLinkCard({ from, onBack }: { from: LinkFrom; onBack: () =
 	};
 
 	let body: React.ReactNode;
-	if (canPopOut) {
-		body = (
-			<>
-				<p className="text-sm text-muted-foreground">
-					<Trans>
-						Linking continues in a window, which stays open while you switch to the desktop app.
-					</Trans>
-				</p>
-				<Button variant="secondary" fullWidth onClick={() => popOut()}>
-					<ExternalLink className="w-4 h-4" />
-					<Trans>Continue in a window</Trans>
-				</Button>
-			</>
-		);
-	} else if (allowed === false) {
+	if (allowed === false) {
 		body = (
 			<>
 				<p className="text-sm text-muted-foreground">
@@ -92,7 +85,9 @@ export function DesktopLinkCard({ from, onBack }: { from: LinkFrom; onBack: () =
 				className="space-y-3"
 				onSubmit={(e) => {
 					e.preventDefault();
-					void link.accept(password);
+					void link.accept(password).then((joined) => {
+						if (joined) onLinked?.();
+					});
 				}}
 			>
 				<p className="text-sm text-muted-foreground">
