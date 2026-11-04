@@ -79,6 +79,11 @@ msgstr "{0} · ajouté {1}"
 msgid "{0} (your domain)"
 msgstr "{0} (votre domaine)"
 
+#. placeholder {0}: combined.quarantined
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{0} damaged entries stayed in the old vault."
+msgstr "{0} entrées endommagées sont restées dans l’ancien coffre."
+
 #. placeholder {0}: heldBack.length
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "{0} more look like entries you already have (the same site, username and password, or the same card number), so they are held back."
@@ -109,8 +114,12 @@ msgid "{browserName} also syncs with {others}. Combining moves only this browser
 msgstr "{browserName} se synchronise également avec {others}. La fusion ne déplace que ce navigateur ; ils restent sur {browserName}."
 
 #: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
-msgid "{browserName} is kept, locked, as \"{browserName} (before linking)\" until you delete it."
-msgstr "{browserName} est conservé, verrouillé, sous le nom « {browserName} (avant liaison) » jusqu'à ce que vous le supprimiez."
+#~ msgid "{browserName} is kept, locked, as \"{browserName} (before linking)\" until you delete it."
+#~ msgstr "{browserName} est conservé, verrouillé, sous le nom « {browserName} (avant liaison) » jusqu'à ce que vous le supprimiez."
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "{browserName} stays, as \"{browserName} (before linking)\", until you delete it."
+msgstr "{browserName} reste, sous le nom « {browserName} (avant la liaison) », jusqu’à ce que vous le supprimiez."
 
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "{conflicted, plural, one {# entry has a sync conflict. Only the version you see is exported.} other {# entries have a sync conflict. Only the version you see is exported.}}"
@@ -3441,6 +3450,10 @@ msgstr "Smiley"
 msgid "Something went wrong"
 msgstr "Une erreur est survenue"
 
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Something went wrong after linking."
+msgstr "Un problème est survenu après la liaison."
+
 #: packages/core/src/hooks/useCryptoErrorMessage.tsx
 msgid "Something went wrong. Please try again."
 msgstr "Une erreur s'est produite. Veuillez réessayer."
@@ -3691,8 +3704,8 @@ msgid "The desktop app did not accept that code."
 msgstr "L’application de bureau n’a pas accepté ce code."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-#~ msgid "The desktop app is showing the same symbols and waiting for you to approve there. Approve only if they match."
-#~ msgstr "L'application de bureau affiche les mêmes symboles et attend que vous approuviez là-bas. Approuvez uniquement s'ils correspondent."
+msgid "The desktop app is showing the same symbols and waiting for you to approve there. Approve only if they match."
+msgstr "L'application de bureau affiche les mêmes symboles et attend que vous approuviez là-bas. Approuvez uniquement s'ils correspondent."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "The desktop app is still linked, but this browser's permission to talk to it was turned off."
@@ -3713,6 +3726,10 @@ msgstr "L'application de bureau a proposé de partager son coffre avec ce naviga
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "the desktop app's vault"
 msgstr "le coffre de l'application de bureau"
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "The desktop app's vault did not open."
+msgstr "Le coffre de l’application de bureau ne s’est pas ouvert."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "The desktop vault has {found} matching logins."
@@ -3834,8 +3851,12 @@ msgid "This browser will unlock with the desktop app's master password."
 msgstr "Ce navigateur se déverrouillera avec le mot de passe principal de l'application de bureau."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "This browser's entries and files are copied into {desktopName}, and this browser will unlock with its master password. {browserName} is kept, locked, as \"{browserName} (before linking)\" until you delete it."
-msgstr "Les entrées et les fichiers de ce navigateur sont copiés dans {desktopName}, et ce navigateur se déverrouillera avec son mot de passe principal. {browserName} est conservé, verrouillé, sous le nom « {browserName} (avant liaison) » jusqu'à ce que vous le supprimiez."
+#~ msgid "This browser's entries and files are copied into {desktopName}, and this browser will unlock with its master password. {browserName} is kept, locked, as \"{browserName} (before linking)\" until you delete it."
+#~ msgstr "Les entrées et les fichiers de ce navigateur sont copiés dans {desktopName}, et ce navigateur se déverrouillera avec son mot de passe principal. {browserName} est conservé, verrouillé, sous le nom « {browserName} (avant liaison) » jusqu'à ce que vous le supprimiez."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This browser's entries and files are copied into {desktopName}, and this browser will unlock with its master password. {browserName} stays, as \"{browserName} (before linking)\", until you delete it."
+msgstr "Les entrées et les fichiers de ce navigateur sont copiés dans {desktopName}, et ce navigateur se déverrouillera avec son mot de passe principal. {browserName} reste, sous le nom « {browserName} (avant la liaison) », jusqu’à ce que vous le supprimiez."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "This can't be undone, and the deletion syncs to your other devices."
@@ -3868,6 +3889,11 @@ msgstr "Cette action crée un nouveau coffre sur cet appareil et le synchronise 
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 #~ msgid "This creates a new vault on this device and syncs it from your other device. You'll register a new key here, on this device, so you never type the master password. Your other device keeps its own key."
 #~ msgstr "Cela crée un nouveau coffre-fort sur cet appareil et le synchronise depuis votre autre appareil. Vous enregistrerez une nouvelle clé ici, sur cet appareil, afin de ne jamais saisir le mot de passe principal. Votre autre appareil conserve sa propre clé."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "This desktop app links with a code. Enter the one its Connect a browser screen shows."
+msgstr "Cette application de bureau s’associe avec un code. Saisissez le code affiché sur son écran « Connecter un navigateur »."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 #: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
@@ -3947,14 +3973,18 @@ msgstr "Ce coffre n’a pas de code de récupération."
 msgid "This vault syncs with the desktop app."
 msgstr "Ce coffre-fort se synchronise avec l’application de bureau."
 
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "This vault's entries didn't copy into the desktop's vault. They are still in the old vault."
+msgstr "Les entrées de ce coffre n’ont pas été copiées dans le coffre de l’application de bureau. Elles se trouvent toujours dans l’ancien coffre."
+
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "This vault's folder: {folder}"
 msgstr "Dossier de ce coffre : {folder}"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
-msgid "This version of the desktop app links with a code. In its Connect a browser screen, choose to show a code, then enter it here."
-msgstr "Cette version de l'application de bureau s'associe à l'aide d'un code. Dans son écran Connecter un navigateur, choisissez d'afficher un code, puis saisissez-le ici."
+#~ msgid "This version of the desktop app links with a code. In its Connect a browser screen, choose to show a code, then enter it here."
+#~ msgstr "Cette version de l'application de bureau s'associe à l'aide d'un code. Dans son écran Connecter un navigateur, choisissez d'afficher un code, puis saisissez-le ici."
 
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Those passwords don't match."
