@@ -36,6 +36,8 @@ export interface PeerAuthOptions {
 	fetchLocalRoster?: () => Promise<string>;
 	wasm: RosterHandshakeWasm;
 	report: (status: string) => void;
+	/** Close this peer before any handshake: it is reachable on the local link instead. */
+	skipPeer?: (peerPub: string) => boolean;
 }
 
 export function inRoster(roster: RosterPayload, pubkey: string): boolean {
@@ -69,6 +71,11 @@ export async function authenticatePeer(
 	channel.send(pub);
 	try {
 		const peerPub = await withTimeout(channel.recv(), HANDSHAKE_TIMEOUT_MS, "roster-auth");
+		if (opts.skipPeer?.(peerPub)) {
+			opts.report(`${peerPub.slice(0, 8)} is on the local link, not over the relay`);
+			peer.close();
+			return null;
+		}
 		// Gate on the CURRENT roster (read fresh), so a device revoked since this session started
 		// cannot (re-)authenticate against a stale snapshot.
 		if (!inRoster(await currentRoster(opts), peerPub)) {

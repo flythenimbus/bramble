@@ -843,21 +843,24 @@ on(
 	}),
 );
 
+/** The app's sync device key, or null when it is not linked or not running. */
+export async function desktopSyncKey(): Promise<string | null> {
+	try {
+		const answer = (await askDesktop({ op: "syncIdentity" })) as {
+			ok?: boolean;
+			identity?: string;
+		};
+		return answer?.ok === true ? (answer.identity ?? null) : null;
+	} catch {
+		return null;
+	}
+}
+
 on(
 	"DESKTOP_LINK_SYNC_KEY",
 	// The app's own sync key. Null rather than an error when it is not running: the UI says less
 	// in that case rather than claiming something it cannot check.
-	extensionOnly(async () => {
-		try {
-			const answer = (await askDesktop({ op: "syncIdentity" })) as {
-				ok?: boolean;
-				identity?: string;
-			};
-			return { ok: true, data: answer?.ok === true ? (answer.identity ?? null) : null };
-		} catch {
-			return { ok: true, data: null };
-		}
-	}),
+	extensionOnly(async () => ({ ok: true, data: await desktopSyncKey() })),
 );
 
 on(

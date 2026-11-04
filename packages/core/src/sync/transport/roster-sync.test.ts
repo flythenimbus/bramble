@@ -359,6 +359,60 @@ describe("what each tick sends", () => {
 		vi.useRealTimers();
 	});
 
+	it("reports each peer it authenticates", async () => {
+		const ab = pipe("aaaa", "bbbb");
+		await device("aaaa", [ab.aaaa!], { payload: "a" });
+		const authed: string[] = [];
+		sessions.push(
+			await startRosterSync({
+				relayUrl: "wss://relay.invalid",
+				groupKeyB64: "unused",
+				devicePrivB64: "priv-bbbb",
+				devicePubB64: "bbbb",
+				roster: rosterOf(["aaaa", "bbbb", "cccc"]),
+				wasm: identityWasm(),
+				report: () => {},
+				fetchLocalPayload: async () => "b",
+				pushRemotePayload: async () => {},
+				peerSource: async ({ onPeer }) => {
+					onPeer(ab.bbbb!);
+					return { stop() {} };
+				},
+				onAuthenticated: (pub) => authed.push(pub),
+			}),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(authed).toEqual(["aaaa"]);
+	});
+
+	it("ignores skipPeer over a local peer source", async () => {
+		const ab = pipe("aaaa", "bbbb");
+		await device("aaaa", [ab.aaaa!], { payload: "from-a" });
+		const got: string[] = [];
+		sessions.push(
+			await startRosterSync({
+				relayUrl: "wss://relay.invalid",
+				groupKeyB64: "unused",
+				devicePrivB64: "priv-bbbb",
+				devicePubB64: "bbbb",
+				roster: rosterOf(["aaaa", "bbbb", "cccc"]),
+				wasm: identityWasm(),
+				report: () => {},
+				fetchLocalPayload: async () => "b",
+				pushRemotePayload: async (json) => {
+					got.push(json);
+				},
+				peerSource: async ({ onPeer }) => {
+					onPeer(ab.bbbb!);
+					return { stop() {} };
+				},
+				skipPeer: () => true,
+			}),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(got).toEqual(["from-a"]);
+	});
+
 	it("sends an unchanged vault once, and keeps the peer with heartbeats", async () => {
 		const ab = pipe("aaaa", "bbbb");
 		const vaultA = { payload: "vault-1" };

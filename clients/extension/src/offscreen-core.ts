@@ -115,6 +115,8 @@ export interface SyncBridge {
 	linkBlobSend?: (stream: number, frame: string) => Promise<boolean>;
 	/** Whether a link is up to an app that speaks files. */
 	linkBlobUp?: () => Promise<boolean>;
+	/** The linked desktop app's sync device key, or null when unknown. */
+	linkDesktopSyncKey?: () => Promise<string | null>;
 }
 
 export interface HostResponse {
@@ -143,6 +145,9 @@ const unregisteredBridge: SyncBridge = {
 
 // The single live enrollment / sync session for this host context.
 let enrollSession: MeshSession | null = null;
+/** How long relay sync waits to learn the desktop's key before starting without it. */
+const DESKTOP_KEY_WAIT_MS = 2000;
+
 let syncSession: MeshSession | null = null;
 /**
  * The second sync session, over the native link to the desktop app on this machine.
@@ -234,11 +239,20 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 		fetchLocalRoster: () => bridge.fetchLocalRoster(opts.vaultId),
 		pushRemoteRoster: (json: string) => bridge.pushRemoteRoster(opts.vaultId, json),
 	};
-	syncSession = await startRosterSync(common);
+	// The desktop app on this machine syncs over the link only, never the relay.
+	let desktopKey = await Promise.race([
+		bridge.linkDesktopSyncKey?.().catch(() => null) ?? Promise.resolve(null),
+		new Promise<null>((r) => setTimeout(() => r(null), DESKTOP_KEY_WAIT_MS)),
+	]);
+	const skipPeer = (pub: string) => pub === desktopKey;
+	syncSession = await startRosterSync({ ...common, skipPeer });
 	// The desktop app on this machine, over the pipe it already has. Started second so
 	// a relay failure does not cost the local peer, which is the one that works offline.
 	linkSyncSession = await startRosterSync({
 		...common,
+		onAuthenticated: (pub: string) => {
+			desktopKey = pub;
+		},
 		peerSource: makeLinkPeerSource({
 			send: (frame) => bridge.linkSend?.(frame) ?? Promise.resolve(false),
 			subscribe: (onFrame) => {
@@ -256,6 +270,7 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 		// Direct connections need WebRTC, which no Firefox extension context has. There the
 		// desktop app's link is the only path a file has to this browser.
 		relay: typeof RTCPeerConnection !== "undefined",
+		skipPeer,
 		localSources: [
 			blobLinkDialer({
 				up: () => bridge.linkBlobUp?.() ?? Promise.resolve(false),

@@ -16,6 +16,7 @@ import type { PeerSession } from "@core/sync/transport/mesh";
 import type { PeerSource } from "@core/sync/transport/peer-session";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { desktopStorage } from "../adapters/storage";
 
 interface PeerEvent {
 	peerId: string;
@@ -42,6 +43,26 @@ interface Live {
 	/** The connection this peer belongs to, so a stale event cannot tear down a newer one. */
 	link: number;
 	deliver: (frame: string) => void;
+}
+
+/** Device keys that passed roster-auth over the link, so the relay can leave them alone. Kept
+ * across restarts, so a relay session started before the link cannot reach them either. */
+const linkDevices = new Set<string>();
+const LINK_DEVICES_KEY = "link.devices";
+
+export async function loadLinkDevices(): Promise<void> {
+	const saved = await desktopStorage.getMeta<string[]>(LINK_DEVICES_KEY).catch(() => null);
+	for (const pub of saved ?? []) linkDevices.add(pub);
+}
+
+export function recordLinkDevice(pub: string): void {
+	if (linkDevices.has(pub)) return;
+	linkDevices.add(pub);
+	void desktopStorage.setMeta(LINK_DEVICES_KEY, [...linkDevices]).catch(() => {});
+}
+
+export function linkDevicePubs(): ReadonlySet<string> {
+	return linkDevices;
 }
 
 export const linkPeerSource: PeerSource = async ({ onPeer, report }) => {

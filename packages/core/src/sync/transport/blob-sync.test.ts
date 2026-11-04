@@ -52,6 +52,21 @@ describe("blob sync", () => {
 		b.stop();
 	});
 
+	it("ignores skipPeer on the local link", async () => {
+		const file = await sealedFile(1000, 5);
+		const holder = memoryBlobStore().store;
+		await holder.put(file.hash, file.body);
+		const fetcher = memoryBlobStore().store;
+		const link = peerPipe();
+		const a = await start("aaaa", link.a, holder, [file], { skipPeer: () => true });
+		const b = await start("bbbb", link.b, fetcher, [file], { skipPeer: () => true });
+		await vi.waitFor(async () => expect(await fetcher.has(file.hash)).toBe(true), {
+			timeout: 10_000,
+		});
+		a.stop();
+		b.stop();
+	});
+
 	it("fetches nothing the vault does not name", async () => {
 		const file = await sealedFile(1000, 3);
 		const holder = memoryBlobStore().store;

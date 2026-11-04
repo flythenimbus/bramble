@@ -46,6 +46,16 @@ const chromeBridge: SyncBridge = {
 	linkSend: (frame) => askBackground("LINK_SYNC_SEND", { frame }),
 	linkBlobSend: (stream, frame) => askBackground("LINK_BLOB_SEND", { stream, frame }),
 	linkBlobUp: () => askBackground("LINK_BLOB_UP"),
+	linkDesktopSyncKey: async () => {
+		try {
+			const res = (await api.runtime.sendMessage({ type: "DESKTOP_LINK_SYNC_KEY" })) as
+				| { ok?: boolean; data?: string | null }
+				| undefined;
+			return res?.ok === true ? (res.data ?? null) : null;
+		} catch {
+			return null;
+		}
+	},
 };
 
 /** A yes/no from the background, which owns the native port. No answer (a worker that is gone)

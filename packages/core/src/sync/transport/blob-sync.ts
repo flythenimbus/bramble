@@ -81,6 +81,8 @@ export interface BlobSyncOptions {
 	relay?: boolean;
 	/** Pipes this host already holds to peers, beside the mesh: the desktop app's local link. */
 	localSources?: PeerSource[];
+	/** Relay path only: a device to leave to the local link. */
+	skipPeer?: (peerPub: string) => boolean;
 }
 
 export interface BlobSyncSession extends MeshSession {
@@ -366,7 +368,12 @@ export async function startBlobSync(opts: BlobSyncOptions): Promise<BlobSyncSess
 	};
 
 	const onPeer = async (peerSession: PeerSession, path: number) => {
-		const authed = await authenticatePeer(opts, peerSession);
+		// Path 0 is the relay mesh when there is one; local paths never skip.
+		const viaRelay = opts.relay !== false && path === 0;
+		const authed = await authenticatePeer(
+			viaRelay ? opts : { ...opts, skipPeer: undefined },
+			peerSession,
+		);
 		if (!authed || stopped) return;
 		const { peerPub, sessionId } = authed;
 		const key = `${path}:${peerPub}`;

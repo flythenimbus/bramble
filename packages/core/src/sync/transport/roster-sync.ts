@@ -66,6 +66,10 @@ export interface RosterSyncOptions {
 	pushRemoteRoster?: (json: string) => Promise<void>;
 	/** Take peers from here rather than the relay mesh. See PeerSource. */
 	peerSource?: PeerSource;
+	/** Relay only: a device to leave to the local link. Ignored with a peerSource. */
+	skipPeer?: (peerPub: string) => boolean;
+	/** A peer passed roster-auth, by its device key. */
+	onAuthenticated?: (peerPub: string) => void;
 }
 
 /** What a peer broadcast carries: entries and the roster when it changed, nothing on a heartbeat,
@@ -279,9 +283,13 @@ async function syncPeer(
 ): Promise<void> {
 	const { channel } = peer;
 	const { wasm } = opts;
-	const authed = await authenticatePeer(opts, peer);
+	const authed = await authenticatePeer(
+		opts.peerSource ? { ...opts, skipPeer: undefined } : opts,
+		peer,
+	);
 	if (!authed) return;
 	const { peerPub } = authed;
+	opts.onAuthenticated?.(peerPub);
 	const sess = { sessionId: authed.sessionId };
 	let wakeAbort: (() => void) | null = null;
 	const aborted = new Promise<null>((resolve) => {

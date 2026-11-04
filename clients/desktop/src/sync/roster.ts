@@ -50,7 +50,9 @@ import { desktopSyncCrypto } from "../sync-crypto";
 import { emit, report } from "./bus";
 import { deviceKeypair, publishSyncIdentity } from "./keys";
 import { linkBlobSource } from "./link-blob";
-import { linkPeerSource } from "./link-peers";
+import { linkDevicePubs, linkPeerSource, loadLinkDevices, recordLinkDevice } from "./link-peers";
+
+const onTheLink = (pub: string): boolean => linkDevicePubs().has(pub);
 
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 const GROUP_KEY = "sync.group";
@@ -256,11 +258,17 @@ async function startRoster(): Promise<void> {
 		},
 	} satisfies Parameters<typeof startRosterSync>[0];
 
+	await loadLinkDevices();
 	rosterSessions = [
-		await startRosterSync(common),
+		// A browser on this machine syncs over the link only, never the relay.
+		await startRosterSync({ ...common, skipPeer: onTheLink }),
 		// Browsers paired to this app, over the pipe they already have. Started second so a relay
 		// failure does not cost the local peers, which are the ones that work offline.
-		await startRosterSync({ ...common, peerSource: linkPeerSource }),
+		await startRosterSync({
+			...common,
+			peerSource: linkPeerSource,
+			onAuthenticated: recordLinkDevice,
+		}),
 	];
 	if (gen !== sessionGen) return; // torn down while the sessions started
 	// Its own failure, reported: entry sync carries on without it.
@@ -270,6 +278,7 @@ async function startRoster(): Promise<void> {
 			blobs: desktopFiles.forVault(vaultId).blobs,
 			wanted: async () => wantedFromPayload(await blobStore.readEntriesPayload()),
 			localSources: [linkBlobSource],
+			skipPeer: onTheLink,
 			onReceived: blobArrived,
 		});
 	} catch (e) {
