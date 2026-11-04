@@ -879,7 +879,10 @@ fn drive(
                 let peer = handshake::handshake_remote_static(handshake.session_id)
                     .map_err(|e| format!("remote static: {e:?}"))?;
                 bind_invite(&peer);
-                emit("link-paired", serde_json::json!({ "peerId": peer }));
+                emit(
+                    "link-paired",
+                    serde_json::json!({ "peerId": peer, "via": "code" }),
+                );
             }
             // Authenticated from here, so the same connection carries application traffic,
             // sealed under the session the handshake just established.
@@ -1033,7 +1036,10 @@ fn confirm_link(
     }
     pairing::finish_link(root, &peer, label)?;
     bind_invite(&peer);
-    emit("link-paired", serde_json::json!({ "peerId": peer }));
+    emit(
+        "link-paired",
+        serde_json::json!({ "peerId": peer, "via": "emoji" }),
+    );
     emit("link-pair-done", serde_json::json!({ "paired": true }));
     write_sealed(
         session_id,

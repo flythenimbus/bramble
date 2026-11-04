@@ -431,6 +431,17 @@ export function DesktopLinkSection() {
 							/>
 						</>
 					)}
+					{link.joinSas && (
+						<>
+							<p className="text-xs text-muted-foreground">
+								<Trans>
+									The desktop app is showing the same symbols and waiting for you to approve there.
+									Approve only if they match.
+								</Trans>
+							</p>
+							<SasDisplay digits={link.joinSas.digits} emoji={link.joinSas.emoji} />
+						</>
+					)}
 					{link.inviteError && <p className="text-xs text-destructive">{link.inviteError}</p>}
 					<div className="flex justify-end gap-2">
 						<Button

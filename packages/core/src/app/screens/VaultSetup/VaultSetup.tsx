@@ -109,7 +109,7 @@ export function VaultSetup({
 				<div className="w-full max-w-xl text-center">
 					<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />
 					<h1 className="text-2xl mb-2">
-						{effectiveMode === "desktop" ? (
+						{effectiveMode === "desktop" && !joinSas ? (
 							<Trans>Copying your desktop app's vault…</Trans>
 						) : joinSas ? (
 							<Trans>Check this matches</Trans>
@@ -117,7 +117,7 @@ export function VaultSetup({
 							<Trans>Connecting to your other device…</Trans>
 						)}
 					</h1>
-					{effectiveMode === "desktop" ? (
+					{effectiveMode === "desktop" && !joinSas ? (
 						<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>
 							<Trans>Keep the desktop app open until this finishes.</Trans>
 						</p>

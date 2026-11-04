@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../../../context/PlatformContext";
 import type { Entry } from "../../../../hooks/useVault";
@@ -42,6 +42,7 @@ const h = vi.hoisted(() => ({
 		| { id: string; sas: { emoji: number[]; digits: string } }
 		| { legacy: true },
 	confirms: [] as [string, boolean][],
+	syncEvent: null as ((e: { kind: string; sas?: string; sasEmoji?: number[] }) => void) | null,
 }));
 
 vi.mock("../../../hooks/usePopOut", () => ({
@@ -106,7 +107,12 @@ const platform = {
 			};
 		},
 	},
-	shell: { onSyncEvent: () => () => {} },
+	shell: {
+		onSyncEvent: (cb: (e: { kind: string; sas?: string; sasEmoji?: number[] }) => void) => {
+			h.syncEvent = cb;
+			return () => {};
+		},
+	},
 	desktopLink: {
 		status: async () => ({ paired: h.paired, pairedAt: 1, permitted: h.permitted }),
 		claimSyncInvite: async () => {
@@ -529,5 +535,20 @@ describe("linking by emoji", () => {
 		await waitFor(() => expect(h.confirms).toEqual([["L1", false]]));
 		expect(await screen.findByText(/nothing was linked/i)).toBeTruthy();
 		expect(h.claims).toBe(0);
+	});
+});
+
+describe("an older desktop app's copy", () => {
+	it("shows the symbols it asks to compare", async () => {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.groupOf.set("v1", "OTHER-GROUP");
+		h.invite = "code";
+		mount();
+		await linkAgain();
+		await screen.findByText(/you have two vaults/i);
+		act(() =>
+			h.syncEvent?.({ kind: "sas", sas: "1234 5678 9012", sasEmoji: [0, 1, 2, 3, 4, 5, 6] }),
+		);
+		expect(await screen.findByText(/approve only if they match/i)).toBeTruthy();
 	});
 });

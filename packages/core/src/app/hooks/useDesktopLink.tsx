@@ -2,7 +2,7 @@
 // holds, claim its invite, then join over the link. See docs/desktop-link-onboarding.md.
 
 import { useLingui } from "@lingui/react/macro";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { type EntryData, useVault, useVaultActions } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
@@ -57,6 +57,10 @@ export function useDesktopLink({
 	const [summary, setSummary] = useState<DesktopVaultSummary | null>(null);
 	const [joining, setJoining] = useState(false);
 	const [inviteError, setInviteError] = useState<string | null>(null);
+	/** How this browser linked: only an emoji link may copy the vault over the link. */
+	const [linkedBy, setLinkedBy] = useState<"emoji" | "code" | null>(null);
+	/** The emoji an older desktop app asks to compare during a relay copy. */
+	const [joinSas, setJoinSas] = useState<{ digits: string; emoji?: number[] } | null>(null);
 	/** Other devices syncing this browser's vault: combining moves only this browser. */
 	const [otherDevices, setOtherDevices] = useState<string[]>([]);
 	/** What a combine left behind: look-alikes held back, and files it could not carry. */
@@ -133,6 +137,7 @@ export function useDesktopLink({
 			try {
 				await desktopLink.confirm(linking.id, matches);
 				setLinking(null);
+				setLinkedBy("emoji");
 				await afterLinked();
 			} catch (e) {
 				setLinking(null);
@@ -152,6 +157,7 @@ export function useDesktopLink({
 		try {
 			await desktopLink.pair(code);
 			setCode("");
+			setLinkedBy("code");
 			await afterLinked();
 		} catch (e) {
 			// The app refuses a wrong, expired and already-used code identically.
@@ -162,6 +168,16 @@ export function useDesktopLink({
 			setBusy(false);
 		}
 	}, [desktopLink, code, afterLinked, t]);
+
+	// An older desktop app copies over the relay behind its own emoji prompt; show this side's.
+	useEffect(
+		() =>
+			shell.onSyncEvent((e) => {
+				if (e.kind === "sas" && e.sas) setJoinSas({ digits: e.sas, emoji: e.sasEmoji });
+				else if (e.kind === "joined" || e.kind === "join-error") setJoinSas(null);
+			}),
+		[shell],
+	);
 
 	/** Wait for the render after a join, whose actions belong to the vault that just opened. */
 	const vaultSwitchedFrom = useCallback(
@@ -204,7 +220,9 @@ export function useDesktopLink({
 					combining && oldId
 						? await collectCarry(entries, files, platformFiles?.forVault(oldId) ?? null)
 						: null;
-				await startJoin(invite, { kind: "password", password }, undefined, { viaLink: true });
+				await startJoin(invite, { kind: "password", password }, undefined, {
+					viaLink: linkedBy === "emoji",
+				});
 				joined = true;
 				setInvite(null);
 				setOutcome(null);
@@ -238,7 +256,18 @@ export function useDesktopLink({
 				setJoining(false);
 			}
 		},
-		[invite, outcome, activeId, entries, files, platformFiles, startJoin, vaultSwitchedFrom, t],
+		[
+			linkedBy,
+			invite,
+			outcome,
+			activeId,
+			entries,
+			files,
+			platformFiles,
+			startJoin,
+			vaultSwitchedFrom,
+			t,
+		],
 	);
 
 	/** Copy the look-alikes the dedup held back, as import's "Import them anyway" does. */
@@ -278,6 +307,7 @@ export function useDesktopLink({
 		combined,
 		copyHeldBack,
 		otherDevices,
+		joinSas,
 		/** For the Settings poller-free path: an invite claimed elsewhere. */
 		afterLinked,
 	};

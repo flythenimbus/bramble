@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
 	meta: new Map<string, unknown>(),
 	joinFails: false,
 	importFails: false,
+	syncEvent: null as ((e: { kind: string; sas?: string; sasEmoji?: number[] }) => void) | null,
 	/** The open vault, as the provider sees it. Unset means the first vault in `vaults`. */
 	active: undefined as string | undefined,
 	subs: new Set<() => void>(),
@@ -93,7 +94,13 @@ vi.mock("../../sync/enrollment", async (importOriginal) => ({
 
 const platform = {
 	storage: { getMeta: async (k: string) => h.meta.get(k) },
-	shell: { onSyncEvent: () => () => {}, syncDevicePublicKey: async () => "me" },
+	shell: {
+		onSyncEvent: (cb: (e: { kind: string; sas?: string; sasEmoji?: number[] }) => void) => {
+			h.syncEvent = cb;
+			return () => {};
+		},
+		syncDevicePublicKey: async () => "me",
+	},
 	files: {
 		forVault: () => ({
 			stage: async () => {
@@ -117,6 +124,9 @@ const platform = {
 		vaultSummary: async () => {
 			h.calls.push("summary");
 			return h.summary;
+		},
+		pair: async () => {
+			h.calls.push("pair");
 		},
 		claimSyncInvite: async () => {
 			h.calls.push("claim");
@@ -316,5 +326,42 @@ describe("an empty browser vault", () => {
 		expect(h.steps).toEqual(["join"]);
 		expect(result.current.inviteError).toMatch(/join failed/i);
 		h.joinFails = false;
+	});
+});
+
+describe("an older desktop app, linked with the code", () => {
+	async function linkedByCode() {
+		h.vaults = [];
+		h.start = { legacy: true };
+		h.summary = null;
+		h.joins = [];
+		const { result } = renderHook(() => useDesktopLink({ from: "setup" }), { wrapper });
+		await act(async () => {
+			await result.current.start();
+		});
+		act(() => result.current.setCode("ABCD2345"));
+		await act(async () => {
+			await result.current.pairWithCode();
+		});
+		h.start = { id: "L1", sas: { emoji: [0, 1, 2, 3, 4, 5, 6], digits: "1" } };
+		return result;
+	}
+
+	it("joins over the relay, which is all an older app can serve", async () => {
+		const result = await linkedByCode();
+		await act(async () => {
+			await result.current.accept("pw");
+		});
+		expect(h.joins[0]?.[3]).toEqual({ viaLink: false });
+	});
+
+	it("shows the emoji the older app asks to compare during the copy", async () => {
+		const result = await linkedByCode();
+		act(() =>
+			h.syncEvent?.({ kind: "sas", sas: "1234 5678 9012", sasEmoji: [1, 2, 3, 4, 5, 6, 7] }),
+		);
+		expect(result.current.joinSas?.digits).toBe("1234 5678 9012");
+		act(() => h.syncEvent?.({ kind: "joined" }));
+		expect(result.current.joinSas).toBeNull();
 	});
 });

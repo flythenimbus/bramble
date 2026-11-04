@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
 	/** The options the enroll host was started with, so a test can drive its callbacks. */
 	enrollOpts: null as Record<string, (...a: never[]) => unknown> | null,
 	linkSource: null as { room: string; only: unknown } | null,
+	linkPaired: null as ((e: { payload: { peerId: string; via?: string } }) => void) | null,
 }));
 
 const LINK_SOURCE = async () => ({ stop() {} });
@@ -23,7 +24,12 @@ vi.mock("./link-peers", () => ({
 		return LINK_SOURCE;
 	},
 }));
-vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
+vi.mock("@tauri-apps/api/event", () => ({
+	listen: async (_name: string, cb: (e: { payload: { peerId: string; via?: string } }) => void) => {
+		h.linkPaired = cb;
+		return () => {};
+	},
+}));
 
 vi.mock("@core/sync/transport/enroll-host", () => ({
 	startEnroll: async (_role: string, opts: Record<string, (...a: never[]) => unknown>) => {
@@ -136,6 +142,7 @@ beforeEach(() => {
 	h.meta.clear();
 	h.enrollOpts = null;
 	h.linkSource = null;
+	h.linkPaired = null;
 	h.meta.set("active-vault", VAULT);
 	h.meta.set(`sync.group:${VAULT}`, {
 		groupKey: "k",
@@ -231,18 +238,41 @@ describe("an invite delivered over the link", () => {
 		entries: { entries: [], tombstones: [] },
 	};
 
+	it("waits to learn how the browser linked before starting the copy", async () => {
+		const mod = await loadTransport();
+		await mod.startEnrollInvite({ ...base, viaLink: true });
+		expect(h.enrollOpts).toBeNull();
+	});
+
 	it("runs over the link's enroll room and releases the vault without a prompt", async () => {
 		const mod = await loadTransport();
 		const { onSyncEvent } = await import("./bus");
 		const kinds: string[] = [];
 		onSyncEvent((e) => kinds.push(e.kind));
 		await mod.startEnrollInvite({ ...base, viaLink: true });
+		h.linkPaired?.({ payload: { peerId: "browser", via: "emoji" } });
+		await vi.waitFor(() => expect(h.enrollOpts).not.toBeNull());
 
 		expect(h.enrollOpts?.peerSource).toBe(LINK_SOURCE);
 		expect(h.linkSource?.room).toBe("enroll");
 		const approve = h.enrollOpts?.approve as unknown as (s: unknown, l: string) => Promise<boolean>;
 		expect(await approve({ digits: "1", emoji: [] }, "Chrome")).toBe(true);
 		expect(kinds).not.toContain("enroll-approval");
+	});
+
+	it("gives an older extension that paired by code the relay copy and the prompt", async () => {
+		const mod = await loadTransport();
+		await mod.startEnrollInvite({ ...base, viaLink: true });
+		h.linkPaired?.({ payload: { peerId: "old-browser", via: "code" } });
+		await vi.waitFor(() => expect(h.enrollOpts).not.toBeNull());
+
+		expect(h.enrollOpts?.peerSource).toBeUndefined();
+		const approve = h.enrollOpts?.approve as unknown as (s: unknown, l: string) => Promise<boolean>;
+		const answer = await Promise.race([
+			approve({ digits: "1", emoji: [] }, "Old Chrome"),
+			new Promise((r) => setTimeout(() => r("waiting"), 30)),
+		]);
+		expect(answer).toBe("waiting");
 	});
 
 	it("keeps the prompt for any other invite, such as a phone's", async () => {
