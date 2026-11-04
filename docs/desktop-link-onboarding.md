@@ -4,9 +4,11 @@ Design for making it easier to link the desktop app and the browser extension. I
 pieces: piece 1 (setup and one vault) and piece 2 (one check instead of two: emoji only, no
 code).
 
-**Status (2026-11-04):** built on a worktree off main (`eaa0df5a`), not merged. Unit, component
-and Rust tests and the extension e2e suite pass. Not yet run end to end with the real desktop app
-and extension together, on any platform.
+**Status (2026-11-04):** built on a worktree off main (`eaa0df5a`), not merged. Run end to end on
+macOS with the dev desktop app and the extension in Chromium: first-run link, linking from
+Settings into an empty vault and with Combine (a file included), approving then leaving, the app
+locking mid-link, and main's extension pairing by code. Not run: Firefox, Windows, Linux, and this
+extension against an older desktop app.
 
 Read [desktop-port.md](desktop-port.md) first for how the link works, and
 [p2p-sync.md](p2p-sync.md) "Pairing code" for what the vault copy hands over.
