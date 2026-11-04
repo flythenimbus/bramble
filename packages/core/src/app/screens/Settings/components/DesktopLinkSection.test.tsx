@@ -78,6 +78,7 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 vi.mock("../../../../hooks/useVaultRegistry", () => ({
 	useVaultRegistry: () => ({
 		vaults: h.vaults,
+		activeId: h.vaults.length ? h.activeVault : undefined,
 		syncKey: (k: string) => `${k}:${h.activeVault}`,
 	}),
 }));
@@ -139,6 +140,12 @@ const platform = {
 const entry = (id: string): Entry =>
 	({ id, kind: "login", name: id, username: "u", password: "p", urls: [] }) as unknown as Entry;
 
+/** Link an already-paired browser again, the way it now picks up the desktop's vault. */
+async function linkAgain() {
+	fireEvent.click(await screen.findByRole("button", { name: /^link again$/i }));
+	fireEvent.click(await screen.findByRole("button", { name: /they match/i }));
+}
+
 function mount() {
 	return render(
 		<I18nProvider i18n={i18n}>
@@ -188,6 +195,7 @@ describe("what a desktop connect will do to this browser", () => {
 		h.groupOf.set("v1", "GROUP");
 		h.invite = "code";
 		mount();
+		await linkAgain();
 
 		expect(await screen.findByText(/already share this vault/i)).toBeTruthy();
 		expect(screen.queryByLabelText(/master password/i)).toBeNull();
@@ -198,23 +206,26 @@ describe("what a desktop connect will do to this browser", () => {
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
 		mount();
+		await linkAgain();
 
 		expect(await screen.findByText(/add the desktop's vault/i)).toBeTruthy();
 		expect(screen.getByText(/existing vaults stay as they are/i)).toBeTruthy();
 	});
 
-	it("names the vault it creates after the desktop app", async () => {
-		// A blank "Vault 2" appearing mid-flow is what made this feel like data loss.
+	it("lets the vault arrive under its own name", async () => {
+		// The name follows the vault to every device, so nothing is named here.
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
 		mount();
+		await linkAgain();
 		await screen.findByText(/add the desktop's vault/i);
 
 		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
 		fireEvent.click(screen.getByRole("button", { name: /^sync$/i }));
 
-		await waitFor(() => expect(h.joinLabel).toBe("Desktop vault"));
+		await waitFor(() => expect(h.joinViaLink).toBe(true));
+		expect(h.joinLabel).toBeUndefined();
 	});
 
 	it("joins over the link, never the relay", async () => {
@@ -222,6 +233,7 @@ describe("what a desktop connect will do to this browser", () => {
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
 		mount();
+		await linkAgain();
 		await screen.findByText(/add the desktop's vault/i);
 
 		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
@@ -237,6 +249,7 @@ describe("carrying this vault's entries across", () => {
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
 		mount();
+		await linkAgain();
 		await screen.findByText(/add the desktop's vault/i);
 
 		expect(screen.queryByRole("checkbox")).toBeNull();
@@ -251,6 +264,7 @@ describe("carrying this vault's entries across", () => {
 		h.entries = [entry("a"), entry("b")];
 		h.invite = "code";
 		mount();
+		await linkAgain();
 		await screen.findByText(/add the desktop's vault/i);
 
 		fireEvent.click(screen.getByRole("checkbox"));
@@ -267,6 +281,7 @@ describe("carrying this vault's entries across", () => {
 		h.entries = [entry("a")];
 		h.invite = "code";
 		mount();
+		await linkAgain();
 		await screen.findByText(/add the desktop's vault/i);
 
 		fireEvent.click(screen.getByRole("checkbox"));
@@ -283,6 +298,7 @@ describe("carrying this vault's entries across", () => {
 		h.entries = [entry("a")];
 		h.invite = "code";
 		mount();
+		await linkAgain();
 		await screen.findByText(/add the desktop's vault/i);
 
 		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
@@ -301,6 +317,7 @@ describe("carrying this vault's entries across", () => {
 		h.invite = "code";
 		h.joinFails = true;
 		mount();
+		await linkAgain();
 		await screen.findByText(/add the desktop's vault/i);
 
 		fireEvent.click(screen.getByRole("checkbox"));

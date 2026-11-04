@@ -1022,7 +1022,10 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 								label,
 							});
 						}),
-					onSas: (sas) => broadcastSyncEvent({ kind: "sas", sas: sas.digits, sasEmoji: sas.emoji }),
+					// Over the link both screens already compared emoji; there is nothing to show here.
+					onSas: viaLink
+						? undefined
+						: (sas) => broadcastSyncEvent({ kind: "sas", sas: sas.digits, sasEmoji: sas.emoji }),
 					// The window closed. Refuse any prompt still parked here (nothing can be sent
 					// after this) and tell the UI, which may have lost its own countdown when the
 					// popup closed and reopened.

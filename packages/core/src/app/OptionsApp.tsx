@@ -10,6 +10,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { ThemeProvider } from "./hooks/useTheme";
 import { LocaleGate } from "./LocaleGate";
 import { RestoreShell } from "./screens/Restore/RestoreShell";
+import { initialSetupMode } from "./screens/VaultSetup/types";
 import { VaultSetup, type VaultSetupMode } from "./screens/VaultSetup/VaultSetup";
 
 // Lazy: the import pipeline + parsers (kdbx/csv) are heavy, so load them on demand. RestoreShell,
@@ -27,7 +28,7 @@ function SetupShell({ onComplete, mobile }: { onComplete?: () => void; mobile?: 
 	const { createVault, startJoin, joining, joinError } = useVault();
 	const { vaults } = useVaultRegistry();
 	const adding = vaults.length > 0;
-	const [mode, setMode] = useState<VaultSetupMode>("create");
+	const [mode, setMode] = useState<VaultSetupMode>(() => initialSetupMode(location.search));
 	// The pairing SAS for a join in progress, raised by the sync host once the channel is
 	// authenticated and cleared when the join settles either way (so a retry never shows a stale
 	// number). Held here rather than in VaultProvider: the setup screen is its only consumer.

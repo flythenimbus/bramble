@@ -2,12 +2,15 @@ import { Trans } from "@lingui/react/macro";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { usePlatform } from "../../../context/PlatformContext";
 import { useCryptoErrorMessage } from "../../../hooks/useCryptoErrorMessage";
 import type { JoinUnlock } from "../../../hooks/useVault";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { SasDisplay } from "../../components/SasDisplay";
 import { BackButton } from "../../components/ui/back-button";
 import { RestoreShell } from "../Restore/RestoreShell";
+import { DesktopLinkBanner } from "./components/DesktopLinkBanner";
+import { DesktopLinkCard } from "./components/DesktopLinkCard";
 import { JoinCard } from "./components/JoinCard";
 import { ModeTabs } from "./components/ModeTabs";
 import { PasswordCard } from "./components/PasswordCard";
@@ -70,9 +73,14 @@ export function VaultSetup({
 	const form = useForm<VaultSetupFormValues>({
 		defaultValues: { masterPassword: "", confirmPassword: "", label: "" },
 	});
-	// Fall a tab back to create when its panel isn't available (no join / no restore on this host).
+	const { desktopLink } = usePlatform();
+	// Fall a tab back to create when its panel isn't available (no join / no restore / no link here).
 	const effectiveMode: VaultSetupMode =
-		(mode === "join" && !onJoin) || (mode === "restore" && !onRestore) ? "create" : mode;
+		(mode === "join" && !onJoin) ||
+		(mode === "restore" && !onRestore) ||
+		(mode === "desktop" && !desktopLink)
+			? "create"
+			: mode;
 
 	const handleCreate = async ({ masterPassword, label }: VaultSetupFormValues) => {
 		setSubmitError(null);
@@ -101,13 +109,19 @@ export function VaultSetup({
 				<div className="w-full max-w-xl text-center">
 					<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />
 					<h1 className="text-2xl mb-2">
-						{joinSas ? (
+						{effectiveMode === "desktop" ? (
+							<Trans>Copying your desktop app's vault…</Trans>
+						) : joinSas ? (
 							<Trans>Check this matches</Trans>
 						) : (
 							<Trans>Connecting to your other device…</Trans>
 						)}
 					</h1>
-					{joinSas ? (
+					{effectiveMode === "desktop" ? (
+						<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>
+							<Trans>Keep the desktop app open until this finishes.</Trans>
+						</p>
+					) : joinSas ? (
 						<>
 							{/* The comparison is the whole defence, so it is the loudest thing on screen and
 							    the instruction is one sentence. */}
@@ -148,14 +162,24 @@ export function VaultSetup({
 			<div className="w-full max-w-xl">
 				{onBack && <BackButton onClick={onBack} className="mb-3" />}
 				<SetupHeader mode={effectiveMode} mobile={mobile} adding={adding} />
-				<ModeTabs
-					mode={effectiveMode}
-					onChange={handleModeChange}
-					disabled={busy}
-					showRestore={!!onRestore}
-					showJoin={!!onJoin}
-				/>
-				{effectiveMode === "restore" && onRestore ? (
+				{effectiveMode !== "desktop" && desktopLink && (
+					<DesktopLinkBanner onLink={() => handleModeChange("desktop")} />
+				)}
+				{effectiveMode !== "desktop" && (
+					<ModeTabs
+						mode={effectiveMode}
+						onChange={handleModeChange}
+						disabled={busy}
+						showRestore={!!onRestore}
+						showJoin={!!onJoin}
+					/>
+				)}
+				{effectiveMode === "desktop" ? (
+					<DesktopLinkCard
+						from={adding ? "add" : "setup"}
+						onBack={() => handleModeChange("create")}
+					/>
+				) : effectiveMode === "restore" && onRestore ? (
 					<RestoreShell embedded onRestored={onRestore} />
 				) : effectiveMode === "join" && onJoin ? (
 					<JoinCard onJoin={onJoin} busy={!!joining} error={joinError ?? null} mobile={mobile} />

@@ -3,11 +3,8 @@ import { CheckCircle2, ExternalLink, Monitor, TriangleAlert } from "lucide-react
 import { useCallback, useEffect, useState } from "react";
 import type { DesktopLinkStatus } from "../../../../adapters/desktop-link";
 import { usePlatform } from "../../../../context/PlatformContext";
-import { useVault, useVaultActions } from "../../../../hooks/useVault";
+import { useVault } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
-import { decodePairingCode } from "../../../../sync/enrollment";
-import type { PairingSas } from "../../../../sync/pairing-sas";
-import { syncKeyFor } from "../../../../sync/sync-keys";
 import { formatDate } from "../../../../util/format-date";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
@@ -15,6 +12,7 @@ import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
+import { useDesktopLink } from "../../../hooks/useDesktopLink";
 import { usePopOut } from "../../../hooks/usePopOut";
 import { Row, Section } from "./primitives";
 
@@ -22,18 +20,13 @@ import { Row, Section } from "./primitives";
  * pairing.rs. Anything longer is a paste that picked up whitespace. */
 const CODE_LENGTH = 8;
 
-/** How often a linked browser asks whether the app is offering to share its vault. Slack because
- * each check is a round trip that can spawn a host process; the app arms an invite for minutes. */
-const OFFER_POLL_MS = 4000;
-
 /** Link this browser to the Bramble desktop app. Rendered only where the platform provides a
  * desktop-link adapter, which today is the extension. See docs/desktop-port.md. */
 export function DesktopLinkSection() {
-	const { desktopLink, shell, storage } = usePlatform();
+	const { desktopLink, storage } = usePlatform();
 	const { t } = useLingui();
-	const { startJoin, importEntries } = useVaultActions();
 	const { entries } = useVault();
-	const { vaults, syncKey } = useVaultRegistry();
+	const { syncKey } = useVaultRegistry();
 	// The toolbar popup closes the moment the user switches to the desktop app, which a join asks
 	// them to do, and the vault it was receiving goes with it. So that much runs in a window.
 	const { canPopOut, popOut } = usePopOut();
@@ -52,35 +45,12 @@ export function DesktopLinkSection() {
 	 * is why absence reads as allowed rather than denied.
 	 */
 	const [allowed, setAllowed] = useState<boolean | undefined>(undefined);
-	const [code, setCode] = useState("");
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	/** The invite the app handed over, waiting on the master password that unlocks the copy. */
-	const [invite, setInvite] = useState<string | null>(null);
 	const [invitePassword, setInvitePassword] = useState("");
-	const [inviteError, setInviteError] = useState<string | null>(null);
-	const [joining, setJoining] = useState(false);
 	/** Guards the local verb, so its wording is read before it is used. */
 	const [confirmUnlink, setConfirmUnlink] = useState(false);
-	/** The SAS for the join in flight. The inviter is holding on the user's answer, so without
-	 * this the modal is a disabled button and the only way past it is approving something on the
-	 * other screen that has not been compared with anything. */
-	const [joinSas, setJoinSas] = useState<{ sas: string; sasEmoji?: number[] } | null>(null);
-	/**
-	 * What accepting will actually do to this browser, worked out before anything moves.
-	 *
-	 * "switch" means a vault here already syncs that group, so this only changes which one is
-	 * open. "add" means a new vault appears alongside the ones already here. "first" means this
-	 * browser has no vaults at all. The distinction is the whole point: a settings action started
-	 * inside one vault must not silently leave the user standing in another.
-	 */
-	const [outcome, setOutcome] = useState<"switch" | "add" | "first" | null>(null);
+	const [unlinking, setUnlinking] = useState(false);
 	/** Whether to carry this vault's entries into the shared one rather than leave two apart. */
 	const [alsoMove, setAlsoMove] = useState(false);
-	/** An emoji link waiting on this screen's answer. */
-	const [linking, setLinking] = useState<{ id: string; sas: PairingSas } | null>(null);
-	/** The desktop app predates the emoji, so the code is the way to link. */
-	const [legacy, setLegacy] = useState(false);
 
 	const refresh = useCallback(async () => {
 		if (!desktopLink) return;
@@ -89,9 +59,13 @@ export function DesktopLinkSection() {
 			// No sub-adapter means nothing to ask for, which is a grant, not a refusal.
 			setAllowed(desktopLink.permission ? await desktopLink.permission.granted() : true);
 		} catch (e) {
-			setError(String(e));
+			setRefreshError(String(e));
 		}
 	}, [desktopLink]);
+	const [refreshError, setRefreshError] = useState<string | null>(null);
+
+	const link = useDesktopLink({ from: "settings", onLinked: refresh });
+	const busy = link.busy || unlinking;
 
 	/**
 	 * Ask for the browser permission, then reload so the grant is usable.
@@ -109,33 +83,15 @@ export function DesktopLinkSection() {
 	 */
 	const requestPermission = useCallback(async () => {
 		if (!desktopLink?.permission) return;
-		setError(null);
+		link.setError(null);
 		const granted = await desktopLink.permission.request().catch(() => false);
 		if (granted) location.reload();
-		else setError(t`Bramble needs that permission to talk to the desktop app.`);
-	}, [desktopLink, t]);
+		else link.setError(t`Bramble needs that permission to talk to the desktop app.`);
+	}, [desktopLink, link, t]);
 
 	useEffect(() => {
 		void refresh();
 	}, [refresh]);
-
-	/** Which of the three things accepting this invite would do. */
-	const outcomeFor = useCallback(
-		async (pairingCode: string): Promise<"switch" | "add" | "first"> => {
-			try {
-				const { groupKey } = decodePairingCode(pairingCode.trim());
-				for (const v of vaults) {
-					const g = await storage.getMeta<{ groupKey?: string }>(syncKeyFor("sync.group", v.id));
-					// The same check startJoin makes, run early so the user is told rather than moved.
-					if (g?.groupKey === groupKey) return "switch";
-				}
-			} catch {
-				// An undecodable code fails later with something specific; do not guess here.
-			}
-			return vaults.length === 0 ? "first" : "add";
-		},
-		[vaults, storage],
-	);
 
 	// Ask the app who it is and look for it in THIS vault's roster. The comparison happens here,
 	// against a roster this browser already holds, so the app discloses nothing about its vaults.
@@ -159,118 +115,10 @@ export function DesktopLinkSection() {
 		};
 	}, [desktopLink, status?.paired, storage, syncKey]);
 
-	// The joiner's half of the comparison. Raised once the channel is authenticated and cleared
-	// when the join settles either way, so a retry never shows a stale one.
-	useEffect(() => {
-		return shell.onSyncEvent((e) => {
-			if (e.kind === "sas" && e.sas) setJoinSas({ sas: e.sas, sasEmoji: e.sasEmoji });
-			else if (e.kind === "joined" || e.kind === "join-error") setJoinSas(null);
-		});
-	}, [shell]);
-
-	/**
-	 * Watch for an invite the app has armed, for a browser that is ALREADY linked.
-	 *
-	 * The claim used to happen only inside `pair()`, so a browser linked before this existed could
-	 * never pick up the sync half: the app armed an invite, the user waited, and nothing on this
-	 * side ever asked. Which is every browser paired with the old two-step flow.
-	 *
-	 * Polled rather than pushed, and only while this section is on screen, because claiming is what
-	 * consumes the invite: doing it in the background would burn an offer with nobody looking at
-	 * the prompt it raises. The interval is slack because each check is a round trip to the app,
-	 * which spawns a host process when sync is not already holding the pipe open.
-	 */
-	// Never from the toolbar popup: claiming spends the invite, and the join it starts would die
-	// with the popup. The window claims it instead.
-	useEffect(() => {
-		if (canPopOut || !desktopLink?.claimSyncInvite || !status?.paired || invite !== null) return;
-		let cancelled = false;
-		const check = async () => {
-			const claimed = await desktopLink.claimSyncInvite?.().catch(() => null);
-			if (cancelled || !claimed) return;
-			setInvitePassword("");
-			setInviteError(null);
-			setOutcome(await outcomeFor(claimed));
-			setInvite(claimed);
-		};
-		void check();
-		const id = setInterval(() => void check(), OFFER_POLL_MS);
-		return () => {
-			cancelled = true;
-			clearInterval(id);
-		};
-	}, [canPopOut, desktopLink, status?.paired, invite, outcomeFor]);
-
 	if (!desktopLink) return null;
 
-	/**
-	 * After a link: pick up the vault the app armed when its user clicked Connect. Absent is
-	 * ordinary (an older app, or its dialog already closed) and leaves the link working alone.
-	 */
-	const afterLinked = async () => {
-		await refresh();
-		const claimed = await desktopLink.claimSyncInvite?.().catch(() => null);
-		if (claimed) {
-			setInvitePassword("");
-			setInviteError(null);
-			setOutcome(await outcomeFor(claimed));
-			setInvite(claimed);
-		}
-	};
-
-	/** Start an emoji link, or fall back to the code where the app (or host) predates it. */
-	const startLink = async () => {
-		setBusy(true);
-		setError(null);
-		try {
-			const started = desktopLink.start ? await desktopLink.start() : { legacy: true as const };
-			if ("legacy" in started) setLegacy(true);
-			else setLinking(started);
-		} catch (e) {
-			setError(e instanceof Error && e.message ? e.message : t`Could not reach the desktop app.`);
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	/** This screen's answer to the emoji. The app is trusted only after both screens say yes. */
-	const answerLink = async (matches: boolean) => {
-		if (!linking || !desktopLink.confirm) return;
-		const { id } = linking;
-		setBusy(true);
-		setError(null);
-		try {
-			await desktopLink.confirm(id, matches);
-			setLinking(null);
-			await afterLinked();
-		} catch (e) {
-			setLinking(null);
-			setError(e instanceof Error && e.message ? e.message : t`Nothing was linked.`);
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	const pair = async () => {
-		setBusy(true);
-		setError(null);
-		try {
-			await desktopLink.pair(code);
-			setCode("");
-			await afterLinked();
-		} catch (e) {
-			// The app refuses a wrong, expired and already-used code identically, so there is
-			// nothing more specific to say here than that it did not take.
-			setError(
-				e instanceof Error && e.message ? e.message : t`The desktop app did not accept that code.`,
-			);
-		} finally {
-			setBusy(false);
-		}
-	};
-
 	const unlink = async () => {
-		setBusy(true);
+		setUnlinking(true);
 		try {
 			await desktopLink.unlink();
 			// Hand the permission back too. Severing the link should return what the link needed,
@@ -281,47 +129,62 @@ export function DesktopLinkSection() {
 			setConfirmUnlink(false);
 			await refresh();
 		} finally {
-			setBusy(false);
+			setUnlinking(false);
 		}
 	};
 
 	/**
 	 * Build this browser's own copy of the desktop's vault from the claimed invite.
 	 *
-	 * The password is the shared master password: it proves this is the same person and wraps the
-	 * local copy, so the browser keeps working when the app is closed.
+	 * The password is the one the desktop's vault uses: it wraps the local copy, so the browser
+	 * keeps working when the app is closed.
 	 */
 	const acceptInvite = async () => {
-		if (!invite) return;
-		setJoining(true);
-		setInviteError(null);
 		// Captured BEFORE the join, while this vault is still the open one. Its entries are already
 		// decrypted in memory here, which is what makes moving them possible at all: the two vaults
 		// have different keys and only one is ever loaded, so the plaintext crossing between them
 		// has to be held over the switch rather than re-wrapped in place.
-		const carry = alsoMove ? entries.map(({ id: _id, ...data }) => data) : null;
-		try {
-			// Named, so a vault that appears in the list is recognisably the desktop's rather than
-			// an unexplained "Vault 2".
-			await startJoin(invite, { kind: "password", password: invitePassword }, t`Desktop vault`, {
-				viaLink: true,
-			});
-			setInvite(null);
-			setInvitePassword("");
-			setJoinSas(null);
-			setOutcome(null);
-			// After the join, so this lands in the vault that is now open. Failing here leaves the
-			// originals untouched in the vault they came from, which is the safe way round.
-			if (carry?.length) await importEntries(carry);
-			setAlsoMove(false);
-		} catch (e) {
-			setInviteError(
-				e instanceof Error && e.message ? e.message : t`Could not sync with the desktop app.`,
-			);
-		} finally {
-			setJoining(false);
-		}
+		const carry = alsoMove ? entries.map(({ id: _id, ...data }) => data) : undefined;
+		await link.accept(invitePassword, { carry });
+		setInvitePassword("");
+		setAlsoMove(false);
 	};
+
+	/** The three things accepting would do, as this screen words them. */
+	const outcome =
+		link.outcome === "switch"
+			? "switch"
+			: link.outcome === "add" || link.outcome === "ask"
+				? "add"
+				: "first";
+	const error = link.error ?? refreshError;
+
+	const emojiConfirm = link.linking && (
+		<div className="space-y-3 text-center">
+			<p className="text-sm">
+				<Trans>Check these match your desktop app</Trans>
+			</p>
+			<SasDisplay digits={link.linking.sas.digits} emoji={link.linking.sas.emoji} large />
+			<p className="text-xs text-muted-foreground">
+				<Trans>
+					Confirm here and approve in the desktop app, only if both show the same symbols.
+				</Trans>
+			</p>
+			<div className="flex justify-center gap-2">
+				<Button
+					variant="secondary"
+					size="sm"
+					disabled={busy}
+					onClick={() => void link.answer(false)}
+				>
+					<Trans>They don't match</Trans>
+				</Button>
+				<Button size="sm" disabled={busy} onClick={() => void link.answer(true)}>
+					<Trans>They match</Trans>
+				</Button>
+			</div>
+		</div>
+	);
 
 	const continueInWindow = (
 		<Button variant="secondary" fullWidth onClick={() => popOut()}>
@@ -403,6 +266,26 @@ export function DesktopLinkSection() {
 							{continueInWindow}
 						</div>
 					)}
+					{!canPopOut &&
+						sharesThisVault !== true &&
+						(emojiConfirm || (
+							<div className="space-y-3">
+								<p className="text-sm text-muted-foreground">
+									<Trans>
+										To bring in the desktop app's vault, open Connect a browser there and link
+										again.
+									</Trans>
+								</p>
+								<Button
+									variant="secondary"
+									fullWidth
+									disabled={busy}
+									onClick={() => void link.start()}
+								>
+									<Trans>Link again</Trans>
+								</Button>
+							</div>
+						))}
 				</>
 			) : canPopOut ? (
 				<div className="space-y-3">
@@ -428,32 +311,9 @@ export function DesktopLinkSection() {
 						<Trans>Allow and continue</Trans>
 					</Button>
 				</div>
-			) : linking ? (
-				<div className="space-y-3 text-center">
-					<p className="text-sm">
-						<Trans>Check these match your desktop app</Trans>
-					</p>
-					<SasDisplay digits={linking.sas.digits} emoji={linking.sas.emoji} large />
-					<p className="text-xs text-muted-foreground">
-						<Trans>
-							Confirm here and approve in the desktop app, only if both show the same symbols.
-						</Trans>
-					</p>
-					<div className="flex justify-center gap-2">
-						<Button
-							variant="secondary"
-							size="sm"
-							disabled={busy}
-							onClick={() => void answerLink(false)}
-						>
-							<Trans>They don't match</Trans>
-						</Button>
-						<Button size="sm" disabled={busy} onClick={() => void answerLink(true)}>
-							<Trans>They match</Trans>
-						</Button>
-					</div>
-				</div>
-			) : !legacy ? (
+			) : link.linking ? (
+				emojiConfirm
+			) : !link.legacy ? (
 				<div className="space-y-3">
 					<p className="text-sm text-muted-foreground">
 						<Trans>
@@ -461,7 +321,7 @@ export function DesktopLinkSection() {
 							Link here. Both screens will show the same symbols.
 						</Trans>
 					</p>
-					<Button variant="primary" fullWidth disabled={busy} onClick={() => void startLink()}>
+					<Button variant="primary" fullWidth disabled={busy} onClick={() => void link.start()}>
 						<Trans>Link</Trans>
 					</Button>
 				</div>
@@ -475,22 +335,22 @@ export function DesktopLinkSection() {
 					</p>
 					<TextField
 						label={t`Code from the desktop app`}
-						value={code}
+						value={link.code}
 						autoComplete="off"
 						spellCheck={false}
 						// The alphabet is uppercase; the app folds case anyway, but showing it the
 						// way it is displayed avoids a mismatch the user cannot see.
-						onChange={(e) => setCode(e.target.value.toUpperCase().trim())}
+						onChange={(e) => link.setCode(e.target.value.toUpperCase().trim())}
 						onKeyDown={(e) => {
-							if (e.key === "Enter" && code.length === CODE_LENGTH) void pair();
+							if (e.key === "Enter" && link.code.length === CODE_LENGTH) void link.pairWithCode();
 						}}
 						className="font-mono tracking-widest"
 					/>
 					<Button
 						variant="primary"
 						fullWidth
-						disabled={busy || code.length !== CODE_LENGTH}
-						onClick={() => void pair()}
+						disabled={busy || link.code.length !== CODE_LENGTH}
+						onClick={() => void link.pairWithCode()}
 					>
 						<Trans>Connect</Trans>
 					</Button>
@@ -499,11 +359,10 @@ export function DesktopLinkSection() {
 
 			{error && <p className="text-xs text-destructive">{error}</p>}
 			<Modal
-				open={invite !== null}
+				open={link.invite !== null}
 				onClose={() => {
-					setInvite(null);
+					link.dismissInvite();
 					setInvitePassword("");
-					setOutcome(null);
 				}}
 				className="max-w-sm"
 			>
@@ -523,17 +382,7 @@ export function DesktopLinkSection() {
 							<Trans>Sync with the desktop app</Trans>
 						)}
 					</h2>
-					{joinSas ? (
-						<>
-							<p className="text-xs text-muted-foreground">
-								<Trans>
-									The desktop app is showing the same symbols and waiting for you to approve there.
-									Approve only if they match.
-								</Trans>
-							</p>
-							<SasDisplay digits={joinSas.sas} emoji={joinSas.sasEmoji} />
-						</>
-					) : outcome === "switch" ? (
+					{outcome === "switch" ? (
 						// Nothing transfers and no vault is created: this browser is already in that
 						// group. All that changes is which vault is open, so say that and ask, rather
 						// than moving the user and leaving them to work out where they landed.
@@ -555,7 +404,7 @@ export function DesktopLinkSection() {
 								) : (
 									<Trans>
 										The desktop app offered to share its vault with this browser. Enter the master
-										password you use there, then compare the symbols both screens show.
+										password you use there.
 									</Trans>
 								)}
 							</p>
@@ -565,7 +414,6 @@ export function DesktopLinkSection() {
 								autoFocus
 								onChange={(e) => {
 									setInvitePassword(e.target.value);
-									setInviteError(null);
 								}}
 							/>
 							{outcome === "add" && entries.length > 0 && (
@@ -586,13 +434,13 @@ export function DesktopLinkSection() {
 							)}
 						</>
 					)}
-					{inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
+					{link.inviteError && <p className="text-xs text-destructive">{link.inviteError}</p>}
 					<div className="flex justify-end gap-2">
 						<Button
 							variant="secondary"
 							size="sm"
 							onClick={() => {
-								setInvite(null);
+								link.dismissInvite();
 								setInvitePassword("");
 							}}
 						>
@@ -602,9 +450,9 @@ export function DesktopLinkSection() {
 						<Button
 							type="submit"
 							size="sm"
-							disabled={joining || (outcome !== "switch" && !invitePassword)}
+							disabled={link.joining || (outcome !== "switch" && !invitePassword)}
 						>
-							{joining ? (
+							{link.joining ? (
 								<Trans>Waiting for the desktop app…</Trans>
 							) : outcome === "switch" ? (
 								<Trans>Open that vault</Trans>
