@@ -1661,12 +1661,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		if (await crypto.isLocked()) {
 			throw new Error(t`Unlock the vault before disabling the master password.`);
 		}
+		// Pairing needs the password, and a synced vault can pair again at any time.
+		if ((await storage.getMeta(syncKey("sync.group"))) != null) {
+			throw new Error(t`Disconnect this device from sync before turning off the master password.`);
+		}
 		const { blob } = await readDecodedBlob();
 		// Throws (invariant B) if no security key remains to unlock with.
 		const newBlob = removePasswordSlot(blob);
 		await storage.writeVaultBlob(encodeVaultBlob(newBlob));
 		await refreshSlotMetadata();
-	}, [crypto, readDecodedBlob, storage, refreshSlotMetadata, t]);
+	}, [crypto, readDecodedBlob, storage, syncKey, refreshSlotMetadata, t]);
 
 	/**
 	 * Rotate the vault's encryption key: everything is re-encrypted under a fresh one.

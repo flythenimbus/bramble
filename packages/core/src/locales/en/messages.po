@@ -1333,6 +1333,10 @@ msgstr "Disconnect"
 msgid "Disconnect this browser"
 msgstr "Disconnect this browser"
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Disconnect this device from sync before turning off the master password."
+msgstr "Disconnect this device from sync before turning off the master password."
+
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
 msgid "Dismiss"
 msgstr "Dismiss"
@@ -2534,6 +2538,10 @@ msgstr "Pair with another device"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pairing code"
 msgstr "Pairing code"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."
+msgstr "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing didn't complete."

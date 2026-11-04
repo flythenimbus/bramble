@@ -2,8 +2,10 @@ import { expect, test } from "./fixtures";
 import {
 	addTapToUnlockKey,
 	addVirtualAuthenticator,
+	backgroundWorker,
 	createVault,
 	expectUnlocked,
+	gotoSync,
 	lock,
 	openPopup,
 } from "./helpers";
@@ -198,5 +200,47 @@ test("a key-only vault is asked for a master password before it can add a device
 	await expect(popup.getByText(/bramble-pair-1\./)).toHaveCount(0);
 
 	await popup.getByRole("button", { name: "Turn on master password" }).click();
+	await expect(popup.getByText(/Off\. You unlock by tapping a key/i)).toBeVisible();
+});
+
+test("a synced vault keeps its master password until this device leaves sync", async ({
+	context,
+	extensionId,
+}) => {
+	// Pairing requires a master password, and a synced vault can pair again at any time.
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+	// What an enrollment writes, without a second real device.
+	const sw = await backgroundWorker(context);
+	await sw.evaluate(async () => {
+		const reg = (await chrome.storage.local.get("vault.registry"))["vault.registry"] as {
+			vaults: { id: string }[];
+		};
+		await chrome.storage.local.set({
+			[`sync.group:${reg.vaults[0]!.id}`]: {
+				groupKey: "dGVzdC1ncm91cA==",
+				roster: { devices: [], revoked: [] },
+			},
+		});
+	});
+
+	const popup = await context.newPage();
+	await addVirtualAuthenticator(popup, { hasPrf: true });
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+	await addTapToUnlockKey(popup, "This device", "Only key");
+	await expect(popup.getByText("Only key")).toBeVisible();
+
+	const toggle = popup.getByRole("button", { name: /Require master password to unlock/i });
+	await expect(toggle).toBeDisabled();
+	await expect(popup.getByText(/Disconnect this device from sync to turn it off/)).toBeVisible();
+
+	await gotoSync(popup);
+	await popup.getByRole("button", { name: "Disconnect" }).click();
+	await popup.getByRole("button", { name: "Confirm disconnect" }).click();
+	await popup.getByRole("button", { name: "Security", exact: true }).click();
+	await expect(toggle).toBeEnabled();
+	await toggle.click();
+	await popup.getByRole("button", { name: "Disable master password" }).click();
 	await expect(popup.getByText(/Off\. You unlock by tapping a key/i)).toBeVisible();
 });

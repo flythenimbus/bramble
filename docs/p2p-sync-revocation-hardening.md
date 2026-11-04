@@ -400,7 +400,10 @@ it).
 (`Ed25519(HKDF(KEK, ...))`, `KEK = Argon2(password, salt)`), and a vault unlocked by keys alone has
 no password to derive from. It used to enroll joiners unsigned with no re-auth; it now may not
 invite at all: `inviteDevice` throws `MasterPasswordRequiredError`, and "Add a device" (and the
-desktop's "Connect a browser") asks the user to turn a master password on first. A PRF-derived
+desktop's "Connect a browser") asks the user to turn a master password on first. A vault in a sync
+group cannot turn its password off either (`disableMasterPassword` refuses; the Security toggle says
+to disconnect first), since any member may need to pair the next device. A key-only vault that was
+already synced before this rule stays in its group; it just cannot invite. A PRF-derived
 admission key (`HKDF(prf_secret, "roster/admission/v1")`) was the alternative; it is not pursued,
 because pairing is a master-password action by decision (it would also have needed one admission key
 per device across a password and several keys, each deriving a different one).

@@ -1333,6 +1333,10 @@ msgstr "Déconnecter"
 msgid "Disconnect this browser"
 msgstr "Déconnecter ce navigateur"
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Disconnect this device from sync before turning off the master password."
+msgstr "Déconnectez cet appareil de la synchronisation avant de désactiver le mot de passe principal."
+
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
 msgid "Dismiss"
 msgstr "Ignorer"
@@ -2534,6 +2538,10 @@ msgstr "Appairer avec un autre appareil"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pairing code"
 msgstr "Code de jumelage"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."
+msgstr "L'association d'appareils nécessite un mot de passe principal, donc un coffre synchronisé le conserve. Déconnectez cet appareil de la synchronisation pour le désactiver."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing didn't complete."

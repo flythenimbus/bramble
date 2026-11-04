@@ -240,7 +240,9 @@ password-less vault.
 
 So pairing requires a master password, on both sides. A vault with no password slot cannot add a
 device: "Add a device" asks the user to turn one on first, and core's `inviteDevice` refuses with
-`MasterPasswordRequiredError`. See [p2p-sync-revocation-hardening.md](p2p-sync-revocation-hardening.md).
+`MasterPasswordRequiredError`. For the same reason a vault in a sync group cannot turn its master
+password off: the toggle is disabled until this device disconnects from sync, and
+`disableMasterPassword` refuses too. See [p2p-sync-revocation-hardening.md](p2p-sync-revocation-hardening.md).
 
 ## Unlock with several keys: one prompt
 

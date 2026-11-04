@@ -12,6 +12,7 @@ import { PasswordField } from "../../../components/ui/password-field";
 import { PasswordStrengthMeter } from "../../../components/ui/password-strength-meter";
 import { cn } from "../../../components/ui/utils";
 import { WeakPasswordNotice } from "../../../components/ui/weak-password-notice";
+import { useInSyncGroup } from "../../../hooks/useInSyncGroup";
 import { useSettingsHighlight } from "../settings-search";
 import { Row, Toggle } from "./primitives";
 
@@ -37,6 +38,9 @@ export function MasterPasswordSection() {
 	const { t } = useLingui();
 	const cryptoError = useCryptoErrorMessage();
 	const hasWebauthnKey = webauthnKeys.length > 0;
+	// Pairing needs the password, and a synced vault can pair again at any time.
+	const inSyncGroup = useInSyncGroup();
+	const canTurnOff = hasWebauthnKey && !inSyncGroup;
 	// "change" reveals current+new+confirm; "set" reveals new+confirm (re-enable
 	// or first-time on a key-only vault); null = form closed.
 	const [formMode, setFormMode] = useState<null | "change" | "set">(null);
@@ -132,7 +136,7 @@ export function MasterPasswordSection() {
 			reset();
 			setWithRecoveryCode(false);
 			setFormMode("set");
-		} else if (!next && hasPasswordSlot && hasWebauthnKey) {
+		} else if (!next && hasPasswordSlot && canTurnOff) {
 			setDisableError(null);
 			setConfirmingDisable(true);
 		}
@@ -181,7 +185,7 @@ export function MasterPasswordSection() {
 				<Toggle
 					checked={hasPasswordSlot}
 					onChange={onToggle}
-					disabled={hasPasswordSlot && !hasWebauthnKey}
+					disabled={hasPasswordSlot && !canTurnOff}
 					label={t`Require master password to unlock`}
 				/>
 			</Row>
@@ -211,6 +215,14 @@ export function MasterPasswordSection() {
 			{hasPasswordSlot && !hasWebauthnKey && (
 				<p className="text-xs text-muted-foreground pl-12">
 					<Trans>Add a key under Tap to unlock before you can turn off the master password.</Trans>
+				</p>
+			)}
+			{hasPasswordSlot && hasWebauthnKey && inSyncGroup && (
+				<p className="text-xs text-muted-foreground pl-12">
+					<Trans>
+						Pairing devices needs a master password, so a synced vault keeps it. Disconnect this
+						device from sync to turn it off.
+					</Trans>
 				</p>
 			)}
 

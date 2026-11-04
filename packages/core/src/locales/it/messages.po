@@ -1333,6 +1333,10 @@ msgstr "Disconnetti"
 msgid "Disconnect this browser"
 msgstr "Disconnettere questo browser"
 
+#: packages/core/src/hooks/useVault.tsx
+msgid "Disconnect this device from sync before turning off the master password."
+msgstr "Disconnetta questo dispositivo dalla sincronizzazione prima di disattivare la password principale."
+
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
 msgid "Dismiss"
 msgstr "Ignorare"
@@ -2534,6 +2538,10 @@ msgstr "Abbina con un altro dispositivo"
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Pairing code"
 msgstr "Codice di accoppiamento"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."
+msgstr "L'associazione dei dispositivi richiede una password principale, quindi una cassaforte sincronizzata la mantiene. Disconnetta questo dispositivo dalla sincronizzazione per disattivarla."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing didn't complete."

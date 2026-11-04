@@ -17,6 +17,8 @@ const h = vi.hoisted(() => ({
 	verifiedPasswords: [] as string[],
 	verifiedCodes: [] as string[],
 	changed: [] as string[],
+	webauthnKeys: [] as object[],
+	inSyncGroup: false,
 }));
 
 vi.mock("../../../../hooks/useVault", () => ({
@@ -24,7 +26,7 @@ vi.mock("../../../../hooks/useVault", () => ({
 		hasPasswordSlot: true,
 		hasRecoveryCode: true,
 		unlockedWithRecoveryCode: h.unlockedWithRecoveryCode,
-		webauthnKeys: [],
+		webauthnKeys: h.webauthnKeys,
 		verifyMasterPassword: async (p: string) => {
 			h.verifiedPasswords.push(p);
 			return p === "old-password";
@@ -38,6 +40,8 @@ vi.mock("../../../../hooks/useVault", () => ({
 		disableMasterPassword: async () => {},
 	}),
 }));
+
+vi.mock("../../../hooks/useInSyncGroup", () => ({ useInSyncGroup: () => h.inSyncGroup }));
 
 vi.mock("../settings-search", () => ({
 	useSettingsHighlight: () => [h.highlight, (next?: string) => void h.highlights.push(next)],
@@ -76,6 +80,8 @@ beforeEach(() => {
 	h.verifiedPasswords = [];
 	h.verifiedCodes = [];
 	h.changed = [];
+	h.webauthnKeys = [];
+	h.inSyncGroup = false;
 });
 
 afterEach(cleanup);
@@ -141,5 +147,28 @@ describe("MasterPasswordSection in a password session", () => {
 		await waitFor(() => expect(h.changed).toEqual([NEW_PASSWORD]));
 		expect(h.verifiedPasswords).toEqual([]);
 		expect(h.highlights).toEqual(["recovery-code"]);
+	});
+});
+
+// Pairing requires a master password, and a synced vault can pair again at any time.
+describe("turning the master password off on a synced vault", () => {
+	const toggle = () =>
+		screen.getByRole("button", { name: "Require master password to unlock" }) as HTMLButtonElement;
+
+	beforeEach(() => {
+		h.webauthnKeys = [{ slotIdB64: "AA==", label: "Touch ID", addedAt: 1, kind: "platform" }];
+	});
+
+	it("is not offered while the vault is in a sync group, and says why", () => {
+		h.inSyncGroup = true;
+		mount();
+		expect(toggle().disabled).toBe(true);
+		expect(screen.getByText(/Disconnect this device from sync/)).toBeTruthy();
+	});
+
+	it("is offered once the vault no longer syncs", () => {
+		mount();
+		expect(toggle().disabled).toBe(false);
+		expect(screen.queryByText(/Disconnect this device from sync/)).toBeNull();
 	});
 });
