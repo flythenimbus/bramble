@@ -37,6 +37,8 @@ enum Session {
         // The peer's static public key, captured at completion. For KK this is
         // the (known) roster key; for enrollment XX it is the joiner's new key.
         remote_static: Vec<u8>,
+        // The Noise handshake hash, which binds the whole transcript. The link emoji derive from it.
+        handshake_hash: Vec<u8>,
     },
 }
 
@@ -56,7 +58,9 @@ fn registry() -> &'static Mutex<Registry> {
 }
 
 fn params() -> Result<NoiseParams, String> {
-    NOISE_PARAMS.parse().map_err(|e| format!("noise params: {e}"))
+    NOISE_PARAMS
+        .parse()
+        .map_err(|e| format!("noise params: {e}"))
 }
 
 fn insert_session(reg: &mut Registry, s: Session) -> u32 {
@@ -109,9 +113,19 @@ fn read(session_id: u32, msg: &[u8]) -> Result<(Option<Vec<u8>>, bool), String> 
     let session = reg.sessions.remove(&session_id).ok_or("unknown session")?;
     let mut hs = match session {
         Session::Handshake(hs) => hs,
-        Session::Transport { tx, remote_static } => {
-            reg.sessions
-                .insert(session_id, Session::Transport { tx, remote_static });
+        Session::Transport {
+            tx,
+            remote_static,
+            handshake_hash,
+        } => {
+            reg.sessions.insert(
+                session_id,
+                Session::Transport {
+                    tx,
+                    remote_static,
+                    handshake_hash,
+                },
+            );
             return Err("handshake already complete".into());
         }
     };
@@ -133,7 +147,11 @@ fn read(session_id: u32, msg: &[u8]) -> Result<(Option<Vec<u8>>, bool), String> 
     }
     let done = hs.is_handshake_finished();
     if done {
-        let remote_static = hs.get_remote_static().map(|s| s.to_vec()).unwrap_or_default();
+        let remote_static = hs
+            .get_remote_static()
+            .map(|s| s.to_vec())
+            .unwrap_or_default();
+        let handshake_hash = hs.get_handshake_hash().to_vec();
         let tx = hs
             .into_transport_mode()
             .map_err(|e| format!("transport: {e}"))?;
@@ -142,6 +160,7 @@ fn read(session_id: u32, msg: &[u8]) -> Result<(Option<Vec<u8>>, bool), String> 
             Session::Transport {
                 tx: Box::new(tx),
                 remote_static,
+                handshake_hash,
             },
         );
     } else {
@@ -228,6 +247,49 @@ fn enroll_start_responder(local_priv: &[u8], psk: &[u8]) -> Result<u32, String> 
     Ok(insert_session(&mut reg, Session::Handshake(Box::new(hs))))
 }
 
+// ---- browser link handshake (Noise XX, no PSK) ----
+//
+// Links the extension to the desktop app with no code: both screens show emoji derived from the
+// handshake hash, and the user confirms they match on both. See docs/desktop-link-onboarding.md.
+
+fn link_params() -> Result<NoiseParams, String> {
+    "Noise_XX_25519_ChaChaPoly_SHA256"
+        .parse()
+        .map_err(|e| format!("noise params: {e}"))
+}
+
+fn link_start_initiator(local_priv: &[u8]) -> Result<(u32, Vec<u8>), String> {
+    let mut hs = Builder::new(link_params()?)
+        .local_private_key(local_priv)
+        .build_initiator()
+        .map_err(|e| format!("build link initiator: {e}"))?;
+    let mut buf = vec![0u8; 1024];
+    let n = hs
+        .write_message(&[], &mut buf)
+        .map_err(|e| format!("write msg1: {e}"))?;
+    let mut reg = registry().lock().unwrap();
+    let id = insert_session(&mut reg, Session::Handshake(Box::new(hs)));
+    Ok((id, buf[..n].to_vec()))
+}
+
+fn link_start_responder(local_priv: &[u8]) -> Result<u32, String> {
+    let hs = Builder::new(link_params()?)
+        .local_private_key(local_priv)
+        .build_responder()
+        .map_err(|e| format!("build link responder: {e}"))?;
+    let mut reg = registry().lock().unwrap();
+    Ok(insert_session(&mut reg, Session::Handshake(Box::new(hs))))
+}
+
+/// The handshake hash of a completed session.
+fn handshake_hash_bytes(session_id: u32) -> Result<Vec<u8>, String> {
+    let reg = registry().lock().unwrap();
+    match reg.sessions.get(&session_id).ok_or("unknown session")? {
+        Session::Transport { handshake_hash, .. } => Ok(handshake_hash.clone()),
+        Session::Handshake(_) => Err("handshake not complete".into()),
+    }
+}
+
 /// The peer's static public key on a completed session (KK: the known roster
 /// key; enrollment XX: the joiner's newly transmitted key).
 fn remote_static(session_id: u32) -> Result<Vec<u8>, String> {
@@ -277,7 +339,8 @@ fn ce(msg: String) -> CryptoError {
 }
 
 fn b64dec(s: &str) -> Result<Vec<u8>, CryptoError> {
-    B64.decode(s.as_bytes()).map_err(|e| ce(format!("base64: {e}")))
+    B64.decode(s.as_bytes())
+        .map_err(|e| ce(format!("base64: {e}")))
 }
 
 fn generate_keypair_core() -> Result<KeypairResult, CryptoError> {
@@ -288,21 +351,41 @@ fn generate_keypair_core() -> Result<KeypairResult, CryptoError> {
     })
 }
 
-fn start_initiator_core(local_priv_b64: &str, remote_pub_b64: &str) -> Result<StartResult, CryptoError> {
+fn start_initiator_core(
+    local_priv_b64: &str,
+    remote_pub_b64: &str,
+) -> Result<StartResult, CryptoError> {
     let (session_id, msg) =
         start_initiator(&b64dec(local_priv_b64)?, &b64dec(remote_pub_b64)?).map_err(ce)?;
-    Ok(StartResult { session_id, message: B64.encode(msg) })
+    Ok(StartResult {
+        session_id,
+        message: B64.encode(msg),
+    })
 }
 
 fn enroll_initiator_core(local_priv_b64: &str, psk_b64: &str) -> Result<StartResult, CryptoError> {
     let (session_id, msg) =
         enroll_start_initiator(&b64dec(local_priv_b64)?, &b64dec(psk_b64)?).map_err(ce)?;
-    Ok(StartResult { session_id, message: B64.encode(msg) })
+    Ok(StartResult {
+        session_id,
+        message: B64.encode(msg),
+    })
+}
+
+fn link_initiator_core(local_priv_b64: &str) -> Result<StartResult, CryptoError> {
+    let (session_id, msg) = link_start_initiator(&b64dec(local_priv_b64)?).map_err(ce)?;
+    Ok(StartResult {
+        session_id,
+        message: B64.encode(msg),
+    })
 }
 
 fn read_core(session_id: u32, message_b64: &str) -> Result<ReadResult, CryptoError> {
     let (reply, done) = read(session_id, &b64dec(message_b64)?).map_err(ce)?;
-    Ok(ReadResult { message: reply.map(|m| B64.encode(m)), done })
+    Ok(ReadResult {
+        message: reply.map(|m| B64.encode(m)),
+        done,
+    })
 }
 
 // ---- shared scalar exports (one body, both layers) ----
@@ -350,6 +433,30 @@ pub fn handshake_remote_static(session_id: u32) -> Result<String, CryptoError> {
     Ok(B64.encode(remote_static(session_id).map_err(ce)?))
 }
 
+/// Answer a browser link handshake (desktop side). No uniffi export: phones never link.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn handshake_link_responder(local_priv_b64: String) -> Result<u32, CryptoError> {
+    link_start_responder(&b64dec(&local_priv_b64)?).map_err(ce)
+}
+
+/// The handshake hash of a completed session, base64. Both ends of an untampered handshake agree.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn handshake_hash(session_id: u32) -> Result<String, CryptoError> {
+    Ok(B64.encode(handshake_hash_bytes(session_id).map_err(ce)?))
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn handshake_link_initiator(local_priv_b64: String) -> Result<JsValue, CryptoError> {
+    serde_wasm_bindgen::to_value(&link_initiator_core(&local_priv_b64)?)
+        .map_err(|e| ce(format!("serialize: {e}")))
+}
+
+#[cfg(any(feature = "ffi", feature = "native"))]
+pub fn handshake_link_initiator(local_priv_b64: String) -> Result<StartResult, CryptoError> {
+    link_initiator_core(&local_priv_b64)
+}
+
 /// Drop a session and zero its keys.
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[cfg_attr(feature = "ffi", uniffi::export)]
@@ -369,7 +476,8 @@ pub fn handshake_close(session_id: u32) {
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
 pub fn handshake_generate_keypair() -> Result<JsValue, CryptoError> {
-    serde_wasm_bindgen::to_value(&generate_keypair_core()?).map_err(|e| ce(format!("serialize: {e}")))
+    serde_wasm_bindgen::to_value(&generate_keypair_core()?)
+        .map_err(|e| ce(format!("serialize: {e}")))
 }
 
 #[cfg(any(feature = "ffi", feature = "native"))]
@@ -436,6 +544,55 @@ pub fn handshake_read(session_id: u32, message_b64: String) -> Result<ReadResult
 #[cfg(test)]
 mod tests {
     use super::{close, decrypt, encrypt, gen_keypair, read, start_initiator, start_responder};
+    use super::{handshake_hash_bytes, link_start_initiator, link_start_responder};
+
+    /// Run an XX link handshake to completion between two fresh sessions.
+    fn link_pair(a_priv: &[u8], b_priv: &[u8]) -> (u32, u32) {
+        let (init, msg1) = link_start_initiator(a_priv).unwrap();
+        let resp = link_start_responder(b_priv).unwrap();
+        let (msg2, done) = read(resp, &msg1).unwrap();
+        assert!(!done);
+        let (msg3, done) = read(init, &msg2.unwrap()).unwrap();
+        assert!(done);
+        let (none, done) = read(resp, &msg3.unwrap()).unwrap();
+        assert!(none.is_none() && done);
+        (init, resp)
+    }
+
+    #[test]
+    fn link_xx_completes_and_both_sides_share_the_hash() {
+        let (a_priv, a_pub) = gen_keypair().unwrap();
+        let (b_priv, b_pub) = gen_keypair().unwrap();
+        let (init, resp) = link_pair(&a_priv, &b_priv);
+
+        let (h_init, h_resp) = (
+            handshake_hash_bytes(init).unwrap(),
+            handshake_hash_bytes(resp).unwrap(),
+        );
+        assert_eq!(h_init.len(), 32);
+        assert_eq!(h_init, h_resp);
+        assert_eq!(remote_static(init).unwrap(), b_pub);
+        assert_eq!(remote_static(resp).unwrap(), a_pub);
+        close(init);
+        close(resp);
+    }
+
+    #[test]
+    fn a_relayed_mitm_yields_different_hashes() {
+        let (a_priv, _) = gen_keypair().unwrap();
+        let (m_priv, _) = gen_keypair().unwrap();
+        let (b_priv, _) = gen_keypair().unwrap();
+        let (a_init, m_resp) = link_pair(&a_priv, &m_priv);
+        let (m_init, b_resp) = link_pair(&m_priv, &b_priv);
+
+        assert_ne!(
+            handshake_hash_bytes(a_init).unwrap(),
+            handshake_hash_bytes(b_resp).unwrap()
+        );
+        for id in [a_init, m_resp, m_init, b_resp] {
+            close(id);
+        }
+    }
 
     #[test]
     fn kk_round_trip_then_transport() {
@@ -475,7 +632,10 @@ mod tests {
         // alice initiates, but the responder expects the impostor's key as peer.
         let (_init, msg1) = start_initiator(&a_priv, &b_pub).unwrap();
         let resp = start_responder(&b_priv, &imp_pub).unwrap();
-        assert!(read(resp, &msg1).is_err(), "mismatched roster key must fail");
+        assert!(
+            read(resp, &msg1).is_err(),
+            "mismatched roster key must fail"
+        );
     }
 
     #[test]
