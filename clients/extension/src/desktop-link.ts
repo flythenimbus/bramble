@@ -10,7 +10,8 @@ import { api, disconnectReason } from "./platform-api";
 
 async function dispatch<T = unknown>(type: string, extra?: Record<string, unknown>): Promise<T> {
 	const res = await api.runtime.sendMessage({ type, ...extra });
-	if (!res?.ok) throw new Error(res?.error ?? `${type} failed`);
+	// The router answers a throw with String(err); the screen wants the words alone.
+	if (!res?.ok) throw new Error(String(res?.error ?? `${type} failed`).replace(/^Error: /, ""));
 	return res.data as T;
 }
 

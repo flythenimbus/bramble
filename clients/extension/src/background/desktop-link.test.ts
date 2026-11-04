@@ -296,6 +296,39 @@ describe("the held sync link", () => {
 		expect(frames).toEqual(["interleaved"]);
 	});
 
+	it("keeps a frame the app pushes before this end has finished the handshake", async () => {
+		// The app may push the moment the link is up, before this side has read the handshake's
+		// last message. Dropping that frame put Noise one frame out of step, and nothing on the link
+		// could be opened again: the vault summary and invite timed out on a link that looked up.
+		const mod = await load();
+		const frames: string[] = [];
+		const opening = mod.openSyncLink((f) => frames.push(f));
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		pushSync("early");
+
+		expect(await opening).toBe(true);
+		await vi.waitFor(() => expect(frames).toEqual(["early"]));
+	});
+
+	it("gives each of two overlapping requests its own answer", async () => {
+		// Sync asks for the app's identity while a page asks what its vault holds. One shared slot
+		// for "the request waiting" handed the first answer to the second asker, and the first
+		// timed out: sync took a vault summary for the app's key.
+		const mod = await load();
+		await open(mod, []);
+
+		const first = mod.askDesktop({ op: "vaultSummary" });
+		const second = mod.askDesktop({ op: "syncIdentity" });
+		await vi.waitFor(() => expect(postedOps()).toContain("vaultSummary"));
+		deliver({ sealed: `sealed:${JSON.stringify({ ok: true, summary: { name: "Home" } })}` });
+		await vi.waitFor(() => expect(postedOps()).toContain("syncIdentity"));
+		deliver({ sealed: `sealed:${JSON.stringify({ ok: true, identity: "app-key" })}` });
+
+		await expect(first).resolves.toMatchObject({ summary: { name: "Home" } });
+		await expect(second).resolves.toMatchObject({ identity: "app-key" });
+	});
+
 	it("keeps one connection open rather than one per request", async () => {
 		// A second connection displaces this one as the target for the app's pushes, and closing
 		// it takes the queue with it: sync goes quiet with nothing reporting a fault.
@@ -368,6 +401,36 @@ describe("the held sync link", () => {
 
 		expect(await opening).toBe(true);
 		expect(h.connects).toBe(1);
+	});
+
+	it("starts a link held before sync afresh when sync starts, so the app offers it for sync", async () => {
+		// The app offers a browser for sync when it connects, and refuses it while nothing here
+		// answers: a link opened to pair, before this browser had a vault. It offers again only on
+		// a new connection, so sync starting on the old one waited forever.
+		const mod = await load();
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		await opening;
+		const before = { connects: h.connects, disconnects: h.disconnects };
+
+		const syncing = mod.openSyncLink(() => {});
+		await vi.waitFor(() => expect(h.connects).toBe(before.connects + 1));
+		completeHandshake();
+
+		expect(await syncing).toBe(true);
+		expect(h.disconnects).toBe(before.disconnects + 1);
+	});
+
+	it("keeps the link when sync was already running on it", async () => {
+		const mod = await load();
+		await open(mod, []);
+		const before = { connects: h.connects, disconnects: h.disconnects };
+
+		expect(await mod.openSyncLink(() => {})).toBe(true);
+
+		expect(h.connects).toBe(before.connects);
+		expect(h.disconnects).toBe(before.disconnects);
 	});
 
 	it("gives up on a request the app never answers", async () => {
@@ -700,6 +763,33 @@ describe("pairing borrows the page's native transport", () => {
 		expect(h.setCalls).toHaveLength(1);
 	});
 
+	it("drops a held link once a new link is stored, so later requests speak as the new key", async () => {
+		// The app binds its invite to the key that just linked. A held link opened under the
+		// previous key made the claim look like another browser's, and the vault never came.
+		const mod = await load();
+		await open(mod, []);
+		const before = h.disconnects;
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+
+		const confirmed = mod.confirmDesktopLink(started.id, true);
+		await vi.waitFor(() => expect(page.sent.length).toBe(7));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, paired: true })}` });
+		await confirmed;
+
+		expect(h.disconnects).toBe(before + 1);
+	});
+
+	it("drops a held link once a code pairing is stored, for the same reason", async () => {
+		const mod = await load();
+		await open(mod, []);
+		const before = h.disconnects;
+		await pairOver(mod, lend(EXT_SENDER));
+
+		expect(h.disconnects).toBe(before + 1);
+	});
+
 	it("stores nothing when the user says the emoji do not match", async () => {
 		const mod = await load();
 		h.setCalls.length = 0;
@@ -723,6 +813,23 @@ describe("pairing borrows the page's native transport", () => {
 		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: false, error: "refused" })}` });
 
 		await expect(confirmed).rejects.toThrow();
+		expect(h.setCalls).toEqual([]);
+	});
+
+	it("says the app did not approve when it drops the link instead of answering", async () => {
+		// What a desktop that approved and then closed its dialog looks like from here: it shuts the
+		// pipe rather than answer. The browser's own wording for that is no message for a person.
+		const mod = await load();
+		h.setCalls.length = 0;
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+
+		const confirmed = mod.confirmDesktopLink(started.id, true);
+		await vi.waitFor(() => expect(page.sent.length).toBe(7));
+		page.die("Native host has exited.");
+
+		await expect(confirmed).rejects.toThrow("The desktop app did not approve the link.");
 		expect(h.setCalls).toEqual([]);
 	});
 

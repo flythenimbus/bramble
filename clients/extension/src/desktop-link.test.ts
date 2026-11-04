@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
 	held: false,
 	/** Every permissions call, so the tests can assert what was asked for, not just that it ran. */
 	calls: [] as { fn: string; arg: unknown }[],
+	/** What the background answers every message with. */
+	reply: { ok: true } as { ok: boolean; error?: string },
 }));
 
 // Deliberately no `connectNative` on this mock: the gate must not test for the binding, which is
@@ -21,7 +23,7 @@ vi.mock("./platform-api", () => ({
 	api: {
 		runtime: {
 			getManifest: () => ({ permissions: h.permissions, optional_permissions: h.optional }),
-			sendMessage: async () => ({ ok: true }),
+			sendMessage: async () => h.reply,
 		},
 		permissions: {
 			contains: async (arg: unknown) => {
@@ -53,6 +55,7 @@ beforeEach(() => {
 	h.optional = undefined;
 	h.held = false;
 	h.calls = [];
+	h.reply = { ok: true };
 });
 
 /** The shipping Chromium manifest: declared optional, so it is asked for at connect time. */
@@ -148,5 +151,17 @@ describe("the permission sub-adapter", () => {
 
 		await expect(link?.permission?.granted()).resolves.toBe(false);
 		expect(h.calls).toEqual([{ fn: "contains", arg: { permissions: ["nativeMessaging"] } }]);
+	});
+});
+
+describe("a failure the background reports", () => {
+	it("reads as the background's words, without the prefix its router adds", async () => {
+		// The router sends back String(err), so every refusal reached the screen as "Error: ...".
+		h.reply = { ok: false, error: "Error: The desktop app did not approve the link." };
+		const link = await load();
+
+		await expect(link?.confirm?.("L1", true)).rejects.toThrow(
+			/^The desktop app did not approve the link\.$/,
+		);
 	});
 });

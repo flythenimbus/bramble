@@ -299,14 +299,12 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 			sessionId: start.sessionId,
 		})) as string;
 
-		const state: LinkState = {
+		return storeLink({
 			privateKey: kp.privateKey,
 			publicKey: kp.publicKey,
 			appPublicKey,
 			pairedAt: Date.now(),
-		};
-		await api.storage.local.set({ [STORAGE_KEY]: state });
-		return state;
+		});
 	} finally {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		session.close();
@@ -456,23 +454,23 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
 			sessionId: pending.sessionId,
 			plaintext: JSON.stringify({ op: "linkConfirm" }),
 		})) as string;
-		const answer = await pending.session.request({ sealed });
+		const refused = "The desktop app did not approve the link.";
+		// An app whose dialog closed after Approve shuts the pipe rather than answer.
+		const answer = await pending.session.request({ sealed }).catch(() => {
+			throw new Error(refused);
+		});
 		const plain = (await offscreen("LINK_OPEN", {
 			sessionId: pending.sessionId,
 			sealed: answer?.sealed,
 		})) as string;
 		const verdict = JSON.parse(plain) as { ok?: boolean; paired?: boolean };
-		if (verdict.ok !== true || verdict.paired !== true) {
-			throw new Error("The desktop app did not approve the link.");
-		}
-		const state: LinkState = {
+		if (verdict.ok !== true || verdict.paired !== true) throw new Error(refused);
+		return storeLink({
 			privateKey: pending.privateKey,
 			publicKey: pending.publicKey,
 			appPublicKey: pending.appPublicKey,
 			pairedAt: Date.now(),
-		};
-		await api.storage.local.set({ [STORAGE_KEY]: state });
-		return state;
+		});
 	} finally {
 		await close();
 	}
@@ -531,16 +529,28 @@ export async function askDesktop(request: Record<string, unknown>): Promise<any>
 	}
 }
 
-/** One request over the held link, answered by routeInbound. */
-async function askOverHeld(link: HeldLink, request: Record<string, unknown>): Promise<any> {
+/**
+ * One request over the held link, answered by routeInbound. One at a time: the app answers a
+ * link's requests in order, and the link has one slot for the request waiting. Sync and a page
+ * ask independently, and two in flight handed each other's answers back.
+ */
+function askOverHeld(link: HeldLink, request: Record<string, unknown>): Promise<any> {
+	const turn = link.asking.then(() => askOnce(link, request));
+	link.asking = turn.catch(() => {});
+	return turn;
+}
+
+async function askOnce(link: HeldLink, request: Record<string, unknown>): Promise<unknown> {
 	const answer = new Promise<unknown>((resolve, reject) => {
 		// A dead pipe would otherwise leave this pending forever, and the caller is a fill the
 		// user is waiting on.
 		const timer = setTimeout(() => {
-			pendingAnswer = null;
+			link.answer = null;
+			// The answer may still come, and would be taken for the next request's. Start over.
+			if (held === link) void dropHeld();
 			reject(new Error("The desktop app did not answer."));
 		}, ASK_TIMEOUT_MS);
-		pendingAnswer = (value) => {
+		link.answer = (value) => {
 			clearTimeout(timer);
 			resolve(value);
 		};
@@ -622,6 +632,10 @@ interface HeldLink {
 	outbound: Promise<void>;
 	/** The app said it speaks files, so file frames may go over this link. */
 	files: boolean;
+	/** Requests queue here, one at a time. See askOverHeld. */
+	asking: Promise<unknown>;
+	/** The request waiting for its answer, if any. */
+	answer: ((value: unknown) => void) | null;
 }
 
 let held: HeldLink | null = null;
@@ -757,7 +771,12 @@ function startKeepalive(): void {
 export async function openSyncLink(
 	onFrame: (frame: string, room?: string) => void,
 ): Promise<boolean> {
+	// A link held before sync wanted it (opened to pair, before there was a vault) was offered
+	// for sync and refused while nothing here answered. The app offers again only on a new
+	// connection, so start it afresh.
+	const stale = onSyncFrame === null && held !== null;
 	onSyncFrame = onFrame;
+	if (stale) await dropHeld();
 	return openDesktopLink();
 }
 
@@ -851,6 +870,27 @@ async function connectHeld(): Promise<HeldLink | null> {
 	})) as { sessionId: number; message: string };
 
 	const session = new NativeSession();
+	// Inbound frames wait on this: the app may push before this side has read the handshake's last
+	// message, and a frame dropped then leaves Noise out of step for the life of the link.
+	let transportReady!: () => void;
+	const link: HeldLink = {
+		session,
+		sessionId: start.sessionId,
+		inbound: new Promise<void>((resolve) => {
+			transportReady = resolve;
+		}),
+		outbound: Promise.resolve(),
+		files: false,
+		asking: Promise.resolve(),
+		answer: null,
+	};
+	session.intercept((msg) => {
+		if (typeof msg?.sealed !== "string") return false;
+		// Claimed BEFORE it is opened, and opened on a chain, because deciding what a frame is
+		// requires decrypting it and decryption has to happen in arrival order.
+		link.inbound = link.inbound.then(() => routeInbound(link, msg.sealed as string));
+		return true;
+	});
 	try {
 		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
 		const reply = await session.request({ message: start.message });
@@ -865,21 +905,7 @@ async function connectHeld(): Promise<HeldLink | null> {
 		session.close();
 		return null;
 	}
-
-	const link: HeldLink = {
-		session,
-		sessionId: start.sessionId,
-		inbound: Promise.resolve(),
-		outbound: Promise.resolve(),
-		files: false,
-	};
-	session.intercept((msg) => {
-		if (typeof msg?.sealed !== "string") return false;
-		// Claimed BEFORE it is opened, and opened on a chain, because deciding what a frame is
-		// requires decrypting it and decryption has to happen in arrival order.
-		link.inbound = link.inbound.then(() => routeInbound(link, msg.sealed as string));
-		return true;
-	});
+	transportReady();
 	session.onDead(() => {
 		// Only if it is still the current link: a rebuild may already have replaced it.
 		if (held === link) held = null;
@@ -944,12 +970,17 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 		return;
 	}
 	// An answer: hand the plaintext to whoever asked. Requests over the held link resolve here.
-	pendingAnswer?.(parsed);
-	pendingAnswer = null;
+	link.answer?.(parsed);
+	link.answer = null;
 }
 
-/** The request waiting on the held link, if any. One at a time: askDesktop awaits each call. */
-let pendingAnswer: ((value: unknown) => void) | null = null;
+/** Store a new link and let go of any held one: it speaks as the previous key, and the app
+ * binds its invite to the key that just linked. The keepalive reopens it as the new one. */
+async function storeLink(state: LinkState): Promise<LinkState> {
+	await api.storage.local.set({ [STORAGE_KEY]: state });
+	await dropHeld();
+	return state;
+}
 
 async function dropHeld(): Promise<void> {
 	const link = held;
