@@ -219,10 +219,7 @@ export function MasterPasswordSection() {
 			)}
 			{hasPasswordSlot && hasWebauthnKey && inSyncGroup && (
 				<p className="text-xs text-muted-foreground pl-12">
-					<Trans>
-						Pairing devices needs a master password, so a synced vault keeps it. Disconnect this
-						device from sync to turn it off.
-					</Trans>
+					<Trans>Pairing devices needs a master password, so a synced vault keeps it.</Trans>
 				</p>
 			)}
 

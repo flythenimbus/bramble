@@ -2540,8 +2540,12 @@ msgid "Pairing code"
 msgstr "Code de jumelage"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."
-msgstr "L'association d'appareils nécessite un mot de passe principal, donc un coffre synchronisé le conserve. Déconnectez cet appareil de la synchronisation pour le désactiver."
+msgid "Pairing devices needs a master password, so a synced vault keeps it."
+msgstr "L’appairage d’appareils nécessite un mot de passe principal ; un coffre synchronisé le conserve donc."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#~ msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."
+#~ msgstr "L'association d'appareils nécessite un mot de passe principal, donc un coffre synchronisé le conserve. Déconnectez cet appareil de la synchronisation pour le désactiver."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing didn't complete."

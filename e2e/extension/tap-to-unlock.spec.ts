@@ -233,7 +233,7 @@ test("a synced vault keeps its master password until this device leaves sync", a
 
 	const toggle = popup.getByRole("button", { name: /Require master password to unlock/i });
 	await expect(toggle).toBeDisabled();
-	await expect(popup.getByText(/Disconnect this device from sync to turn it off/)).toBeVisible();
+	await expect(popup.getByText(/a synced vault keeps it/)).toBeVisible();
 
 	await gotoSync(popup);
 	await popup.getByRole("button", { name: "Disconnect" }).click();

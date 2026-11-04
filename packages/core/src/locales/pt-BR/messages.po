@@ -2540,8 +2540,12 @@ msgid "Pairing code"
 msgstr "Código de emparelhamento"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."
-msgstr "O pareamento de dispositivos exige uma senha mestra; por isso, um cofre sincronizado a mantém. Desconecte este dispositivo da sincronização para desativá-la."
+msgid "Pairing devices needs a master password, so a synced vault keeps it."
+msgstr "Parear dispositivos exige uma senha mestra, então um cofre sincronizado a mantém."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#~ msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."
+#~ msgstr "O pareamento de dispositivos exige uma senha mestra; por isso, um cofre sincronizado a mantém. Desconecte este dispositivo da sincronização para desativá-la."
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Pairing didn't complete."
