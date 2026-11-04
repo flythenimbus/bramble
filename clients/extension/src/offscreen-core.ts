@@ -1004,10 +1004,13 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 					wasm: w,
 					report: reportSyncStatus,
 					peerSource: viaLink
-						? makeLinkPeerSource({
-								send: (frame) => bridge.linkSend?.(frame, "enroll") ?? Promise.resolve(false),
-								subscribe: (onFrame) => subscribeLinkFrames("enroll", onFrame),
-							})
+						? makeLinkPeerSource(
+								{
+									send: (frame) => bridge.linkSend?.(frame, "enroll") ?? Promise.resolve(false),
+									subscribe: (onFrame) => subscribeLinkFrames("enroll", onFrame),
+								},
+								{ eager: true },
+							)
 						: undefined,
 					// Inviter: park the transfer on the user's answer. The joiner is connected and
 					// authenticated at this point, but nothing has been sent, and nothing will be

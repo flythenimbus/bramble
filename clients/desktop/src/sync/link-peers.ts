@@ -81,6 +81,10 @@ export const linkPeerSourceFor =
 		/** When each DECLINED browser becomes eligible to be offered again. */
 		const cooldown = new Map<string, number>();
 		let stopped = false;
+		// Sync offers a browser as soon as it is there, because the browser waits for this end to
+		// speak. The vault copy is the other way round: the joining browser opens the handshake, so
+		// it is offered on its first frame, and this end's handshake clock starts only then.
+		const offerOnConnect = room === "sync";
 
 		/**
 		 * The browser is gone: drop it with no cool-down, so its next connection or frame is offered
@@ -145,7 +149,7 @@ export const linkPeerSourceFor =
 				// wait out a cool-down meant for one that is still connected and re-broadcasting.
 				cooldown.delete(peerId);
 				report(`browser ${peerId.slice(0, 8)} connected`);
-				offer(peerId, link);
+				if (offerOnConnect) offer(peerId, link);
 			}),
 			await listen<PeerEvent>("link-peer-disconnected", (e) => {
 				forget(e.payload.peerId, e.payload.link);
@@ -170,7 +174,10 @@ export const linkPeerSourceFor =
 		// their browser restarted, because the connect event fired before anyone was listening. The
 		// registry reports the real generation, so a browser picked up here and the events about that
 		// same connection are recognisably one peer rather than two.
-		for (const peer of await invoke<PeerEvent[]>("link_sync_peers")) offer(peer.peerId, peer.link);
+		if (offerOnConnect) {
+			for (const peer of await invoke<PeerEvent[]>("link_sync_peers"))
+				offer(peer.peerId, peer.link);
+		}
 
 		return {
 			stop() {

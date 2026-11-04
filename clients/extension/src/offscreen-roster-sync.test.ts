@@ -1,4 +1,5 @@
 import type { RosterPayload } from "@core/sync/roster";
+import type { PeerSource } from "@core/sync/transport/peer-session";
 import { describe, expect, it, vi } from "vitest";
 
 // Regression guard for the sync-never-converges bug. On Chrome the background service worker
@@ -251,6 +252,16 @@ describe("a join handed over by the desktop app", () => {
 		await join({ viaLink: true });
 		expect(enrolls[0]?.opts?.peerSource).toBeDefined();
 		expect(enrolls[0]?.opts?.onSas).toBeUndefined();
+	});
+
+	it("offers the desktop app at once, since the joiner opens the handshake", async () => {
+		await reset();
+		enrolls.length = 0;
+		await join({ viaLink: true });
+		const source = enrolls[0]?.opts?.peerSource as PeerSource;
+		const peers: unknown[] = [];
+		await source({ onPeer: (p) => peers.push(p), report: () => {} });
+		expect(peers).toHaveLength(1);
 	});
 
 	it("keeps the relay and the symbols for any other join", async () => {

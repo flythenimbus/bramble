@@ -33,7 +33,12 @@ export interface LinkTransport {
 	subscribe: (onFrame: (frame: string) => void) => () => void;
 }
 
-export function makeLinkPeerSource(transport: LinkTransport): PeerSource {
+export function makeLinkPeerSource(
+	transport: LinkTransport,
+	/** Offer the app at once. For the vault copy only: this end just linked with the app, and as
+	 * the joiner it opens the handshake, so waiting for the app to speak would wait forever. */
+	{ eager = false }: { eager?: boolean } = {},
+): PeerSource {
 	return async ({ onPeer, report }) => {
 		let deliver: ((frame: string) => void) | null = null;
 		let declinedUntil = 0;
@@ -85,6 +90,8 @@ export function makeLinkPeerSource(transport: LinkTransport): PeerSource {
 		// The other end has the information: it learns of a browser from the socket connecting, so
 		// it can always speak first, and it re-broadcasts every few seconds. So waiting costs at
 		// most one tick and removes the guesswork.
+
+		if (eager) offer();
 
 		return {
 			stop() {

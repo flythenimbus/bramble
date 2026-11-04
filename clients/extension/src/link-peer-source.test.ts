@@ -34,9 +34,12 @@ function transport(over: Partial<LinkTransport> = {}) {
 	};
 }
 
-async function start(t: LinkTransport) {
+async function start(t: LinkTransport, opts?: { eager?: boolean }) {
 	const peers: PeerSession[] = [];
-	const source = await makeLinkPeerSource(t)({
+	const source = await makeLinkPeerSource(
+		t,
+		opts,
+	)({
 		onPeer: (p) => peers.push(p),
 		report: () => {},
 	});
@@ -168,5 +171,18 @@ describe("teardown", () => {
 
 		expect(t.unsubscribed()).toBe(1);
 		expect(peers).toHaveLength(1);
+	});
+});
+
+describe("the vault copy over the link", () => {
+	it("offers the app at once, because this end opens the copy's handshake", async () => {
+		// The joining browser is the Noise initiator and the app only answers. Waiting for the app
+		// to speak first, as sync does, left both ends waiting until the invite expired.
+		const t = transport();
+		const { peers } = await start(t.transport, { eager: true });
+
+		expect(peers).toHaveLength(1);
+		peers[0]!.channel.send("msg1");
+		await vi.waitFor(() => expect(t.sent).toEqual(["msg1"]));
 	});
 });

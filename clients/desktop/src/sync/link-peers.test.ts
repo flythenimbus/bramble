@@ -230,7 +230,21 @@ describe("rooms on the link", () => {
 		const { sync, enroll } = await both();
 		fire("link-sync-frame", { peerId: "p1", link: 1, frame: "s" });
 		expect(await sync[0]!.channel.recv()).toBe("s");
-		expect(await nothingWithin(enroll[0]!.channel.recv())).toBe("nothing");
+		expect(enroll).toEqual([]);
+	});
+
+	it("offers a browser for enrollment only once it speaks, because it opens the handshake", async () => {
+		// The joining browser is the Noise initiator. Offering it on connect started this end's
+		// handshake clock while the user was still typing a password, and a slow typist's first
+		// message then landed in the cool-down after the timeout.
+		h.connected = [{ peerId: "p1", link: 1 }];
+		const { enroll } = await both();
+		fire("link-peer-connected", { peerId: "p1", link: 1 });
+		expect(enroll).toEqual([]);
+
+		fire("link-sync-frame", { peerId: "p1", link: 1, frame: "m1", room: "enroll" });
+		expect(enroll.map((p) => p.remotePubkey)).toEqual(["p1"]);
+		expect(await enroll[0]!.channel.recv()).toBe("m1");
 	});
 
 	it("offers only the named browser for enrollment, and tags what it sends", async () => {
@@ -239,6 +253,8 @@ describe("rooms on the link", () => {
 			{ peerId: "p2", link: 2 },
 		];
 		const { enroll } = await both();
+		fire("link-sync-frame", { peerId: "p2", link: 2, frame: "x", room: "enroll" });
+		fire("link-sync-frame", { peerId: "p1", link: 1, frame: "m1", room: "enroll" });
 		expect(enroll.map((p) => p.remotePubkey)).toEqual(["p1"]);
 		enroll[0]!.channel.send("out");
 		await vi.waitFor(() =>
