@@ -2,7 +2,7 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { act, renderHook } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useSyncExternalStore } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../context/PlatformContext";
 import { useDesktopLink } from "./useDesktopLink";
@@ -24,37 +24,64 @@ const h = vi.hoisted(() => ({
 	failStage: false,
 	meta: new Map<string, unknown>(),
 	joinFails: false,
+	/** The open vault, as the provider sees it. Unset means the first vault in `vaults`. */
+	active: undefined as string | undefined,
+	subs: new Set<() => void>(),
 }));
+
+/** The open vault, re-rendering subscribers when a join switches it, as the provider does. */
+function useActive(): string | undefined {
+	return useSyncExternalStore(
+		(cb) => {
+			h.subs.add(cb);
+			return () => h.subs.delete(cb);
+		},
+		() => h.active ?? h.vaults[0]?.id,
+	);
+}
+
+function switchTo(id: string) {
+	h.active = id;
+	for (const cb of h.subs) cb();
+}
 
 vi.mock("../../hooks/useVault", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../hooks/useVault")>()),
 	useVault: () => ({ entries: h.entries, files: h.files }),
-	useVaultActions: () => ({
-		startJoin: async (...args: unknown[]) => {
-			h.steps.push("join");
-			h.joins.push(args);
-			if (h.joinFails) throw new Error("join failed");
-		},
-		importEntries: async (items: unknown[], attachments: unknown[] = []) => {
-			h.steps.push("import");
-			h.imported.push([items, attachments]);
-		},
-		readEntries: () => h.desktopEntries,
-		deleteEmptyVault: async (id: string) => {
-			h.steps.push(`deleteEmpty:${id}`);
-			return true;
-		},
-	}),
+	// Like the real provider, each action is bound to the vault open when it was made.
+	useVaultActions: () => {
+		const at = useActive();
+		return {
+			startJoin: async (...args: unknown[]) => {
+				h.steps.push("join");
+				h.joins.push(args);
+				if (h.joinFails) throw new Error("join failed");
+				switchTo("new");
+			},
+			importEntries: async (items: unknown[], attachments: unknown[] = []) => {
+				h.steps.push(`import@${at}`);
+				h.imported.push([items, attachments]);
+			},
+			readEntries: () => h.desktopEntries,
+			deleteEmptyVault: async (id: string) => {
+				h.steps.push(`deleteEmpty:${id}@${at}`);
+				return at !== id;
+			},
+		};
+	},
 }));
 
 vi.mock("../../hooks/useVaultRegistry", () => ({
-	useVaultRegistry: () => ({
-		vaults: h.vaults,
-		activeId: h.vaults[0]?.id,
-		setAside: async (id: string) => {
-			h.steps.push(`setAside:${id}`);
-		},
-	}),
+	useVaultRegistry: () => {
+		const at = useActive();
+		return {
+			vaults: h.vaults,
+			activeId: at,
+			setAside: async (id: string) => {
+				h.steps.push(`setAside:${id}@${at}`);
+			},
+		};
+	},
 }));
 
 vi.mock("../../sync/enrollment", async (importOriginal) => ({
@@ -108,6 +135,7 @@ beforeAll(() => {
 });
 
 async function linkedFrom(from: "setup" | "settings" | "add") {
+	h.active = undefined;
 	const { result } = renderHook(() => useDesktopLink({ from }), { wrapper });
 	await act(async () => {
 		await result.current.start();
@@ -182,7 +210,7 @@ describe("combining into the desktop's vault", () => {
 			await result.current.accept("pw", { choice: "combine" });
 		});
 
-		expect(h.steps).toEqual(["stage", "join", "import", "setAside:v1"]);
+		expect(h.steps).toEqual(["stage", "join", "import@new", "setAside:v1@new"]);
 		expect(h.imported[0]?.[0]).toHaveLength(1);
 		expect(h.imported[0]?.[1]).toHaveLength(1);
 		expect(result.current.combined?.heldBack.items).toHaveLength(1);
@@ -260,7 +288,7 @@ describe("an empty browser vault", () => {
 		await act(async () => {
 			await result.current.accept("pw");
 		});
-		expect(h.steps).toEqual(["join", "deleteEmpty:v1"]);
+		expect(h.steps).toEqual(["join", "deleteEmpty:v1@new"]);
 	});
 
 	it("is kept when the join fails, and the failure is shown", async () => {

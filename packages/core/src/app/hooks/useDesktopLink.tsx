@@ -2,7 +2,7 @@
 // holds, claim its invite, then join over the link. See docs/desktop-link-onboarding.md.
 
 import { useLingui } from "@lingui/react/macro";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { type EntryData, useVault, useVaultActions } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
@@ -35,9 +35,15 @@ export function useDesktopLink({
 }) {
 	const { desktopLink, storage, shell, files: platformFiles } = usePlatform();
 	const { t } = useLingui();
-	const { startJoin, importEntries, readEntries, deleteEmptyVault } = useVaultActions();
+	const vaultActions = useVaultActions();
+	const { startJoin, importEntries } = vaultActions;
 	const { entries, files } = useVault();
-	const { vaults, activeId, setAside } = useVaultRegistry();
+	const registry = useVaultRegistry();
+	const { vaults, activeId } = registry;
+	/** The provider's actions are bound to the vault open when they were made. After a join the
+	 * desktop's vault is open, and only the actions of a render since then write to it. */
+	const latest = useRef({ actions: vaultActions, registry });
+	latest.current = { actions: vaultActions, registry };
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	/** An emoji link waiting on this screen's answer. */
@@ -157,6 +163,20 @@ export function useDesktopLink({
 		}
 	}, [desktopLink, code, afterLinked, t]);
 
+	/** Wait for the render after a join, whose actions belong to the vault that just opened. */
+	const vaultSwitchedFrom = useCallback(
+		async (oldId: string | undefined) => {
+			for (let i = 0; i < 200 && latest.current.registry.activeId === oldId; i++) {
+				await new Promise((r) => setTimeout(r, 10));
+			}
+			if (latest.current.registry.activeId === oldId) {
+				throw new Error(t`The desktop app's vault did not open.`);
+			}
+			return latest.current;
+		},
+		[t],
+	);
+
 	/**
 	 * Join the desktop's vault over the link. The password is the one that vault uses: it wraps
 	 * this browser's own copy, so the browser keeps working when the app is closed. The vault
@@ -183,18 +203,19 @@ export function useDesktopLink({
 				await startJoin(invite, { kind: "password", password }, undefined, { viaLink: true });
 				setInvite(null);
 				setOutcome(null);
+				const now = await vaultSwitchedFrom(oldId);
 				if (carry && oldId) {
-					const placed = placeCarry(readEntries(), carry);
+					const placed = placeCarry(now.actions.readEntries(), carry);
 					if (placed.items.length || placed.attachments.length) {
-						await importEntries(placed.items, placed.attachments);
+						await now.actions.importEntries(placed.items, placed.attachments);
 					}
-					await setAside(oldId);
+					await now.registry.setAside(oldId);
 					setCombined({ heldBack: placed.heldBack, uncarried: carry.uncarried });
 				}
 				// After the join, so the copies land in the vault that is now open.
-				if (opts?.carry?.length) await importEntries(opts.carry);
+				if (opts?.carry?.length) await now.actions.importEntries(opts.carry);
 				// Only once the desktop's vault is here, and only if it is still empty: nothing lost.
-				if (outcome === "take" && oldId) await deleteEmptyVault(oldId, oldCount);
+				if (outcome === "take" && oldId) await now.actions.deleteEmptyVault(oldId, oldCount);
 			} catch (e) {
 				setInviteError(
 					e instanceof Error && e.message ? e.message : t`Could not sync with the desktop app.`,
@@ -203,20 +224,7 @@ export function useDesktopLink({
 				setJoining(false);
 			}
 		},
-		[
-			invite,
-			outcome,
-			activeId,
-			entries,
-			files,
-			platformFiles,
-			startJoin,
-			readEntries,
-			importEntries,
-			setAside,
-			deleteEmptyVault,
-			t,
-		],
+		[invite, outcome, activeId, entries, files, platformFiles, startJoin, vaultSwitchedFrom, t],
 	);
 
 	/** Copy the look-alikes the dedup held back, as import's "Import them anyway" does. */
