@@ -15,6 +15,15 @@ const h = vi.hoisted(() => ({
 	enrollOpts: null as Record<string, (...a: never[]) => unknown> | null,
 	linkSource: null as { room: string; only: unknown } | null,
 	linkPaired: null as ((e: { payload: { peerId: string; via?: string } }) => void) | null,
+	/** Each start of ongoing sync, and whether the joiner was in the roster by then. */
+	syncStarts: [] as { joinerInRoster: boolean }[],
+}));
+
+vi.mock("./roster", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./roster")>()),
+	maybeStartRosterSync: async () => {
+		h.syncStarts.push({ joinerInRoster: joiner() !== undefined });
+	},
 }));
 
 const LINK_SOURCE = async () => ({ stop() {} });
@@ -143,6 +152,7 @@ beforeEach(() => {
 	h.enrollOpts = null;
 	h.linkSource = null;
 	h.linkPaired = null;
+	h.syncStarts = [];
 	h.meta.set("active-vault", VAULT);
 	h.meta.set(`sync.group:${VAULT}`, {
 		groupKey: "k",
@@ -202,6 +212,16 @@ describe("host-side roster add on enroll", () => {
 		unsub();
 
 		expect(rosterAtEvent).toBeDefined();
+	});
+
+	it("starts ongoing sync once the device is in the roster", async () => {
+		// Sync starts on unlock, and only for a vault already in a group. A first pairing makes the
+		// group, so without this the new browser waited for the next unlock to see any edit.
+		const mod = await loadTransport();
+		await invite(mod);
+		await enrolled(JSON.stringify(JOINER));
+
+		await vi.waitFor(() => expect(h.syncStarts).toEqual([{ joinerInRoster: true }]));
 	});
 
 	it("survives a malformed enrolled entry without losing the roster", async () => {

@@ -286,7 +286,8 @@ async function startRoster(): Promise<void> {
 	}
 }
 
-async function maybeStartRosterSync(): Promise<void> {
+/** Start ongoing sync if it is not running and this vault is in a group. */
+export async function maybeStartRosterSync(): Promise<void> {
 	if (rosterSessions.length > 0) return;
 	try {
 		await startRoster();

@@ -25,7 +25,13 @@ import { desktopSyncCrypto } from "../sync-crypto";
 import { emit, report } from "./bus";
 import { clearSyncIdentity, deviceKeypair, syncAdmissionSign } from "./keys";
 import { linkPeerSourceFor } from "./link-peers";
-import { addToLocalRoster, clearGroupState, stopRosterSync, syncTargetVaultId } from "./roster";
+import {
+	addToLocalRoster,
+	clearGroupState,
+	maybeStartRosterSync,
+	stopRosterSync,
+	syncTargetVaultId,
+} from "./roster";
 
 /** The inviter's material for admitting a joiner: a re-entered password and who is admitting. */
 interface Admission {
@@ -175,6 +181,9 @@ export async function startEnrollInvite(opts: {
 				void (async () => {
 					if (vaultId) await admitJoiner(vaultId, opts.admission, entryJson);
 					emit({ kind: "enrolled", entryJson });
+					// Sync starts on unlock, and only for a vault already in a group. A first pairing
+					// makes the group, so start it now that the new device is in the roster.
+					await maybeStartRosterSync();
 				})();
 			},
 			relayUrl: opts.relayUrl,
