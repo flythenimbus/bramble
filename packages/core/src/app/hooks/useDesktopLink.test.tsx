@@ -24,6 +24,7 @@ const h = vi.hoisted(() => ({
 	failStage: false,
 	meta: new Map<string, unknown>(),
 	joinFails: false,
+	importFails: false,
 	/** The open vault, as the provider sees it. Unset means the first vault in `vaults`. */
 	active: undefined as string | undefined,
 	subs: new Set<() => void>(),
@@ -60,6 +61,7 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 			},
 			importEntries: async (items: unknown[], attachments: unknown[] = []) => {
 				h.steps.push(`import@${at}`);
+				if (h.importFails) throw new Error("disk full");
 				h.imported.push([items, attachments]);
 			},
 			readEntries: () => h.desktopEntries,
@@ -256,6 +258,18 @@ describe("combining into the desktop's vault", () => {
 		const result = await linkedFrom("settings");
 		expect(result.current.otherDevices).toEqual(["Pixel 8"]);
 		h.meta.clear();
+	});
+
+	it("says so when the copy fails after the join, where the screen still shows it", async () => {
+		twoFullVaults();
+		h.importFails = true;
+		const result = await linkedFrom("settings");
+		await act(async () => {
+			await result.current.accept("pw", { choice: "combine" });
+		});
+		h.importFails = false;
+		expect(result.current.invite).toBeNull();
+		expect(result.current.error).toMatch(/didn't copy/i);
 	});
 
 	it("keeps them separate when asked to, copying and setting aside nothing", async () => {

@@ -196,16 +196,21 @@ export function useDesktopLink({
 			// Counted now, while the old vault is the one open; the re-check before removal uses it.
 			const oldCount = entries.length;
 			const oldFiles = files.length;
+			// Past the join the invite form is gone, so a failure has to show in `error` instead.
+			let joined = false;
+			let copying = false;
 			try {
 				const carry =
 					combining && oldId
 						? await collectCarry(entries, files, platformFiles?.forVault(oldId) ?? null)
 						: null;
 				await startJoin(invite, { kind: "password", password }, undefined, { viaLink: true });
+				joined = true;
 				setInvite(null);
 				setOutcome(null);
 				const now = await vaultSwitchedFrom(oldId);
 				if (carry && oldId) {
+					copying = true;
 					const placed = placeCarry(now.actions.readEntries(), carry);
 					if (placed.items.length || placed.attachments.length) {
 						await now.actions.importEntries(placed.items, placed.attachments);
@@ -219,9 +224,16 @@ export function useDesktopLink({
 				if (outcome === "take" && oldId)
 					await now.actions.deleteEmptyVault(oldId, oldCount, oldFiles);
 			} catch (e) {
-				setInviteError(
-					e instanceof Error && e.message ? e.message : t`Could not sync with the desktop app.`,
-				);
+				const message = e instanceof Error && e.message ? e.message : null;
+				if (copying) {
+					setError(
+						t`This vault's entries didn't copy into the desktop's vault. They are still in the old vault.`,
+					);
+				} else if (joined) {
+					setError(message ?? t`Something went wrong after linking.`);
+				} else {
+					setInviteError(message ?? t`Could not sync with the desktop app.`);
+				}
 			} finally {
 				setJoining(false);
 			}
