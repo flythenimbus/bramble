@@ -2540,8 +2540,12 @@ msgid "Pairing code"
 msgstr "Pairing code"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-msgid "Pairing devices needs a master password, so a synced vault keeps it."
-msgstr "Pairing devices needs a master password, so a synced vault keeps it."
+msgid "Pairing devices needs a master password"
+msgstr "Pairing devices needs a master password"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#~ msgid "Pairing devices needs a master password, so a synced vault keeps it."
+#~ msgstr "Pairing devices needs a master password, so a synced vault keeps it."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #~ msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."

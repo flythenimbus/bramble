@@ -2540,8 +2540,12 @@ msgid "Pairing code"
 msgstr "Código de emparejamiento"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-msgid "Pairing devices needs a master password, so a synced vault keeps it."
-msgstr "Vincular dispositivos requiere una contraseña maestra, por lo que una bóveda sincronizada la conserva."
+msgid "Pairing devices needs a master password"
+msgstr "Vincular dispositivos requiere una contraseña maestra"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#~ msgid "Pairing devices needs a master password, so a synced vault keeps it."
+#~ msgstr "Vincular dispositivos requiere una contraseña maestra, por lo que una bóveda sincronizada la conserva."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #~ msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."

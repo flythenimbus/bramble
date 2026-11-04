@@ -2540,8 +2540,12 @@ msgid "Pairing code"
 msgstr "Codice di accoppiamento"
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
-msgid "Pairing devices needs a master password, so a synced vault keeps it."
-msgstr "Per associare i dispositivi è necessaria una password principale, quindi una cassaforte sincronizzata la conserva."
+msgid "Pairing devices needs a master password"
+msgstr "L'associazione dei dispositivi richiede una password principale"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#~ msgid "Pairing devices needs a master password, so a synced vault keeps it."
+#~ msgstr "Per associare i dispositivi è necessaria una password principale, quindi una cassaforte sincronizzata la conserva."
 
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 #~ msgid "Pairing devices needs a master password, so a synced vault keeps it. Disconnect this device from sync to turn it off."

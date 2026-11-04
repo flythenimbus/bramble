@@ -163,12 +163,12 @@ describe("turning the master password off on a synced vault", () => {
 		h.inSyncGroup = true;
 		mount();
 		expect(toggle().disabled).toBe(true);
-		expect(screen.getByText(/a synced vault keeps it/)).toBeTruthy();
+		expect(screen.getByText(/Pairing devices needs a master password/)).toBeTruthy();
 	});
 
 	it("is offered once the vault no longer syncs", () => {
 		mount();
 		expect(toggle().disabled).toBe(false);
-		expect(screen.queryByText(/a synced vault keeps it/)).toBeNull();
+		expect(screen.queryByText(/Pairing devices needs a master password/)).toBeNull();
 	});
 });
