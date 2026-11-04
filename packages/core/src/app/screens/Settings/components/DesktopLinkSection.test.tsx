@@ -37,6 +37,11 @@ const h = vi.hoisted(() => ({
 	canPopOut: false,
 	poppedOut: 0,
 	claims: 0,
+	/** What desktopLink.start() resolves with. */
+	startResult: { id: "L1", sas: { emoji: [0, 1, 2, 3, 4, 5, 6], digits: "1234 5678 9012" } } as
+		| { id: string; sas: { emoji: number[]; digits: string } }
+		| { legacy: true },
+	confirms: [] as [string, boolean][],
 }));
 
 vi.mock("../../../hooks/usePopOut", () => ({
@@ -104,6 +109,12 @@ const platform = {
 			return h.invite;
 		},
 		desktopSyncKey: async () => h.desktopKey,
+		start: async () => h.startResult,
+		confirm: async (id: string, matches: boolean) => {
+			h.confirms.push([id, matches]);
+			if (!matches) throw new Error("The symbols did not match, so nothing was linked.");
+			h.paired = true;
+		},
 		unlink: async () => {
 			h.steps.push("unlink");
 		},
@@ -165,6 +176,8 @@ afterEach(() => {
 	h.canPopOut = false;
 	h.poppedOut = 0;
 	h.claims = 0;
+	h.startResult = { id: "L1", sas: { emoji: [0, 1, 2, 3, 4, 5, 6], digits: "1234 5678 9012" } };
+	h.confirms = [];
 });
 
 describe("what a desktop connect will do to this browser", () => {
@@ -450,7 +463,7 @@ describe("the browser permission the link needs", () => {
 		h.askable = false;
 		mount();
 
-		expect(await screen.findByLabelText(/pairing code/i)).toBeTruthy();
+		expect(await screen.findByRole("button", { name: /^link$/i })).toBeTruthy();
 		expect(screen.queryByRole("button", { name: /allow and continue/i })).toBeNull();
 	});
 });
@@ -485,5 +498,40 @@ describe("in the toolbar popup", () => {
 		mount();
 		expect(await screen.findByText("This vault syncs with the desktop app.")).toBeTruthy();
 		expect(screen.queryByRole("button", { name: "Continue in a window" })).toBeNull();
+	});
+});
+
+describe("linking by emoji", () => {
+	it("shows the symbols, and claims the desktop's vault once both screens confirm", async () => {
+		h.paired = false;
+		h.invite = "code";
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^link$/i }));
+		expect(await screen.findByText("1234 5678 9012")).toBeTruthy();
+
+		fireEvent.click(screen.getByRole("button", { name: /they match/i }));
+
+		await waitFor(() => expect(h.confirms).toEqual([["L1", true]]));
+		expect(await screen.findByText(/sync with the desktop app/i)).toBeTruthy();
+	});
+
+	it("offers the code for a desktop app that predates the emoji", async () => {
+		h.paired = false;
+		h.startResult = { legacy: true };
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^link$/i }));
+
+		expect(await screen.findByLabelText(/code from the desktop app/i)).toBeTruthy();
+	});
+
+	it("links nothing when the symbols do not match", async () => {
+		h.paired = false;
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^link$/i }));
+		fireEvent.click(await screen.findByRole("button", { name: /don't match/i }));
+
+		await waitFor(() => expect(h.confirms).toEqual([["L1", false]]));
+		expect(await screen.findByText(/nothing was linked/i)).toBeTruthy();
+		expect(h.claims).toBe(0);
 	});
 });

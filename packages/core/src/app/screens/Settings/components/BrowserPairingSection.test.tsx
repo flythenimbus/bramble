@@ -1,0 +1,132 @@
+/** @vitest-environment happy-dom */
+import { i18n } from "@lingui/core";
+import { I18nProvider } from "@lingui/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { type Platform, PlatformProvider } from "../../../../context/PlatformContext";
+import { BrowserPairingSection } from "./BrowserPairingSection";
+
+// The desktop's half of linking a browser: one emoji comparison, confirmed here and in the
+// browser. The code survives only for an extension that predates the emoji.
+
+const h = vi.hoisted(() => ({
+	calls: [] as string[],
+	onPending: null as ((p: { sasHashB64: string; label: string }) => void) | null,
+	onDone: null as ((paired: boolean) => void) | null,
+}));
+
+vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../../../hooks/useVault")>()),
+	useVault: () => ({ hasPasswordSlot: true }),
+	useVaultActions: () => ({
+		verifyMasterPassword: async () => true,
+		inviteDevice: async () => "invite",
+	}),
+}));
+
+const pairing = {
+	begin: async () => "ABCD2345",
+	cancel: async () => {
+		h.calls.push("cancel");
+	},
+	isOpen: async () => true,
+	list: async () => [],
+	identity: async () => "id",
+	forget: async () => true,
+	armSyncInvite: async () => {},
+	clearSyncInvite: async () => {
+		h.calls.push("clearInvite");
+	},
+	beginLinkWindow: async () => {
+		h.calls.push("beginWindow");
+	},
+	cancelLinkWindow: async () => {
+		h.calls.push("cancelWindow");
+	},
+	answerLink: async (approved: boolean) => {
+		h.calls.push(`answer:${approved}`);
+	},
+	onLinkPending: (cb: (p: { sasHashB64: string; label: string }) => void) => {
+		h.onPending = cb;
+		return () => {};
+	},
+	onLinkDone: (cb: (paired: boolean) => void) => {
+		h.onDone = cb;
+		return () => {};
+	},
+};
+
+const platform = {
+	target: "desktop",
+	storage: { getMeta: async () => undefined },
+	pairing,
+} as unknown as Platform;
+
+const HASH = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+
+function mount() {
+	return render(
+		<I18nProvider i18n={i18n}>
+			<PlatformProvider platform={platform}>
+				<BrowserPairingSection />
+			</PlatformProvider>
+		</I18nProvider>,
+	);
+}
+
+async function connect() {
+	mount();
+	fireEvent.click(await screen.findByRole("button", { name: /^connect$/i }));
+	fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
+	fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+	await waitFor(() => expect(h.calls).toContain("beginWindow"));
+}
+
+beforeAll(() => {
+	i18n.load("en", {});
+	i18n.activate("en");
+});
+
+afterEach(() => {
+	cleanup();
+	h.calls.length = 0;
+	h.onPending = null;
+	h.onDone = null;
+});
+
+describe("connecting a browser by emoji", () => {
+	it("opens the link window and keeps the code out of sight", async () => {
+		await connect();
+		expect(screen.queryByText("ABCD2345")).toBeNull();
+		expect(screen.getByText(/in the bramble extension, press link/i)).toBeTruthy();
+	});
+
+	it("shows the code only when asked, for an older extension", async () => {
+		await connect();
+		fireEvent.click(screen.getByRole("button", { name: /older extension/i }));
+		expect(screen.getByText("ABCD2345")).toBeTruthy();
+	});
+
+	it("shows the browser's emoji and approves when they match", async () => {
+		await connect();
+		h.onPending?.({ sasHashB64: HASH, label: "Chrome on Mac" });
+		expect(await screen.findByText(/chrome on mac/i)).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
+		await waitFor(() => expect(h.calls).toContain("answer:true"));
+	});
+
+	it("refuses when they do not match", async () => {
+		await connect();
+		h.onPending?.({ sasHashB64: HASH, label: "Chrome on Mac" });
+		fireEvent.click(await screen.findByRole("button", { name: /don't match/i }));
+		await waitFor(() => expect(h.calls).toContain("answer:false"));
+	});
+
+	it("closes the link window and drops the invite on cancel", async () => {
+		await connect();
+		fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+		await waitFor(() =>
+			expect(h.calls).toEqual(expect.arrayContaining(["cancelWindow", "clearInvite"])),
+		);
+	});
+});

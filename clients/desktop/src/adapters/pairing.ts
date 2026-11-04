@@ -5,6 +5,7 @@
 
 import type { PairedBrowser, PairingAdapter } from "@core/adapters/pairing";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export const desktopPairing: PairingAdapter = {
 	begin: () => invoke<string>("pairing_begin"),
@@ -19,4 +20,25 @@ export const desktopPairing: PairingAdapter = {
 	// request is served. See src-tauri/src/socket.rs.
 	armSyncInvite: (payload, ttlMs) => invoke<void>("link_arm_sync_invite", { payload, ttlMs }),
 	clearSyncInvite: () => invoke<void>("link_clear_sync_invite"),
+
+	// The emoji link: the dialog opens a window, Rust holds the link until both screens answer.
+	beginLinkWindow: () => invoke<void>("link_window_begin"),
+	cancelLinkWindow: () => invoke<void>("link_window_cancel"),
+	answerLink: (approved) => invoke<void>("link_pair_answer", { approved }),
+	onLinkPending: (cb) => subscribe<{ sasHashB64: string; label: string }>("link-pair-pending", cb),
+	onLinkDone: (cb) => subscribe<{ paired: boolean }>("link-pair-done", (e) => cb(e.paired)),
 };
+
+/** A Tauri event as a synchronous unsubscribe, which is what React effects want. */
+function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
+	let un: (() => void) | null = null;
+	let gone = false;
+	void listen<T>(event, (e) => cb(e.payload)).then((fn) => {
+		if (gone) fn();
+		else un = fn;
+	});
+	return () => {
+		gone = true;
+		un?.();
+	};
+}

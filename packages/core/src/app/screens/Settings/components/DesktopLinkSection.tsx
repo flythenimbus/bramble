@@ -6,6 +6,7 @@ import { usePlatform } from "../../../../context/PlatformContext";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { decodePairingCode } from "../../../../sync/enrollment";
+import type { PairingSas } from "../../../../sync/pairing-sas";
 import { syncKeyFor } from "../../../../sync/sync-keys";
 import { formatDate } from "../../../../util/format-date";
 import { SasDisplay } from "../../../components/SasDisplay";
@@ -76,6 +77,10 @@ export function DesktopLinkSection() {
 	const [outcome, setOutcome] = useState<"switch" | "add" | "first" | null>(null);
 	/** Whether to carry this vault's entries into the shared one rather than leave two apart. */
 	const [alsoMove, setAlsoMove] = useState(false);
+	/** An emoji link waiting on this screen's answer. */
+	const [linking, setLinking] = useState<{ id: string; sas: PairingSas } | null>(null);
+	/** The desktop app predates the emoji, so the code is the way to link. */
+	const [legacy, setLegacy] = useState(false);
 
 	const refresh = useCallback(async () => {
 		if (!desktopLink) return;
@@ -198,24 +203,61 @@ export function DesktopLinkSection() {
 
 	if (!desktopLink) return null;
 
+	/**
+	 * After a link: pick up the vault the app armed when its user clicked Connect. Absent is
+	 * ordinary (an older app, or its dialog already closed) and leaves the link working alone.
+	 */
+	const afterLinked = async () => {
+		await refresh();
+		const claimed = await desktopLink.claimSyncInvite?.().catch(() => null);
+		if (claimed) {
+			setInvitePassword("");
+			setInviteError(null);
+			setOutcome(await outcomeFor(claimed));
+			setInvite(claimed);
+		}
+	};
+
+	/** Start an emoji link, or fall back to the code where the app (or host) predates it. */
+	const startLink = async () => {
+		setBusy(true);
+		setError(null);
+		try {
+			const started = desktopLink.start ? await desktopLink.start() : { legacy: true as const };
+			if ("legacy" in started) setLegacy(true);
+			else setLinking(started);
+		} catch (e) {
+			setError(e instanceof Error && e.message ? e.message : t`Could not reach the desktop app.`);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	/** This screen's answer to the emoji. The app is trusted only after both screens say yes. */
+	const answerLink = async (matches: boolean) => {
+		if (!linking || !desktopLink.confirm) return;
+		const { id } = linking;
+		setBusy(true);
+		setError(null);
+		try {
+			await desktopLink.confirm(id, matches);
+			setLinking(null);
+			await afterLinked();
+		} catch (e) {
+			setLinking(null);
+			setError(e instanceof Error && e.message ? e.message : t`Nothing was linked.`);
+		} finally {
+			setBusy(false);
+		}
+	};
+
 	const pair = async () => {
 		setBusy(true);
 		setError(null);
 		try {
 			await desktopLink.pair(code);
 			setCode("");
-			await refresh();
-			// The app arms a sync invite when the user clicks Connect, so one code does both
-			// halves: the link this browser delegates over, and a copy of the vault itself.
-			// Absent is ordinary (an older app, or its dialog already closed) and leaves the link
-			// working on its own.
-			const claimed = await desktopLink.claimSyncInvite?.().catch(() => null);
-			if (claimed) {
-				setInvitePassword("");
-				setInviteError(null);
-				setOutcome(await outcomeFor(claimed));
-				setInvite(claimed);
-			}
+			await afterLinked();
 		} catch (e) {
 			// The app refuses a wrong, expired and already-used code identically, so there is
 			// nothing more specific to say here than that it did not take.
@@ -386,16 +428,53 @@ export function DesktopLinkSection() {
 						<Trans>Allow and continue</Trans>
 					</Button>
 				</div>
+			) : linking ? (
+				<div className="space-y-3 text-center">
+					<p className="text-sm">
+						<Trans>Check these match your desktop app</Trans>
+					</p>
+					<SasDisplay digits={linking.sas.digits} emoji={linking.sas.emoji} large />
+					<p className="text-xs text-muted-foreground">
+						<Trans>
+							Confirm here and approve in the desktop app, only if both show the same symbols.
+						</Trans>
+					</p>
+					<div className="flex justify-center gap-2">
+						<Button
+							variant="secondary"
+							size="sm"
+							disabled={busy}
+							onClick={() => void answerLink(false)}
+						>
+							<Trans>They don't match</Trans>
+						</Button>
+						<Button size="sm" disabled={busy} onClick={() => void answerLink(true)}>
+							<Trans>They match</Trans>
+						</Button>
+					</div>
+				</div>
+			) : !legacy ? (
+				<div className="space-y-3">
+					<p className="text-sm text-muted-foreground">
+						<Trans>
+							Open Bramble on this computer, go to Settings and choose Connect a browser, then press
+							Link here. Both screens will show the same symbols.
+						</Trans>
+					</p>
+					<Button variant="primary" fullWidth disabled={busy} onClick={() => void startLink()}>
+						<Trans>Link</Trans>
+					</Button>
+				</div>
 			) : (
 				<div className="space-y-3">
 					<p className="text-sm text-muted-foreground">
 						<Trans>
-							Open Bramble on this computer, go to Settings and choose Connect a browser, then enter
-							the code it shows.
+							This version of the desktop app links with a code. In its Connect a browser screen,
+							choose to show a code, then enter it here.
 						</Trans>
 					</p>
 					<TextField
-						label={t`Pairing code`}
+						label={t`Code from the desktop app`}
 						value={code}
 						autoComplete="off"
 						spellCheck={false}

@@ -5,7 +5,10 @@ import type { PairedBrowser } from "../../../../adapters/pairing";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { UnrecognizedDeviceError } from "../../../../hooks/useSyncEnrollment";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
+import { linkSas } from "../../../../sync/link-sas";
+import type { PairingSas } from "../../../../sync/pairing-sas";
 import { formatDate } from "../../../../util/format-date";
+import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
 import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { Modal } from "../../../components/ui/modal";
@@ -41,6 +44,10 @@ export function BrowserPairingSection() {
 	/** Who was already paired when the code went up. In a ref because it is a snapshot of that
 	 * moment: as state it would re-arm the watcher on every list change and lose the baseline. */
 	const knownBefore = useRef<Set<string>>(new Set());
+	/** A browser waiting on this screen's answer, with the emoji both screens show. */
+	const [linkPending, setLinkPending] = useState<{ sas: PairingSas; label: string } | null>(null);
+	/** The code, for an extension that predates the emoji, shown only when asked for. */
+	const [showCode, setShowCode] = useState(false);
 
 	const refresh = useCallback(async () => {
 		if (!pairing) return;
@@ -102,9 +109,26 @@ export function BrowserPairingSection() {
 	useEffect(() => {
 		return () => {
 			void pairing?.cancel();
+			void pairing?.cancelLinkWindow?.();
 			void pairing?.clearSyncInvite?.();
 		};
 	}, [pairing]);
+
+	// The browser's emoji, once its handshake is done. Rust holds it until both screens answer.
+	useEffect(() => {
+		if (!pairing?.onLinkPending || !pairing.onLinkDone) return;
+		const offPending = pairing.onLinkPending(({ sasHashB64, label }) => {
+			void linkSas(sasHashB64).then((sas) => setLinkPending({ sas, label }));
+		});
+		const offDone = pairing.onLinkDone((paired) => {
+			setLinkPending(null);
+			if (!paired) setError(t`The browser was not linked.`);
+		});
+		return () => {
+			offPending();
+			offDone();
+		};
+	}, [pairing, t]);
 
 	if (!pairing) return null;
 
@@ -122,6 +146,8 @@ export function BrowserPairingSection() {
 		knownBefore.current = new Set(browsers.map((b) => b.publicKey));
 		try {
 			const linkCode = await pairing.begin();
+			await pairing.beginLinkWindow?.();
+			setShowCode(!pairing.beginLinkWindow);
 			setCode(linkCode);
 			setRemaining(CODE_TTL_SECONDS);
 			if (!pairing.armSyncInvite) return; // link only: this platform cannot deliver an invite
@@ -177,7 +203,9 @@ export function BrowserPairingSection() {
 	const stop = async () => {
 		setCode(null);
 		setRemaining(0);
+		setLinkPending(null);
 		await pairing.cancel();
+		await pairing.cancelLinkWindow?.();
 		await pairing.clearSyncInvite?.();
 		// A pairing may have completed while the code was up.
 		await refresh();
@@ -249,28 +277,55 @@ export function BrowserPairingSection() {
 						</div>
 					)}
 				</>
+			) : linkPending ? (
+				<div className="space-y-3 text-center">
+					<p className="text-sm">
+						<Trans>Check these match {linkPending.label}</Trans>
+					</p>
+					<SasDisplay digits={linkPending.sas.digits} emoji={linkPending.sas.emoji} large />
+					<p className="text-xs text-muted-foreground">
+						<Trans>Approve only if your browser shows the same symbols.</Trans>
+					</p>
+					<div className="flex justify-center gap-2">
+						<Button variant="secondary" size="sm" onClick={() => void pairing.answerLink?.(false)}>
+							<Trans>They don't match</Trans>
+						</Button>
+						<Button size="sm" onClick={() => void pairing.answerLink?.(true)}>
+							<Trans>Approve</Trans>
+						</Button>
+					</div>
+				</div>
 			) : (
 				<div className="space-y-3 text-center">
-					{/* Naming the exact path, because "in the extension" is three clicks the user has
-					    to guess at, and a code with nowhere obvious to go reads as a dead end. */}
 					<p className="text-sm text-muted-foreground">
 						<Trans>
-							In the Bramble extension, open Settings → Sync → Desktop app and enter this code.
+							In the Bramble extension, press Link on the first screen, or open Settings → Desktop
+							app. Both screens will then show the same symbols.
 						</Trans>
 					</p>
-					{/* Spaced and monospaced because it is read off this screen and typed into
-					    another; the alphabet already excludes characters that look alike. */}
-					<p className="text-3xl font-mono tracking-[0.3em] select-all" data-selectable>
-						{code}
-					</p>
-					<p className="text-xs text-muted-foreground">
-						<Trans>
-							Expires in {minutes}:{seconds}. It can only be used once.
-						</Trans>
-					</p>
-					<Button variant="secondary" size="sm" onClick={() => void stop()}>
-						<Trans>Cancel</Trans>
-					</Button>
+					{showCode ? (
+						<>
+							{/* Spaced and monospaced because it is read off this screen and typed into
+							    another; the alphabet already excludes characters that look alike. */}
+							<p className="text-3xl font-mono tracking-[0.3em] select-all" data-selectable>
+								{code}
+							</p>
+							<p className="text-xs text-muted-foreground">
+								<Trans>
+									Expires in {minutes}:{seconds}. It can only be used once.
+								</Trans>
+							</p>
+						</>
+					) : (
+						<Button variant="link" size="sm" onClick={() => setShowCode(true)}>
+							<Trans>Using an older extension? Show a code instead</Trans>
+						</Button>
+					)}
+					<div>
+						<Button variant="secondary" size="sm" onClick={() => void stop()}>
+							<Trans>Cancel</Trans>
+						</Button>
+					</div>
 				</div>
 			)}
 

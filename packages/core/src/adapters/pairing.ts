@@ -61,4 +61,14 @@ export interface PairingAdapter {
 	armSyncInvite?(payload: string, ttlMs: number): Promise<void>;
 	/** Disarm, for a dialog the user dismissed. Dismissing is a refusal. */
 	clearSyncInvite?(): Promise<void>;
+	/** Accept an emoji link while the Connect dialog is open. */
+	beginLinkWindow?(): Promise<void>;
+	/** The dialog closed: refuse any link in progress and drop the invite. */
+	cancelLinkWindow?(): Promise<void>;
+	/** This screen's answer to the emoji comparison. */
+	answerLink?(approved: boolean): Promise<void>;
+	/** A browser finished the link handshake and waits on both answers. Returns an unsubscribe. */
+	onLinkPending?(cb: (pending: { sasHashB64: string; label: string }) => void): () => void;
+	/** A link settled, either way. Returns an unsubscribe. */
+	onLinkDone?(cb: (paired: boolean) => void): () => void;
 }
