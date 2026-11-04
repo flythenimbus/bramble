@@ -267,7 +267,6 @@ import {
 } from "../vault/slot-policy";
 import {
 	createPrfCredential,
-	getPrfSecret,
 	getPrfSecretAcrossRpIds,
 	unlockRpIdOrder,
 	type WebauthnKeyKind,
@@ -1068,6 +1067,29 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[crypto, openUnlocked, shell, activeId, t],
 	);
 
+	/** One tap from any registered key, under whichever rpID it lives. Unlock and re-auth share it. */
+	const tapAnyWebauthnKey = useCallback(
+		async (slots: WebauthnSlot[]) => {
+			// Platform keys and security keys live under different rpIDs and the vault file does not
+			// record which is which, so a mixed vault may need both tried. Order by what THIS vault
+			// holds: the labels pref is not vault-scoped, so reading it raw would let a platform key
+			// in another vault cost this one an extra prompt.
+			//
+			// Read the pref rather than the mounted state: the state loads asynchronously, so a window
+			// that unlocks the instant it opens (the Firefox pop-out handoff does exactly that) would
+			// see an empty map, assume no platform key, and try the wrong rpID first.
+			const storedLabels =
+				(await storage.getMeta<Record<string, StoredKeyLabel>>(WEBAUTHN_KEY_LABELS_PREF)) ?? {};
+			const hasPlatformKey = describeWebauthnKeys(slots, storedLabels, bytesToBase64).some(
+				(k) => k.kind === "platform",
+			);
+
+			// Slots carry their salts, so whichever key is tapped answers with its own: one prompt.
+			return getPrfSecretAcrossRpIds(slots, slots[0]!.salt, unlockRpIdOrder(hasPlatformKey));
+		},
+		[storage],
+	);
+
 	/** Unlock via a registered security key: one tap, whichever key it is. */
 	const unlockWithWebauthnKey = useCallback(async () => {
 		setError(null);
@@ -1083,33 +1105,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			throw new Error(t`No security key registered on this vault.`);
 		}
 
-		// Platform keys and security keys live under different rpIDs and the vault file does not
-		// record which is which, so a mixed vault may need both tried. Order by what THIS vault
-		// holds: the labels pref is not vault-scoped, so reading it raw would let a platform key
-		// in another vault cost this one an extra prompt.
-		//
-		// Read the pref rather than the mounted state: the state loads asynchronously, so a window
-		// that unlocks the instant it opens (the Firefox pop-out handoff does exactly that) would
-		// see an empty map, assume no platform key, and try the wrong rpID first.
-		const storedLabels =
-			(await storage.getMeta<Record<string, StoredKeyLabel>>(WEBAUTHN_KEY_LABELS_PREF)) ?? {};
-		const hasPlatformKey = describeWebauthnKeys(slots, storedLabels, bytesToBase64).some(
-			(k) => k.kind === "platform",
-		);
-
-		// Slots carry their salts, so whichever key is tapped answers with its own: one prompt.
-		const attempt = await getPrfSecretAcrossRpIds(
-			slots,
-			slots[0]!.salt,
-			unlockRpIdOrder(hasPlatformKey),
-		);
+		const attempt = await tapAnyWebauthnKey(slots);
 		const used = matchSlotByCredentialId(slots, attempt.rawId);
 		if (!used) {
 			throw new Error(t`Authenticator returned an unknown credential.`);
 		}
 
 		await finishWebauthnUnlock(used, attempt.hmacSecret);
-	}, [readDecodedBlob, finishWebauthnUnlock, storage, t]);
+	}, [readDecodedBlob, finishWebauthnUnlock, tapAnyWebauthnKey, t]);
 
 	/**
 	 * Prove possession of a registered key (a tap) without touching lock state.
@@ -1120,12 +1123,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		const slots = findWebauthnSlots(blob);
 		if (slots.length === 0) return false;
 		try {
-			const attempt = await getPrfSecret(slots, slots[0]!.salt, { forUnlock: true });
+			const attempt = await tapAnyWebauthnKey(slots);
 			return matchSlotByCredentialId(slots, attempt.rawId) !== null;
 		} catch {
 			return false;
 		}
-	}, [readDecodedBlob]);
+	}, [readDecodedBlob, tapAnyWebauthnKey]);
 
 	/**
 	 * Register a new security key against the unlocked vault. Requires the vault

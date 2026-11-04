@@ -146,3 +146,28 @@ test("tapping a key that is not the vault's first still unlocks in one prompt", 
 	await expectUnlocked(popup);
 	expect(await popup.evaluate(() => (window as unknown as { prompts: number }).prompts)).toBe(1);
 });
+
+test("a key-only vault can confirm a sensitive action with its platform key", async ({
+	context,
+	extensionId,
+}) => {
+	// With the master password off, resetting the recovery code is authorized by a key tap.
+	// Platform keys live under the shared rpID, so that tap must ask there, as unlock does.
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+
+	const popup = await context.newPage();
+	await addVirtualAuthenticator(popup, { hasPrf: true });
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+
+	await addTapToUnlockKey(popup, "This device", "Only key");
+	await expect(popup.getByText("Only key")).toBeVisible();
+	await popup.getByRole("button", { name: /Require master password to unlock/i }).click();
+	await popup.getByRole("button", { name: "Disable master password" }).click();
+	await expect(popup.getByText(/Off\. You unlock by tapping a key/i)).toBeVisible();
+
+	await popup.getByRole("button", { name: "Reset", exact: true }).click();
+	await expect(popup.getByRole("heading", { name: "Your new recovery code" })).toBeVisible();
+	await expect(popup.getByText(/Couldn't verify your key/i)).toHaveCount(0);
+});
