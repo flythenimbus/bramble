@@ -207,6 +207,12 @@ const adapter: DesktopLinkAdapter = {
 	claimSyncInvite: () =>
 		withNativeProxy(() => dispatch<string | null>("DESKTOP_LINK_CLAIM_INVITE")),
 	desktopSyncKey: () => withNativeProxy(() => dispatch<string | null>("DESKTOP_LINK_SYNC_KEY")),
+	vaultSummary: () =>
+		withNativeProxy(() =>
+			dispatch<{ name: string; empty: boolean; entries: number } | null>(
+				"DESKTOP_LINK_VAULT_SUMMARY",
+			),
+		),
 	unlink: async () => {
 		await dispatch("DESKTOP_LINK_UNLINK");
 	},

@@ -980,6 +980,29 @@ on(
 	}),
 );
 
+/** What the app's vault holds, for deciding what linking does. Null when it will not say: not
+ * the browser that just linked, the app is locked, or it predates this. */
+export async function desktopVaultSummary(): Promise<{
+	name: string;
+	empty: boolean;
+	entries: number;
+} | null> {
+	try {
+		const answer = (await askDesktop({ op: "vaultSummary" })) as {
+			ok?: boolean;
+			summary?: { name: string; empty: boolean; entries: number };
+		};
+		return answer?.ok === true ? (answer.summary ?? null) : null;
+	} catch {
+		return null;
+	}
+}
+
+on(
+	"DESKTOP_LINK_VAULT_SUMMARY",
+	extensionOnly(async () => ({ ok: true, data: await desktopVaultSummary() })),
+);
+
 /** The app's sync device key, or null when it is not linked or not running. */
 export async function desktopSyncKey(): Promise<string | null> {
 	try {

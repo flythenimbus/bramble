@@ -13,11 +13,16 @@ const h = vi.hoisted(() => ({
 	calls: [] as string[],
 	onPending: null as ((p: { sasHashB64: string; label: string }) => void) | null,
 	onDone: null as ((paired: boolean) => void) | null,
+	summaries: [] as unknown[],
+}));
+
+vi.mock("../../../../hooks/useVaultRegistry", () => ({
+	useVaultRegistry: () => ({ vaults: [{ id: "v1", label: "Home", createdAt: 1 }], activeId: "v1" }),
 }));
 
 vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../../../hooks/useVault")>()),
-	useVault: () => ({ hasPasswordSlot: true }),
+	useVault: () => ({ hasPasswordSlot: true, entries: [{ id: "a" }, { id: "b" }] }),
 	useVaultActions: () => ({
 		verifyMasterPassword: async () => true,
 		inviteDevice: async () => "invite",
@@ -49,6 +54,9 @@ const pairing = {
 	onLinkPending: (cb: (p: { sasHashB64: string; label: string }) => void) => {
 		h.onPending = cb;
 		return () => {};
+	},
+	setVaultSummary: async (summary: unknown) => {
+		h.summaries.push(summary);
 	},
 	onLinkDone: (cb: (paired: boolean) => void) => {
 		h.onDone = cb;
@@ -92,6 +100,7 @@ afterEach(() => {
 	h.calls.length = 0;
 	h.onPending = null;
 	h.onDone = null;
+	h.summaries.length = 0;
 });
 
 describe("connecting a browser by emoji", () => {
@@ -120,6 +129,15 @@ describe("connecting a browser by emoji", () => {
 		h.onPending?.({ sasHashB64: HASH, label: "Chrome on Mac" });
 		fireEvent.click(await screen.findByRole("button", { name: /don't match/i }));
 		await waitFor(() => expect(h.calls).toContain("answer:false"));
+	});
+
+	it("tells the linking browser what this vault holds, and stops on cancel", async () => {
+		await connect();
+		await waitFor(() =>
+			expect(h.summaries).toContainEqual({ name: "Home", empty: false, entries: 2 }),
+		);
+		fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+		await waitFor(() => expect(h.summaries.at(-1)).toBeNull());
 	});
 
 	it("closes the link window and drops the invite on cancel", async () => {

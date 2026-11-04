@@ -331,6 +331,7 @@ pub fn run() {
             socket::link_window_cancel,
             socket::link_pair_answer,
             socket::link_pair_pending,
+            socket::link_set_vault_summary,
             socket::link_set_sync_identity,
             socket::spotlight_active_tab,
             socket::spotlight_request_fill,

@@ -260,6 +260,22 @@ describe("the held sync link", () => {
 		await vi.waitFor(() => expect(got).toEqual(["e"]));
 	});
 
+	it("asks the app what its vault holds, and reads a refusal as unknown", async () => {
+		const mod = await load();
+		await open(mod, []);
+
+		const asked = mod.desktopVaultSummary();
+		await vi.waitFor(() => expect(postedOps()).toContain("vaultSummary"));
+		const summary = { name: "Home", empty: false, entries: 380 };
+		deliver({ sealed: `sealed:${JSON.stringify({ ok: true, summary })}` });
+		expect(await asked).toEqual(summary);
+
+		const refused = mod.desktopVaultSummary();
+		await vi.waitFor(() => expect(postedOps().filter((o) => o === "vaultSummary")).toHaveLength(2));
+		deliver({ sealed: `sealed:${JSON.stringify({ ok: false, error: "no summary" })}` });
+		expect(await refused).toBeNull();
+	});
+
 	it("does not answer a request with a frame the app pushed", async () => {
 		// The bug this exists for: the pushed frame arrives between the request and its answer.
 		// Handed back as the answer, every later request would return the previous one's result.

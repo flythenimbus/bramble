@@ -61,6 +61,10 @@ export interface PairingAdapter {
 	armSyncInvite?(payload: string, ttlMs: number): Promise<void>;
 	/** Disarm, for a dialog the user dismissed. Dismissing is a refusal. */
 	clearSyncInvite?(): Promise<void>;
+	/** Publish what the open vault holds, for the browser linking now; null clears it. */
+	setVaultSummary?(
+		summary: { name: string; empty: boolean; entries: number } | null,
+	): Promise<void>;
 	/** Accept an emoji link while the Connect dialog is open. */
 	beginLinkWindow?(): Promise<void>;
 	/** The dialog closed: refuse any link in progress and drop the invite. */

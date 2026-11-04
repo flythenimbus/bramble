@@ -128,6 +128,9 @@ enum Request {
     /// this browser last week authenticated it, and authentication is not consent to hand over
     /// the vault today. See docs/desktop-port.md.
     SyncInvite,
+    /// What the open vault holds, for the browser deciding what linking does. Answered only to
+    /// the browser that paired in the open Connect dialog, and only while unlocked.
+    VaultSummary,
     /// This app's sync device public key, so a browser can work out whether the vault it is
     /// looking at is one this app shares.
     ///
@@ -188,6 +191,9 @@ struct Answer {
     /// Set for a sync-identity request, and only then.
     #[serde(skip_serializing_if = "Option::is_none")]
     identity: Option<String>,
+    /// Set for a vault-summary request, and only then.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<VaultSummary>,
     /// Set for a fetch, and only then.
     #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
@@ -363,6 +369,38 @@ pub fn link_arm_sync_invite(payload: String, ttl_ms: u64) -> Result<(), String> 
         bound: None,
     });
     Ok(())
+}
+
+/// What the Connect dialog's vault holds: its name, whether it is empty, and how many entries.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultSummary {
+    pub name: String,
+    pub empty: bool,
+    pub entries: u64,
+}
+
+static VAULT_SUMMARY: Mutex<Option<VaultSummary>> = Mutex::new(None);
+
+/// Published by the Connect dialog while it is open, cleared when it closes.
+#[tauri::command]
+pub fn link_set_vault_summary(summary: Option<VaultSummary>) {
+    if let Ok(mut slot) = VAULT_SUMMARY.lock() {
+        *slot = summary;
+    }
+}
+
+/// The summary, for the browser the armed invite is bound to and nobody else.
+fn vault_summary_for(peer_id: &str) -> Option<VaultSummary> {
+    let bound = armed()
+        .lock()
+        .ok()?
+        .as_ref()
+        .and_then(|i| i.bound.clone())?;
+    if bound != peer_id {
+        return None;
+    }
+    VAULT_SUMMARY.lock().ok()?.clone()
 }
 
 /// Bind the armed invite to the browser that just paired in this dialog. The first pairing wins:
@@ -689,6 +727,13 @@ fn answer_for(request: Request, peer_id: &str) -> Answer {
                 None => Answer::error("no identity"),
             };
         }
+        Request::VaultSummary => match vault_summary_for(peer_id) {
+            Some(summary) => Answer {
+                summary: Some(summary),
+                ..Answer::ok()
+            },
+            None => Answer::error("no summary"),
+        },
         Request::SyncInvite => match claim_invite(peer_id) {
             Some(payload) => Answer {
                 invite: Some(payload),
@@ -2020,6 +2065,54 @@ mod tests {
         );
         assert_eq!(pending.label, "Chrome on Mac");
         link_window_cancel();
+        handshake::handshake_close(a.session_id);
+    }
+
+    fn summary() -> VaultSummary {
+        VaultSummary {
+            name: "Home".into(),
+            empty: false,
+            entries: 380,
+        }
+    }
+
+    #[test]
+    fn the_summary_goes_only_to_the_bound_browser() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_set_vault_summary(Some(summary()));
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        let mut a = Linked::open(&dir); // bound
+        let mut b = Linked::open(&dir);
+
+        a.send(serde_json::json!({ "op": "vaultSummary" }));
+        let got = a.recv();
+        assert_eq!(got["summary"]["name"], "Home", "{got}");
+        assert_eq!(got["summary"]["entries"], 380);
+        b.send(serde_json::json!({ "op": "vaultSummary" }));
+        assert_eq!(b.recv()["ok"], false);
+
+        link_clear_sync_invite();
+        link_set_vault_summary(None);
+        vault_crypto::lock();
+        handshake::handshake_close(a.session_id);
+        handshake::handshake_close(b.session_id);
+    }
+
+    #[test]
+    fn no_summary_while_locked() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        link_set_vault_summary(Some(summary()));
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        let mut a = Linked::open(&dir);
+        vault_crypto::lock();
+
+        a.send(serde_json::json!({ "op": "vaultSummary" }));
+        assert_eq!(a.recv()["ok"], false);
+        link_clear_sync_invite();
+        link_set_vault_summary(None);
         handshake::handshake_close(a.session_id);
     }
 }

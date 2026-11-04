@@ -5,9 +5,12 @@ import type { PairedBrowser } from "../../../../adapters/pairing";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { UnrecognizedDeviceError } from "../../../../hooks/useSyncEnrollment";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
+import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { linkSas } from "../../../../sync/link-sas";
 import type { PairingSas } from "../../../../sync/pairing-sas";
 import { formatDate } from "../../../../util/format-date";
+import { isVaultEmpty, readVaultContents } from "../../../../vault/vault-empty";
+import { displayLabel } from "../../../../vault/vault-registry";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
 import { InlineConfirm } from "../../../components/ui/inline-confirm";
@@ -27,7 +30,8 @@ export function BrowserPairingSection() {
 	const { pairing, storage } = usePlatform();
 	const { t } = useLingui();
 	const { inviteDevice, verifyMasterPassword } = useVaultActions();
-	const { hasPasswordSlot } = useVault();
+	const { hasPasswordSlot, entries } = useVault();
+	const { vaults, activeId } = useVaultRegistry();
 	const [browsers, setBrowsers] = useState<PairedBrowser[]>([]);
 	const [code, setCode] = useState<string | null>(null);
 	const [remaining, setRemaining] = useState(0);
@@ -110,6 +114,7 @@ export function BrowserPairingSection() {
 		return () => {
 			void pairing?.cancel();
 			void pairing?.cancelLinkWindow?.();
+			void pairing?.setVaultSummary?.(null);
 			void pairing?.clearSyncInvite?.();
 		};
 	}, [pairing]);
@@ -146,6 +151,7 @@ export function BrowserPairingSection() {
 		knownBefore.current = new Set(browsers.map((b) => b.publicKey));
 		try {
 			const linkCode = await pairing.begin();
+			await publishSummary();
 			await pairing.beginLinkWindow?.();
 			setShowCode(!pairing.beginLinkWindow);
 			setCode(linkCode);
@@ -168,6 +174,18 @@ export function BrowserPairingSection() {
 						: String(e),
 			);
 		}
+	};
+
+	/** What this vault holds, for the browser deciding whether to take, combine or ask. */
+	const publishSummary = async () => {
+		if (!pairing.setVaultSummary || !activeId) return;
+		const index = vaults.findIndex((v) => v.id === activeId);
+		const contents = await readVaultContents(storage, activeId, entries.length);
+		await pairing.setVaultSummary({
+			name: displayLabel(vaults[index]?.label ?? "", Math.max(0, index)),
+			empty: isVaultEmpty(contents),
+			entries: entries.length,
+		});
 	};
 
 	/** Confirm the master password first: it signs the admission. A vault without one may not pair. */
@@ -206,6 +224,7 @@ export function BrowserPairingSection() {
 		setLinkPending(null);
 		await pairing.cancel();
 		await pairing.cancelLinkWindow?.();
+		await pairing.setVaultSummary?.(null);
 		await pairing.clearSyncInvite?.();
 		// A pairing may have completed while the code was up.
 		await refresh();

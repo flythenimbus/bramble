@@ -23,6 +23,7 @@ export const desktopPairing: PairingAdapter = {
 
 	// The emoji link: the dialog opens a window, Rust holds the link until both screens answer.
 	beginLinkWindow: () => invoke<void>("link_window_begin"),
+	setVaultSummary: (summary) => invoke<void>("link_set_vault_summary", { summary }),
 	cancelLinkWindow: () => invoke<void>("link_window_cancel"),
 	answerLink: (approved) => invoke<void>("link_pair_answer", { approved }),
 	onLinkPending: (cb) => subscribe<{ sasHashB64: string; label: string }>("link-pair-pending", cb),

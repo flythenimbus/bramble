@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isVaultEmpty } from "./vault-empty";
+import { isVaultEmpty, readVaultContents } from "./vault-empty";
 
 const empty = { entryCount: 0, quarantineRaw: null, rosterDevices: 1, hasAliasConfig: false };
 
@@ -31,5 +31,39 @@ describe("isVaultEmpty", () => {
 
 	it("is not empty with an alias provider configured", () => {
 		expect(isVaultEmpty({ ...empty, hasAliasConfig: true })).toBe(false);
+	});
+});
+
+describe("readVaultContents", () => {
+	function storage(meta: Record<string, unknown>, quarantine: string | null = null) {
+		return {
+			getMeta: async <T>(k: string) => meta[k] as T | undefined,
+			readQuarantine: async () => quarantine,
+		};
+	}
+
+	it("reads the roster, quarantine and alias config of that vault", async () => {
+		const s = storage(
+			{
+				"sync.group:v1": { roster: { devices: [{ publicKey: "a" }, { publicKey: "b" }] } },
+				"alias.config:v1": { provider: "addy" },
+			},
+			"[]",
+		);
+		expect(await readVaultContents(s, "v1", 3)).toEqual({
+			entryCount: 3,
+			quarantineRaw: "[]",
+			rosterDevices: 2,
+			hasAliasConfig: true,
+		});
+	});
+
+	it("counts this device alone when the vault syncs with nothing", async () => {
+		expect(await readVaultContents(storage({}), "v1", 0)).toEqual({
+			entryCount: 0,
+			quarantineRaw: null,
+			rosterDevices: 1,
+			hasAliasConfig: false,
+		});
 	});
 });
