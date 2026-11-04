@@ -2253,6 +2253,10 @@ msgstr "Nessun elemento importabile è stato trovato in questo file."
 msgid "No items found matching your search."
 msgstr "Nessun elemento trovato che corrisponda alla sua ricerca."
 
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "No logins at risk."
+msgstr "Nessun accesso a rischio."
+
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "No logins match."
 msgstr "Nessun login corrisponde."

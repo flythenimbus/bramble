@@ -16,6 +16,10 @@ const SORT_KEYS = [
 ] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 
+/** The Overview cards as filters: every item, breached logins, or the logins that are not. */
+const HEALTH_FILTERS = ["all", "atRisk", "strong"] as const;
+export type HealthFilter = (typeof HEALTH_FILTERS)[number];
+
 /** The search/filter/sort state, mirrored in the route's search params. */
 export interface VaultSearch {
 	q: string;
@@ -30,6 +34,8 @@ export interface VaultSearch {
 	archived: boolean;
 	/** Only entries with an attachment (#157). Names are sealed, so this is the whole of it. */
 	attachments: boolean;
+	/** Which Overview card is selected; "all" is Total Items. */
+	health: HealthFilter;
 }
 
 export const DEFAULT_SEARCH: VaultSearch = {
@@ -38,6 +44,7 @@ export const DEFAULT_SEARCH: VaultSearch = {
 	sort: "name-asc",
 	archived: false,
 	attachments: false,
+	health: "all",
 };
 
 // Route search-param validator. All-optional (`.catch` drops garbage) so bad
@@ -48,6 +55,7 @@ export const vaultSearchSchema = z.object({
 	sort: z.enum(SORT_KEYS).optional().catch(undefined),
 	archived: z.boolean().optional().catch(undefined),
 	attachments: z.boolean().optional().catch(undefined),
+	health: z.enum(HEALTH_FILTERS).optional().catch(undefined),
 });
 
 /** The fields the search reads. A `VaultListItem` satisfies this. */
@@ -65,6 +73,8 @@ export interface SearchableEntry {
 	tagKeys?: string[];
 	/** Has at least one attachment. */
 	hasFiles?: boolean;
+	/** A login whose password is in a known breach (and breach checks are on). */
+	leaked?: boolean;
 }
 
 /** Split a raw query into lowercased tokens. */
@@ -173,6 +183,9 @@ export function filterAndSortEntries<T extends SearchableEntry>(
 		if ((item.archived ?? false) !== search.archived) return false;
 		if (search.type !== "all" && item.type !== search.type) return false;
 		if (search.attachments && !item.hasFiles) return false;
+		// The same tests the Overview counts with, so a card lists exactly what it counted.
+		if (search.health === "atRisk" && !item.leaked) return false;
+		if (search.health === "strong" && (item.type !== "login" || item.leaked)) return false;
 		// Every tag token must match some tag, as with text tokens: two of them narrow.
 		const keys = item.tagKeys;
 		if (tags.length > 0 && !tags.every((t) => keys?.some((k) => k.startsWith(t)))) return false;

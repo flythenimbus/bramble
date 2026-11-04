@@ -86,6 +86,20 @@ describe("filterAndSortEntries", () => {
 		expect(filterAndSortEntries(items, search())).toHaveLength(2);
 	});
 
+	// The Overview cards as filters: each lists exactly what it counts.
+	it("lists only breached logins under At Risk, and the rest of the logins under Strong", () => {
+		const items = [
+			item({ name: "Bank", leaked: true }),
+			item({ name: "Mail" }),
+			item({ name: "Wifi", type: "note" }),
+		];
+		const names = (health: VaultSearch["health"]) =>
+			filterAndSortEntries(items, search({ health })).map((i) => i.name);
+		expect(names("atRisk")).toEqual(["Bank"]);
+		expect(names("strong")).toEqual(["Mail"]);
+		expect(names("all")).toEqual(["Bank", "Mail", "Wifi"]);
+	});
+
 	it("filters by tag when the query carries a #token", () => {
 		const items = [
 			item({ name: "Payroll", tagKeys: ["work"], searchText: "payroll" }),
@@ -215,6 +229,7 @@ describe("vaultSearchSchema", () => {
 				sort: "recent-used",
 				archived: true,
 				attachments: true,
+				health: "atRisk",
 			}),
 		).toEqual({
 			q: "hi",
@@ -222,17 +237,25 @@ describe("vaultSearchSchema", () => {
 			sort: "recent-used",
 			archived: true,
 			attachments: true,
+			health: "atRisk",
 		});
 	});
 
 	it("drops unknown values to undefined instead of throwing", () => {
 		expect(
-			vaultSearchSchema.parse({ type: "folder", sort: "date", archived: "yes", attachments: 1 }),
+			vaultSearchSchema.parse({
+				type: "folder",
+				sort: "date",
+				archived: "yes",
+				attachments: 1,
+				health: "weak",
+			}),
 		).toEqual({
 			type: undefined,
 			sort: undefined,
 			archived: undefined,
 			attachments: undefined,
+			health: undefined,
 		});
 	});
 

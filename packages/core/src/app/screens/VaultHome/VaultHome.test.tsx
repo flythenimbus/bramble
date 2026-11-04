@@ -178,3 +178,69 @@ describe("VaultHome bulk actions", () => {
 		expect(screen.queryByText("Items (3)")).toBeNull();
 	});
 });
+
+// The Overview cards filter the list by what they count, and a collapsed Overview lifts the filter.
+describe("VaultHome overview cards", () => {
+	function overview(
+		search: Partial<typeof DEFAULT_SEARCH> = {},
+		statsCollapsed = false,
+		items = [item("bank", { leaked: true }), item("mail"), item("wifi", { type: "note" })],
+	) {
+		const onSearchChange = vi.fn();
+		render(
+			<I18nProvider i18n={i18n}>
+				<PlatformProvider platform={platform}>
+					<VaultHome
+						items={items}
+						entries={[]}
+						search={{ ...DEFAULT_SEARCH, ...search }}
+						onSearchChange={onSearchChange}
+						onCreate={() => {}}
+						onSelectEntry={() => {}}
+						onEditEntry={() => {}}
+						onDeleteEntry={async () => {}}
+						onUseEntry={() => {}}
+						tags={[]}
+						statsCollapsed={statsCollapsed}
+						onToggleStats={() => {}}
+					/>
+				</PlatformProvider>
+			</I18nProvider>,
+		);
+		return onSearchChange;
+	}
+	const card = (name: RegExp) => screen.getByRole("button", { name });
+
+	it("filters to a card's items, and Total Items goes back to all of them", () => {
+		const onSearchChange = overview();
+		fireEvent.click(card(/At Risk/));
+		expect(onSearchChange).toHaveBeenLastCalledWith({ health: "atRisk" });
+		fireEvent.click(card(/Strong/));
+		expect(onSearchChange).toHaveBeenLastCalledWith({ health: "strong" });
+		fireEvent.click(card(/Total Items/));
+		expect(onSearchChange).toHaveBeenLastCalledWith({ health: "all" });
+	});
+
+	it("marks the selected card, with Total Items selected when nothing is filtered", () => {
+		overview();
+		expect(card(/Total Items/).getAttribute("aria-pressed")).toBe("true");
+		expect(card(/At Risk/).getAttribute("aria-pressed")).toBe("false");
+		cleanup();
+		overview({ health: "atRisk" });
+		expect(card(/At Risk/).getAttribute("aria-pressed")).toBe("true");
+		expect(screen.getByText("Items (1)")).toBeTruthy();
+	});
+
+	it("disables a card with nothing to show, unless it is the one selected", () => {
+		overview({}, false, [item("mail")]);
+		expect((card(/At Risk/) as HTMLButtonElement).disabled).toBe(true);
+		cleanup();
+		overview({ health: "atRisk" }, false, [item("mail")]);
+		expect((card(/At Risk/) as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it("lifts the filter while the Overview is collapsed", () => {
+		overview({ health: "atRisk" }, true);
+		expect(screen.getByText("Items (3)")).toBeTruthy();
+	});
+});

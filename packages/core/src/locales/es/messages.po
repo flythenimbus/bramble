@@ -2253,6 +2253,10 @@ msgstr "No se encontraron elementos importables en este archivo."
 msgid "No items found matching your search."
 msgstr "No se encontraron elementos que coincidan con su búsqueda."
 
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "No logins at risk."
+msgstr "Ningún inicio de sesión en riesgo."
+
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "No logins match."
 msgstr "No hay inicios de sesión que coincidan."

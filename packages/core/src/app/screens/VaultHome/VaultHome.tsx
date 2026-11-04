@@ -6,6 +6,7 @@ import type { Entry, EntryType } from "../../../hooks/useVault";
 import { AddDropdown } from "../../components/AddDropdown";
 import { EntryRow } from "../../components/EntryRow";
 import { Button } from "../../components/ui/button";
+import { cn } from "../../components/ui/utils";
 import type { CopyItem } from "../../entry-modes/types";
 import { SelectionBar } from "./SelectionBar";
 import {
@@ -18,7 +19,7 @@ import {
 	toggleSelected,
 } from "./selection";
 import { VaultSearchBar } from "./VaultSearchBar";
-import { filterAndSortEntries, type VaultSearch } from "./vault-search";
+import { filterAndSortEntries, type HealthFilter, type VaultSearch } from "./vault-search";
 
 /** List-ready projection of an entry: shared id/name plus mode-contributed display fields. */
 export interface VaultListItem {
@@ -91,9 +92,12 @@ export function VaultHome({
 	reviewNudge,
 }: VaultHomeProps) {
 	const { t } = useLingui();
+	// A collapsed Overview hides the cards, so it lifts their filter too: the list is never
+	// narrowed by a control that isn't on screen.
+	const health: HealthFilter = statsCollapsed ? "all" : search.health;
 	const filtered = useMemo(
-		() => filterAndSortEntries(items, search, matchedIds),
-		[items, search, matchedIds],
+		() => filterAndSortEntries(items, { ...search, health }, matchedIds),
+		[items, search, health, matchedIds],
 	);
 
 	// Bulk selection. An explicit mode, not one derived from `selected.size`: emptying
@@ -187,39 +191,28 @@ export function VaultHome({
 
 			{!statsCollapsed && (
 				<div className="grid grid-cols-3 gap-3 mb-5">
-					<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
-						<div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-50"></div>
-						<div className="relative">
-							<p className="text-xs text-muted-foreground mb-0.5">
-								<Trans>Total Items</Trans>
-							</p>
-							<p className="text-2xl">{live.length}</p>
-						</div>
-					</div>
-					<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
-						<div className="absolute inset-0 bg-linear-to-br from-destructive/5 to-transparent opacity-50"></div>
-						<div className="relative">
-							<div className="flex items-center gap-1.5 mb-0.5">
-								<p className="text-xs text-muted-foreground">
-									<Trans>At Risk</Trans>
-								</p>
-								<TrendingDown className="w-3 h-3 text-destructive" />
-							</div>
-							<p className="text-2xl text-destructive">{atRisk}</p>
-						</div>
-					</div>
-					<div className="relative overflow-hidden px-4 py-3 rounded-lg border border-border/50 bg-linear-to-br from-card to-background backdrop-blur-sm">
-						<div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-50"></div>
-						<div className="relative">
-							<div className="flex items-center gap-1.5 mb-0.5">
-								<p className="text-xs text-muted-foreground">
-									<Trans>Strong</Trans>
-								</p>
-								<TrendingUp className="w-3 h-3 text-primary" />
-							</div>
-							<p className="text-2xl text-primary">{strong}</p>
-						</div>
-					</div>
+					<StatCard
+						label={t`Total Items`}
+						count={live.length}
+						selected={health === "all"}
+						onSelect={() => onSearchChange({ health: "all" })}
+					/>
+					<StatCard
+						label={t`At Risk`}
+						icon={<TrendingDown className="w-3 h-3 text-destructive" />}
+						count={atRisk}
+						tone="destructive"
+						selected={health === "atRisk"}
+						onSelect={() => onSearchChange({ health: "atRisk" })}
+					/>
+					<StatCard
+						label={t`Strong`}
+						icon={<TrendingUp className="w-3 h-3 text-primary" />}
+						count={strong}
+						tone="primary"
+						selected={health === "strong"}
+						onSelect={() => onSearchChange({ health: "strong" })}
+					/>
 				</div>
 			)}
 
@@ -313,6 +306,8 @@ export function VaultHome({
 								)
 							) : items.length === 0 ? (
 								<Trans>Your vault is empty. Add your first item.</Trans>
+							) : health === "atRisk" ? (
+								<Trans>No logins at risk.</Trans>
 							) : (
 								<Trans>No items found matching your search.</Trans>
 							)}
@@ -325,5 +320,61 @@ export function VaultHome({
 			    the card would push the selection bar's targets around under the cursor. */}
 			{!selectMode && reviewNudge}
 		</main>
+	);
+}
+
+interface StatCardProps {
+	label: string;
+	icon?: ReactNode;
+	count: number;
+	tone?: "primary" | "destructive";
+	selected: boolean;
+	onSelect: () => void;
+}
+
+/**
+ * One Overview number, and the filter for the items it counts. The selected card wears a border
+ * in its own colour; one always is, since Total Items is "no filter". A card with nothing to show
+ * is disabled unless it is the one selected, so it can't empty the list by surprise.
+ */
+function StatCard({ label, icon, count, tone, selected, onSelect }: StatCardProps) {
+	return (
+		<Button
+			variant="link"
+			size="none"
+			onClick={onSelect}
+			aria-pressed={selected}
+			disabled={count === 0 && !selected && tone !== undefined}
+			className={cn(
+				"relative block w-full overflow-hidden px-4 py-3 rounded-lg border text-left text-foreground bg-linear-to-br from-card to-background backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-ring",
+				selected
+					? tone === "destructive"
+						? "border-destructive/60"
+						: "border-primary/60"
+					: "border-border/50 hover:border-border",
+			)}
+		>
+			<div
+				className={cn(
+					"absolute inset-0 bg-linear-to-br to-transparent opacity-50",
+					tone === "destructive" ? "from-destructive/5" : "from-primary/5",
+				)}
+			/>
+			<div className="relative">
+				<div className="flex items-center gap-1.5 mb-0.5">
+					<p className="text-xs text-muted-foreground">{label}</p>
+					{icon}
+				</div>
+				<p
+					className={cn(
+						"text-2xl",
+						tone === "destructive" && "text-destructive",
+						tone === "primary" && "text-primary",
+					)}
+				>
+					{count}
+				</p>
+			</div>
+		</Button>
 	);
 }

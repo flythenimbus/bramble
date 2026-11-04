@@ -24,8 +24,9 @@ export function VaultHomeRoute() {
 			sort: raw.sort ?? DEFAULT_SEARCH.sort,
 			archived: raw.archived ?? DEFAULT_SEARCH.archived,
 			attachments: raw.attachments ?? DEFAULT_SEARCH.attachments,
+			health: raw.health ?? DEFAULT_SEARCH.health,
 		}),
-		[raw.q, raw.type, raw.sort, raw.archived, raw.attachments],
+		[raw.q, raw.type, raw.sort, raw.archived, raw.attachments, raw.health],
 	);
 	const { entries, files, conflicts, ready, deleteEntry, touchEntry } = useVault();
 	const { shell } = usePlatform();
