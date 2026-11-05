@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
 	summaries: [] as unknown[],
 	/** Arming the invite waits on this, as deriving the admission key does in the app. */
 	armed: Promise.resolve() as Promise<void>,
+	/** How many times preparing the invite fails before it works. */
+	inviteFailures: 0,
 }));
 
 vi.mock("../../../../hooks/useVaultRegistry", () => ({
@@ -27,7 +29,13 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 	useVault: () => ({ hasPasswordSlot: true, entries: [{ id: "a" }, { id: "b" }], files: [] }),
 	useVaultActions: () => ({
 		verifyMasterPassword: async () => true,
-		inviteDevice: async () => "invite",
+		inviteDevice: async () => {
+			if (h.inviteFailures > 0) {
+				h.inviteFailures--;
+				throw new Error("The invite could not be prepared.");
+			}
+			return "invite";
+		},
 	}),
 }));
 
@@ -102,6 +110,7 @@ afterEach(() => {
 	h.onDone = null;
 	h.summaries.length = 0;
 	h.armed = Promise.resolve();
+	h.inviteFailures = 0;
 });
 
 describe("connecting a browser by emoji", () => {
@@ -126,6 +135,33 @@ describe("connecting a browser by emoji", () => {
 
 		ready();
 		expect(await screen.findByText(/in the bramble extension, press link/i)).toBeTruthy();
+	});
+
+	it("opens no link window when the invite cannot be prepared, and Continue tries again", async () => {
+		// A link without the invite would be a pairing with no vault in the browser.
+		h.inviteFailures = 1;
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^connect$/i }));
+		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+
+		expect(await screen.findByText(/the invite could not be prepared/i)).toBeTruthy();
+		expect(h.calls).toContain("cancelWindow");
+		expect(screen.queryByText(/press link/i)).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+		expect(await screen.findByText(/in the bramble extension, press link/i)).toBeTruthy();
+	});
+
+	it("keeps the password for the retry", async () => {
+		h.inviteFailures = 1;
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^connect$/i }));
+		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+
+		await screen.findByText(/the invite could not be prepared/i);
+		expect((screen.getByLabelText(/master password/i) as HTMLInputElement).value).toBe("pw");
 	});
 
 	it("shows the browser's emoji and approves when they match", async () => {

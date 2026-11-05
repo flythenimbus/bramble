@@ -135,9 +135,10 @@ export function BrowserPairingSection() {
 	 *
 	 * The invite is ARMED rather than sent. The browser claims it over the link once it has
 	 * paired, and the app answers only while this window is open, so an old pairing cannot be
-	 * used to take the vault later. `password` admission-signs the joiner.
+	 * used to take the vault later. `password` admission-signs the joiner. Resolves with what to
+	 * show when the invite cannot be armed, and nothing is left open then.
 	 */
-	const start = async (password: string) => {
+	const start = async (password: string): Promise<string | null> => {
 		setError(null);
 		setConnected(null);
 		knownBefore.current = new Set(browsers.map((b) => b.publicKey));
@@ -145,23 +146,20 @@ export function BrowserPairingSection() {
 			await publishSummary();
 			await pairing.beginLinkWindow?.();
 			// "Press Link" shows once the invite is armed: a browser that linked sooner got the link
-			// and never the vault. Opened either way, so a failed invite still links for filling.
-			const failed = await armInvite(password).then(
-				() => null,
-				(e: unknown) => e,
-			);
+			// and never the vault.
+			await armInvite(password);
 			setOpen(true);
-			if (failed) throw failed;
+			return null;
 		} catch (e) {
-			// The link may be up even though the invite failed. Say so rather than looking as if
-			// nothing happened: delegation will work and sync will not.
-			setError(
-				e instanceof UnrecognizedDeviceError
-					? t`This device can't add devices right now: your other devices no longer recognize it. Disconnect, then join again with a code from another device.`
-					: e instanceof Error
-						? e.message
-						: String(e),
-			);
+			// Nothing is left open: a link without the invite would be a pairing with no vault in the
+			// browser. The caller shows this and offers Continue again.
+			await pairing.cancelLinkWindow?.();
+			await pairing.setVaultSummary?.(null);
+			return e instanceof UnrecognizedDeviceError
+				? t`This device can't add devices right now: your other devices no longer recognize it. Disconnect, then join again with a code from another device.`
+				: e instanceof Error
+					? e.message
+					: String(e);
 		}
 	};
 
@@ -208,8 +206,13 @@ export function BrowserPairingSection() {
 				setGateError(t`Incorrect master password`);
 				return;
 			}
-			// Open, and busy, until the browser can be told to press Link.
-			await start(gatePassword);
+			// Open, and busy, until the browser can be told to press Link. On a failure it stays,
+			// with the password, so Continue tries again.
+			const failed = await start(gatePassword);
+			if (failed) {
+				setGateError(failed);
+				return;
+			}
 			setGateOpen(false);
 			setGatePassword("");
 		} finally {
