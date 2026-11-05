@@ -93,6 +93,8 @@ pub(crate) const ACTIVE_VAULT_KEY: &str = "active-vault";
 
 /// Why a browser gets nothing: the vault open now is not one it is linked to.
 pub(crate) const NOT_LINKED: &str = "not linked to the open vault";
+/// What a browser no vault here is linked to is told, so it can drop its link.
+pub(crate) const UNLINKED: &str = "not linked to this app";
 const VAULT_REGISTRY_KEY: &str = "vault.registry";
 
 /// Both halves together, so the two can never drift apart across separate stores.
@@ -429,11 +431,102 @@ pub fn paired_peers(root: &Path) -> Res<Vec<PairedPeer>> {
     }
 }
 
-/// Whether a browser may be served now: it is linked to the vault that is open. Checked when it
-/// connects, on every frame it sends, and before anything is pushed to it, so a browser linked
-/// to one vault gets nothing while another is open.
+/// Whether a browser may be served now: it is linked to the vault that is open, or its link to
+/// that vault is pending. Checked when it connects, on every frame it sends, and before anything
+/// is pushed to it, so a browser linked to one vault gets nothing while another is open.
 pub fn admitted(root: &Path, public_key: &str) -> bool {
-    paired_peers(root).is_ok_and(|peers| peers.iter().any(|p| p.public_key == public_key))
+    pending_for_open_vault(root, public_key)
+        || paired_peers(root).is_ok_and(|peers| peers.iter().any(|p| p.public_key == public_key))
+}
+
+/// How long a confirmed link waits for the browser to report its pairing complete.
+const PENDING_MS: u64 = 5 * 60_000;
+
+/// A link both screens confirmed, served for the claim and the vault copy but listed only once
+/// the browser has the vault, so a pairing is never half made. One at a time, like the window.
+struct PendingLink {
+    public_key: String,
+    label: String,
+    vault_id: String,
+    expires_at: u64,
+}
+
+static PENDING: Mutex<Option<PendingLink>> = Mutex::new(None);
+
+fn pending_key(public_key: &str) -> bool {
+    PENDING.lock().is_ok_and(|p| {
+        p.as_ref()
+            .is_some_and(|p| p.public_key == public_key && p.expires_at > now_ms())
+    })
+}
+
+fn pending_for_open_vault(root: &Path, public_key: &str) -> bool {
+    let vault = PENDING.lock().ok().and_then(|p| {
+        p.as_ref()
+            .filter(|p| p.public_key == public_key && p.expires_at > now_ms())
+            .map(|p| p.vault_id.clone())
+    });
+    vault.is_some_and(|v| open_vault_id(root).ok().flatten() == Some(v))
+}
+
+/// List the pending link, now that the browser holds the vault. False when this browser's link
+/// is not the pending one, has expired, or its vault is no longer open.
+pub fn complete_link(root: &Path, public_key: &str) -> Res<bool> {
+    let pending = {
+        let mut slot = PENDING.lock().unwrap();
+        match slot.as_ref() {
+            Some(p) if p.public_key == public_key && p.expires_at > now_ms() => slot.take(),
+            _ => None,
+        }
+    };
+    let Some(pending) = pending else {
+        return Ok(false);
+    };
+    if open_vault_id(root)?.as_deref() != Some(pending.vault_id.as_str()) {
+        return Ok(false);
+    }
+    add_peer(root, &pending.public_key, &pending.label)?;
+    Ok(true)
+}
+
+/// Forget the pending link: its dialog closed, so its pairing is abandoned.
+pub fn drop_pending() {
+    if let Ok(mut slot) = PENDING.lock() {
+        *slot = None;
+    }
+}
+
+/// What a browser that is not admitted is told: another vault is open (`NOT_LINKED`), or no vault
+/// here is linked to it (`UNLINKED`). Unsure means the former, so nothing drops a link by mistake.
+pub fn refusal(root: &Path, public_key: &str) -> &'static str {
+    match linked_anywhere(root, public_key) {
+        Ok(false) => UNLINKED,
+        _ => NOT_LINKED,
+    }
+}
+
+fn linked_anywhere(root: &Path, public_key: &str) -> Res<bool> {
+    if pending_key(public_key) {
+        return Ok(true);
+    }
+    let file = read_trusted(root)?;
+    let registry = storage::ops::get_meta(root, VAULT_REGISTRY_KEY)?.unwrap_or_default();
+    let mut vaults: Vec<String> = registry["vaults"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v["id"].as_str().map(str::to_string))
+        .collect();
+    vaults.extend(open_vault_id(root)?);
+    for vault_id in vaults {
+        if vault_peers(root, &file, &vault_id)?
+            .iter()
+            .any(|p| p.public_key == public_key)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Revoke a browser from the vault open now. Its next connection fails the KK handshake, and
@@ -516,10 +609,18 @@ pub fn accept_link(root: &Path, label: &str) -> Res<Handshake> {
     }
 }
 
-/// Allowlist a browser both sides confirmed, and close the window behind it.
+/// Hold a browser both sides confirmed as pending, and close the window behind it. It is listed
+/// once it reports its pairing complete (`complete_link`).
 pub fn finish_link(root: &Path, public_key: &str, label: &str) -> Res<()> {
     cancel_link_window();
-    add_peer(root, public_key, label)
+    let vault_id = open_vault_id(root)?.ok_or("no vault is open to link a browser to")?;
+    *PENDING.lock().unwrap() = Some(PendingLink {
+        public_key: public_key.to_string(),
+        label: label.to_string(),
+        vault_id,
+        expires_at: now_ms() + PENDING_MS,
+    });
+    Ok(())
 }
 
 /// Feed a handshake message through. Nothing is allowlisted here: a browser is added only once
@@ -570,6 +671,7 @@ static TEST_LOCK: Mutex<()> = Mutex::new(());
 pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
     let guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     *TEST_STORE.lock().unwrap() = None;
+    drop_pending();
     guard
 }
 
@@ -589,16 +691,24 @@ mod tests {
         *TEST_STORE.lock().unwrap() = None;
         *CACHED.lock().unwrap() = None;
         *STORE_READS.lock().unwrap() = 0;
+        drop_pending();
         guard
     }
 
-    /// Link a browser the way a link both screens confirmed ends, returning its public key.
-    fn link(root: &Path, label: &str) -> String {
+    /// A link both screens confirmed, before the browser has the vault: returns its public key.
+    fn pending_link(root: &Path, label: &str) -> String {
         // The app's identity exists before any link: accept_link sets it up for the handshake.
         identity(root).unwrap();
         let kp = handshake::handshake_generate_keypair().unwrap();
         finish_link(root, &kp.public_key, label).unwrap();
         kp.public_key
+    }
+
+    /// Link a browser the way a whole pairing ends, returning its public key.
+    fn link(root: &Path, label: &str) -> String {
+        let key = pending_link(root, label);
+        assert!(complete_link(root, &key).unwrap());
+        key
     }
 
     #[test]
@@ -945,6 +1055,73 @@ mod tests {
     }
 
     #[test]
+    fn a_confirmed_link_is_admitted_but_not_listed_until_completed() {
+        let _g = setup();
+        let d = root();
+        let browser = pending_link(d.path(), "chrome");
+
+        assert!(admitted(d.path(), &browser));
+        assert!(paired_peers(d.path()).unwrap().is_empty());
+
+        assert!(complete_link(d.path(), &browser).unwrap());
+        assert_eq!(paired_peers(d.path()).unwrap()[0].public_key, browser);
+    }
+
+    #[test]
+    fn completing_with_another_key_lists_nothing() {
+        let _g = setup();
+        let d = root();
+        let browser = pending_link(d.path(), "chrome");
+
+        assert!(!complete_link(d.path(), "someone-else").unwrap());
+        assert!(paired_peers(d.path()).unwrap().is_empty());
+        assert!(admitted(d.path(), &browser));
+    }
+
+    #[test]
+    fn a_dropped_pending_link_is_refused() {
+        let _g = setup();
+        let d = root();
+        let browser = pending_link(d.path(), "chrome");
+
+        drop_pending();
+
+        assert!(!admitted(d.path(), &browser));
+        assert_eq!(refusal(d.path(), &browser), UNLINKED);
+        assert!(!complete_link(d.path(), &browser).unwrap());
+    }
+
+    #[test]
+    fn a_pending_link_expires() {
+        let _g = setup();
+        let d = root();
+        let browser = pending_link(d.path(), "chrome");
+
+        PENDING.lock().unwrap().as_mut().unwrap().expires_at = 0;
+
+        assert!(!admitted(d.path(), &browser));
+        assert!(!complete_link(d.path(), &browser).unwrap());
+    }
+
+    #[test]
+    fn a_browser_on_another_vaults_list_is_told_not_linked_and_a_removed_one_unlinked() {
+        let _g = setup();
+        let d = root();
+        register(d.path(), &[("vault-a", 1), ("vault-b", 1)]);
+        open_vault(d.path(), "vault-a");
+        let browser = link(d.path(), "chrome");
+
+        // Another vault open: it is still linked, to a vault that is not open now.
+        open_vault(d.path(), "vault-b");
+        assert_eq!(refusal(d.path(), &browser), NOT_LINKED);
+
+        // Removed from the only vault it was on: linked to nothing here.
+        open_vault(d.path(), "vault-a");
+        assert!(forget_peer(d.path(), &browser).unwrap());
+        assert_eq!(refusal(d.path(), &browser), UNLINKED);
+    }
+
+    #[test]
     fn with_several_vaults_and_none_open_nobody_is_admitted() {
         let _g = setup();
         let d = root();
@@ -970,7 +1147,11 @@ pub fn pairing_list(app: AppHandle) -> Result<Vec<PairedPeer>, String> {
 
 #[tauri::command]
 pub fn pairing_forget(app: AppHandle, public_key: String) -> Result<bool, String> {
-    forget_peer(&data_dir(&app)?, &public_key)
+    let root = data_dir(&app)?;
+    let removed = forget_peer(&root, &public_key)?;
+    // Its open connection goes now, so it learns at once rather than on its next frame.
+    crate::socket::vault_opened(&root);
+    Ok(removed)
 }
 
 /// This device's static public key, for showing the user which identity a browser paired to.

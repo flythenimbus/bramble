@@ -168,6 +168,8 @@ enum Request {
     /// that was up before it, so the offer made at connect went unheard. Answered, so it keeps
     /// the link; an app from before this answers with an error and the browser reconnects.
     SyncRestart,
+    /// The browser holds the vault now, so its pending link is listed (`pairing::complete_link`).
+    LinkComplete,
 }
 
 /// The capability that carries attachment bytes over the link.
@@ -416,9 +418,20 @@ pub fn bind_invite(peer_id: &str) -> bool {
     }
 }
 
-/// Disarm, for a dialog the user closed. Dismissing is a refusal.
+/// Disarm, for a dialog the user closed. Dismissing is a refusal, and abandons a link still
+/// pending: its connection goes too.
 #[tauri::command]
-pub fn link_clear_sync_invite() {
+pub fn link_clear_sync_invite(app: AppHandle) {
+    clear_sync_invite(crate::storage::data_dir(&app).ok().as_deref());
+}
+
+/// `link_clear_sync_invite`, for callers without an app handle. With no `root`, the pending
+/// link's connection is left to fail its next frame.
+pub fn clear_sync_invite(root: Option<&Path>) {
+    pairing::drop_pending();
+    if let Some(root) = root {
+        vault_opened(root);
+    }
     if let Ok(mut slot) = armed().lock() {
         *slot = None;
     }
@@ -704,7 +717,7 @@ fn read_loop(
         // Admitted when it connected, which says nothing about now: the app may have opened
         // another vault since. One refusal, then the connection goes.
         if !pairing::admitted(root, peer_id) {
-            let body = serde_json::to_string(&Answer::error(NOT_LINKED))
+            let body = serde_json::to_string(&Answer::error(pairing::refusal(root, peer_id)))
                 .map_err(|e| format!("encode answer: {e}"))?;
             let _ = out.send(body);
             return Err(NOT_LINKED.into());
@@ -746,6 +759,12 @@ fn read_loop(
                 );
                 Answer::ok()
             }
+            // Listing needs no vault key, and the app may lock while the copy runs.
+            Ok(Request::LinkComplete) => match pairing::complete_link(root, peer_id) {
+                Ok(true) => Answer::ok(),
+                Ok(false) => Answer::error("no link to complete"),
+                Err(e) => Answer::error(&e),
+            },
             Ok(request) => answer_for(request, peer_id),
             Err(e) => Answer::error(&format!("bad request: {e}")),
         };
@@ -816,6 +835,7 @@ fn answer_for(request: Request, peer_id: &str) -> Answer {
         Request::ActiveTab { .. } => Answer::error("active-tab reports are not answered"),
         Request::Caps { .. } => Answer::error("caps are answered per link"),
         Request::SyncRestart => Answer::error("sync restarts are answered per link"),
+        Request::LinkComplete => Answer::error("link completion is answered per link"),
     }
 }
 
@@ -864,17 +884,25 @@ fn serve(root: &Path, stream: &mut ipc::Stream) -> Result<(), String> {
     let handshake = match hello {
         Hello::Hello { v, public_key } => {
             check_version(v)?;
-            pairing::accept_known(root, &public_key)
+            // Says which, so a browser no vault here knows can drop its link.
+            pairing::accept_known(root, &public_key).map_err(|e| {
+                let said = if e == NOT_LINKED {
+                    pairing::refusal(root, &public_key)
+                } else {
+                    "refused"
+                };
+                (said, e)
+            })
         }
         Hello::Link { v, label } => {
             check_version(v)?;
-            pairing::accept_link(root, &label)
+            pairing::accept_link(root, &label).map_err(|e| ("refused", e))
         }
     };
     let handshake = match handshake {
         Ok(h) => h,
-        Err(e) => {
-            let _ = reply(stream, &Reply::err("refused"));
+        Err((said, e)) => {
+            let _ = reply(stream, &Reply::err(said));
             return Err(e);
         }
     };
@@ -1022,7 +1050,12 @@ pub fn link_window_begin() {
 
 /// The dialog closed: refuse any link in progress and drop the invite it armed.
 #[tauri::command]
-pub fn link_window_cancel() {
+pub fn link_window_cancel(app: AppHandle) {
+    window_cancel(crate::storage::data_dir(&app).ok().as_deref());
+}
+
+/// `link_window_cancel`, for callers without an app handle.
+pub fn window_cancel(root: Option<&Path>) {
     pairing::cancel_link_window();
     let (lock, cvar) = pending_link();
     if let Ok(mut slot) = lock.lock() {
@@ -1032,7 +1065,7 @@ pub fn link_window_cancel() {
             cvar.notify_all();
         }
     }
-    link_clear_sync_invite();
+    clear_sync_invite(root);
 }
 
 /// The desktop user's answer to the emoji comparison.
@@ -1327,13 +1360,21 @@ mod tests {
 
     /// A browser that has linked, as its keypair: allowlisted and bound to any armed invite,
     /// the two steps `confirm_link` ends with once both screens have confirmed.
-    fn linked_client(dir: &TempDir) -> (String, String) {
+    /// A browser both screens confirmed, before it has the vault.
+    fn pending_client(dir: &TempDir) -> (String, String) {
         // The app's identity exists before any link: accept_link sets it up for the handshake.
         pairing::public_key(dir.path()).unwrap();
         let kp = handshake::handshake_generate_keypair().unwrap();
         pairing::finish_link(dir.path(), &kp.public_key, "Chrome on Mac").unwrap();
         bind_invite(&kp.public_key);
         (kp.private_key, kp.public_key)
+    }
+
+    /// A browser whose pairing is complete.
+    fn linked_client(dir: &TempDir) -> (String, String) {
+        let keys = pending_client(dir);
+        assert!(pairing::complete_link(dir.path(), &keys.1).unwrap());
+        keys
     }
 
     #[test]
@@ -1403,7 +1444,10 @@ mod tests {
 
     impl Linked {
         fn open(dir: &TempDir) -> Self {
-            let (client_priv, client_pub) = linked_client(dir);
+            Self::connect(dir, linked_client(dir))
+        }
+
+        fn connect(dir: &TempDir, (client_priv, client_pub): (String, String)) -> Self {
             let app_pub = pairing::public_key(dir.path()).unwrap();
             let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
             let mut client = Client::connect(dir.path());
@@ -1497,7 +1541,7 @@ mod tests {
         let _g = pairing::test_lock();
         let dir = started();
         unlocked();
-        link_clear_sync_invite();
+        clear_sync_invite(None);
         let mut link = Linked::open(&dir);
 
         link.send(serde_json::json!({ "op": "syncInvite" }));
@@ -1570,7 +1614,7 @@ mod tests {
         let dir = started();
         unlocked();
         link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
-        link_clear_sync_invite();
+        clear_sync_invite(None);
         let mut link = Linked::open(&dir);
 
         link.send(serde_json::json!({ "op": "syncInvite" }));
@@ -1724,6 +1768,63 @@ mod tests {
         let answer = link.recv();
         assert_eq!(answer["ok"], true, "{answer}");
         handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn a_link_completes_while_locked() {
+        // Listing the browser needs no vault key, and the app may lock while the copy runs.
+        let _g = pairing::test_lock();
+        let dir = started();
+        let mut link = Linked::connect(&dir, pending_client(&dir));
+        link.await_registered(true);
+        vault_crypto::lock();
+        assert!(pairing::paired_peers(dir.path()).unwrap().is_empty());
+
+        link.send(serde_json::json!({ "op": "linkComplete" }));
+        let answer = link.recv();
+        assert_eq!(answer["ok"], true, "{answer}");
+        assert_eq!(pairing::paired_peers(dir.path()).unwrap().len(), 1);
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn a_link_that_is_not_pending_cannot_be_completed() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        let mut link = Linked::open(&dir);
+        link.await_registered(true);
+
+        link.send(serde_json::json!({ "op": "linkComplete" }));
+        let answer = link.recv();
+        assert_eq!(answer["ok"], false, "{answer}");
+        assert_eq!(answer["error"], "no link to complete");
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_removed_browser_is_closed_and_refused_as_unlinked() {
+        // Told apart from another vault being open, so the browser can drop its link.
+        let _g = pairing::test_lock();
+        let dir = started();
+        let (client_priv, client_pub) = linked_client(&dir);
+        let link = Linked::connect(&dir, (client_priv.clone(), client_pub.clone()));
+        link.await_registered(true);
+
+        assert!(pairing::forget_peer(dir.path(), &client_pub).unwrap());
+        vault_opened(dir.path());
+        link.await_registered(false);
+        handshake::handshake_close(link.session_id);
+
+        let app_pub = pairing::public_key(dir.path()).unwrap();
+        let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
+        let mut client = Client::connect(dir.path());
+        client.send(serde_json::json!({ "kind": "hello", "v": 1, "publicKey": client_pub }));
+        client.send(serde_json::json!({ "message": start.message }));
+        let reply = client.recv();
+        assert_eq!(reply["ok"], false, "{reply}");
+        assert_eq!(reply["error"], pairing::UNLINKED);
+        handshake::handshake_close(start.session_id);
     }
 
     #[test]
@@ -2104,7 +2205,7 @@ mod tests {
         link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
         a.send(serde_json::json!({ "op": "syncInvite" }));
         assert_eq!(a.recv()["error"], "no invite");
-        link_clear_sync_invite();
+        clear_sync_invite(None);
         vault_crypto::lock();
         handshake::handshake_close(a.session_id);
     }
@@ -2220,7 +2321,7 @@ mod tests {
     fn a_link_hello_with_no_window_open_is_refused() {
         let _g = pairing::test_lock();
         let dir = started();
-        link_window_cancel();
+        window_cancel(None);
         let refused = LinkClient::start(&dir).err().expect("refused");
         assert_eq!(refused["ok"], false);
     }
@@ -2236,7 +2337,7 @@ mod tests {
             LinkClient::start(&dir).err().expect("second refused")["ok"],
             false
         );
-        link_window_cancel();
+        window_cancel(None);
         handshake::handshake_close(first.session_id);
     }
 
@@ -2282,7 +2383,7 @@ mod tests {
         await_pending(true);
         a.send(serde_json::json!({ "op": "linkConfirm" }));
 
-        link_window_cancel();
+        window_cancel(None);
 
         assert_eq!(a.recv()["ok"], false);
         assert!(!pairing::paired_peers(dir.path())
@@ -2294,7 +2395,7 @@ mod tests {
     }
 
     #[test]
-    fn a_confirmed_link_is_allowlisted_and_bound_to_the_armed_invite() {
+    fn a_confirmed_link_claims_the_armed_invite_and_is_listed_once_complete() {
         let _g = pairing::test_lock();
         let dir = started();
         unlocked();
@@ -2308,12 +2409,20 @@ mod tests {
         let done = a.recv();
         assert_eq!(done["ok"], true, "{done}");
         assert_eq!(done["paired"], true);
-        assert!(pairing::paired_peers(dir.path())
-            .unwrap()
-            .iter()
-            .any(|p| p.public_key == a.public_key));
+        let listed = |dir: &TempDir, key: &str| {
+            pairing::paired_peers(dir.path())
+                .unwrap()
+                .iter()
+                .any(|p| p.public_key == key)
+        };
+        // Not before the browser holds the vault: a pairing is never half made.
+        assert!(!listed(&dir, &a.public_key));
         a.send(serde_json::json!({ "op": "syncInvite" }));
         assert_eq!(a.recv()["invite"], "the-invite");
+
+        a.send(serde_json::json!({ "op": "linkComplete" }));
+        assert_eq!(a.recv()["ok"], true);
+        assert!(listed(&dir, &a.public_key));
         vault_crypto::lock();
         handshake::handshake_close(a.session_id);
     }
@@ -2328,7 +2437,7 @@ mod tests {
         let pending = link_pair_pending().unwrap();
         assert_eq!(pending.sas_hash_b64, a.material);
         assert_eq!(pending.label, "Chrome on Mac");
-        link_window_cancel();
+        window_cancel(None);
         handshake::handshake_close(a.session_id);
     }
 
@@ -2357,7 +2466,7 @@ mod tests {
         b.send(serde_json::json!({ "op": "vaultSummary" }));
         assert_eq!(b.recv()["ok"], false);
 
-        link_clear_sync_invite();
+        clear_sync_invite(None);
         link_set_vault_summary(None);
         vault_crypto::lock();
         handshake::handshake_close(a.session_id);
@@ -2375,7 +2484,7 @@ mod tests {
 
         a.send(serde_json::json!({ "op": "vaultSummary" }));
         assert_eq!(a.recv()["ok"], false);
-        link_clear_sync_invite();
+        clear_sync_invite(None);
         link_set_vault_summary(None);
         handshake::handshake_close(a.session_id);
     }
@@ -2388,7 +2497,7 @@ mod tests {
         let mut a = LinkClient::start(&dir).expect("link");
         await_pending(true);
         link_pair_answer(true);
-        link_window_cancel();
+        window_cancel(None);
 
         a.send(serde_json::json!({ "op": "linkConfirm" }));
         assert_eq!(a.recv()["ok"], false);
@@ -2408,7 +2517,7 @@ mod tests {
         let mut a = LinkClient::start(&dir).expect("link");
         await_pending(true);
         link_pair_answer(true);
-        link_window_cancel();
+        window_cancel(None);
 
         // B: a new dialog and a new link, waiting on its own answers.
         link_window_begin();
@@ -2435,7 +2544,7 @@ mod tests {
             .unwrap()
             .iter()
             .any(|p| p.public_key == a.public_key));
-        link_window_cancel();
+        window_cancel(None);
         handshake::handshake_close(a.session_id);
         handshake::handshake_close(b.session_id);
     }
@@ -2454,7 +2563,7 @@ mod tests {
         assert!(started_at.elapsed() < std::time::Duration::from_secs(5));
         // Either a refusal frame or a closed socket; never a hang.
         let _ = read;
-        link_window_cancel();
+        window_cancel(None);
     }
 
     #[test]
@@ -2510,7 +2619,7 @@ mod tests {
 
         // Nothing reached the user's screen, so the dialog still accepts the real browser.
         let real = LinkClient::start(&dir).expect("window still open");
-        link_window_cancel();
+        window_cancel(None);
         handshake::handshake_close(real.session_id);
     }
 
@@ -2520,7 +2629,7 @@ mod tests {
         link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
         assert!(bind_invite("first"));
         assert!(!bind_invite("second"));
-        link_clear_sync_invite();
+        clear_sync_invite(None);
         assert!(!bind_invite("third"));
     }
 
@@ -2537,7 +2646,7 @@ mod tests {
 
         a.send(serde_json::json!({ "op": "vaultSummary" }));
         assert_eq!(a.recv()["ok"], false);
-        link_clear_sync_invite();
+        clear_sync_invite(None);
         link_set_vault_summary(None);
         vault_crypto::lock();
         handshake::handshake_close(a.session_id);
