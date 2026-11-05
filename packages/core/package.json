@@ -46,7 +46,7 @@
 		"@types/zxcvbn": "^4.4.5",
 		"@vitejs/plugin-react": "^6.1.0",
 		"happy-dom": "^21.0.4",
-		"typescript": "^5.9.3",
+		"typescript": "^7.0.2",
 		"vite-plugin-babel": "^1.7.3",
 		"vitest": "^4.1.12"
 	}

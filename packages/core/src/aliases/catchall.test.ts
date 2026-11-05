@@ -68,12 +68,10 @@ describe("createCatchAllClient", () => {
 	// large to exhaust.
 	it("refuses rather than repeat when every attempt collides", async () => {
 		const c = client({ style: "characters" });
-		const pinned = vi
-			.spyOn(globalThis.crypto, "getRandomValues")
-			.mockImplementation((arr: ArrayBufferView) => {
-				new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength).fill(0);
-				return arr;
-			});
+		const pinned = vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation((arr) => {
+			new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength).fill(0);
+			return arr;
+		});
 		try {
 			const only = (await c.create({})).address;
 			const err = await c.create({ taken: [only] }).catch((e) => e);

@@ -28,7 +28,7 @@ function countMatches(run: () => void): number {
 	Element.prototype.matches = function (this: Element, selector: string) {
 		calls += 1;
 		return real.call(this, selector);
-	};
+	} as typeof real;
 	try {
 		run();
 	} finally {

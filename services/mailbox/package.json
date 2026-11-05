@@ -25,7 +25,7 @@
 		"@types/better-sqlite3": "^9.6.0",
 		"@types/node": "^24.13.3",
 		"drizzle-kit": "^0.31.11",
-		"typescript": "^5.9.3",
+		"typescript": "^7.0.2",
 		"vitest": "^4.1.12"
 	}
 }
