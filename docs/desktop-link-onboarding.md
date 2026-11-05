@@ -1,8 +1,8 @@
 # Desktop link onboarding: one vault, one check
 
-Design for making it easier to link the desktop app and the browser extension. It has two
-pieces: piece 1 (setup and one vault) and piece 2 (one check instead of two: emoji only, no
-code).
+Design for making it easier to link the desktop app and the browser extension. It has three
+pieces: piece 1 (setup and one vault), piece 2 (one check instead of two: emoji only, no
+code) and piece 3 (one browser vault, one desktop vault).
 
 **Status (2026-11-04):** built on a worktree off main (`eaa0df5a`), not merged. Run end to end on
 macOS with the dev desktop app and the extension in Chromium: first-run link, linking from
@@ -355,6 +355,157 @@ one. Emoji prompts don't look identical: a fake connection shows different symbo
 removes finding 3, since no low-entropy code is left to guess. The cost is that comparing is
 weaker than typing for users who don't really look.
 
+## Piece 3: one browser vault, one desktop vault
+
+Design (2026-11-05), not built. The desktop's half of "A browser is linked to a vault" above is
+done; the extension's is not. A browser profile holds one link (`desktopLink` in `storage.local`),
+whichever vault it was made from. So with one browser profile holding ext-a and ext-b, and one
+desktop app holding desk-a and desk-b:
+
+- Linking ext-b to desk-b mints a new key and replaces the profile's only link. ext-a's link to
+  desk-a is gone, and desk-a's list keeps a key nobody holds.
+- ext-b's Settings offers "Link again" whenever the desktop's open vault is not ext-b's. Pressing it
+  does the same.
+- Disconnecting in ext-b's Settings removes the profile's only link and hands the browser permission
+  back, so ext-a loses its link too.
+
+Two people sharing one computer account, each with their own vault, break each other's links the
+same way.
+
+### The rule
+
+**Decided by the user:**
+
+- A link pairs one desktop vault with the one browser vault that holds the same vault (the same
+  sync group). Within a browser profile that is one-to-one: ext-a with desk-a, ext-b with desk-b.
+  Across browsers it is one-to-many, as today: Chrome, Firefox and a second profile can each pair
+  with desk-a.
+- Nothing done from one browser vault changes another vault's link: not linking, not a link
+  abandoned or refused part way, not disconnecting.
+- When the vault open in the browser and the vault open in the desktop app are not a pair, there is
+  no link. Nothing is shown about it, and nothing crosses: no filling from the desktop, no quick
+  search (panel) fill into the browser, no sync with the desktop.
+- A pairing is never half made. There is no link without the vault in the browser: no "Not now" at
+  the copy step, and when the desktop cannot prepare its invite, linking tries again rather than
+  linking without it.
+
+### Constraints from the code
+
+- **The desktop keeps one vault unlocked** (`vault_crypto`), and its open vault is meta
+  `active-vault` (`pairing::open_vault_id`). Its per-vault lists and the admission gate (connect,
+  every frame, every push, closing on `vault_opened`) are the enforcement point.
+- **The desktop has one sync identity for every vault** (`clients/desktop/src/sync/keys.ts`: "both
+  keypairs are shared by all of them"). The extension cannot tell desk-a from desk-b by it, only
+  whether a browser vault's roster contains the desktop at all. Which desktop vault a link reaches
+  is decided by the desktop's lists, never by the extension.
+- **The extension syncs only its open vault** (`retargetSync` on every active-vault change in
+  `background/session.ts`), and each of its vaults already has its own sync identity (`syncKeyFor`).
+- **A browser profile cannot hold two copies of a vault.** Joining a group the browser already has
+  opens that vault instead (`startJoin`'s dedup), and linking from a vault outside the desktop's
+  group while another browser vault is in it already ends at "You already share this vault"
+  (outcome `switch`).
+- **The native-messaging permission is per browser profile**, granted once for every vault.
+- **The desktop's upgrade rule can admit one key in several vaults.** A desktop vault with no list
+  of its own takes the app-wide links made since it existed (`pairing::vault_peers`), so a link
+  from before the per-vault lists can be on more than one vault.
+
+### Where a link lives
+
+Each browser vault has at most one link: its own key pair and the desktop's key, stored under that
+vault's id the way its sync identity is. A link is made by the emoji check as today, then attached
+to a vault only once the flow ends with that vault holding the desktop's vault:
+
+| Outcome of linking from browser vault X | The link attaches to |
+| --- | --- |
+| take (X empty) | the vault the copy creates, which replaces X |
+| add (setup's "add a vault") | the vault the copy creates |
+| combine | the desktop's vault, now in the browser; X is set aside |
+| ask, then combine or keep separate | the vault holding the desktop's vault |
+| switch (another browser vault already holds it) | that vault, replacing its previous link |
+
+In `switch`, the vault that already pairs gets the new link: it is a re-link of the same pair, and
+X stays unlinked.
+
+### A pairing is all or nothing
+
+- **The desktop's invite.** It is prepared before the link window opens. If that fails, the window
+  does not open: the password dialog shows the error, and Continue tries again. Today a failed
+  invite still opens the window, for a link without the copy; that goes.
+- **The copy step.** It offers no "Not now". Leaving it (closing it, going back, closing the tab)
+  abandons the link: nothing is attached in the browser, and the desktop forgets that browser.
+- **The claim.** If the browser cannot get the invite (the desktop answered without one, or the
+  claim did not arrive), it says so and offers Try again, which claims again while the desktop's
+  Connect window is open. Once that window has closed, linking starts over.
+- **The desktop's list.** A browser joins a vault's list only when it reports its pairing complete:
+  the copy finished, or it switched to the vault that already holds this one. Until then it is
+  pending, served for the claim and the copy only, and forgotten when the Connect window closes,
+  the invite expires or the app quits.
+- **Removed on the desktop.** A browser removed from a vault's list there is refused from then on.
+  The desktop says so in a way the browser can tell apart from "another vault is open", and that
+  browser vault drops its link and offers Link.
+
+### What holds the pipe
+
+The extension holds the link of its open vault, and only that. Changing the open vault drops the
+held link and, if the newly open vault has a link, opens that one. Requests, panel fills and sync
+ride it as today. A vault with no link holds nothing.
+
+The one exception is a link still being made. The vault copy rides it, and the copy itself changes
+the open vault (to the vault it creates), so a link in progress stays held through those changes
+until it attaches or is abandoned.
+
+The desktop admits the link only while its pair is open, which it already does. Filling with the
+desktop's quick search therefore reaches the browser only while both open vaults are a pair.
+
+### Settings
+
+The browser's "Desktop app" section describes the open vault's link. A vault with no link offers
+Link, which makes a link for this vault and touches no other. The "Link again" prompt that replaced
+the profile's link goes, and so does "Linked to this browser, but the app shares a different vault,
+not this one".
+
+Disconnect removes this vault's link only. The browser permission goes back only when no vault in
+the profile has a link left.
+
+### Upgrade
+
+- **Extension:** the profile's single link goes to the browser vault whose roster contains the
+  desktop's sync identity, learned by asking the desktop once it answers. Until then it stays where
+  it is and works as today. If no vault's roster contains it, the link is dropped and the user links
+  again.
+- **Desktop:** a link from before the per-vault lists that two or more vaults admit is pinned to the
+  first vault that syncs with that browser over the link; until then it is admitted as today.
+
+### Tests
+
+Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode included):
+
+- ext-a with desk-a and ext-b with desk-b both work, each when its pair is open.
+- Linking ext-b, a link from ext-b abandoned part way, and disconnecting ext-b all leave ext-a's
+  link working.
+- With ext-a open in the browser and desk-b open in the desktop app: no link, no fill, no panel
+  fill, no sync frame.
+- Linking from ext-b to desk-a while ext-a already pairs with it ends in ext-a, and ext-b stays
+  unlinked.
+- Leaving the copy step leaves nothing on either side: no link in the browser, nothing on the
+  desktop's list.
+- A desktop invite that fails opens no window, and Continue tries again; a failed claim offers Try
+  again.
+- A browser removed on the desktop drops its link.
+- Two browser profiles both pair with desk-a.
+- The permission is handed back only when the last link goes.
+- Upgrade: a single link reaches the vault that syncs with the desktop; with none, it is dropped.
+
+### Left to the builder
+
+- The storage key for a vault's link, and how a link in progress waits between the emoji check and
+  attaching.
+- Whether a re-link of the same pair (`switch`) reuses that vault's key or mints a new one. A new
+  one leaves the old entry on the desktop's list until removed there.
+- The wire for "pairing complete" and for "not linked to any vault": additive, as `syncRestart` was,
+  with an older app or extension behaving as today.
+- How the extension asks for the desktop's sync identity during the upgrade without a lent pipe.
+
 ## Who decided what
 
 **The user:**
@@ -371,6 +522,15 @@ weaker than typing for users who don't really look.
 - No code from the desktop for an extension from before the emoji, and none armed.
 - No browser-to-desktop direction, ever.
 - The link is all local: the vault copy and desktop-to-browser sync never use the internet.
+- Piece 3: links are one-to-one between a browser vault and a desktop vault within a profile, and
+  one-to-many across browsers. Nothing done in one browser vault may break another vault's link.
+  Two open vaults that are not a pair have no link, nothing is shown, and quick search filling does
+  not reach the browser. Linking from a vault that does not hold the desktop's vault resolves to the
+  one that does, or creates it.
+- Piece 3: a pairing is never missing. No "Not now" at the copy step, and an invite the desktop
+  cannot prepare is retried rather than linked without.
+- Piece 3 upgrade: the single link goes to the browser vault that already syncs with the desktop;
+  with none, it is dropped and linked again.
 
 **My calls (flag any you disagree with):**
 
@@ -386,3 +546,14 @@ weaker than typing for users who don't really look.
 - Case 2 combines into the desktop's empty vault without asking.
 - Held-back duplicates stay in the old vault, with "Copy them anyway".
 - Failure is loud on a partial copy.
+- Piece 3: the extension holds its open vault's link, and a link in progress stays held until it
+  attaches or is abandoned.
+- Piece 3: in `switch`, the vault that already pairs takes the new link.
+- Piece 3: the browser permission goes back only with the last link.
+- Piece 3: the desktop lists a browser only once it reports the pairing complete, so an abandoned
+  link leaves nothing on either side.
+- Piece 3: retrying is Continue in the desktop's password dialog, and Try again in the browser while
+  the desktop's Connect window is open.
+- Piece 3: a browser removed on the desktop drops its link when told, and offers Link.
+- Piece 3: the desktop pins a pre-per-vault link that several vaults admit to the first vault it
+  syncs with.

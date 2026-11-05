@@ -47,7 +47,7 @@ comments point here instead of repeating it.
 | [firefox-port.md](firefox-port.md) | Firefox MV3 port feasibility and the filesystem-sync gap P2P sync fills |
 | [mobile-port.md](mobile-port.md) | Capacitor mobile port feasibility; native autofill + biometric-unlock constraints |
 | [desktop-port.md](desktop-port.md) | Plan: Tauri 2 desktop app; the spotlight mini app, browser IPC over native messaging, auto-type, SSH agent |
-| [desktop-link-onboarding.md](desktop-link-onboarding.md) | Plan: link the desktop app from the setup screen and end with one vault (combine or keep separate); one emoji check and no code, all over the local link; security review |
+| [desktop-link-onboarding.md](desktop-link-onboarding.md) | Plan: link the desktop app from the setup screen and end with one vault (combine or keep separate); one emoji check and no code, all over the local link; each browser vault pairs with one desktop vault; security review |
 | [windows-release-checklist.md](windows-release-checklist.md) | What CI and a scripted install already cover on Windows, and the human checklist for a release: SmartScreen, tray, autostart, browser pairing, updater, both uninstall answers |
 | [desktop-biometric-unlock.md](desktop-biometric-unlock.md) | Plan: Touch ID and Windows Hello unlock in the desktop app; the key stays in Rust, the macOS keychain gate and its signing requirement, Windows Hello key derivation, no Linux |
 | [macos-credential-provider.md](macos-credential-provider.md) | Plan: an AutoFill credential provider extension in the macOS app, for Safari and native-app fill; what carries over from iOS, and the packaging and App Group unknowns |
