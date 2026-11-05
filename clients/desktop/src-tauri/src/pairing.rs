@@ -18,6 +18,7 @@
 //! pairing does *not* cover.
 
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -28,6 +29,8 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use vault_crypto::{handshake, roster_sig};
+
+use crate::storage;
 
 type Res<T> = Result<T, String>;
 
@@ -79,18 +82,38 @@ pub struct PairedPeer {
 /// keypair would silently pair against a freshly generated identity and every browser in the
 /// list would stop working with no indication why.
 ///
-/// Any process running as the user can write this file, so `seal` signs the other two fields
-/// with a key only the identity yields. A file that fails it keeps no peers (see `read_trusted`).
+/// Any process running as the user can write this file, so `seal` signs the other fields with
+/// a key only the identity yields. A file that fails it keeps no peers (see `read_trusted`).
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PairingFile {
     #[serde(default)]
     public_key: String,
+    /// The one list kept for the whole app before each vault had its own. Frozen: nothing is
+    /// added to it, and a vault with no list yet takes its links from here (see `vault_peers`).
     #[serde(default)]
     peers: Vec<PairedPeer>,
+    /// The browsers linked to each vault, by vault id. A browser is served only while a vault it
+    /// is linked to is the one open (see `admitted`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    vaults: BTreeMap<String, Vec<PairedPeer>>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     seal: String,
 }
+
+impl PairingFile {
+    fn has_links(&self) -> bool {
+        !self.peers.is_empty() || self.vaults.values().any(|peers| !peers.is_empty())
+    }
+}
+
+/// Where the webview records the vault it has open, and the vaults on this device (the
+/// `ACTIVE_VAULT_KEY` and `VAULT_REGISTRY_KEY` it writes to meta.json).
+pub(crate) const ACTIVE_VAULT_KEY: &str = "active-vault";
+
+/// Why a browser gets nothing: the vault open now is not one it is linked to.
+pub(crate) const NOT_LINKED: &str = "not linked to the open vault";
+const VAULT_REGISTRY_KEY: &str = "vault.registry";
 
 /// Both halves together, so the two can never drift apart across separate stores.
 #[derive(Clone, Serialize, Deserialize)]
@@ -185,8 +208,14 @@ fn seal_key(id: &Identity) -> String {
 }
 
 fn sealed_fields(file: &PairingFile) -> Res<String> {
-    serde_json::to_string(&(&file.public_key, &file.peers))
-        .map_err(|e| format!("encode pairing state: {e}"))
+    // The per-vault lists joined the seal when they arrived. A file without any still verifies
+    // against the seal an earlier build wrote, so upgrading keeps every link it trusted.
+    let encoded = if file.vaults.is_empty() {
+        serde_json::to_string(&(&file.public_key, &file.peers))
+    } else {
+        serde_json::to_string(&(&file.public_key, &file.peers, &file.vaults))
+    };
+    encoded.map_err(|e| format!("encode pairing state: {e}"))
 }
 
 fn sign_seal(id: &Identity, file: &PairingFile) -> Res<String> {
@@ -214,10 +243,11 @@ fn read_trusted(root: &Path) -> Res<PairingFile> {
     let mut file = read_file(root)?;
     if let Some(id) = sealed_identity()? {
         if !seal_holds(&id, &file) {
-            if !file.peers.is_empty() {
+            if file.has_links() {
                 log::warn!("pairing.json was changed outside Bramble; not trusting its browsers");
             }
             file.peers.clear();
+            file.vaults.clear();
         }
     }
     Ok(file)
@@ -358,7 +388,7 @@ fn identity(root: &Path) -> Res<(String, String)> {
         return Ok((id.private_key, id.public_key));
     }
 
-    if !file.peers.is_empty() {
+    if file.has_links() {
         return Err("This device's pairing key is missing from the keychain, so the browsers listed below can no longer connect. Disconnect them here to start again.".into());
     }
 
@@ -377,18 +407,77 @@ pub fn public_key(root: &Path) -> Res<String> {
     Ok(identity(root)?.1)
 }
 
-pub fn paired_peers(root: &Path) -> Res<Vec<PairedPeer>> {
-    Ok(read_trusted(root)?.peers)
+/// The vault open in the app: the active one the webview recorded, else the only one there is.
+/// With several and none recorded there is no safe answer, so nobody is admitted. Before the
+/// registry existed the one vault had no id, which storage calls `DEFAULT_VAULT_ID`.
+fn open_vault_id(root: &Path) -> Res<Option<String>> {
+    if let Some(serde_json::Value::String(id)) = storage::ops::get_meta(root, ACTIVE_VAULT_KEY)? {
+        return Ok(Some(id));
+    }
+    Ok(match storage::ops::get_meta(root, VAULT_REGISTRY_KEY)? {
+        None => Some(storage::ops::DEFAULT_VAULT_ID.to_string()),
+        Some(registry) => match registry["vaults"].as_array().map(Vec::as_slice) {
+            Some([only]) => only["id"].as_str().map(str::to_string),
+            _ => None,
+        },
+    })
 }
 
-/// Revoke a browser. The next connection from it fails the KK handshake, because its static
-/// key is no longer one this device will accept.
+/// When a vault was made, from the registry. None for a vault it does not date.
+fn vault_created_at(root: &Path, vault_id: &str) -> Res<Option<u64>> {
+    let registry = storage::ops::get_meta(root, VAULT_REGISTRY_KEY)?.unwrap_or_default();
+    Ok(registry["vaults"]
+        .as_array()
+        .and_then(|vaults| vaults.iter().find(|v| v["id"] == vault_id))
+        .and_then(|v| v["createdAt"].as_f64())
+        .map(|at| at as u64))
+}
+
+/// A vault's browsers. One with no list of its own yet takes the app-wide list an earlier build
+/// kept, cut to the links made since the vault existed: those are the ones that already worked
+/// with it. A vault the registry does not date keeps them all, so nothing that worked stops.
+fn vault_peers(root: &Path, file: &PairingFile, vault_id: &str) -> Res<Vec<PairedPeer>> {
+    if let Some(peers) = file.vaults.get(vault_id) {
+        return Ok(peers.clone());
+    }
+    let since = vault_created_at(root, vault_id)?.unwrap_or(0);
+    Ok(file
+        .peers
+        .iter()
+        .filter(|p| p.paired_at >= since)
+        .cloned()
+        .collect())
+}
+
+/// The browsers linked to the vault open now. None when no vault is open.
+pub fn paired_peers(root: &Path) -> Res<Vec<PairedPeer>> {
+    let file = read_trusted(root)?;
+    match open_vault_id(root)? {
+        Some(vault_id) => vault_peers(root, &file, &vault_id),
+        None => Ok(Vec::new()),
+    }
+}
+
+/// Whether a browser may be served now: it is linked to the vault that is open. Checked when it
+/// connects, on every frame it sends, and before anything is pushed to it, so a browser linked
+/// to one vault gets nothing while another is open.
+pub fn admitted(root: &Path, public_key: &str) -> bool {
+    paired_peers(root).is_ok_and(|peers| peers.iter().any(|p| p.public_key == public_key))
+}
+
+/// Revoke a browser from the vault open now. Its next connection fails the KK handshake, and
+/// a vault it is also linked to keeps it.
 pub fn forget_peer(root: &Path, public_key: &str) -> Res<bool> {
+    let Some(vault_id) = open_vault_id(root)? else {
+        return Ok(false);
+    };
     let mut file = read_trusted(root)?;
-    let before = file.peers.len();
-    file.peers.retain(|p| p.public_key != public_key);
-    let removed = file.peers.len() != before;
+    let mut peers = vault_peers(root, &file, &vault_id)?;
+    let before = peers.len();
+    peers.retain(|p| p.public_key != public_key);
+    let removed = peers.len() != before;
     if removed {
+        file.vaults.insert(vault_id, peers);
         save(root, &mut file)?;
     }
     Ok(removed)
@@ -486,12 +575,8 @@ impl Handshake {
 #[allow(dead_code)]
 pub fn accept_known(root: &Path, peer_public_key: &str) -> Res<Handshake> {
     let (priv_key, _) = identity(root)?;
-    let known = read_trusted(root)?
-        .peers
-        .iter()
-        .any(|p| p.public_key == peer_public_key);
-    if !known {
-        return Err("unknown peer".into());
+    if !admitted(root, peer_public_key) {
+        return Err(NOT_LINKED.into());
     }
     let session_id = handshake::handshake_start_responder(priv_key, peer_public_key.to_string())
         .map_err(|e| format!("start responder: {e:?}"))?;
@@ -583,16 +668,20 @@ pub struct Step {
     pub done: bool,
 }
 
+/// Link a browser to the vault open now: the one whose Connect dialog it came through.
 fn add_peer(root: &Path, public_key: &str, label: &str) -> Res<()> {
+    let vault_id = open_vault_id(root)?.ok_or("no vault is open to link a browser to")?;
     let mut file = read_trusted(root)?;
+    let mut peers = vault_peers(root, &file, &vault_id)?;
     // Re-pairing an existing browser refreshes it rather than adding a duplicate that would
     // then need revoking twice.
-    file.peers.retain(|p| p.public_key != public_key);
-    file.peers.push(PairedPeer {
+    peers.retain(|p| p.public_key != public_key);
+    peers.push(PairedPeer {
         public_key: public_key.to_string(),
         label: label.to_string(),
         paired_at: now_ms(),
     });
+    file.vaults.insert(vault_id, peers);
     save(root, &mut file)
 }
 
@@ -960,6 +1049,120 @@ mod tests {
         // Generating a new identity here would leave a browser listed that can never connect.
         // What the message SAYS is asserted separately; this is about the guard firing.
         assert!(public_key(d.path()).is_err());
+    }
+
+    /// Which vault is open, as the webview records it on unlock.
+    fn open_vault(root: &Path, id: &str) {
+        crate::storage::ops::set_meta(root, "active-vault".into(), serde_json::json!(id)).unwrap();
+    }
+
+    /// The vaults on this device and when each was made, as the webview's registry holds them.
+    fn register(root: &Path, vaults: &[(&str, u64)]) {
+        let records: Vec<_> = vaults
+            .iter()
+            .map(|(id, at)| serde_json::json!({ "id": id, "label": "", "createdAt": at }))
+            .collect();
+        crate::storage::ops::set_meta(
+            root,
+            "vault.registry".into(),
+            serde_json::json!({ "vaults": records }),
+        )
+        .unwrap();
+    }
+
+    /// A browser on the one list an earlier build kept for the whole app, sealed as it sealed it.
+    fn legacy_link(root: &Path, public_key: &str, paired_at: u64) {
+        identity(root).unwrap();
+        let mut file = read_trusted(root).unwrap();
+        file.peers.push(PairedPeer {
+            public_key: public_key.to_string(),
+            label: "legacy".into(),
+            paired_at,
+        });
+        save(root, &mut file).unwrap();
+    }
+
+    #[test]
+    fn a_browser_linked_to_one_vault_is_not_admitted_while_another_is_open() {
+        let _g = setup();
+        let d = root();
+        register(d.path(), &[("vault-a", 1), ("vault-b", 1)]);
+        open_vault(d.path(), "vault-a");
+        let browser = pair(d.path(), &begin_pairing().unwrap(), "chrome").unwrap();
+
+        open_vault(d.path(), "vault-b");
+        assert!(accept_known(d.path(), &browser).is_err());
+        assert!(paired_peers(d.path()).unwrap().is_empty());
+
+        open_vault(d.path(), "vault-a");
+        close(&accept_known(d.path(), &browser).unwrap());
+        assert_eq!(paired_peers(d.path()).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn links_made_before_lists_were_per_vault_go_to_the_vaults_that_existed_then() {
+        let _g = setup();
+        let d = root();
+        let browser = handshake::handshake_generate_keypair().unwrap();
+        legacy_link(d.path(), &browser.public_key, 100);
+        register(d.path(), &[("older", 50), ("newer", 200)]);
+
+        // The file an earlier build sealed still verifies, and the link stays where it worked.
+        open_vault(d.path(), "older");
+        close(&accept_known(d.path(), &browser.public_key).unwrap());
+        // A vault made after the link never had it.
+        open_vault(d.path(), "newer");
+        assert!(accept_known(d.path(), &browser.public_key).is_err());
+        assert!(paired_peers(d.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn disconnecting_in_one_vault_keeps_the_link_in_another() {
+        let _g = setup();
+        let d = root();
+        let browser = handshake::handshake_generate_keypair().unwrap();
+        legacy_link(d.path(), &browser.public_key, 100);
+        register(d.path(), &[("vault-a", 10), ("vault-b", 20)]);
+
+        open_vault(d.path(), "vault-b");
+        assert!(forget_peer(d.path(), &browser.public_key).unwrap());
+        assert!(accept_known(d.path(), &browser.public_key).is_err());
+
+        open_vault(d.path(), "vault-a");
+        close(&accept_known(d.path(), &browser.public_key).unwrap());
+    }
+
+    #[test]
+    fn a_browser_written_into_a_vaults_list_is_not_trusted() {
+        let _g = setup();
+        let d = root();
+        register(d.path(), &[("vault-a", 1), ("vault-b", 1)]);
+        open_vault(d.path(), "vault-a");
+        pair(d.path(), &begin_pairing().unwrap(), "chrome").unwrap();
+
+        let rogue = handshake::handshake_generate_keypair().unwrap();
+        let mut file: serde_json::Value =
+            serde_json::from_slice(&fs::read(path(d.path())).unwrap()).unwrap();
+        file["vaults"]["vault-b"] = serde_json::json!([peer_json(&rogue.public_key)]);
+        fs::write(path(d.path()), file.to_string()).unwrap();
+
+        open_vault(d.path(), "vault-b");
+        assert!(accept_known(d.path(), &rogue.public_key).is_err());
+        // Fail closed, as with the app-wide list: a tampered file vouches for nobody.
+        open_vault(d.path(), "vault-a");
+        assert!(paired_peers(d.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn with_several_vaults_and_none_open_nobody_is_admitted() {
+        let _g = setup();
+        let d = root();
+        let browser = handshake::handshake_generate_keypair().unwrap();
+        legacy_link(d.path(), &browser.public_key, 100);
+        register(d.path(), &[("vault-a", 10), ("vault-b", 20)]);
+
+        assert!(accept_known(d.path(), &browser.public_key).is_err());
+        assert!(paired_peers(d.path()).unwrap().is_empty());
     }
 
     #[test]

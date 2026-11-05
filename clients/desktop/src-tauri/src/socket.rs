@@ -16,7 +16,7 @@
 use std::{
     collections::HashMap,
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
         mpsc, Condvar, Mutex, OnceLock,
@@ -30,7 +30,7 @@ use tauri::{AppHandle, Emitter};
 
 use vault_crypto::handshake;
 
-use crate::{index_store, ipc, pairing};
+use crate::{index_store, ipc, pairing, pairing::NOT_LINKED};
 
 /// Chrome caps a native-messaging frame at 1 MB. Nothing this protocol carries comes near it,
 /// so a larger frame is a bug or an attempt to exhaust memory, not a big credential.
@@ -463,6 +463,10 @@ struct Outbox {
     /// The browser said it speaks files (`Caps`). Until then no file frame is sent to it: an
     /// extension that predates them would take one for the answer to its pending request.
     files: bool,
+    /// The data folder, for asking whether this browser is still admitted (pairing::admitted).
+    root: PathBuf,
+    /// The connection, to close when another vault opens (see `vault_opened`).
+    closer: ipc::Stream,
 }
 
 fn outboxes() -> &'static Mutex<HashMap<String, Outbox>> {
@@ -498,6 +502,9 @@ pub fn link_sync_send(peer_id: String, frame: String, room: Option<String>) -> R
 fn queue(peer_id: &str, body: serde_json::Value, files: bool) -> Result<(), String> {
     let boxes = outboxes().lock().map_err(|_| "outbox lock poisoned")?;
     let outbox = boxes.get(peer_id).ok_or("no such peer")?;
+    if !pairing::admitted(&outbox.root, peer_id) {
+        return Err(NOT_LINKED.into());
+    }
     if files && !outbox.files {
         return Err("that browser does not speak files".into());
     }
@@ -505,6 +512,19 @@ fn queue(peer_id: &str, body: serde_json::Value, files: bool) -> Result<(), Stri
         .tx
         .send(body.to_string())
         .map_err(|_| "link closed".to_string())
+}
+
+/// Close the connections of browsers not linked to the vault that is open now. Called when the
+/// webview records another vault as open; each one's next frame would be refused anyway, but a
+/// browser that just sits there should not stay connected (or be the one a panel fill picks).
+pub fn vault_opened(root: &Path) {
+    if let Ok(boxes) = outboxes().lock() {
+        for (peer_id, outbox) in boxes.iter() {
+            if !pairing::admitted(root, peer_id) {
+                ipc::shutdown(&outbox.closer);
+            }
+        }
+    }
 }
 
 /// One connected browser, as reported to a webview catching up.
@@ -584,13 +604,14 @@ fn answer_caps(peer_id: &str, link: u64, caps: &[String]) -> Answer {
 /// Every answer is gated on the vault being unlocked. That is the single biggest bound on
 /// what a stolen pairing key is worth: it turns permanent silent access into access during
 /// the windows the user was already working in. See docs/desktop-port.md.
-fn serve_session(session_id: u32, stream: &mut ipc::Stream) -> Result<(), String> {
+fn serve_session(session_id: u32, root: &Path, stream: &mut ipc::Stream) -> Result<(), String> {
     // The browser's static key: stable across reconnects and distinct per install, so it is what
     // the webview addresses a peer by. Two profiles of one browser share an extension id but not
     // this, which is why nothing keys on the id.
     let peer_id = handshake::handshake_remote_static(session_id)
         .map_err(|e| format!("remote static: {e:?}"))?;
     let mut writer = ipc::try_clone(stream).map_err(|e| format!("clone stream: {e}"))?;
+    let closer = ipc::try_clone(stream).map_err(|e| format!("clone stream: {e}"))?;
 
     let (tx, rx) = mpsc::channel::<String>();
     let link = NEXT_LINK.fetch_add(1, Ordering::Relaxed);
@@ -603,6 +624,8 @@ fn serve_session(session_id: u32, stream: &mut ipc::Stream) -> Result<(), String
                 link,
                 tx: tx.clone(),
                 files: false,
+                root: root.to_path_buf(),
+                closer,
             },
         );
     }
@@ -631,7 +654,7 @@ fn serve_session(session_id: u32, stream: &mut ipc::Stream) -> Result<(), String
         "link-peer-connected",
         serde_json::json!({ "peerId": peer_id, "link": link }),
     );
-    let result = read_loop(session_id, &peer_id, link, stream, &tx);
+    let result = read_loop(session_id, root, &peer_id, link, stream, &tx);
 
     // Deregister before dropping our sender, so nothing queues onto a link that is closing.
     if let Ok(mut boxes) = outboxes().lock() {
@@ -655,6 +678,7 @@ fn serve_session(session_id: u32, stream: &mut ipc::Stream) -> Result<(), String
 
 fn read_loop(
     session_id: u32,
+    root: &Path,
     peer_id: &str,
     link: u64,
     stream: &mut ipc::Stream,
@@ -669,6 +693,15 @@ fn read_loop(
 
         let plaintext = handshake::handshake_decrypt(session_id, sealed.sealed)
             .map_err(|e| format!("decrypt: {e:?}"))?;
+
+        // Admitted when it connected, which says nothing about now: the app may have opened
+        // another vault since. One refusal, then the connection goes.
+        if !pairing::admitted(root, peer_id) {
+            let body = serde_json::to_string(&Answer::error(NOT_LINKED))
+                .map_err(|e| format!("encode answer: {e}"))?;
+            let _ = out.send(body);
+            return Err(NOT_LINKED.into());
+        }
 
         // Sync frames are relayed, not answered: the webview replies in its own time, or not at
         // all. Everything else is request/response and gets exactly one answer.
@@ -901,7 +934,7 @@ fn drive(
             }
             // Authenticated from here, so the same connection carries application traffic,
             // sealed under the session the handshake just established.
-            return serve_session(handshake.session_id, stream);
+            return serve_session(handshake.session_id, root, stream);
         }
     }
 }
@@ -1204,7 +1237,7 @@ fn confirm_link(
         stream,
         serde_json::json!({ "ok": true, "paired": true }),
     )?;
-    serve_session(session_id, stream)
+    serve_session(session_id, root, stream)
 }
 
 /// Bind the endpoint and serve connections until the process exits.
@@ -1235,8 +1268,13 @@ pub fn listen(root: &Path) -> std::io::Result<()> {
                 if let Err(e) = serve(&root, &mut stream) {
                     // Logged, never sent: see `serve`. At warn rather than debug because
                     // this is the only place the reason exists, and a refusal the user did
-                    // not expect is exactly what they will be trying to diagnose.
-                    log::warn!("socket connection refused: {e}");
+                    // not expect is exactly what they will be trying to diagnose. Except a
+                    // browser linked to another vault: expected, and retried every 20 s.
+                    if e == NOT_LINKED {
+                        log::debug!("socket connection refused: {e}");
+                    } else {
+                        log::warn!("socket connection refused: {e}");
+                    }
                 }
             });
         }
@@ -1591,6 +1629,75 @@ mod tests {
         link_sync_send(link.public_key.clone(), "hello-from-app".into(), None).expect("push");
 
         assert_eq!(link.recv()["sync"], "hello-from-app");
+        handshake::handshake_close(link.session_id);
+    }
+
+    /// The webview's record of the vaults on this device and the one it has open.
+    fn vaults(dir: &TempDir, open: &str) {
+        crate::storage::ops::set_meta(
+            dir.path(),
+            "vault.registry".into(),
+            serde_json::json!({ "vaults": [
+                { "id": "vault-a", "label": "", "createdAt": 1 },
+                { "id": "vault-b", "label": "", "createdAt": 1 },
+            ] }),
+        )
+        .unwrap();
+        crate::storage::ops::set_meta(dir.path(), "active-vault".into(), serde_json::json!(open))
+            .unwrap();
+    }
+
+    #[test]
+    fn a_browser_linked_to_another_vault_gets_no_answers() {
+        // Linked while vault A was open, connected, and then the app opened vault B. A request
+        // must not be answered out of B, the vault this browser was never linked to.
+        let _g = pairing::test_lock();
+        let dir = started();
+        vaults(&dir, "vault-a");
+        let mut link = Linked::open(&dir);
+        link.await_registered(true);
+        github_indexed();
+
+        vaults(&dir, "vault-b");
+        link.send(serde_json::json!({ "op": "query", "hostname": "github.com" }));
+        let answer = link.recv();
+
+        assert_eq!(answer["ok"], false, "{answer}");
+        assert!(!answer.to_string().contains("octocat"), "{answer}");
+        link.await_registered(false);
+        index_store::clear();
+        vault_crypto::lock();
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn nothing_is_pushed_to_a_browser_linked_to_another_vault() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        vaults(&dir, "vault-a");
+        let link = Linked::open(&dir);
+        link.await_registered(true);
+
+        vaults(&dir, "vault-b");
+        assert!(link_sync_send(link.public_key.clone(), "frame".into(), None).is_err());
+        handshake::handshake_close(link.session_id);
+    }
+
+    // Unix only: a Windows pipe cannot be shut from another thread (see ipc::shutdown), so there
+    // the browser is cut off by the check on its next frame instead.
+    #[cfg(unix)]
+    #[test]
+    fn opening_another_vault_closes_the_browsers_it_is_not_linked_to() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        vaults(&dir, "vault-a");
+        let link = Linked::open(&dir);
+        link.await_registered(true);
+
+        vaults(&dir, "vault-b");
+        vault_opened(dir.path());
+
+        link.await_registered(false);
         handshake::handshake_close(link.session_id);
     }
 

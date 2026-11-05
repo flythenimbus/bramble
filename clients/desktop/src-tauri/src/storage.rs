@@ -37,7 +37,7 @@ pub(crate) mod ops {
 
     /// Resolves an omitted vault id. Multi-vault gets a real registry later; today every
     /// caller that omits the id means "the one vault". See docs/multiple-vaults.md.
-    const DEFAULT_VAULT_ID: &str = "default";
+    pub(crate) const DEFAULT_VAULT_ID: &str = "default";
 
     /// Serializes meta.json read-modify-write so two concurrent setMeta calls can't lose one.
     static META_LOCK: Mutex<()> = Mutex::new(());
@@ -323,12 +323,24 @@ pub fn storage_get_meta(app: AppHandle, key: String) -> CmdResult<Option<Value>>
 
 #[tauri::command]
 pub fn storage_set_meta(app: AppHandle, key: String, value: Value) -> CmdResult<()> {
-    ops::set_meta(&data_dir(&app)?, key, value)
+    let dir = data_dir(&app)?;
+    let opened = key == crate::pairing::ACTIVE_VAULT_KEY;
+    ops::set_meta(&dir, key, value)?;
+    // Browsers are linked per vault: opening another cuts off those it does not know.
+    if opened {
+        crate::socket::vault_opened(&dir);
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub fn storage_remove_meta(app: AppHandle, key: String) -> CmdResult<()> {
-    ops::remove_meta(&data_dir(&app)?, &key)
+    let dir = data_dir(&app)?;
+    ops::remove_meta(&dir, &key)?;
+    if key == crate::pairing::ACTIVE_VAULT_KEY {
+        crate::socket::vault_opened(&dir);
+    }
+    Ok(())
 }
 
 /// Write bytes the user chose a path for (vault export / backup). The path comes from the

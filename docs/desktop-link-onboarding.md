@@ -281,6 +281,14 @@ for the invite. Two places treat every linked browser as one today, and both get
   also switches off the panel's hostname check. Keep the reported page per link,
   and judge a fill against the page reported by the browser it is going to. An empty report
   only clears that browser's own entry.
+- **A browser is linked to a vault, not to the app.** Found in testing (2026-11-04): the desktop
+  kept one list of linked browsers for the whole app, so a new vault showed browsers linked
+  long before it existed, and a browser linked while one vault was open could fill from any
+  other. `pairing.json` now keeps a list per vault, and a browser is served only while a vault
+  it is linked to is open: checked when it connects, on every frame it sends and before
+  anything is pushed to it, and opening another vault closes its connection. The app-wide list
+  an earlier build kept stays as it was; a vault with no list of its own takes the links made
+  since it existed, so nothing that worked stops.
 
 **Out of scope here:** other link hardening is tracked separately.
 
@@ -357,6 +365,8 @@ weaker than typing for users who don't really look.
 - Piece 2: emoji only, no code, everything over the local link.
 - Files between the desktop and the browser go over the link only.
 - One browser, one desktop: fills and the reported page are per browser.
+- Linked browsers are per vault. A browser gets nothing while another vault is open, and
+  existing links go to the vaults that existed when each was made.
 - No browser-to-desktop direction, ever.
 - The link is all local: the vault copy and desktop-to-browser sync never use the internet.
 

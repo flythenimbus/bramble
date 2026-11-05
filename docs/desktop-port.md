@@ -86,7 +86,8 @@ own WebRTC, the browser link, and the whole release and packaging story below.
   app shows a code, the extension takes it, and `Test` then reconnects over KK with no code.
   The chain is the desktop's socket, a native-messaging proxy Chrome spawns, a host manifest
   the app installs for every Chromium browser present, and the extension's own client. The
-  pairing key lives in the OS credential store; the allowlist is a file beside the vault.
+  pairing key lives in the OS credential store; the allowlist is a sealed file beside the
+  vaults, with a list per vault (a browser is served only while a vault it is linked to is open).
 - **The app outlives its main window.** Closing hides rather than destroys (on Wayland it
   destroys and the tray rebuilds it, which is the only way to be genuinely closed there; see
   the Wayland section), a tray icon is the route back, and on macOS the Dock icon follows the
