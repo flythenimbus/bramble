@@ -435,8 +435,13 @@ pub fn paired_peers(root: &Path) -> Res<Vec<PairedPeer>> {
 /// that vault is pending. Checked when it connects, on every frame it sends, and before anything
 /// is pushed to it, so a browser linked to one vault gets nothing while another is open.
 pub fn admitted(root: &Path, public_key: &str) -> bool {
-    pending_for_open_vault(root, public_key)
-        || paired_peers(root).is_ok_and(|peers| peers.iter().any(|p| p.public_key == public_key))
+    pending_for_open_vault(root, public_key) || listed(root, public_key)
+}
+
+/// Whether a browser's pairing with the open vault is complete. A pending one is served for the
+/// claim and the copy only: no credential, no fill.
+pub fn listed(root: &Path, public_key: &str) -> bool {
+    paired_peers(root).is_ok_and(|peers| peers.iter().any(|p| p.public_key == public_key))
 }
 
 /// How long a confirmed link waits for the browser to report its pairing complete.

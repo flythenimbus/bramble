@@ -172,6 +172,18 @@ enum Request {
     LinkComplete,
 }
 
+/// What a browser whose pairing is still pending hears when it asks for a credential.
+const PAIRING_PENDING: &str = "pairing not complete";
+
+/// Whether this connected browser's pairing is complete (`pairing::listed`).
+fn listed_peer(peer_id: &str) -> bool {
+    outboxes()
+        .lock()
+        .ok()
+        .and_then(|b| b.get(peer_id).map(|o| pairing::listed(&o.root, peer_id)))
+        .unwrap_or(false)
+}
+
 /// The capability that carries attachment bytes over the link.
 const CAP_FILES: &str = "files";
 
@@ -298,6 +310,9 @@ pub fn spotlight_request_fill(id: String) -> Result<(), String> {
     let entry = index_store::secret_for(&id).ok_or("unknown entry")?;
     // The browser that last reported a page is the one being filled; with none, nothing is sent.
     let (peer_id, page) = reported_page().ok_or("no browser page")?;
+    if !listed_peer(&peer_id) {
+        return Err(PAIRING_PENDING.into());
+    }
     // Only where the entry belongs. A login with no hostnames at all is not pinned to anywhere,
     // so it is left to the user's choice rather than refused.
     if !entry.hostnames.is_empty()
@@ -751,6 +766,11 @@ fn read_loop(
             // Before the lock gate in answer_for: what a connection speaks says nothing about
             // any vault, and a browser reconnecting to a locked app still needs to learn it.
             Ok(Request::Caps { caps }) => answer_caps(peer_id, link, &caps),
+            Ok(Request::Query { .. } | Request::Fetch { .. })
+                if !pairing::listed(root, peer_id) =>
+            {
+                Answer::error(PAIRING_PENDING)
+            }
             // Says nothing about any vault either; the webview's sync ignores it while locked.
             Ok(Request::SyncRestart) => {
                 emit(
@@ -2110,6 +2130,47 @@ mod tests {
     fn next_after_marker(link: &mut Linked, marker: &str) -> serde_json::Value {
         link_sync_send(link.public_key.clone(), marker.into(), None).expect("marker");
         link.recv()
+    }
+
+    #[test]
+    fn a_pending_browser_gets_no_credentials_until_its_pairing_is_complete() {
+        // Served for the claim and the copy only: a pairing abandoned part way had nothing else.
+        let _g = pairing::test_lock();
+        let dir = started();
+        github_indexed();
+        let mut link = Linked::connect(&dir, pending_client(&dir));
+        link.await_registered(true);
+
+        link.send(serde_json::json!({ "op": "query", "hostname": "github.com" }));
+        let refused = link.recv();
+        assert_eq!(refused["ok"], false, "{refused}");
+        link.send(serde_json::json!({ "op": "fetch", "id": "gh" }));
+        assert_eq!(link.recv()["ok"], false);
+
+        link.send(serde_json::json!({ "op": "linkComplete" }));
+        assert_eq!(link.recv()["ok"], true);
+        link.send(serde_json::json!({ "op": "fetch", "id": "gh" }));
+        assert_eq!(link.recv()["password"], "hunter2");
+        index_store::clear();
+        vault_crypto::lock();
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn no_panel_fill_reaches_a_browser_whose_pairing_is_pending() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        github_indexed();
+        let mut link = Linked::connect(&dir, pending_client(&dir));
+        link.await_registered(true);
+        link.send(serde_json::json!({ "op": "activeTab", "hostname": "github.com" }));
+        await_reported(Some((&link.public_key, "github.com")));
+
+        assert!(spotlight_request_fill("gh".into()).is_err());
+        assert_eq!(next_after_marker(&mut link, "marker")["sync"], "marker");
+        index_store::clear();
+        vault_crypto::lock();
+        handshake::handshake_close(link.session_id);
     }
 
     #[test]
