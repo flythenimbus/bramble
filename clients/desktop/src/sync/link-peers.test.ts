@@ -190,6 +190,47 @@ describe("closing a peer", () => {
 	});
 });
 
+describe("a browser whose sync starts after its link", () => {
+	// The offer made at connect went unheard: the link came up to link the browser, before it had
+	// a vault to sync. A browser that cannot open a second pipe yet asks for the offer again.
+	it("is offered again on the same connection when it asks", async () => {
+		h.connected = [{ peerId: "browser-a", link: 1 }];
+		const { peers } = await start();
+
+		fire("link-sync-restart", { peerId: "browser-a", link: 1 });
+
+		expect(peers).toHaveLength(2);
+		const next = peers[1]?.channel.recv();
+		fire("link-sync-frame", { peerId: "browser-a", link: 1, frame: "to-the-new-offer" });
+		expect(await next).toBe("to-the-new-offer");
+	});
+
+	it("is not taken down when the unheard offer gives up", async () => {
+		// Same connection, so the old offer's link number is the new one's too. Its roster-auth
+		// times out and closes it, which must not decline the offer that replaced it.
+		h.connected = [{ peerId: "browser-a", link: 1 }];
+		const { peers } = await start();
+		fire("link-sync-restart", { peerId: "browser-a", link: 1 });
+
+		peers[0]?.close();
+
+		const next = peers[1]?.channel.recv();
+		fire("link-sync-frame", { peerId: "browser-a", link: 1, frame: "still-served" });
+		expect(await next).toBe("still-served");
+		expect(peers).toHaveLength(2);
+	});
+
+	it("is not offered for enrollment by a restart, which only sync asks for", async () => {
+		const { linkPeerSourceFor } = await import("./link-peers");
+		const peers: PeerSession[] = [];
+		await linkPeerSourceFor("enroll")({ onPeer: (p) => peers.push(p), report: () => {} });
+
+		fire("link-sync-restart", { peerId: "browser-a", link: 1 });
+
+		expect(peers).toEqual([]);
+	});
+});
+
 describe("teardown", () => {
 	it("unsubscribes every listener and offers nothing more", async () => {
 		h.connected = [{ peerId: "browser-a", link: 1 }];
@@ -198,7 +239,7 @@ describe("teardown", () => {
 		source.stop();
 		fire("link-peer-connected", { peerId: "browser-b", link: 1 });
 
-		expect(h.unlistened).toBe(3);
+		expect(h.unlistened).toBe([...h.listeners.values()].flat().length);
 		expect(peers).toHaveLength(1);
 	});
 });

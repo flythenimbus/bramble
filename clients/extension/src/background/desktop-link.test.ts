@@ -36,6 +36,8 @@ const h = vi.hoisted(() => ({
 	/** What the app answers a caps request with; null for an app from before caps, which
 	 * answers an op it does not know with an error. */
 	appCaps: ["files"] as string[] | null,
+	/** Whether the app offers sync again when asked (`syncRestart`); an older one does not know it. */
+	appRestarts: false,
 	/** A seal whose plaintext contains this takes a while, as a busy crypto host's might. */
 	slowSeal: null as string | null,
 	/** What was written to storage.local, in order. */
@@ -55,6 +57,12 @@ const nativePort = () => {
 				const answer = h.appCaps
 					? { ok: true, caps: h.appCaps }
 					: { ok: false, error: "bad request: unknown variant `caps`" };
+				queueMicrotask(() => deliver({ sealed: `sealed:${JSON.stringify(answer)}` }));
+			}
+			if (plain && JSON.parse(plain).op === "syncRestart") {
+				const answer = h.appRestarts
+					? { ok: true }
+					: { ok: false, error: "bad request: unknown variant `syncRestart`" };
 				queueMicrotask(() => deliver({ sealed: `sealed:${JSON.stringify(answer)}` }));
 			}
 		},
@@ -185,6 +193,7 @@ async function load() {
 	h.hasBinding = true;
 	h.sealed.clear();
 	h.appCaps = ["files"];
+	h.appRestarts = false;
 	h.slowSeal = null;
 	h.stored = {
 		desktopLink: {
@@ -403,10 +412,28 @@ describe("the held sync link", () => {
 		expect(h.connects).toBe(1);
 	});
 
-	it("starts a link held before sync afresh when sync starts, so the app offers it for sync", async () => {
+	it("asks the app to offer sync again on a link held before sync, and keeps the link", async () => {
 		// The app offers a browser for sync when it connects, and refuses it while nothing here
-		// answers: a link opened to pair, before this browser had a vault. It offers again only on
-		// a new connection, so sync starting on the old one waited forever.
+		// answers: a link opened to pair, before this browser had a vault. Starting afresh needs a
+		// pipe this worker can open, which one granted the permission this session cannot.
+		const mod = await load();
+		h.appRestarts = true;
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		await opening;
+		const before = { connects: h.connects, disconnects: h.disconnects };
+
+		expect(await mod.openSyncLink(() => {})).toBe(true);
+
+		expect(postedOps()).toContain("syncRestart");
+		expect(h.connects).toBe(before.connects);
+		expect(h.disconnects).toBe(before.disconnects);
+	});
+
+	it("starts a link held before sync afresh when the app cannot offer it again", async () => {
+		// An app from before `syncRestart` offers again only on a new connection, so sync starting
+		// on the old one waited forever.
 		const mod = await load();
 		const opening = mod.openDesktopLink();
 		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
@@ -589,7 +616,19 @@ describe("pairing borrows the page's native transport", () => {
 		const port = {
 			name: `link-native-proxy:${id}`,
 			sender,
-			postMessage: (m: Record<string, unknown>) => sent.push(m),
+			postMessage: (m: Record<string, unknown>) => {
+				sent.push(m);
+				// The app answers caps as soon as a link is up, as socket.rs does.
+				const sealed = (m.frame as { sealed?: string } | undefined)?.sealed;
+				const plain = sealed ? h.sealed.get(sealed) : undefined;
+				const op = plain ? JSON.parse(plain).op : undefined;
+				if (op === "caps" || op === "syncRestart") {
+					const answer = op === "caps" ? { ok: true, caps: ["files"] } : { ok: true };
+					queueMicrotask(() =>
+						onMessage?.({ frame: { sealed: `sealed:${JSON.stringify(answer)}` } }),
+					);
+				}
+			},
 			onMessage: {
 				addListener: (cb: (m: unknown) => void) => {
 					onMessage = cb;
@@ -780,6 +819,70 @@ describe("pairing borrows the page's native transport", () => {
 		await confirmed;
 
 		expect(h.disconnects).toBe(before + 1);
+	});
+
+	it("keeps the link's own pipe as the held link, so a worker without one can still sync", async () => {
+		// A browser that granted the permission at link time has a worker that cannot open a pipe
+		// until it restarts. The vault copy rides the held link, so closing the link's own pipe
+		// left the copy nothing to ride: it stalled at "connecting to inviter".
+		const mod = await load();
+		h.hasBinding = false;
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+		const closes = h.linkCloses;
+
+		const confirmed = mod.confirmDesktopLink(started.id, true);
+		await vi.waitFor(() => expect(page.sent.length).toBe(7));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, paired: true })}` });
+		await confirmed;
+
+		expect(mod.linkIsHeld()).toBe(true);
+		expect(h.linkCloses).toBe(closes);
+		await expect(mod.sendSyncFrame("frame-1", "enroll")).resolves.toBe(true);
+		const last = page.sent.at(-1) as { frame: { sealed: string } };
+		expect(JSON.parse(h.sealed.get(last.frame.sealed) ?? "{}")).toMatchObject({
+			op: "sync",
+			frame: "frame-1",
+		});
+	});
+
+	it("keeps sync on the link's own pipe once sync starts, asking the app to offer again", async () => {
+		const mod = await load();
+		h.hasBinding = false;
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+		const confirmed = mod.confirmDesktopLink(started.id, true);
+		await vi.waitFor(() => expect(page.sent.length).toBe(7));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, paired: true })}` });
+		await confirmed;
+
+		const frames: string[] = [];
+		await mod.openSyncLink((f) => frames.push(f));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ sync: "offer" })}` });
+
+		await vi.waitFor(() => expect(frames).toEqual(["offer"]));
+		expect(mod.linkIsHeld()).toBe(true);
+	});
+
+	it("loses no frame the app pushes right after it approves", async () => {
+		// The app serves the link as soon as it answers, and may push at once. A frame nobody
+		// claimed was dropped, and Noise, which numbers frames, was out of step from then on.
+		const mod = await load();
+		const enrolled: string[] = [];
+		mod.setEnrollFrameSink((f) => enrolled.push(f));
+		const page = lend(EXT_SENDER);
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+
+		const confirmed = mod.confirmDesktopLink(started.id, true);
+		await vi.waitFor(() => expect(page.sent.length).toBe(7));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, paired: true })}` });
+		page.deliver({ sealed: `sealed:${JSON.stringify({ sync: "offer", room: "enroll" })}` });
+		await confirmed;
+
+		await vi.waitFor(() => expect(enrolled).toEqual(["offer"]));
 	});
 
 	it("drops a held link once a code pairing is stored, for the same reason", async () => {

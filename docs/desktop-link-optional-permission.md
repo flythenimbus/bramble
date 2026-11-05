@@ -187,7 +187,12 @@ the page asks to pair, because a pair request that overtakes its own transport f
 registered, which is a race that only appears on a cold worker.
 
 Everything after pairing stays where it is. Delegation, sync frames and `reportActiveTab` are all
-background-owned and none of them is on a path where a sub-minute delay is visible.
+background-owned and almost none of them is on a path where a sub-minute delay is visible. The
+exception is the vault copy, which rides the held link the moment linking ends
+([desktop-link-onboarding.md](desktop-link-onboarding.md)). So once both screens confirm, the
+link's own connection stays open as the held link instead of being closed and reopened over KK.
+On a worker without the binding that connection is a pipe the page lent, kept until the page
+closes; the worker's next start opens one of its own.
 
 ## Execution plan
 

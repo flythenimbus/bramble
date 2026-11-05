@@ -158,7 +158,8 @@ async function withNativeProxy<T>(run: (via?: string) => Promise<T>): Promise<T>
 	}
 }
 
-/** The port lent for an emoji link in progress, held between start and confirm. */
+/** The port lent for an emoji link: held from start to the answer, and after a link is made for
+ * as long as this page is open, as the background's held link. */
 let linkProxy: ReturnType<typeof openNativeProxy> = null;
 
 function releaseLinkProxy(): void {
@@ -171,7 +172,7 @@ const adapter: DesktopLinkAdapter = {
 	// The code goes straight through to the background and is never stored here.
 	pair: (code) =>
 		withNativeProxy(async (via) => void (await dispatch("DESKTOP_LINK_PAIR", { code, via }))),
-	// The emoji link spans two calls on one pipe, so the lent port stays open until the answer.
+	// The emoji link spans two calls on one pipe, so the lent port stays open past the answer.
 	start: async () => {
 		linkProxy?.close();
 		const needed = await dispatch<boolean>("DESKTOP_LINK_TRANSPORT_NEEDED").catch(() => true);
@@ -197,9 +198,12 @@ const adapter: DesktopLinkAdapter = {
 	confirm: async (id, matches) => {
 		try {
 			await dispatch("DESKTOP_LINK_CONFIRM", { id, matches });
-		} finally {
+		} catch (e) {
 			releaseLinkProxy();
+			throw e;
 		}
+		// Kept while this page is open: a lent pipe is now the background's held link, which
+		// carries the vault copy and sync until its worker can open a pipe of its own.
 	},
 	connect: () => withNativeProxy(() => dispatch<boolean>("DESKTOP_LINK_CONNECT")),
 	query: async (hostname) => {

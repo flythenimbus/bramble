@@ -43,8 +43,12 @@ const REOFFER_AFTER_MS = 30_000;
 interface Live {
 	/** The connection this peer belongs to, so a stale event cannot tear down a newer one. */
 	link: number;
+	/** This offer, so one that gave up cannot decline the offer made again on its connection. */
+	offer: number;
 	deliver: (frame: string) => void;
 }
+
+let nextOffer = 0;
 
 /** Device keys that passed roster-auth over the link, so the relay can leave them alone. Kept
  * across restarts, so a relay session started before the link cannot reach them either. */
@@ -100,8 +104,8 @@ export const linkPeerSourceFor =
 		 * Sync refused this browser: not in the roster, revoked, or gone quiet. Hold it off for a
 		 * while rather than re-handshaking on every frame it sends.
 		 */
-		const decline = (peerId: string, link: number) => {
-			if (live.get(peerId)?.link !== link) return;
+		const decline = (peerId: string, offer: number) => {
+			if (live.get(peerId)?.offer !== offer) return;
 			live.delete(peerId);
 			cooldown.set(peerId, Date.now() + REOFFER_AFTER_MS);
 		};
@@ -129,7 +133,8 @@ export const linkPeerSourceFor =
 					room: room === "sync" ? undefined : room,
 				}).catch(() => forget(peerId, link));
 			});
-			live.set(peerId, { link, deliver: push });
+			const id = ++nextOffer;
+			live.set(peerId, { link, offer: id, deliver: push });
 			onPeer({
 				remotePubkey: peerId,
 				// We are the listener; browsers connect to us. Nothing reads this, but false is
@@ -138,7 +143,7 @@ export const linkPeerSourceFor =
 				channel,
 				// Forgets this browser as a SYNC peer without touching the link itself. The same
 				// connection serves autofill, and dropping a sync peer must not cost the user fill.
-				close: () => decline(peerId, link),
+				close: () => decline(peerId, id),
 			} satisfies PeerSession);
 		};
 
@@ -153,6 +158,15 @@ export const linkPeerSourceFor =
 			}),
 			await listen<PeerEvent>("link-peer-disconnected", (e) => {
 				forget(e.payload.peerId, e.payload.link);
+			}),
+			// The browser's sync started after its link did, so the offer made at connect went
+			// unheard. Offered again on the same connection, as a fresh start.
+			await listen<PeerEvent>("link-sync-restart", (e) => {
+				if (!offerOnConnect) return;
+				const { peerId, link } = e.payload;
+				live.delete(peerId);
+				cooldown.delete(peerId);
+				offer(peerId, link);
 			}),
 			await listen<FrameEvent>("link-sync-frame", (e) => {
 				const { peerId, link, frame } = e.payload;

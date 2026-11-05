@@ -164,6 +164,10 @@ enum Request {
     /// One frame of attachment transfer, on its way to the webview's file session. Relayed
     /// like `Sync`, on a numbered stream (see @core/sync/transport/blob-link).
     Blob { stream: u32, frame: String },
+    /// Offer sync on this connection again. The browser asks when its sync starts on a link
+    /// that was up before it, so the offer made at connect went unheard. Answered, so it keeps
+    /// the link; an app from before this answers with an error and the browser reconnects.
+    SyncRestart,
 }
 
 /// The capability that carries attachment bytes over the link.
@@ -734,6 +738,14 @@ fn read_loop(
             // Before the lock gate in answer_for: what a connection speaks says nothing about
             // any vault, and a browser reconnecting to a locked app still needs to learn it.
             Ok(Request::Caps { caps }) => answer_caps(peer_id, link, &caps),
+            // Says nothing about any vault either; the webview's sync ignores it while locked.
+            Ok(Request::SyncRestart) => {
+                emit(
+                    "link-sync-restart",
+                    serde_json::json!({ "peerId": peer_id, "link": link }),
+                );
+                Answer::ok()
+            }
             Ok(request) => answer_for(request, peer_id),
             Err(e) => Answer::error(&format!("bad request: {e}")),
         };
@@ -803,6 +815,7 @@ fn answer_for(request: Request, peer_id: &str) -> Answer {
         Request::Blob { .. } => Answer::error("file frames are not answered"),
         Request::ActiveTab { .. } => Answer::error("active-tab reports are not answered"),
         Request::Caps { .. } => Answer::error("caps are answered per link"),
+        Request::SyncRestart => Answer::error("sync restarts are answered per link"),
     }
 }
 
@@ -1693,6 +1706,23 @@ mod tests {
         let answer = link.recv();
         assert_eq!(answer["ok"], true, "{answer}");
         assert!(link_blob_send(link.public_key.clone(), 1, "frame".into()).is_err());
+        handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn a_sync_restart_is_answered_even_while_locked() {
+        // The browser asks when its sync starts on a link that was up before it: the offer this
+        // app made at connect went unheard. Answered, so the browser keeps the link rather than
+        // reconnecting, which a browser that cannot open its own pipe yet has no way to do.
+        let _g = pairing::test_lock();
+        let dir = started();
+        vault_crypto::lock();
+        let mut link = Linked::open(&dir);
+        link.await_registered(true);
+
+        link.send(serde_json::json!({ "op": "syncRestart" }));
+        let answer = link.recv();
+        assert_eq!(answer["ok"], true, "{answer}");
         handshake::handshake_close(link.session_id);
     }
 

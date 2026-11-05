@@ -101,6 +101,11 @@ interface LinkTransport {
 	request(message: Record<string, unknown>): Promise<any>;
 	send(message: Record<string, unknown>): void;
 	close(): void;
+	/** Claim frames the app sends unprompted, before they are taken for an answer. */
+	intercept(handler: (msg: any) => boolean): void;
+	/** Whether the pipe has died. */
+	readonly dead: boolean;
+	onDead(cb: () => void): void;
 }
 
 /**
@@ -113,10 +118,13 @@ interface LinkTransport {
 class ProxiedSession implements LinkTransport {
 	private queue: Array<(value: any) => void> = [];
 	private failed: string | null = null;
+	private onUnsolicited: ((msg: any) => boolean) | null = null;
+	private deadListeners: Array<() => void> = [];
 
 	constructor(private port: chrome.runtime.Port) {
 		port.onMessage.addListener((msg: { frame?: unknown; dead?: string }) => {
 			if (typeof msg?.dead === "string") return this.die(msg.dead);
+			if (this.onUnsolicited?.(msg?.frame)) return;
 			const next = this.queue.shift();
 			if (next) next(msg?.frame);
 		});
@@ -126,8 +134,23 @@ class ProxiedSession implements LinkTransport {
 	}
 
 	private die(reason: string): void {
+		if (this.failed) return;
 		this.failed = reason;
 		for (const pending of this.queue.splice(0)) pending(null);
+		for (const cb of this.deadListeners.splice(0)) cb();
+	}
+
+	intercept(handler: (msg: any) => boolean): void {
+		this.onUnsolicited = handler;
+	}
+
+	get dead(): boolean {
+		return this.failed !== null;
+	}
+
+	onDead(cb: () => void): void {
+		if (this.failed) cb();
+		else this.deadListeners.push(cb);
 	}
 
 	request(message: Record<string, unknown>): Promise<any> {
@@ -189,7 +212,7 @@ async function pipeFor(via: string | undefined): Promise<LinkTransport | null> {
 }
 
 /** A single request/response over a freshly spawned host. */
-class NativeSession {
+class NativeSession implements LinkTransport {
 	private port: chrome.runtime.Port;
 	private queue: Array<(value: any) => void> = [];
 	private failed: string | null = null;
@@ -254,7 +277,8 @@ class NativeSession {
 	}
 
 	onDead(cb: () => void): void {
-		this.port.onDisconnect.addListener(cb);
+		if (this.failed) cb();
+		else this.port.onDisconnect.addListener(cb);
 	}
 
 	close(): void {
@@ -455,6 +479,10 @@ export async function startDesktopLink(
 /**
  * The user's answer to the emoji. On a match, tell the app and wait for its own approval; only
  * then is the app's key stored. Anything else closes the link and stores nothing.
+ *
+ * Once both agree, the app serves this connection as a link, so it stays open as the held one.
+ * A worker that got the permission this session cannot open a pipe of its own until it restarts,
+ * and the vault copy rides the held link: closing this one left the copy nothing to ride.
  */
 export async function confirmDesktopLink(id: string, matches: boolean): Promise<LinkState> {
 	const pending = pendingLinks.get(id);
@@ -463,35 +491,62 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
 		throw new Error("That link is no longer in progress.");
 	}
 	pendingLinks.delete(id);
+	const { session, sessionId } = pending;
 	const close = async () => {
-		await offscreen("LINK_CLOSE", { sessionId: pending.sessionId }).catch(() => {});
-		pending.session.close();
+		await offscreen("LINK_CLOSE", { sessionId }).catch(() => {});
+		session.close();
 	};
+	if (!matches) {
+		await close();
+		throw new Error("The symbols did not match, so nothing was linked.");
+	}
+	const link: HeldLink = {
+		session,
+		sessionId,
+		inbound: Promise.resolve(),
+		outbound: Promise.resolve(),
+		files: false,
+		asking: Promise.resolve(),
+		answer: null,
+	};
+	// Before the confirm goes out: the app may push the moment it answers, and a frame nobody
+	// claims leaves Noise, which numbers every frame, out of step for the life of the link.
+	session.intercept((msg) => {
+		if (typeof msg?.sealed !== "string") return false;
+		link.inbound = link.inbound.then(() => routeInbound(link, msg.sealed as string));
+		return true;
+	});
+	const refused = "The desktop app did not approve the link.";
 	try {
-		if (!matches) throw new Error("The symbols did not match, so nothing was linked.");
-		const sealed = (await offscreen("LINK_SEAL", {
-			sessionId: pending.sessionId,
-			plaintext: JSON.stringify({ op: "linkConfirm" }),
-		})) as string;
-		const refused = "The desktop app did not approve the link.";
-		// An app whose dialog closed after Approve shuts the pipe rather than answer.
-		const answer = await pending.session.request({ sealed }).catch(() => {
-			throw new Error(refused);
-		});
-		const plain = (await offscreen("LINK_OPEN", {
-			sessionId: pending.sessionId,
-			sealed: answer?.sealed,
-		})) as string;
-		const verdict = JSON.parse(plain) as { ok?: boolean; paired?: boolean };
+		// No timeout: this waits on a person. An app whose dialog closed after Approve shuts the
+		// pipe rather than answer.
+		const verdict = (await new Promise<unknown>((resolve, reject) => {
+			link.answer = resolve;
+			session.onDead(() => reject(new Error(refused)));
+			sealAndSend(link, { op: "linkConfirm" }).catch(() => reject(new Error(refused)));
+		})) as { ok?: boolean; paired?: boolean };
 		if (verdict.ok !== true || verdict.paired !== true) throw new Error(refused);
-		return storeLink({
+		const state = await storeLink({
 			privateKey: pending.privateKey,
 			publicKey: pending.publicKey,
 			appPublicKey: pending.appPublicKey,
 			pairedAt: Date.now(),
 		});
-	} finally {
+		// As connectHeld does, before the link is published.
+		link.files = await askOverHeld(link, { op: "caps", caps: [CAP_FILES] })
+			.then((answer) => Array.isArray(answer?.caps) && answer.caps.includes(CAP_FILES))
+			.catch(() => false);
+		session.onDead(() => {
+			if (held === link) held = null;
+		});
+		held = link;
+		linkWanted = true;
+		startKeepalive();
+		return state;
+	} catch (e) {
+		link.answer = null;
 		await close();
+		throw e;
 	}
 }
 
@@ -642,7 +697,7 @@ export async function connectToDesktop(): Promise<boolean> {
  * it instead of spawning their own.
  */
 interface HeldLink {
-	session: NativeSession;
+	session: LinkTransport;
 	/** The Noise session id, held in the offscreen where the crypto lives. */
 	sessionId: number;
 	/** Opens arrive in order and must be DECRYPTED in order: Noise numbers its transport frames,
@@ -791,12 +846,20 @@ function startKeepalive(): void {
 export async function openSyncLink(
 	onFrame: (frame: string, room?: string) => void,
 ): Promise<boolean> {
-	// A link held before sync wanted it (opened to pair, before there was a vault) was offered
-	// for sync and refused while nothing here answered. The app offers again only on a new
-	// connection, so start it afresh.
-	const stale = onSyncFrame === null && held !== null;
+	// A link held before sync wanted it (opened to link, before there was a vault) was offered
+	// for sync and refused while nothing here answered. Ask the app to offer again on it: a worker
+	// granted the permission this session cannot open another. An app from before that answers
+	// with an error, and offers again only on a new connection, so the link starts afresh.
+	const stale = onSyncFrame === null ? held : null;
 	onSyncFrame = onFrame;
-	if (stale) await dropHeld();
+	if (stale && !stale.session.dead) {
+		const offered = await askOverHeld(stale, { op: "syncRestart" })
+			.then((answer) => answer?.ok === true)
+			.catch(() => false);
+		if (!offered && held === stale) await dropHeld();
+	} else if (stale) {
+		await dropHeld();
+	}
 	return openDesktopLink();
 }
 
@@ -961,7 +1024,10 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 		parsed = JSON.parse(plain) as InboundFrame;
 	} catch {
 		// An unopenable frame means this session is out of step; rebuilding is the only recovery.
-		await dropHeld();
+		// Whoever is waiting hears it now rather than at a timeout.
+		link.answer?.({ ok: false, error: "unreadable frame" });
+		link.answer = null;
+		if (held === link) await dropHeld();
 		return;
 	}
 	if (typeof parsed.sync === "string" && parsed.room === "enroll") {
