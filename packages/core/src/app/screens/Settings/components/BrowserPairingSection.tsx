@@ -23,6 +23,9 @@ import { Row, Section } from "./primitives";
  * browser pressing Link is refused, so the screen closes with it. */
 const WINDOW_SECONDS = 180;
 
+/** How long a link both screens confirmed waits to finish (pairing.rs `PENDING_MS`). */
+const PENDING_SECONDS = 300;
+
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
 /** Pair this app with a browser extension. Rendered only where the platform provides a
@@ -56,6 +59,8 @@ export function BrowserPairingSection() {
 	/** Both screens confirmed this browser; it is listed once it holds the vault. */
 	const [finishing, setFinishing] = useState<string | null>(null);
 	const pendingLabel = useRef<string | null>(null);
+	/** `stop`, for an effect declared before it. */
+	const stopRef = useRef<() => Promise<void>>(async () => {});
 
 	const refresh = useCallback(async () => {
 		if (!pairing) return;
@@ -78,10 +83,17 @@ export function BrowserPairingSection() {
 	// Close the dialog when the app's link window closes. Without this the screen would keep
 	// inviting the user to press Link in a browser the app will now refuse.
 	useEffect(() => {
-		if (!open) return;
+		if (!open || finishing !== null) return;
 		const timer = setTimeout(() => setOpen(false), WINDOW_SECONDS * 1000);
 		return () => clearTimeout(timer);
-	}, [open]);
+	}, [open, finishing]);
+
+	// A browser finishing its link has until its pending link expires, not the window's 3 minutes.
+	useEffect(() => {
+		if (finishing === null) return;
+		const timer = setTimeout(() => void stopRef.current(), PENDING_SECONDS * 1000);
+		return () => clearTimeout(timer);
+	}, [finishing]);
 
 	// A link completes on the app's own thread, so nothing here is told about it. While the dialog
 	// is open, watch the list: a new browser means it worked, which is the only feedback this
@@ -238,6 +250,7 @@ export function BrowserPairingSection() {
 		// A link may have completed while the dialog was open.
 		await refresh();
 	};
+	stopRef.current = stop;
 
 	const forget = async (publicKey: string) => {
 		try {

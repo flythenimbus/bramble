@@ -194,6 +194,27 @@ describe("connecting a browser by emoji", () => {
 		await waitFor(() => expect(h.calls).toContain("clearInvite"));
 	});
 
+	it("keeps waiting past the link window, and closes when the pending link would have expired", async () => {
+		// The window to start a link is 3 minutes; the link it started has 5 to finish.
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		try {
+			await connect();
+			h.onPending?.({ sasHashB64: HASH, label: "Chrome on Mac" });
+			fireEvent.click(await screen.findByRole("button", { name: /^approve$/i }));
+			act(() => h.onDone?.(true));
+			await screen.findByText(/waiting for chrome on mac to finish/i);
+
+			act(() => vi.advanceTimersByTime(181_000));
+			expect(screen.getByText(/waiting for chrome on mac to finish/i)).toBeTruthy();
+
+			act(() => vi.advanceTimersByTime(120_000));
+			await waitFor(() => expect(screen.queryByText(/waiting for chrome on mac/i)).toBeNull());
+			expect(h.calls).toContain("clearInvite");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("refuses when they do not match", async () => {
 		await connect();
 		h.onPending?.({ sasHashB64: HASH, label: "Chrome on Mac" });

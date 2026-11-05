@@ -298,13 +298,10 @@ export function useDesktopLink({
 				joined = true;
 				setInvite(null);
 				setOutcome(null);
-				// The pairing is complete now: the link belongs to the vault the join opened.
+				// The pairing is complete now: the link belongs to the vault the join opened. The
+				// vault is here either way, so what the user chose for theirs still happens below.
 				const attached = (await desktopLink?.attach?.(opened)) ?? true;
 				unattached.current = false;
-				if (!attached) {
-					setError(t`Linking didn't finish. Link again.`);
-					return false;
-				}
 				const now = await vaultSwitchedFrom(oldId);
 				if (carry && oldId) {
 					copying = true;
@@ -324,6 +321,10 @@ export function useDesktopLink({
 				// Only once the desktop's vault is here, and only if it is still empty: nothing lost.
 				if (outcome === "take" && oldId)
 					await now.actions.deleteEmptyVault(oldId, oldCount, oldFiles);
+				if (!attached) {
+					setError(t`Linking didn't finish. Link again.`);
+					return false;
+				}
 				return true;
 			} catch (e) {
 				const message = e instanceof Error && e.message ? e.message : null;

@@ -299,6 +299,26 @@ describe("combining into the desktop's vault", () => {
 		expect(result.current.combined?.heldBack.items).toHaveLength(1);
 	});
 
+	it("still combines when the app will not finish the pairing, then says so", async () => {
+		// The vault is already here; what the user chose for theirs happens either way.
+		twoFullVaults();
+		h.attaches = false;
+		try {
+			const result = await linkedFrom("settings");
+			h.steps = [];
+			let done: boolean | undefined;
+			await act(async () => {
+				done = await result.current.accept("pw", { choice: "combine" });
+			});
+
+			expect(h.steps).toEqual(["stage", "join", "import@new", "setAside:v1@new"]);
+			expect(done).toBe(false);
+			expect(result.current.error).toMatch(/didn't finish/i);
+		} finally {
+			h.attaches = true;
+		}
+	});
+
 	it("copies the held-back look-alikes when asked to", async () => {
 		twoFullVaults();
 		const result = await linkedFrom("settings");
