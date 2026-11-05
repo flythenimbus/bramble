@@ -4447,6 +4447,10 @@ msgstr "Visible"
 msgid "Waiting for {0}…"
 msgstr "En attente de {0}…"
 
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Waiting for {finishing} to finish linking…"
+msgstr "En attente que {finishing} termine la liaison…"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Waiting for a device to join…"
 msgstr "En attente d'un appareil pour rejoindre..."

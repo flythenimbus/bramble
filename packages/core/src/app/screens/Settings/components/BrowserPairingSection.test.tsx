@@ -1,7 +1,7 @@
 /** @vitest-environment happy-dom */
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../../../context/PlatformContext";
 import { BrowserPairingSection } from "./BrowserPairingSection";
@@ -178,6 +178,20 @@ describe("connecting a browser by emoji", () => {
 		fireEvent.click(await screen.findByRole("button", { name: /^approve$/i }));
 		expect(await screen.findByText(/waiting for chrome on mac/i)).toBeTruthy();
 		expect(screen.queryByRole("button", { name: /^approve$/i })).toBeNull();
+	});
+
+	it("waits for the browser to finish once both screens confirm, and Cancel lets it go", async () => {
+		// The browser is listed only once it holds the vault; until then this window has closed
+		// to new links, so it must not go back to asking for one.
+		await connect();
+		h.onPending?.({ sasHashB64: HASH, label: "Chrome on Mac" });
+		fireEvent.click(await screen.findByRole("button", { name: /^approve$/i }));
+		act(() => h.onDone?.(true));
+
+		expect(await screen.findByText(/waiting for chrome on mac to finish/i)).toBeTruthy();
+		expect(screen.queryByText(/press link/i)).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+		await waitFor(() => expect(h.calls).toContain("clearInvite"));
 	});
 
 	it("refuses when they do not match", async () => {

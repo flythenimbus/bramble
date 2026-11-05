@@ -53,6 +53,9 @@ export function BrowserPairingSection() {
 	const [linkPending, setLinkPending] = useState<{ sas: PairingSas; label: string } | null>(null);
 	/** This screen said yes; the link completes once the browser does too. */
 	const [approved, setApproved] = useState(false);
+	/** Both screens confirmed this browser; it is listed once it holds the vault. */
+	const [finishing, setFinishing] = useState<string | null>(null);
+	const pendingLabel = useRef<string | null>(null);
 
 	const refresh = useCallback(async () => {
 		if (!pairing) return;
@@ -91,6 +94,7 @@ export function BrowserPairingSection() {
 				if (!fresh) return;
 				setBrowsers(list);
 				setConnected(fresh.label);
+				setFinishing(null);
 				setOpen(false);
 			});
 		}, 1500);
@@ -114,12 +118,14 @@ export function BrowserPairingSection() {
 		if (!pairing?.onLinkPending || !pairing.onLinkDone) return;
 		const offPending = pairing.onLinkPending(({ sasHashB64, label }) => {
 			setApproved(false);
+			pendingLabel.current = label;
 			void linkSas(sasHashB64).then((sas) => setLinkPending({ sas, label }));
 		});
 		const offDone = pairing.onLinkDone((paired) => {
 			setLinkPending(null);
 			setApproved(false);
-			if (!paired) setError(t`The browser was not linked.`);
+			if (paired) setFinishing(pendingLabel.current);
+			else setError(t`The browser was not linked.`);
 		});
 		return () => {
 			offPending();
@@ -141,6 +147,7 @@ export function BrowserPairingSection() {
 	const start = async (password: string): Promise<string | null> => {
 		setError(null);
 		setConnected(null);
+		setFinishing(null);
 		knownBefore.current = new Set(browsers.map((b) => b.publicKey));
 		try {
 			await publishSummary();
@@ -224,6 +231,7 @@ export function BrowserPairingSection() {
 		setOpen(false);
 		setLinkPending(null);
 		setApproved(false);
+		setFinishing(null);
 		await pairing.cancelLinkWindow?.();
 		await pairing.setVaultSummary?.(null);
 		await pairing.clearSyncInvite?.();
@@ -330,6 +338,18 @@ export function BrowserPairingSection() {
 							</div>
 						</>
 					)}
+				</div>
+			) : finishing !== null ? (
+				// Listed once it holds the vault. Cancel abandons the pairing on this side.
+				<div className="space-y-3 text-center">
+					<p className="text-sm text-muted-foreground">
+						<Trans>Waiting for {finishing} to finish linking…</Trans>
+					</p>
+					<div>
+						<Button variant="secondary" size="sm" onClick={() => void stop()}>
+							<Trans>Cancel</Trans>
+						</Button>
+					</div>
 				</div>
 			) : (
 				<div className="space-y-3 text-center">
