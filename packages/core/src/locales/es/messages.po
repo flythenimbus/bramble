@@ -868,6 +868,7 @@ msgstr "Compruebe que estos coinciden con {0}"
 msgid "Check these match your desktop app"
 msgstr "Compruebe que estos coinciden con su aplicación de escritorio"
 
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Check this matches"
 msgstr "Verificar coincidencia"
@@ -1163,7 +1164,7 @@ msgstr "Copiar de todos modos"
 msgid "Copy verification code"
 msgstr "Copiar código de verificación"
 
-#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Copying your desktop app's vault…"
 msgstr "Copiando la bóveda de su aplicación de escritorio…"
 
@@ -2074,7 +2075,7 @@ msgstr "Conservar todo"
 msgid "Keep it"
 msgstr "Conservarla"
 
-#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Keep the desktop app open until this finishes."
 msgstr "Mantenga abierta la aplicación de escritorio hasta que esto termine."
 
@@ -3707,6 +3708,7 @@ msgid "The desktop app didn't send its vault."
 msgstr "La aplicación de escritorio no envió su bóveda."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "The desktop app is showing the same symbols and waiting for you to approve there. Approve only if they match."
 msgstr "La aplicación de escritorio muestra los mismos símbolos y espera que apruebe allí. Apruebe solo si coinciden."
 

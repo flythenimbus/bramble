@@ -2,6 +2,7 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../../context/PlatformContext";
 import { initialSetupMode } from "./types";
@@ -17,20 +18,33 @@ const h = vi.hoisted(() => ({
 	/** The symbols on screen, and whether this screen has said they match. */
 	linking: null as unknown,
 	awaitingApp: false,
+	/** The desktop's vault is copying in. */
+	joining: false,
+	/** How often a card using the hook went away; the flow it runs dies with it. */
+	unmounts: 0,
 }));
 
 vi.mock("../../hooks/useDesktopLink", () => ({
-	useDesktopLink: () => ({
-		busy: false,
-		error: null,
-		linking: h.linking,
-		awaitingApp: h.awaitingApp,
-		legacy: false,
-		invite: h.invite,
-		outcome: null,
-		start: async () => {},
-		accept: async () => h.joined,
-	}),
+	useDesktopLink: () => {
+		useEffect(
+			() => () => {
+				h.unmounts++;
+			},
+			[],
+		);
+		return {
+			busy: false,
+			error: null,
+			linking: h.linking,
+			awaitingApp: h.awaitingApp,
+			legacy: false,
+			invite: h.invite,
+			outcome: null,
+			joining: h.joining,
+			start: async () => {},
+			accept: async () => h.joined,
+		};
+	},
 }));
 
 // No PopOutProvider here on purpose: OptionsApp, the setup screen's only host, has none.
@@ -128,6 +142,40 @@ describe("the desktop link on the setup screen", () => {
 		} finally {
 			h.linking = null;
 			h.awaitingApp = false;
+		}
+	});
+
+	it("keeps the link card while the desktop's vault copies in, so it can hand over after", () => {
+		// The join swapped the screen for a connecting one, which unmounted the card mid-flow: it
+		// never saw the new vault open, and the tab sat on the first step with the vault here.
+		h.unmounts = 0;
+		const view = (joining: boolean) => (
+			<I18nProvider i18n={i18n}>
+				<PlatformProvider platform={withLink}>
+					<VaultSetup
+						mode="desktop"
+						onModeChange={vi.fn()}
+						onCreate={async () => {}}
+						joining={joining}
+					/>
+				</PlatformProvider>
+			</I18nProvider>
+		);
+		const { rerender } = render(view(false));
+		rerender(view(true));
+		rerender(view(false));
+		expect(h.unmounts).toBe(0);
+	});
+
+	it("shows the copy on the card while it runs", () => {
+		h.joining = true;
+		try {
+			mount(withLink, "desktop");
+			expect(screen.getByText(/copying your desktop app's vault/i)).toBeTruthy();
+			expect(screen.getByText(/keep the desktop app open/i)).toBeTruthy();
+			expect(screen.queryByRole("button", { name: /back/i })).toBeNull();
+		} finally {
+			h.joining = false;
 		}
 	});
 

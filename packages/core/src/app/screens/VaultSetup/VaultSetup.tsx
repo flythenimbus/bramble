@@ -105,26 +105,22 @@ export function VaultSetup({
 	};
 
 	// While the join runs (a new empty vault is briefly active, which would otherwise flip the
-	// tabs), show a dedicated connecting state instead of the setup form.
-	if (joining) {
+	// tabs), show a dedicated connecting state instead of the setup form. Not for the desktop link:
+	// its card runs the join and hands over when the vault opens, so it shows its own progress.
+	// Unmounting it mid-flow lost the hand-over, and the tab sat on the first step.
+	if (joining && effectiveMode !== "desktop") {
 		return (
 			<div className="min-h-screen bg-linear-to-br from-background via-background to-primary/5 flex items-center justify-center p-6">
 				<div className="w-full max-w-xl text-center">
 					<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />
 					<h1 className="text-2xl mb-2">
-						{effectiveMode === "desktop" && !joinSas ? (
-							<Trans>Copying your desktop app's vault…</Trans>
-						) : joinSas ? (
+						{joinSas ? (
 							<Trans>Check this matches</Trans>
 						) : (
 							<Trans>Connecting to your other device…</Trans>
 						)}
 					</h1>
-					{effectiveMode === "desktop" && !joinSas ? (
-						<p className={`text-muted-foreground ${mobile ? "text-base" : "text-sm"}`}>
-							<Trans>Keep the desktop app open until this finishes.</Trans>
-						</p>
-					) : joinSas ? (
+					{joinSas ? (
 						<>
 							{/* The comparison is the whole defence, so it is the loudest thing on screen and
 							    the instruction is one sentence. */}

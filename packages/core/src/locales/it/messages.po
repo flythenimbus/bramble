@@ -868,6 +868,7 @@ msgstr "Verifica che questi corrispondano a {0}"
 msgid "Check these match your desktop app"
 msgstr "Verifica che questi corrispondano all'app desktop"
 
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 #: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
 msgid "Check this matches"
 msgstr "Verificare la corrispondenza"
@@ -1163,7 +1164,7 @@ msgstr "Copiali comunque"
 msgid "Copy verification code"
 msgstr "Copia il codice di verifica"
 
-#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Copying your desktop app's vault…"
 msgstr "Copiando la cassaforte dell'app desktop…"
 
@@ -2074,7 +2075,7 @@ msgstr "Mantenere tutto"
 msgid "Keep it"
 msgstr "Mantenerla"
 
-#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Keep the desktop app open until this finishes."
 msgstr "Tenga aperta l'app desktop fino al termine dell'operazione."
 
@@ -3707,6 +3708,7 @@ msgid "The desktop app didn't send its vault."
 msgstr "L'app desktop non ha inviato la propria cassaforte."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "The desktop app is showing the same symbols and waiting for you to approve there. Approve only if they match."
 msgstr "L'app desktop mostra gli stessi simboli e attende l'approvazione. Approvi solo se corrispondono."
 

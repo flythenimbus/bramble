@@ -1,4 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
 import type { LinkFrom } from "../../../../sync/link-outcome";
@@ -48,7 +49,36 @@ export function DesktopLinkCard({
 	};
 
 	let body: React.ReactNode;
-	if (allowed === false) {
+	if (link.joining) {
+		body = (
+			<div className="text-center space-y-3">
+				{link.joinSas ? (
+					<>
+						<p className="text-sm">
+							<Trans>Check this matches</Trans>
+						</p>
+						<SasDisplay digits={link.joinSas.digits} emoji={link.joinSas.emoji} large />
+						<p className="text-xs text-muted-foreground">
+							<Trans>
+								The desktop app is showing the same symbols and waiting for you to approve there.
+								Approve only if they match.
+							</Trans>
+						</p>
+					</>
+				) : (
+					<>
+						<p className="text-sm">
+							<Trans>Copying your desktop app's vault…</Trans>
+						</p>
+						<p className="text-xs text-muted-foreground">
+							<Trans>Keep the desktop app open until this finishes.</Trans>
+						</p>
+					</>
+				)}
+				<Loader2 className="w-6 h-6 inline-block animate-spin text-primary" />
+			</div>
+		);
+	} else if (allowed === false) {
 		body = (
 			<>
 				<p className="text-sm text-muted-foreground">
@@ -168,7 +198,7 @@ export function DesktopLinkCard({
 
 	return (
 		<div className="space-y-4 rounded-xl border border-border bg-card/50 p-5">
-			<BackButton onClick={onBack} />
+			{!link.joining && <BackButton onClick={onBack} />}
 			{body}
 			{link.error && <p className="text-xs text-destructive">{link.error}</p>}
 		</div>
