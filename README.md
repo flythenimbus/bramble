@@ -7,6 +7,7 @@
 [![macOS downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fdownloads%2Fmacos)](https://bramble.sh/latest/desktop)
 [![Linux downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fdownloads%2Flinux)](https://bramble.sh/latest/desktop)
 [![Windows](https://img.shields.io/endpoint?url=https%3A%2F%2Fbramble.sh%2Fapi%2Fversion%2Fwindows)](#whats-coming-next)
+[![Support us on Ko-fi](https://img.shields.io/badge/Support%20us%20on%20Ko--fi-72A4F2?logo=kofi&logoColor=white)](https://ko-fi.com/P0D426TW0A)
 
 A password manager that syncs between your devices. Your passwords are not saved on any server, so there's no account to make and no company to get breached and leak everything. You hold the vault, you hold the password, and that's it.
 
