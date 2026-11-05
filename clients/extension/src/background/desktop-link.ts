@@ -24,6 +24,7 @@ import { defaultDeviceLabel } from "@core/util/device-label";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api, disconnectReason } from "../platform-api";
 import { isExtensionSender } from "../sender";
+import { LAST_OPENED_VAULT_KEY } from "../session-keys";
 import { extensionStorage } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
 import { extensionOnly, on } from "./router";
@@ -121,15 +122,28 @@ interface LinkSource {
 	vaultId: string | null;
 }
 
-/** The link to speak with now: the one being made, else the open vault's, else the single link
- * an earlier build kept, which works as it did until `adoptLegacyLink` places it. */
-async function linkSource(): Promise<LinkSource | null> {
-	if (inProgress) return { state: inProgress.state, legacy: false, vaultId: null };
-	const vaultId = getActiveVaultId();
+/** The vault whose link to hold: the open one, else, while locked, the one the browser would
+ * unlock into. Filling from the app while locked is the link's point. */
+async function linkVault(): Promise<string | null> {
+	const open = getActiveVaultId();
+	if (open) return open;
+	const last = (await api.storage.local.get(LAST_OPENED_VAULT_KEY))[LAST_OPENED_VAULT_KEY];
+	return typeof last === "string" ? last : null;
+}
+
+/** `vaultId`'s own link, else the single link an earlier build kept, which works as it did until
+ * `adoptLegacyLink` places it. */
+async function vaultLink(vaultId: string | null): Promise<LinkSource | null> {
 	const own = vaultId ? await loadLink(linkKeyFor(vaultId)) : null;
 	if (own) return { state: own, legacy: false, vaultId };
 	const legacy = await loadLink(STORAGE_KEY);
 	return legacy ? { state: legacy, legacy: true, vaultId } : null;
+}
+
+/** The link to speak with now: the one being made, else the vault's (`linkVault`). */
+async function linkSource(): Promise<LinkSource | null> {
+	if (inProgress) return { state: inProgress.state, legacy: false, vaultId: null };
+	return vaultLink(await linkVault());
 }
 
 /** Bumped whenever which link should be held changes, so a connect begun before it is dropped
@@ -152,20 +166,32 @@ async function adoptLegacyLink(link: HeldLink): Promise<void> {
 	const answer = await askOverHeld(link, { op: "syncIdentity" }).catch(() => null);
 	const identity = answer?.ok === true ? answer.identity : null;
 	if (typeof identity !== "string") return;
-	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY).catch(() => null));
 	const homes: string[] = [];
-	for (const v of reg.vaults) {
-		const group = (await extensionStorage
-			.getMeta(syncKeyFor("sync.group", v.id))
-			.catch(() => null)) as { roster?: { devices?: { publicKey: string }[] } } | null;
-		if (group?.roster?.devices?.some((d) => d.publicKey === identity)) homes.push(v.id);
+	try {
+		const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY));
+		for (const v of reg.vaults) {
+			const group = (await extensionStorage.getMeta(syncKeyFor("sync.group", v.id))) as {
+				roster?: { devices?: { publicKey: string }[] };
+			} | null;
+			if (group?.roster?.devices?.some((d) => d.publicKey === identity)) homes.push(v.id);
+		}
+	} catch {
+		return; // unsure keeps
 	}
 	if (homes.length > 1) return;
 	const [home] = homes;
-	if (home) await api.storage.local.set({ [linkKeyFor(home)]: legacy });
-	await api.storage.local.remove(STORAGE_KEY);
+	if (home) await placeLegacyLink(home, legacy);
+	else await api.storage.local.remove(STORAGE_KEY);
 	if (home && home === link.vaultId) link.legacy = false;
 	else if (held === link) await dropHeld();
+}
+
+/** The single link an earlier build kept is `vaultId`'s, unless that vault has its own. */
+async function placeLegacyLink(vaultId: string, legacy: LinkState): Promise<void> {
+	if (!(await loadLink(linkKeyFor(vaultId)))) {
+		await api.storage.local.set({ [linkKeyFor(vaultId)]: legacy });
+	}
+	await api.storage.local.remove(STORAGE_KEY);
 }
 
 /**
@@ -177,8 +203,7 @@ export async function desktopLinkProven(vaultId: string): Promise<void> {
 	if (!link?.legacy || link.vaultId !== vaultId) return;
 	const legacy = await loadLink(STORAGE_KEY);
 	if (!legacy) return;
-	await api.storage.local.set({ [linkKeyFor(vaultId)]: legacy });
-	await api.storage.local.remove(STORAGE_KEY);
+	await placeLegacyLink(vaultId, legacy);
 	link.legacy = false;
 }
 
@@ -642,7 +667,12 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
 			.then((answer) => Array.isArray(answer?.caps) && answer.caps.includes(CAP_FILES))
 			.catch(() => false);
 		session.onDead(() => {
-			if (held === link) held = null;
+			const wasHeld = held === link;
+			if (wasHeld) held = null;
+			// The vault copy runs in the page that lent this pipe: with it gone, nothing finishes.
+			if (inProgress?.state === state && !inProgress.listed) void abandonLink();
+			// Closed with that page, routinely: hold the vault's link again now, not at the keepalive.
+			else if (wasHeld) void ensureHeld().catch(() => {});
 		});
 		held = link;
 		linkWanted = true;
@@ -924,7 +954,7 @@ const LINK_KEEPALIVE_MS = 20_000;
 let keepalive: ReturnType<typeof setInterval> | undefined;
 
 /**
- * Hold the pipe open because this browser is paired and unlocked.
+ * Hold the pipe open because this browser is paired, whatever the lock state.
  *
  * Idempotent, and cheap when no app is paired: there is nothing to connect to, so it returns
  * false and the keepalive finds the same thing until one appears.
@@ -1246,22 +1276,25 @@ async function settle(vaultId: string, state: LinkState): Promise<void> {
 	void openDesktopLink().catch(() => {});
 }
 
-/** Let go of the link in progress: its flow ended without a vault. Nothing is stored. */
+/** Let go of the link in progress: its flow ended without a vault. Nothing is stored. The app
+ * forgets its half when the pipe the link was confirmed on closes. */
 export async function abandonLink(): Promise<void> {
 	if (!inProgress) return;
 	inProgress = null;
 	linkGen++;
 	if (held?.vaultId === null) await dropHeld();
+	void openDesktopLink().catch(() => {});
 }
 
 /** The open vault changed: hold its link, not another's. A link in progress stays, because its
- * vault copy changes the open vault itself. Run after the transition rather than inside it, so
- * the transition's own reads come first. */
+ * vault copy changes the open vault itself. None open (a lock) keeps the one held: it is the vault
+ * the browser would unlock into. Run after the transition rather than inside it, so the
+ * transition's own reads come first. */
 export function retargetLink(vaultId: string | null): void {
 	queueMicrotask(() => {
 		if (inProgress) return;
 		linkGen++;
-		if (held && held.vaultId !== vaultId) void dropHeld();
+		if (held && vaultId !== null && held.vaultId !== vaultId) void dropHeld();
 		void openDesktopLink().catch(() => {});
 	});
 }
@@ -1290,11 +1323,11 @@ async function pskFor(code: string): Promise<string> {
 	return btoa(String.fromCharCode(...new Uint8Array(digest)));
 }
 
-/** Forget the desktop app. The next KK handshake has nothing to authenticate with. */
 /** Disconnect one vault's link, and say how many vaults still have one: the browser permission
  * goes back only with the last. */
 export async function unlinkDesktop(vaultId: string): Promise<{ remaining: number }> {
-	await api.storage.local.remove(linkKeyFor(vaultId));
+	const source = await vaultLink(vaultId);
+	if (source) await api.storage.local.remove(source.legacy ? STORAGE_KEY : linkKeyFor(vaultId));
 	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY).catch(() => null));
 	const keys = [...reg.vaults.map((v) => linkKeyFor(v.id)), STORAGE_KEY];
 	const left = await Promise.all(keys.map((k) => loadLink(k)));
@@ -1306,7 +1339,8 @@ export async function desktopLinkStatus(): Promise<{
 	pairedAt?: number;
 	permitted: boolean;
 }> {
-	const state = await currentLink();
+	// The vault's own link: one still in progress is not linked yet.
+	const state = (await vaultLink(await linkVault()))?.state ?? null;
 	// The permission, not this worker's ability to use it. The UI is asking "did the user take
 	// this away", which stays true across a worker that simply started too early.
 	const allowed = await permitted();

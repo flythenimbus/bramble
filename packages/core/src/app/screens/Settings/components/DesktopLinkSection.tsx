@@ -373,10 +373,14 @@ export function DesktopLinkSection() {
 						// group. All that changes is which vault is open, so say that and ask, rather
 						// than moving the user and leaving them to work out where they landed.
 						<p className="text-xs text-muted-foreground">
-							<Trans>
-								This browser already shares that vault with the desktop app. Opening it just
-								switches you to it; the vault you are in now stays exactly as it is.
-							</Trans>
+							{link.sharedIsOpen ? (
+								<Trans>This vault already syncs with the desktop app.</Trans>
+							) : (
+								<Trans>
+									This browser already shares that vault with the desktop app. Opening it just
+									switches you to it; the vault you are in now stays exactly as it is.
+								</Trans>
+							)}
 						</p>
 					) : (
 						<>
@@ -444,7 +448,11 @@ export function DesktopLinkSection() {
 							{link.joining ? (
 								<Trans>Waiting for the desktop app…</Trans>
 							) : outcome === "switch" ? (
-								<Trans>Open that vault</Trans>
+								link.sharedIsOpen ? (
+									<Trans>Link</Trans>
+								) : (
+									<Trans>Open that vault</Trans>
+								)
 							) : outcome === "ask" ? (
 								<Trans>Continue</Trans>
 							) : (

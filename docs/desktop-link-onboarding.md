@@ -426,7 +426,8 @@ to a vault only once the flow ends with that vault holding the desktop's vault:
 | switch (another browser vault already holds it) | that vault, replacing its previous link |
 
 In `switch`, the vault that already pairs gets the new link: it is a re-link of the same pair, and
-X stays unlinked.
+X stays unlinked. When X is that vault (it was disconnected, or its link didn't finish), linking
+stays in it and says so.
 
 ### A pairing is all or nothing
 
@@ -434,26 +435,35 @@ X stays unlinked.
   does not open: the password dialog shows the error, and Continue tries again. Today a failed
   invite still opens the window, for a link without the copy; that goes.
 - **The copy step.** It offers no "Not now". Leaving it (closing it, going back, closing the tab)
-  abandons the link: nothing is attached in the browser, and the desktop forgets that browser.
+  abandons the link: nothing is attached in the browser, and the desktop forgets that browser. The
+  link in progress rides a pipe the page lends, even to a background with its own, so it lives
+  exactly as long as the page running the copy: when that pipe closes, the browser drops the link
+  and the desktop drops the pending browser and stops waiting for it.
 - **The claim.** If the browser cannot get the invite (the desktop answered without one, or the
   claim did not arrive), it says so and offers Try again, which claims again while the desktop's
   Connect window is open. Once that window has closed, linking starts over.
 - **The desktop's list.** A browser joins a vault's list only when it reports its pairing complete:
   the copy finished, or it switched to the vault that already holds this one. Until then it is
   pending, served for the claim and the copy only, and forgotten when the Connect window closes
-  (locking the app closes it too, and the copy needs the vault unlocked anyway), after five
-  minutes, or when the app quits.
+  (locking the app closes it too, and the copy needs the vault unlocked anyway), when the
+  connection it was confirmed on closes, after five minutes, or when the app quits. A pending
+  browser's page reports do not make it the panel's fill target.
 - **Removed on the desktop.** A browser removed from a vault's list there is refused from then on.
   The desktop says so in a way the browser can tell apart from "another vault is open", and that
   browser vault drops its link and offers Link. The refusal is sealed after the handshake, so only
   the app this browser paired with can make it drop a link, and a hello naming a key it does not
-  hold learns nothing.
+  hold learns nothing. A pairings file that fails the desktop's own seal is unsure, not proof: it
+  answers "another vault is open", so no browser drops its link over it.
 
 ### What holds the pipe
 
 The extension holds the link of its open vault, and only that. Changing the open vault drops the
 held link and, if the newly open vault has a link, opens that one. Requests, panel fills and sync
 ride it as today. A vault with no link holds nothing.
+
+Locked, no vault is open, and filling while locked is the link's point (desktop-port.md). The
+extension then holds the link of the vault it would unlock into, the one last opened, including
+after the browser restarts.
 
 The one exception is a link still being made. The vault copy rides it, and the copy itself changes
 the open vault (to the vault it creates), so a link in progress stays held through those changes
@@ -469,8 +479,9 @@ Link, which makes a link for this vault and touches no other. The "Link again" p
 the profile's link goes, and so does "Linked to this browser, but the app shares a different vault,
 not this one".
 
-Disconnect removes this vault's link only. The browser permission goes back only when no vault in
-the profile has a link left.
+Disconnect removes this vault's link only, or, for a vault with none of its own, the profile's
+single link from an earlier build that it speaks with. The browser permission goes back only when no
+vault in the profile has a link left. A link still in progress does not show as linked.
 
 ### Upgrade
 
@@ -479,9 +490,11 @@ the profile has a link left.
   it is and works as today. If no vault's roster contains it, the link is dropped and the user links
   again. The desktop has one sync identity for all its vaults, so when more than one browser vault's
   roster holds it, the link waits for proof: it goes to the vault open when sync over it passes the
-  desktop's roster check. A sealed "not linked to this app" drops it too.
+  desktop's roster check. A sealed "not linked to this app" drops it too. It never replaces a link
+  its vault already has, and a failed read of the vaults or their rosters keeps it as it is.
 - **Desktop:** a link from before the per-vault lists that two or more vaults admit is pinned to the
-  first vault that syncs with that browser over the link; until then it is admitted as today.
+  first vault that syncs with that browser over the link (the vault that sync was for, even if
+  another has opened since); until then it is admitted as today.
 
 ### Tests
 

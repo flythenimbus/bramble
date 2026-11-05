@@ -2,7 +2,11 @@
 
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api } from "../platform-api";
-import { ACTIVE_VAULT_SESSION_KEY, CORNER_HANDOFF_KEY } from "../session-keys";
+import {
+	ACTIVE_VAULT_SESSION_KEY,
+	CORNER_HANDOFF_KEY,
+	LAST_OPENED_VAULT_KEY,
+} from "../session-keys";
 import { extensionStorage } from "../storage";
 import { getAutoLockMinutes } from "./prefs";
 import { type MessageEnvelope, on } from "./router";
@@ -18,9 +22,6 @@ const POPOUT_WINDOW_KEY = "popout.windowId";
 // Id of a pop-out opened solely to unlock (the picker's "Vault locked" row). It is a step in the
 // page's fill flow, not a place the user asked to be, so it closes itself once the vault unlocks.
 const POPOUT_UNLOCK_WINDOW_KEY = "popout.unlockWindowId";
-// The vault the UI last opened. In local (not session) so it outlives the lock that clears the
-// active id. A UUID, not a secret.
-export const LAST_OPENED_VAULT_KEY = "vault.lastOpenedId";
 
 /** Make the last opened vault the active one, so a view opened to unlock boots on its unlock
  * screen instead of the picker. Leaves an existing selection alone and skips a deleted vault. */

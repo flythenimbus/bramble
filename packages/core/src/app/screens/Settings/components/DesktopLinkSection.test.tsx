@@ -224,6 +224,30 @@ describe("what a desktop connect will do to this browser", () => {
 		expect(screen.queryByLabelText(/master password/i)).toBeNull();
 	});
 
+	it("says it stays in this vault when this vault is the one already shared", async () => {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.groupOf.set("v1", "GROUP");
+		h.invite = "code";
+		await mountAndLink();
+
+		expect(await screen.findByText(/this vault already syncs with the desktop app/i)).toBeTruthy();
+		expect(screen.getByRole("button", { name: /^link$/i })).toBeTruthy();
+		expect(screen.queryByText(/switches you to it/i)).toBeNull();
+	});
+
+	it("offers to open the other vault when that one is already shared", async () => {
+		h.vaults = [
+			{ id: "v1", label: "Personal", createdAt: 1 },
+			{ id: "v2", label: "Work", createdAt: 2 },
+		];
+		h.groupOf.set("v2", "GROUP");
+		h.invite = "code";
+		await mountAndLink();
+
+		expect(await screen.findByText(/switches you to it/i)).toBeTruthy();
+		expect(screen.getByRole("button", { name: /open that vault/i })).toBeTruthy();
+	});
+
 	it("asks whether to combine when both sides have entries", async () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");

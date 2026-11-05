@@ -4,14 +4,19 @@ import { CRYPTO_SESSION_CHANGED } from "@core/adapters/crypto";
 import { clearHandoffs } from "../files/idb";
 import { api } from "../platform-api";
 import { isExtensionSender } from "../sender";
-import { ACTIVE_VAULT_SESSION_KEY, CORNER_HANDOFF_KEY, OPENED_VAULT_KEY } from "../session-keys";
+import {
+	ACTIVE_VAULT_SESSION_KEY,
+	CORNER_HANDOFF_KEY,
+	LAST_OPENED_VAULT_KEY,
+	OPENED_VAULT_KEY,
+} from "../session-keys";
 import { SyncVaultMsgSchema } from "../sync/messages";
 import { clearIndex } from "./autofill-index";
 import { runDueBackups } from "./backup";
 import { CAPTURE_KEY_PREFIX } from "./corner-prompt";
 import { retargetLink } from "./desktop-link";
 import { sendToOffscreen } from "./offscreen-client";
-import { closeUnlockPopout, LAST_OPENED_VAULT_KEY, POPOUT_HANDOFF_KEY } from "./popout";
+import { closeUnlockPopout, POPOUT_HANDOFF_KEY } from "./popout";
 import { getAutoLockMinutes } from "./prefs";
 import { extensionOnly, type MessageEnvelope, on, onBeforeDispatch, onPrefix } from "./router";
 import { maybeStartSync, retargetSync, stopSync } from "./sync";

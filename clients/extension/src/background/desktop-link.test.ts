@@ -55,6 +55,8 @@ const h = vi.hoisted(() => ({
 	linkCompleteAnswer: { ok: true } as Record<string, unknown>,
 	/** Vault metadata the background reads, by key (the vault registry). */
 	meta: {} as Record<string, unknown>,
+	/** Metadata keys whose read fails. */
+	metaFails: new Set<string>(),
 }));
 
 /** The native port chrome.runtime.connectNative hands back. */
@@ -185,7 +187,12 @@ vi.mock("./offscreen-client", () => ({
 vi.mock("./vek-store", () => ({ getActiveVaultId: () => h.activeVault }));
 
 vi.mock("../storage", () => ({
-	extensionStorage: { getMeta: async (key: string) => h.meta[key] ?? null },
+	extensionStorage: {
+		getMeta: async (key: string) => {
+			if (h.metaFails.has(key)) throw new Error("storage read failed");
+			return h.meta[key] ?? null;
+		},
+	},
 }));
 
 vi.mock("./router", () => ({
@@ -231,6 +238,7 @@ async function load() {
 	h.activeVault = "v1";
 	h.linkCompleteAnswer = { ok: true };
 	h.removed.length = 0;
+	h.metaFails.clear();
 	h.meta = {
 		"vault.registry": {
 			vaults: [
@@ -673,6 +681,36 @@ describe("a link per vault, over this worker's own pipe", () => {
 		expect(hellos()).toEqual(["pub", "pub-2"]);
 	});
 
+	it("holds, while locked, the link of the vault the browser would unlock into", async () => {
+		// Locking clears the open vault, and filling from the app while locked is the link's point.
+		const mod = await load();
+		h.stored["desktopLink:v2"] = second;
+		h.stored["vault.lastOpenedId"] = "v2";
+		h.activeVault = null;
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub-2"]));
+		completeHandshake();
+
+		expect(await opening).toBe(true);
+		expect(mod.heldVault()).toBe("v2");
+	});
+
+	it("keeps holding the link through a lock", async () => {
+		const mod = await load();
+		h.stored["vault.lastOpenedId"] = "v1";
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
+		completeHandshake();
+		await opening;
+
+		h.activeVault = null;
+		mod.retargetLink(null);
+		await new Promise((r) => setTimeout(r, 20));
+
+		expect(mod.heldVault()).toBe("v1");
+		expect(hellos()).toEqual(["pub"]);
+	});
+
 	it("drops the open vault's link when the app says, under the session, nothing there is linked to it", async () => {
 		const mod = await load();
 		h.refuseWith = "not linked to this app";
@@ -825,6 +863,61 @@ describe("the single link an earlier build kept", () => {
 		await connectOnLegacy(mod);
 
 		await vi.waitFor(() => expect(h.stored.desktopLink).toBeUndefined());
+	});
+
+	it("goes on Disconnect from a vault with no link of its own", async () => {
+		const mod = await load();
+		h.stored = { desktopLink: legacy };
+
+		await expect(mod.unlinkDesktop("v1")).resolves.toEqual({ remaining: 0 });
+		expect(h.stored.desktopLink).toBeUndefined();
+		expect((await mod.desktopLinkStatus()).paired).toBe(false);
+	});
+
+	it("stays on Disconnect from a vault with a link of its own, which is the one that goes", async () => {
+		const mod = await load();
+		h.stored = { desktopLink: legacy, "desktopLink:v1": { ...legacy, publicKey: "pub-1" } };
+
+		await expect(mod.unlinkDesktop("v1")).resolves.toEqual({ remaining: 1 });
+		expect(h.stored.desktopLink).toEqual(legacy);
+	});
+
+	it("never replaces a link its vault already has of its own", async () => {
+		const mod = await load();
+		const own = { ...legacy, publicKey: "pub-2" };
+		h.appIdentity = "desk-identity";
+		h.meta["sync.group:v2"] = roster("desk-identity");
+		h.stored = { desktopLink: legacy, "desktopLink:v2": own };
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		await opening;
+
+		await vi.waitFor(() => expect(h.stored.desktopLink).toBeUndefined());
+		expect(h.stored["desktopLink:v2"]).toBe(own);
+	});
+
+	it("stays when the browser cannot read which vaults sync with the app", async () => {
+		const mod = await load();
+		h.appIdentity = "desk-identity";
+		h.metaFails.add("vault.registry");
+
+		expect(await connectOnLegacy(mod)).toBe(true);
+		await new Promise((r) => setTimeout(r, 20));
+
+		expect(h.stored.desktopLink).toEqual(legacy);
+	});
+
+	it("stays when a vault's roster cannot be read", async () => {
+		const mod = await load();
+		h.appIdentity = "desk-identity";
+		h.meta["sync.group:v2"] = roster("desk-identity");
+		h.metaFails.add("sync.group:v1");
+
+		expect(await connectOnLegacy(mod)).toBe(true);
+		await new Promise((r) => setTimeout(r, 20));
+
+		expect(h.stored.desktopLink).toEqual(legacy);
 	});
 
 	it("stays, and is used, while the app does not answer", async () => {
@@ -1291,6 +1384,44 @@ describe("pairing borrows the page's native transport", () => {
 			mod.retargetLink("v9");
 
 			expect(mod.linkIsHeld()).toBe(true);
+		});
+
+		it("tells Settings the open vault is not linked while a link is only in progress", async () => {
+			const mod = await load();
+			h.activeVault = "v2";
+			await confirmOver(mod, lend(EXT_SENDER));
+
+			expect((await mod.desktopLinkStatus()).paired).toBe(false);
+			await mod.abandonLink();
+			expect((await mod.desktopLinkStatus()).paired).toBe(false);
+		});
+
+		it("abandons a link in progress whose page closes, and holds the open vault's again", async () => {
+			// The vault copy runs in that page, so nothing can finish the link once it is gone.
+			const mod = await load();
+			const page = lend(EXT_SENDER);
+			await confirmOver(mod, page);
+
+			page.drop();
+
+			await expect(mod.attachLink("v2")).resolves.toBe(false);
+			await vi.waitFor(() => expect(h.posted.some((m) => m.kind === "hello")).toBe(true));
+			completeHandshake();
+			await vi.waitFor(() => expect(mod.heldVault()).toBe("v1"));
+		});
+
+		it("holds the vault's link again at once when the page that lent it closes", async () => {
+			const mod = await load();
+			h.stored = {};
+			const page = lend(EXT_SENDER);
+			await confirmOver(mod, page);
+			await expect(mod.attachLink("v1")).resolves.toBe(true);
+			await new Promise((r) => setTimeout(r, 50));
+			h.posted.length = 0;
+
+			page.drop();
+
+			await vi.waitFor(() => expect(h.posted.some((m) => m.kind === "hello")).toBe(true));
 		});
 
 		it("stores nothing for a link abandoned before it attaches", async () => {

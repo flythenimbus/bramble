@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
 	relays: [] as string[],
 	/** How many lent relay ports this page closed. */
 	relaysClosed: 0,
+	/** Whether the background says it cannot open a pipe of its own. */
+	needed: true,
 }));
 
 // No `connectNative` on this mock unless a case turns the binding on: the gate must not test for
@@ -34,7 +36,7 @@ vi.mock("./platform-api", () => ({
 			sendMessage: async (msg: Record<string, unknown>) => {
 				h.sent.push(msg);
 				// Asked before lending; the background cannot open its own pipe here.
-				if (msg.type === "DESKTOP_LINK_TRANSPORT_NEEDED") return { ok: true, data: true };
+				if (msg.type === "DESKTOP_LINK_TRANSPORT_NEEDED") return { ok: true, data: h.needed };
 				return h.reply;
 			},
 			get connectNative() {
@@ -95,6 +97,7 @@ beforeEach(() => {
 	h.sent = [];
 	h.relays = [];
 	h.relaysClosed = 0;
+	h.needed = true;
 });
 
 /** The shipping Chromium manifest: declared optional, so it is asked for at connect time. */
@@ -232,6 +235,20 @@ describe("a pipe lent to the background", () => {
 
 		await link?.start?.();
 
+		expect(named("DESKTOP_LINK_START")).toEqual(h.relays);
+	});
+
+	it("is lent for the emoji link even to a background with a pipe of its own", async () => {
+		// The link in progress then lives exactly as long as this page, which runs its vault copy:
+		// the app forgets its half when the page closes, and so does the background.
+		h.binding = true;
+		h.needed = false;
+		h.reply = { ok: true, data: { id: "L1", sas: { emoji: [], digits: "" } } };
+		const link = await load();
+
+		await link?.start?.();
+
+		expect(h.relays).toHaveLength(1);
 		expect(named("DESKTOP_LINK_START")).toEqual(h.relays);
 	});
 });

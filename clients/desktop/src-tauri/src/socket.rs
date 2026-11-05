@@ -276,19 +276,32 @@ fn forget_page(peer_id: &str, link: u64) {
     }
 }
 
-/// The most recent reporter and its page: the browser a panel fill is for.
-fn reported_page() -> Option<(String, String)> {
-    let map = reported().lock().ok()?;
-    map.iter()
-        .max_by_key(|(_, r)| r.seq)
+/// Each reporting browser and its page, the most recent first.
+fn reports_newest_first() -> Vec<(String, String)> {
+    let Ok(map) = reported().lock() else {
+        return Vec::new();
+    };
+    let mut reports: Vec<_> = map.iter().collect();
+    reports.sort_by(|a, b| b.1.seq.cmp(&a.1.seq));
+    reports
+        .into_iter()
         .map(|(peer, r)| (peer.clone(), r.hostname.clone()))
+        .collect()
+}
+
+/// The browser a panel fill is for: the most recent reporter whose pairing is complete. One still
+/// pairing reports too, and must not take the fill from one that has finished.
+fn fill_target() -> Option<(String, String)> {
+    reports_newest_first()
+        .into_iter()
+        .find(|(peer, _)| listed_peer(peer))
 }
 
 /// Where a fill from the panel would land, as the browser last reported it. Empty when no
 /// browser is connected or it is not on a page worth naming.
 #[tauri::command]
 pub fn spotlight_active_tab() -> Option<String> {
-    reported_page().map(|(_, host)| host)
+    fill_target().map(|(_, host)| host)
 }
 
 /// Fill an entry on the page in front of the user, through a browser that need not be unlocked.
@@ -309,7 +322,7 @@ pub fn spotlight_request_fill(id: String) -> Result<(), String> {
     }
     let entry = index_store::secret_for(&id).ok_or("unknown entry")?;
     // The browser that last reported a page is the one being filled; with none, nothing is sent.
-    let (peer_id, page) = reported_page().ok_or("no browser page")?;
+    let (peer_id, page) = fill_target().ok_or("no browser page")?;
     if !listed_peer(&peer_id) {
         return Err(PAIRING_PENDING.into());
     }
@@ -692,6 +705,7 @@ fn serve_session(session_id: u32, root: &Path, stream: &mut ipc::Stream) -> Resu
     let result = read_loop(session_id, root, &peer_id, link, stream, &tx);
 
     // Deregister before dropping our sender, so nothing queues onto a link that is closing.
+    let mut current = false;
     if let Ok(mut boxes) = outboxes().lock() {
         // Only if it is still ours: a reconnect may have replaced it while this one was closing.
         if boxes
@@ -699,9 +713,15 @@ fn serve_session(session_id: u32, root: &Path, stream: &mut ipc::Stream) -> Resu
             .is_some_and(|outbox| outbox.link == link)
         {
             boxes.remove(&peer_id);
+            current = true;
         }
     }
     forget_page(&peer_id, link);
+    // A pairing lives on the connection it was confirmed on: the browser's page closed, or it
+    // went Back, and nothing will finish it now.
+    if current && pairing::drop_pending_for(&peer_id) {
+        emit("link-pair-done", serde_json::json!({ "paired": false }));
+    }
     drop(tx);
     let _ = pump.join();
     emit(
@@ -2091,6 +2111,11 @@ mod tests {
     }
 
     /// Wait until the most recent reporter is `want` (peer id and page), or nobody reported.
+    /// The most recent reporter and its page, listed or not.
+    fn reported_page() -> Option<(String, String)> {
+        reports_newest_first().into_iter().next()
+    }
+
     fn await_reported(want: Option<(&str, &str)>) {
         for _ in 0..200 {
             let now = reported_page();
@@ -2198,6 +2223,31 @@ mod tests {
         index_store::clear();
         vault_crypto::lock();
         handshake::handshake_close(link.session_id);
+    }
+
+    #[test]
+    fn a_pending_browser_does_not_take_the_panel_fill_from_a_linked_one() {
+        let _g = pairing::test_lock();
+        let dir = started();
+        github_indexed();
+        let mut linked = Linked::open(&dir);
+        linked.await_registered(true);
+        let mut pending = Linked::connect(&dir, pending_client(&dir));
+        pending.await_registered(true);
+        linked.send(serde_json::json!({ "op": "activeTab", "hostname": "github.com" }));
+        await_reported(Some((&linked.public_key, "github.com")));
+        pending.send(serde_json::json!({ "op": "activeTab", "hostname": "github.com" }));
+        await_reported(Some((&pending.public_key, "github.com")));
+
+        assert_eq!(spotlight_active_tab().as_deref(), Some("github.com"));
+        spotlight_request_fill("gh".into()).expect("fill");
+
+        assert_eq!(linked.recv()["fill"]["password"], "hunter2");
+        assert_eq!(next_after_marker(&mut pending, "marker")["sync"], "marker");
+        index_store::clear();
+        vault_crypto::lock();
+        handshake::handshake_close(linked.session_id);
+        handshake::handshake_close(pending.session_id);
     }
 
     #[test]
@@ -2513,6 +2563,36 @@ mod tests {
         assert!(listed(&dir, &a.public_key));
         vault_crypto::lock();
         handshake::handshake_close(a.session_id);
+    }
+
+    #[test]
+    fn a_confirmed_link_is_forgotten_when_its_browser_goes_away() {
+        // The browser's page closed, or it went Back: nothing will finish this link, so the
+        // dialog stops waiting for it rather than for five minutes.
+        let _g = pairing::test_lock();
+        let dir = started();
+        unlocked();
+        link_arm_sync_invite("the-invite".into(), 60_000).unwrap();
+        link_window_begin();
+        let mut a = LinkClient::start(&dir).expect("link");
+        await_pending(true);
+        a.send(serde_json::json!({ "op": "linkConfirm" }));
+        link_pair_answer(true);
+        assert_eq!(a.recv()["paired"], true);
+        let (key, session) = (a.public_key.clone(), a.session_id);
+        assert!(pairing::admitted(dir.path(), &key));
+
+        drop(a);
+
+        for _ in 0..300 {
+            if !pairing::admitted(dir.path(), &key) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!pairing::admitted(dir.path(), &key));
+        vault_crypto::lock();
+        handshake::handshake_close(session);
     }
 
     #[test]

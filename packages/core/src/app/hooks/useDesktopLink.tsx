@@ -71,6 +71,8 @@ export function useDesktopLink({
 	/** The invite the app handed over, waiting on the master password. */
 	const [invite, setInvite] = useState<string | null>(null);
 	const [outcome, setOutcome] = useState<LinkOutcome | null>(null);
+	/** The vault that already syncs with the desktop's is the open one: linking stays in it. */
+	const [sharedIsOpen, setSharedIsOpen] = useState(false);
 	/** The desktop sent no vault after a link: Try again claims again. */
 	const [claimFailed, setClaimFailed] = useState(false);
 	/** A link this screen made that has not attached to a vault yet, let go if the screen goes. */
@@ -95,16 +97,18 @@ export function useDesktopLink({
 	/** What linking does here, from what each side holds. */
 	const outcomeFor = useCallback(
 		async (claimed: string, desktop: DesktopVaultSummary | null): Promise<LinkOutcome> => {
-			let sharesGroup = false;
+			let shared: string | null = null;
 			try {
 				const { groupKey } = decodePairingCode(claimed.trim());
 				for (const v of vaults) {
 					const g = await storage.getMeta<{ groupKey?: string }>(syncKeyFor("sync.group", v.id));
-					if (g?.groupKey === groupKey) sharesGroup = true;
+					if (g?.groupKey === groupKey) shared = v.id;
 				}
 			} catch {
 				// An undecodable code fails later with something specific; do not guess here.
 			}
+			const sharesGroup = shared !== null;
+			setSharedIsOpen(sharesGroup && shared === activeId);
 			let browser: LinkSide = "none";
 			if (vaults.length > 0 && activeId) {
 				const contents = await readVaultContents(storage, activeId, entries.length, files.length);
@@ -300,9 +304,12 @@ export function useDesktopLink({
 				setOutcome(null);
 				// The pairing is complete now: the link belongs to the vault the join opened. The
 				// vault is here either way, so what the user chose for theirs still happens below.
-				const attached = (await desktopLink?.attach?.(opened)) ?? true;
+				const attached = (await desktopLink?.attach?.(opened).catch(() => false)) ?? true;
 				unattached.current = false;
-				const now = await vaultSwitchedFrom(oldId);
+				// Read before the attach, a link in progress is not linked yet.
+				await Promise.resolve(onLinked?.()).catch(() => {});
+				// Relinking the vault that already syncs with the desktop's opens no other.
+				const now = opened === oldId ? latest.current : await vaultSwitchedFrom(oldId);
 				if (carry && oldId) {
 					copying = true;
 					const placed = placeCarry(now.actions.readEntries(), carry);
@@ -354,6 +361,7 @@ export function useDesktopLink({
 			startJoin,
 			vaultSwitchedFrom,
 			storage,
+			onLinked,
 			t,
 		],
 	);
@@ -379,6 +387,7 @@ export function useDesktopLink({
 		setCode,
 		invite,
 		outcome,
+		sharedIsOpen,
 		summary,
 		joining,
 		inviteError,

@@ -275,7 +275,7 @@ async function startRoster(): Promise<void> {
 			peerSource: linkPeerSource,
 			onAuthenticated: (pub, linkKey) => {
 				recordLinkDevice(pub);
-				pinLink(linkKey);
+				pinLink(linkKey, vaultId);
 			},
 		}),
 	];

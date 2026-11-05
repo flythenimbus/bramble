@@ -160,6 +160,11 @@ The app keys its outbound queue by our static key, so a second connection displa
 the target for its pushes and closing the second takes that queue with it, which would leave sync
 quiet with nothing reporting a fault. Lending is only safe when there is nothing to displace.
 
+The emoji link is the exception, and lends unconditionally. It speaks as a key pair made for it, so
+there is nothing of its own to displace, and the background lets go of the link it held before the
+new one is confirmed. Lending it ties the link in progress to the page running its vault copy: when
+the page closes, its pipe goes, and both sides drop the half-made link.
+
 Each lent pipe carries one session. The app reads a connection as one Noise session, so a second
 `hello` on a pipe already in use arrives where it expects a sealed frame, and the app drops the
 connection. The page names each relay port `link-native-proxy:<id>` and sends that id as `via`
@@ -191,8 +196,8 @@ background-owned and almost none of them is on a path where a sub-minute delay i
 exception is the vault copy, which rides the held link the moment linking ends
 ([desktop-link-onboarding.md](desktop-link-onboarding.md)). So once both screens confirm, the
 link's own connection stays open as the held link instead of being closed and reopened over KK.
-On a worker without the binding that connection is a pipe the page lent, kept until the page
-closes; the worker's next start opens one of its own.
+That connection is the pipe the page lent, kept until the page closes. Then a worker with the
+binding opens one of its own at once, and one without opens it at its next start.
 
 ## Execution plan
 

@@ -213,17 +213,25 @@ fn sealed_identity() -> Res<Option<Identity>> {
 /// none, so writing it is never a way onto the allowlist. Before sealing (or with no key at
 /// all) the peers are returned as they stand, for listing; `identity` decides whether to trust them.
 fn read_trusted(root: &Path) -> Res<PairingFile> {
-    let mut file = read_file(root)?;
-    if let Some(id) = sealed_identity()? {
-        if !seal_holds(&id, &file) {
-            if file.has_links() {
-                log::warn!("pairing.json was changed outside Bramble; not trusting its browsers");
-            }
-            file.peers.clear();
-            file.vaults.clear();
+    let (mut file, trusted) = read_checked(root)?;
+    if !trusted {
+        if file.has_links() {
+            log::warn!("pairing.json was changed outside Bramble; not trusting its browsers");
         }
+        file.peers.clear();
+        file.vaults.clear();
     }
     Ok(file)
+}
+
+/// pairing.json as it stands, and whether this app's seal holds over it.
+fn read_checked(root: &Path) -> Res<(PairingFile, bool)> {
+    let file = read_file(root)?;
+    let trusted = match sealed_identity()? {
+        Some(id) => seal_holds(&id, &file),
+        None => true,
+    };
+    Ok((file, trusted))
 }
 
 /// Write pairing.json, sealed whenever this device's identity seals it.
@@ -494,6 +502,18 @@ pub fn complete_link(root: &Path, public_key: &str) -> Res<bool> {
     Ok(true)
 }
 
+/// Forget the pending link if it is `public_key`'s. True when it was.
+pub fn drop_pending_for(public_key: &str) -> bool {
+    let Ok(mut slot) = PENDING.lock() else {
+        return false;
+    };
+    if slot.as_ref().is_some_and(|p| p.public_key == public_key) {
+        *slot = None;
+        return true;
+    }
+    false
+}
+
 /// Forget the pending link: its dialog closed, so its pairing is abandoned.
 pub fn drop_pending() {
     if let Ok(mut slot) = PENDING.lock() {
@@ -514,7 +534,11 @@ fn linked_anywhere(root: &Path, public_key: &str) -> Res<bool> {
     if pending_key(public_key) {
         return Ok(true);
     }
-    let file = read_trusted(root)?;
+    let (file, trusted) = read_checked(root)?;
+    // Links this app's seal does not cover: which are real is unknown, so unsure.
+    if !trusted && file.has_links() {
+        return Err("pairing.json is not trusted".into());
+    }
     let registry = storage::ops::get_meta(root, VAULT_REGISTRY_KEY)?.unwrap_or_default();
     let mut vaults: Vec<String> = registry["vaults"]
         .as_array()
@@ -552,22 +576,19 @@ pub fn forget_peer(root: &Path, public_key: &str) -> Res<bool> {
     Ok(removed)
 }
 
-/// Pin a link from before the per-vault lists to the vault open now, which it has just proved it
-/// syncs with, so no other vault takes it after this. A link made since is never touched.
-pub fn pin_link(root: &Path, public_key: &str) -> Res<bool> {
-    let Some(vault_id) = open_vault_id(root)? else {
-        return Ok(false);
-    };
+/// Pin a link from before the per-vault lists to `vault_id`, which it has just proved it syncs
+/// with, so no other vault takes it after this. A link made since is never touched.
+pub fn pin_link(root: &Path, public_key: &str, vault_id: &str) -> Res<bool> {
     let mut file = read_trusted(root)?;
     if !file.peers.iter().any(|p| p.public_key == public_key) {
         return Ok(false);
     }
-    let peers = vault_peers(root, &file, &vault_id)?;
+    let peers = vault_peers(root, &file, vault_id)?;
     if !peers.iter().any(|p| p.public_key == public_key) {
         return Ok(false);
     }
-    // Its own list first, so the open vault keeps every link it takes from the old one.
-    file.vaults.insert(vault_id.clone(), peers);
+    // Its own list first, so the vault keeps every link it takes from the old one.
+    file.vaults.insert(vault_id.to_string(), peers);
     file.peers.retain(|p| p.public_key != public_key);
     for (id, list) in file.vaults.iter_mut() {
         if *id != vault_id {
@@ -1186,7 +1207,7 @@ mod tests {
         register(d.path(), &[("vault-a", 10), ("vault-b", 20)]);
 
         open_vault(d.path(), "vault-a");
-        assert!(pin_link(d.path(), &browser.public_key).unwrap());
+        assert!(pin_link(d.path(), &browser.public_key, "vault-a").unwrap());
         assert!(admitted(d.path(), &browser.public_key));
 
         // The other vault no longer takes it, and still takes the other old links.
@@ -1204,8 +1225,56 @@ mod tests {
         let browser = link(d.path(), "chrome");
         let before = fs::read(path(d.path())).unwrap();
 
-        assert!(!pin_link(d.path(), &browser).unwrap());
+        assert!(!pin_link(d.path(), &browser, "vault-a").unwrap());
         assert_eq!(fs::read(path(d.path())).unwrap(), before);
+    }
+
+    #[test]
+    fn an_old_link_is_pinned_to_the_vault_whose_sync_passed_not_the_one_open_now() {
+        // The roster check can finish after the app has moved to another vault.
+        let _g = setup();
+        let d = root();
+        let browser = handshake::handshake_generate_keypair().unwrap();
+        legacy_link(d.path(), &browser.public_key, 100);
+        register(d.path(), &[("vault-a", 10), ("vault-b", 20)]);
+
+        open_vault(d.path(), "vault-b");
+        assert!(pin_link(d.path(), &browser.public_key, "vault-a").unwrap());
+
+        assert!(!admitted(d.path(), &browser.public_key));
+        open_vault(d.path(), "vault-a");
+        assert!(admitted(d.path(), &browser.public_key));
+    }
+
+    #[test]
+    fn a_tampered_file_tells_a_browser_another_vault_is_open_not_that_it_is_unlinked() {
+        // Not trusting the file is unsure, not proof: no browser may drop its link over it.
+        let _g = setup();
+        let d = root();
+        let browser = link(d.path(), "chrome");
+        let rogue = handshake::handshake_generate_keypair().unwrap();
+        let mut file: serde_json::Value =
+            serde_json::from_slice(&fs::read(path(d.path())).unwrap()).unwrap();
+        file["peers"]
+            .as_array_mut()
+            .unwrap()
+            .push(peer_json(&rogue.public_key));
+        fs::write(path(d.path()), file.to_string()).unwrap();
+
+        assert!(!admitted(d.path(), &browser));
+        assert_eq!(refusal(d.path(), &browser), NOT_LINKED);
+    }
+
+    #[test]
+    fn a_pending_link_is_dropped_only_for_its_own_browser() {
+        let _g = setup();
+        let d = root();
+        let browser = pending_link(d.path(), "chrome");
+
+        assert!(!drop_pending_for("someone-else"));
+        assert!(admitted(d.path(), &browser));
+        assert!(drop_pending_for(&browser));
+        assert!(!admitted(d.path(), &browser));
     }
 
     #[test]
@@ -1244,8 +1313,8 @@ pub fn pairing_forget(app: AppHandle, public_key: String) -> Result<bool, String
 /// Pin an old app-wide link to the vault open now (`pin_link`), once that browser has passed
 /// sync's check over the link.
 #[tauri::command]
-pub fn pairing_pin_link(app: AppHandle, public_key: String) -> Result<bool, String> {
-    pin_link(&data_dir(&app)?, &public_key)
+pub fn pairing_pin_link(app: AppHandle, public_key: String, vault_id: String) -> Result<bool, String> {
+    pin_link(&data_dir(&app)?, &public_key, &vault_id)
 }
 
 /// This device's static public key, for showing the user which identity a browser paired to.

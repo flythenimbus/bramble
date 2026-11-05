@@ -5,6 +5,7 @@ import { act, renderHook } from "@testing-library/react";
 import { type ReactNode, useSyncExternalStore } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../context/PlatformContext";
+import { syncKeyFor } from "../../sync/sync-keys";
 import { useDesktopLink } from "./useDesktopLink";
 
 // The one link flow behind both the setup banner and Settings: emoji, then what the desktop vault
@@ -39,6 +40,8 @@ const h = vi.hoisted(() => ({
 	afterJoin: null as string | null,
 	/** Whether the app lists the link once the vault is in. */
 	attaches: true,
+	/** Set to make attaching fail outright, as a dead pipe to the background would. */
+	attachThrows: false,
 }));
 
 /** The open vault, re-rendering subscribers when a join switches it, as the provider does. */
@@ -153,6 +156,7 @@ const platform = {
 		},
 		attach: async (vaultId: string) => {
 			h.calls.push(`attach:${vaultId}`);
+			if (h.attachThrows) throw new Error("no answer");
 			return h.attaches;
 		},
 		abandon: async () => {
@@ -316,6 +320,25 @@ describe("combining into the desktop's vault", () => {
 			expect(result.current.error).toMatch(/didn't finish/i);
 		} finally {
 			h.attaches = true;
+		}
+	});
+
+	it("still combines when attaching the link fails outright, then says so", async () => {
+		twoFullVaults();
+		h.attachThrows = true;
+		try {
+			const result = await linkedFrom("settings");
+			h.steps = [];
+			let done: boolean | undefined;
+			await act(async () => {
+				done = await result.current.accept("pw", { choice: "combine" });
+			});
+
+			expect(h.steps).toEqual(["stage", "join", "import@new", "setAside:v1@new"]);
+			expect(done).toBe(false);
+			expect(result.current.error).toMatch(/didn't finish/i);
+		} finally {
+			h.attachThrows = false;
 		}
 	});
 
@@ -513,6 +536,45 @@ describe("a pairing, start to end", () => {
 		expect(h.calls).toContain("attach:v2");
 	});
 
+	it("links again from the vault that already syncs with the desktop, with no false error", async () => {
+		// Disconnect, then Link, in that vault: the join opens the vault already open.
+		reset();
+		h.vaults = [{ id: "v1", label: "", createdAt: 1 }];
+		h.meta.set(syncKeyFor("sync.group", "v1"), { groupKey: "GROUP" });
+		h.joinOpens = "v1";
+		try {
+			const result = await linkedFrom("settings");
+			expect(result.current.outcome).toBe("switch");
+			expect(result.current.sharedIsOpen).toBe(true);
+			let done: boolean | undefined;
+			await act(async () => {
+				done = await result.current.accept("pw");
+			});
+
+			expect(done).toBe(true);
+			expect(result.current.error).toBeNull();
+			expect(h.calls).toContain("attach:v1");
+		} finally {
+			h.meta.delete(syncKeyFor("sync.group", "v1"));
+		}
+	});
+
+	it("says which vault it opens when another one already syncs with the desktop", async () => {
+		reset();
+		h.vaults = [
+			{ id: "v1", label: "", createdAt: 1 },
+			{ id: "v2", label: "", createdAt: 2 },
+		];
+		h.meta.set(syncKeyFor("sync.group", "v2"), { groupKey: "GROUP" });
+		try {
+			const result = await linkedFrom("settings");
+			expect(result.current.outcome).toBe("switch");
+			expect(result.current.sharedIsOpen).toBe(false);
+		} finally {
+			h.meta.delete(syncKeyFor("sync.group", "v2"));
+		}
+	});
+
 	it("attaches it to the vault the join opened, not one opened elsewhere since", async () => {
 		reset();
 		h.afterJoin = "other";
@@ -522,6 +584,33 @@ describe("a pairing, start to end", () => {
 		});
 		expect(h.calls).toContain("attach:new");
 		expect(h.calls).not.toContain("attach:other");
+	});
+
+	it("has Settings look again once the link is attached, not only once it is made", async () => {
+		// A link in progress is not linked yet, so the status read after the emoji says so.
+		reset();
+		h.active = undefined;
+		const { result } = renderHook(
+			() =>
+				useDesktopLink({
+					from: "settings",
+					onLinked: () => {
+						h.calls.push("refresh");
+					},
+				}),
+			{ wrapper },
+		);
+		await act(async () => {
+			await result.current.start();
+		});
+		await act(async () => {
+			await result.current.answer(true);
+		});
+		await act(async () => {
+			await result.current.accept("pw");
+		});
+
+		expect(h.calls.lastIndexOf("refresh")).toBeGreaterThan(h.calls.indexOf("attach:new"));
 	});
 
 	it("says so when the app will not finish the pairing", async () => {

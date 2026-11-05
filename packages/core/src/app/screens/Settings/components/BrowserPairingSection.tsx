@@ -61,6 +61,8 @@ export function BrowserPairingSection() {
 	const pendingLabel = useRef<string | null>(null);
 	/** `stop`, for an effect declared before it. */
 	const stopRef = useRef<() => Promise<void>>(async () => {});
+	const finishingRef = useRef(finishing);
+	finishingRef.current = finishing;
 
 	const refresh = useCallback(async () => {
 		if (!pairing) return;
@@ -137,6 +139,9 @@ export function BrowserPairingSection() {
 			setLinkPending(null);
 			setApproved(false);
 			if (paired) setFinishing(pendingLabel.current);
+			// After both confirmed: the browser went away before it finished, so nothing will.
+			else if (finishingRef.current !== null)
+				void stopRef.current().then(() => setError(t`The browser was not linked.`));
 			else setError(t`The browser was not linked.`);
 		});
 		return () => {

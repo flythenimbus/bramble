@@ -12,6 +12,10 @@ export const ACTIVE_VAULT_SESSION_KEY = "vault.activeId";
 /** The vault whose entries the UI loaded since the last unlock: only it may sync. Cleared on lock. */
 export const OPENED_VAULT_KEY = "sync.openedVault";
 
+/** The vault the UI last opened. In chrome.storage.local, not session, so it outlives the lock
+ * that clears the active id. A UUID, not a secret. */
+export const LAST_OPENED_VAULT_KEY = "vault.lastOpenedId";
+
 /**
  * A corner-prompt capture parked while the vault was locked ("Unlock & Save"), committed by the
  * background once a view unlocks. Holds a plaintext password, so it lives in session only and is

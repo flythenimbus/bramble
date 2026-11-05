@@ -3965,6 +3965,10 @@ msgstr "Questa password è apparsa in una violazione di dati nota."
 msgid "This removes the vault from this device. Synced copies on your other devices aren't affected, and this can't be undone here. Confirm to continue."
 msgstr "Questa operazione rimuove il vault da questo dispositivo. Le copie sincronizzate sugli altri dispositivi non vengono influenzate e questa azione non può essere annullata qui. Conferma per continuare."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This vault already syncs with the desktop app."
+msgstr "Questa cassaforte si sincronizza già con l'app desktop."
+
 #: packages/core/src/hooks/useVault.tsx
 msgid "This vault has no master password to change."
 msgstr "Questo vault non ha una password principale da modificare."

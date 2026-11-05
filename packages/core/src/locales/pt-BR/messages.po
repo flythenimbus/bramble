@@ -3965,6 +3965,10 @@ msgstr "Esta senha apareceu em uma violação de dados conhecida."
 msgid "This removes the vault from this device. Synced copies on your other devices aren't affected, and this can't be undone here. Confirm to continue."
 msgstr "Isso remove o cofre deste dispositivo. Cópias sincronizadas em seus outros dispositivos não são afetadas, e isso não pode ser desfeito aqui. Confirme para continuar."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This vault already syncs with the desktop app."
+msgstr "Este cofre já sincroniza com o aplicativo de desktop."
+
 #: packages/core/src/hooks/useVault.tsx
 msgid "This vault has no master password to change."
 msgstr "Este cofre não possui senha mestra para alterar."

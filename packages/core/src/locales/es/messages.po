@@ -3965,6 +3965,10 @@ msgstr "Esta contraseña apareció en una violación de datos conocida."
 msgid "This removes the vault from this device. Synced copies on your other devices aren't affected, and this can't be undone here. Confirm to continue."
 msgstr "Esto elimina la bóveda de este dispositivo. Las copias sincronizadas en sus otros dispositivos no se ven afectadas, y esto no se puede deshacer aquí. Confirme para continuar."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This vault already syncs with the desktop app."
+msgstr "Esta bóveda ya se sincroniza con la aplicación de escritorio."
+
 #: packages/core/src/hooks/useVault.tsx
 msgid "This vault has no master password to change."
 msgstr "Esta bóveda no tiene una contraseña maestra que cambiar."

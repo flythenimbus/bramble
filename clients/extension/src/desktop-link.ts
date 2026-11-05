@@ -159,7 +159,9 @@ async function withNativeProxy<T>(run: (via?: string) => Promise<T>): Promise<T>
 }
 
 /** The port lent for an emoji link: held from start to the answer, and after a link is made for
- * as long as this page is open, as the background's held link. */
+ * as long as this page is open, as the background's held link. Lent even to a background with a
+ * pipe of its own, so a link in progress lives exactly as long as the page running its vault copy:
+ * the app forgets its half when this pipe closes. */
 let linkProxy: ReturnType<typeof openNativeProxy> = null;
 
 function releaseLinkProxy(): void {
@@ -175,8 +177,7 @@ const adapter: DesktopLinkAdapter = {
 	// The emoji link spans two calls on one pipe, so the lent port stays open past the answer.
 	start: async () => {
 		linkProxy?.close();
-		const needed = await dispatch<boolean>("DESKTOP_LINK_TRANSPORT_NEEDED").catch(() => true);
-		linkProxy = needed ? openNativeProxy() : null;
+		linkProxy = openNativeProxy();
 		await linkProxy?.ready;
 		const started = await dispatch<{ id: string; sas: PairingSas } | { legacy: true }>(
 			"DESKTOP_LINK_START",

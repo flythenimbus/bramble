@@ -194,6 +194,20 @@ describe("connecting a browser by emoji", () => {
 		await waitFor(() => expect(h.calls).toContain("clearInvite"));
 	});
 
+	it("stops waiting, and says so, when the browser goes away before it finishes", async () => {
+		await connect();
+		h.onPending?.({ sasHashB64: HASH, label: "Chrome on Mac" });
+		fireEvent.click(await screen.findByRole("button", { name: /^approve$/i }));
+		act(() => h.onDone?.(true));
+		await screen.findByText(/waiting for chrome on mac to finish/i);
+
+		act(() => h.onDone?.(false));
+
+		await waitFor(() => expect(screen.queryByText(/waiting for chrome on mac/i)).toBeNull());
+		expect(screen.getByText(/the browser was not linked/i)).toBeTruthy();
+		expect(h.calls).toContain("clearInvite");
+	});
+
 	it("keeps waiting past the link window, and closes when the pending link would have expired", async () => {
 		// The window to start a link is 3 minutes; the link it started has 5 to finish.
 		vi.useFakeTimers({ shouldAdvanceTime: true });
