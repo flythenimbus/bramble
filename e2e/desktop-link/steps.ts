@@ -42,6 +42,60 @@ export async function desktopApprove(): Promise<void> {
 	await desk("await front(); await click(/^Approve$/);");
 }
 
+/** Whether the vault window is on screen, read without bringing it forward. */
+export async function desktopVisible(): Promise<boolean> {
+	return desk<boolean>(
+		`return await window.__TAURI_INTERNALS__.invoke("plugin:window|is_visible", { label: "main" });`,
+	);
+}
+
+/** Put the vault window away, as its close button does. */
+export async function desktopHide(): Promise<void> {
+	await desk(`await window.__TAURI_INTERNALS__.invoke("hide_to_tray");`);
+	await expect.poll(desktopVisible).toBe(false);
+}
+
+/** The browsers the open vault's Settings lists as linked to it. */
+export async function desktopListedBrowsers(): Promise<number> {
+	return desk<number>(`
+		await front();
+		if (!find(/^Connect a browser$/, "p,span,div")) { await click(/^Settings$/); await click(/^Sync$/); }
+		await waitFor(() => find(/^Connect a browser$/, "p,span,div"));
+		await sleep(500);
+		return [...document.querySelectorAll("button")]
+			.filter(visible)
+			.filter((b) => b.getAttribute("aria-label") === "Disconnect this browser").length;
+	`);
+}
+
+/** Lock, then make another vault from the unlock screen; it opens empty. */
+export async function desktopCreateAnotherVault(name: string): Promise<void> {
+	await desk(`
+		await front();
+		await click(/^Lock vault$/);
+		await click(/^Create another vault$/);
+		await fill("#vault-name", ${JSON.stringify(name)});
+		await fillPasswords(${JSON.stringify(DESKTOP_PW)});
+		await click(/^Create vault$/);
+		await click(/I've saved it/);
+		await waitFor(() => find(/^Add New$/));
+	`);
+}
+
+/** Lock, then unlock the vault titled `title` from the unlock screen's list. */
+export async function desktopOpenVault(title: string): Promise<void> {
+	await desk(`
+		await front();
+		await click(/^Lock vault$/);
+		await click(/^Choose a different vault$/);
+		// Each row reads initials, title, then the date it was made.
+		await click(new RegExp(${JSON.stringify(title)}));
+		await fillPasswords(${JSON.stringify(DESKTOP_PW)});
+		await click(/^Unlock Vault$/);
+		await waitFor(() => find(/^Add New$/));
+	`);
+}
+
 export async function desktopGoToVault(): Promise<void> {
 	await desk("await front(); await click(/^Go to vault$/);");
 }

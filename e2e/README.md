@@ -194,8 +194,10 @@ crypto core and the web Filesystem/Preferences — that's what `android/` is for
 
 The desktop app's debug build and the extension in Chromium, linked on one machine as
 docs/desktop-link-onboarding.md describes: the first-run banner, Settings with Combine (a file
-included), approving and then leaving the screen, and linking again after backing out. Each test is
-a flow that once failed when run this way.
+included), approving and then leaving the screen, linking again after backing out, a browser that
+granted the permission at link time (Settings taking the desktop's vault, and the app coming
+forward and approving first), and a browser listed only by the vault it linked to. Each test is a
+flow that once failed when run this way.
 
 ```sh
 pnpm test:e2e:desktop-link
@@ -229,6 +231,13 @@ release build (`clients/desktop/src/e2e-bridge.test.ts`).
 - Vite listens on `[::1]` only, so the bridge client calls `localhost`, not `127.0.0.1`.
 - The extension asks for native messaging as an optional permission, and nothing can answer the
   prompt here, so the fixture loads a copy that requires it.
+- That copy's worker can open its own pipe, which a real first link's cannot: the worker predates
+  the grant (docs/desktop-link-optional-permission.md, finding 1), so everything rides a pipe a page
+  lends it. `test.use({ borrowsPipe: true })` takes `connectNative` away from the worker before its
+  code runs, which is that state. Two bugs only showed there: two requests on one lent pipe, and a
+  vault copy with no pipe to ride.
+- The app's own log (`desktop-app.log`) lives in the scratch HOME and is attached to a failing test,
+  since its stdout is cut off when the app is stopped.
 - Playwright cannot see the offscreen document, where sync runs. A raw CDP connection watches the
   extension's contexts instead; a failing test gets its lines as `extension.log`, beside the
   desktop's `desktop-sync.log`.

@@ -5,8 +5,13 @@ import {
 	desktopAddLogin,
 	desktopApprove,
 	desktopConnect,
+	desktopCreateAnotherVault,
 	desktopEntryText,
+	desktopHide,
+	desktopListedBrowsers,
+	desktopOpenVault,
 	desktopSymbols,
+	desktopVisible,
 	isLocal,
 	joinFromSetup,
 	linkFromSettings,
@@ -139,4 +144,84 @@ test("links again after backing out, and the second link still brings the vault"
 	await desktopApprove();
 	await expect(ext.page.getByText(/Enter the master password of Vault 1/)).toBeVisible();
 	await joinFromSetup(ext.page);
+});
+
+// A browser that grants the permission when it links, which is every first link in the shipped
+// extension. Its background worker cannot open a native pipe until it restarts, so everything it
+// says to the app rides a pipe a page lends it (see launchBrowser in fixtures.ts).
+test.describe("granting the permission at link time", () => {
+	test.use({ borrowsPipe: true });
+
+	test("settings: an empty vault takes the desktop's, the browser confirming first", async ({
+		ext,
+	}) => {
+		await createVault(ext.page, ext.extensionId, BROWSER_PW);
+		const popup = await ext.popup();
+		await desktopConnect();
+		const shown = await linkFromSettings(popup);
+		expect(await desktopSymbols()).toBe(shown);
+		await popup.getByRole("button", { name: "They match" }).click();
+		await expect(popup.getByText("Waiting for the desktop app…")).toBeVisible();
+		await desktopApprove();
+
+		// Settings asked for the app's key while the link flow asked for its vault. On one shared
+		// pipe the app dropped both, and this said "The desktop app didn't send its vault."
+		const offer = popup.locator("form").filter({ hasText: "Sync with the desktop app" });
+		await expect(offer).toBeVisible();
+		await offer.getByLabel("Master password").fill(DESKTOP_PW);
+		await offer.getByRole("button", { name: "Sync", exact: true }).click();
+		await expect(popup.getByText("This vault syncs with the desktop app.")).toBeVisible({
+			timeout: 30_000,
+		});
+		await popup.getByRole("button", { name: "Go to vault" }).click();
+		await expect(popup.getByText(DESKTOP_ENTRY)).toBeVisible();
+	});
+
+	test("first run: the app comes forward, approves first and waits for the browser", async ({
+		ext,
+	}) => {
+		await desktopConnect();
+		// The website's puzzle, and no code for an extension from before the emoji.
+		const section = await desk<{ puzzle: boolean; text: string }>(`return {
+			puzzle: [...document.querySelectorAll("svg > title")].some((t) => t.textContent === "Browser extension"),
+			text: text(),
+		};`);
+		expect(section.puzzle).toBe(true);
+		expect(section.text).not.toMatch(/older extension|Show a code/);
+
+		// Whoever pressed Link is looking at the browser: the app has to come to them.
+		await desktopHide();
+		const shown = await linkFromSetup(ext.page);
+		await expect.poll(desktopVisible, { timeout: 10_000 }).toBe(true);
+		expect(await desktopSymbols()).toBe(shown);
+
+		// Approve here first: the app says what it is waiting for, and the browser completes it.
+		await desk("await click(/^Approve$/); await waitFor(() => /Waiting for .+…/.test(text()));");
+		await ext.page.getByRole("button", { name: "They match" }).click();
+		await expect(ext.page.getByText(/Enter the master password of Vault 1/)).toBeVisible();
+		await expect
+			.poll(() => desk<string>("return text();"), { timeout: 10_000 })
+			.toMatch(/Connected to .+\. It is syncing this vault/);
+		await joinFromSetup(ext.page);
+		const popup = await ext.popup();
+		await expect(popup.getByText(DESKTOP_ENTRY)).toBeVisible();
+	});
+});
+
+// Last: it leaves the desktop with a second vault.
+test("a browser is linked to the vault that was open, not to every vault", async ({ ext }) => {
+	await desktopConnect();
+	await linkFromSetup(ext.page);
+	await ext.page.getByRole("button", { name: "They match" }).click();
+	await desktopApprove();
+	await expect(ext.page.getByText(/Enter the master password of Vault 1/)).toBeVisible();
+	const linked = await desktopListedBrowsers();
+	expect(linked).toBeGreaterThan(0);
+
+	// A vault made after the link lists none of the browsers linked to another.
+	await desktopCreateAnotherVault("Second");
+	expect(await desktopListedBrowsers()).toBe(0);
+
+	await desktopOpenVault("Vault 1");
+	expect(await desktopListedBrowsers()).toBe(linked);
 });

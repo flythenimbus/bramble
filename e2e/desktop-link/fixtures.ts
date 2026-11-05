@@ -205,7 +205,7 @@ async function setUpDesktopVault(): Promise<void> {
 
 export interface Desktop {
 	home: string;
-	/** Browsers the desktop has linked, from its own pairing record. */
+	/** Browsers the desktop has linked to any of its vaults, from its own pairing record. */
 	linkedBrowsers(): number;
 }
 
@@ -304,8 +304,17 @@ export interface Browser {
  * NativeMessagingHosts holds the app's manifest, and it runs under the scratch HOME so the proxy
  * it spawns finds the scratch socket. The extension is a copy with nativeMessaging required,
  * since nothing can answer the optional-permission prompt here.
+ *
+ * `borrowsPipe` is a browser that granted the permission at link time. Its background worker
+ * started before the grant and so has no `connectNative` (docs/desktop-link-optional-permission.md,
+ * finding 1): everything it says to the app rides a pipe a page lends it. The grant itself cannot
+ * be automated (finding 8), so this copy holds the permission from install and takes the binding
+ * away from the worker before any of its code runs. Pages keep theirs, as they do after a grant.
  */
-async function launchBrowser(home: string): Promise<{ browser: Browser; close(): Promise<void> }> {
+async function launchBrowser(
+	home: string,
+	{ borrowsPipe }: { borrowsPipe: boolean },
+): Promise<{ browser: Browser; close(): Promise<void> }> {
 	const scratch = mkdtempSync(path.join(tmpdir(), "bramble-desktop-link-browser-"));
 	const profile = path.join(scratch, "profile");
 	const hosts = path.join(profile, "NativeMessagingHosts");
@@ -322,9 +331,25 @@ async function launchBrowser(home: string): Promise<{ browser: Browser; close():
 	const m = JSON.parse(readFileSync(manifestPath, "utf8")) as {
 		permissions?: string[];
 		optional_permissions?: string[];
+		background: { service_worker: string };
 	};
 	m.permissions = [...new Set([...(m.permissions ?? []), "nativeMessaging"])];
 	m.optional_permissions = (m.optional_permissions ?? []).filter((p) => p !== "nativeMessaging");
+	if (borrowsPipe) {
+		// Imported first, so the binding is gone before the worker's own modules evaluate.
+		writeFileSync(
+			path.join(extension, "e2e-no-binding.js"),
+			`for (const ns of [globalThis.chrome, globalThis.browser]) {
+	if (ns?.runtime) Object.defineProperty(ns.runtime, "connectNative", { value: undefined, configurable: true });
+}
+`,
+		);
+		writeFileSync(
+			path.join(extension, "e2e-background.js"),
+			`import "./e2e-no-binding.js";\nimport "./${m.background.service_worker}";\n`,
+		);
+		m.background.service_worker = "e2e-background.js";
+	}
 	writeFileSync(manifestPath, JSON.stringify(m));
 
 	const port = await freePort();
@@ -343,6 +368,12 @@ async function launchBrowser(home: string): Promise<{ browser: Browser; close():
 	let [sw] = context.serviceWorkers();
 	if (!sw) sw = await context.waitForEvent("serviceworker", { timeout: 30_000 });
 	const extensionId = new URL(sw.url()).host;
+	if (
+		borrowsPipe &&
+		(await sw.evaluate(() => typeof chrome.runtime.connectNative)) !== "undefined"
+	) {
+		throw new Error("the worker kept its native binding, so nothing here would borrow a pipe");
+	}
 	const watch = await watchExtension(port, extensionId);
 	const page = await context.newPage();
 	await page.goto(optionsUrl(extensionId));
@@ -374,7 +405,9 @@ async function launchBrowser(home: string): Promise<{ browser: Browser; close():
 	};
 }
 
-export const test = base.extend<{ ext: Browser }, { desktop: Desktop }>({
+export const test = base.extend<{ ext: Browser; borrowsPipe: boolean }, { desktop: Desktop }>({
+	/** See launchBrowser. Off by default: most tests are about the link, not the grant. */
+	borrowsPipe: [false, { option: true }],
 	desktop: [
 		// biome-ignore lint/correctness/noEmptyPattern: Playwright requires the fixtures destructuring param.
 		async ({}, use, workerInfo) => {
@@ -401,10 +434,16 @@ export const test = base.extend<{ ext: Browser }, { desktop: Desktop }>({
 				);
 				await use({
 					home,
-					linkedBrowsers: () =>
-						existsSync(pairing)
-							? (JSON.parse(readFileSync(pairing, "utf8")) as { peers: unknown[] }).peers.length
-							: 0,
+					// Each vault keeps its own list now; `peers` is the frozen app-wide one before them.
+					linkedBrowsers: () => {
+						if (!existsSync(pairing)) return 0;
+						const file = JSON.parse(readFileSync(pairing, "utf8")) as {
+							peers?: unknown[];
+							vaults?: Record<string, unknown[]>;
+						};
+						const lists = [file.peers ?? [], ...Object.values(file.vaults ?? {})];
+						return lists.reduce((n, list) => n + list.length, 0);
+					},
 				});
 			} finally {
 				app.kill();
@@ -418,8 +457,8 @@ export const test = base.extend<{ ext: Browser }, { desktop: Desktop }>({
 		},
 		{ scope: "worker", timeout: 180_000 },
 	],
-	ext: async ({ desktop }, use, testInfo) => {
-		const { browser, close } = await launchBrowser(desktop.home);
+	ext: async ({ desktop, borrowsPipe }, use, testInfo) => {
+		const { browser, close } = await launchBrowser(desktop.home, { borrowsPipe });
 		await use(browser);
 		// Both sides' own account of what happened, which is most of what a failure here needs.
 		// Written to files: the list reporter cuts an inline attachment short.
@@ -430,9 +469,13 @@ export const test = base.extend<{ ext: Browser }, { desktop: Desktop }>({
 			const desktopLog = await desk<string[]>(
 				`const bus = await import("/src/sync/bus.ts"); const out = []; bus.onSyncStatus((s) => out.push(s))(); return out;`,
 			).catch((e: unknown) => [String(e)]);
+			// The app's own log, from the scratch HOME that is deleted with it.
+			const appLog = path.join(desktop.home, "Library/Logs/app.bramble.desktop/bramble.log");
+			const appLines = existsSync(appLog) ? readFileSync(appLog, "utf8") : "(no log file)";
 			for (const [name, body] of [
 				["extension.log", lines.join("\n")],
 				["desktop-sync.log", desktopLog.join("\n")],
+				["desktop-app.log", appLines],
 			] as const) {
 				const file = testInfo.outputPath(name);
 				writeFileSync(file, body);
