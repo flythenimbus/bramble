@@ -123,12 +123,12 @@ export function DesktopLinkSection() {
 	const unlink = async () => {
 		setUnlinking(true);
 		try {
-			await desktopLink.unlink();
-			// Hand the permission back too. Severing the link should return what the link needed,
+			const { remaining } = await desktopLink.unlink();
+			// Hand the permission back with the last link. Severing it should return what it needed,
 			// rather than leaving a browser that can still talk to local programs for a feature it
-			// is no longer using. Best-effort: failing to give it back must not fail the unlink,
-			// which has already happened.
-			await desktopLink.permission?.drop().catch(() => {});
+			// is no longer using; another vault's link still needs it. Best-effort: failing to give
+			// it back must not fail the unlink, which has already happened.
+			if (remaining === 0) await desktopLink.permission?.drop().catch(() => {});
 			setConfirmUnlink(false);
 			await refresh();
 		} finally {
@@ -227,11 +227,9 @@ export function DesktopLinkSection() {
 							// vault rides it is the separate fact underneath.
 							sharesThisVault === true
 								? t`This vault syncs with the desktop app.`
-								: sharesThisVault === false
-									? t`Linked to this browser, but the app shares a different vault, not this one.`
-									: status.pairedAt
-										? t`Linked ${formatDate(status.pairedAt)}`
-										: t`Linked to the Bramble desktop app.`
+								: status.pairedAt
+									? t`Linked ${formatDate(status.pairedAt)}`
+									: t`Linked to the Bramble desktop app.`
 						}
 					>
 						{/* Two different things can be meant by "disconnect", and only one of them is
@@ -261,34 +259,6 @@ export function DesktopLinkSection() {
 							</Trans>
 						</p>
 					)}
-					{canPopOut && sharesThisVault !== true && (
-						<div className="space-y-3">
-							<p className="text-sm text-muted-foreground">
-								<Trans>To add the desktop app's vault, continue in a window.</Trans>
-							</p>
-							{continueInWindow}
-						</div>
-					)}
-					{!canPopOut &&
-						sharesThisVault !== true &&
-						(emojiConfirm || (
-							<div className="space-y-3">
-								<p className="text-sm text-muted-foreground">
-									<Trans>
-										To bring in the desktop app's vault, open Connect a browser there and link
-										again.
-									</Trans>
-								</p>
-								<Button
-									variant="secondary"
-									fullWidth
-									disabled={busy}
-									onClick={() => void link.start()}
-								>
-									<Trans>Link again</Trans>
-								</Button>
-							</div>
-						))}
 				</>
 			) : canPopOut ? (
 				<div className="space-y-3">
@@ -360,11 +330,22 @@ export function DesktopLinkSection() {
 			)}
 
 			{error && <p className="text-xs text-destructive">{error}</p>}
+			{link.claimFailed && (
+				<Button
+					variant="secondary"
+					size="sm"
+					disabled={busy}
+					onClick={() => void link.retryClaim()}
+				>
+					<Trans>Try again</Trans>
+				</Button>
+			)}
 			{link.combined && <CombineResult link={link} />}
 			<Modal
 				open={link.invite !== null}
+				// No "Not now": a link without the vault is half a pairing, so closing lets it go.
 				onClose={() => {
-					link.dismissInvite();
+					void link.abandon();
 					setInvitePassword("");
 				}}
 				className="max-w-sm"
@@ -451,17 +432,6 @@ export function DesktopLinkSection() {
 					)}
 					{link.inviteError && <p className="text-xs text-destructive">{link.inviteError}</p>}
 					<div className="flex justify-end gap-2">
-						<Button
-							variant="secondary"
-							size="sm"
-							onClick={() => {
-								link.dismissInvite();
-								setInvitePassword("");
-							}}
-						>
-							{/* The link stays: declining the vault copy is not declining delegation. */}
-							<Trans>Not now</Trans>
-						</Button>
 						<Button
 							type="submit"
 							size="sm"

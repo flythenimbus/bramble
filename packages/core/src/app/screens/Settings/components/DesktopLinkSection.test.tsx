@@ -42,6 +42,8 @@ const h = vi.hoisted(() => ({
 		| { id: string; sas: { emoji: number[]; digits: string } }
 		| { legacy: true },
 	confirms: [] as [string, boolean][],
+	/** How many vaults still have a link after an unlink. */
+	remaining: 0,
 	syncEvent: null as ((e: { kind: string; sas?: string; sasEmoji?: number[] }) => void) | null,
 }));
 
@@ -70,6 +72,7 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 			if (h.joinFails) throw new Error("join failed");
 			// The desktop's vault is now the open one, as after a real join.
 			h.activeVault = "joined";
+			return "joined";
 		},
 		importEntries: async (items: unknown[]) => {
 			h.steps.push("import");
@@ -128,6 +131,14 @@ const platform = {
 		},
 		unlink: async () => {
 			h.steps.push("unlink");
+			return { remaining: h.remaining };
+		},
+		attach: async (vaultId: string) => {
+			h.steps.push(`attach:${vaultId}`);
+			return true;
+		},
+		abandon: async () => {
+			h.steps.push("abandon");
 		},
 		// A getter, so a test can model a host with no runtime permission to ask for.
 		get permission() {
@@ -150,9 +161,11 @@ const platform = {
 const entry = (id: string): Entry =>
 	({ id, kind: "login", name: id, username: "u", password: "p", urls: [] }) as unknown as Entry;
 
-/** Link an already-paired browser again, the way it now picks up the desktop's vault. */
-async function linkAgain() {
-	fireEvent.click(await screen.findByRole("button", { name: /^link again$/i }));
+/** Mount a vault with no link of its own, and link it: each vault links for itself. */
+async function mountAndLink() {
+	h.paired = false;
+	mount();
+	fireEvent.click(await screen.findByRole("button", { name: /^link$/i }));
 	fireEvent.click(await screen.findByRole("button", { name: /they match/i }));
 }
 
@@ -195,6 +208,7 @@ afterEach(() => {
 	h.claims = 0;
 	h.startResult = { id: "L1", sas: { emoji: [0, 1, 2, 3, 4, 5, 6], digits: "1234 5678 9012" } };
 	h.confirms = [];
+	h.remaining = 0;
 });
 
 describe("what a desktop connect will do to this browser", () => {
@@ -204,8 +218,7 @@ describe("what a desktop connect will do to this browser", () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "GROUP");
 		h.invite = "code";
-		mount();
-		await linkAgain();
+		await mountAndLink();
 
 		expect(await screen.findByText(/already share this vault/i)).toBeTruthy();
 		expect(screen.queryByLabelText(/master password/i)).toBeNull();
@@ -215,8 +228,7 @@ describe("what a desktop connect will do to this browser", () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
-		mount();
-		await linkAgain();
+		await mountAndLink();
 
 		expect(await screen.findByText(/you have two vaults/i)).toBeTruthy();
 		expect(screen.getByRole("radio", { name: /combine into one/i })).toBeTruthy();
@@ -228,8 +240,7 @@ describe("what a desktop connect will do to this browser", () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
-		mount();
-		await linkAgain();
+		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
 
 		fireEvent.click(screen.getByRole("radio", { name: /keep them separate/i }));
@@ -244,8 +255,7 @@ describe("what a desktop connect will do to this browser", () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
-		mount();
-		await linkAgain();
+		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
 
 		fireEvent.click(screen.getByRole("radio", { name: /keep them separate/i }));
@@ -265,8 +275,7 @@ describe("when both sides have entries", () => {
 	}
 
 	async function choose(name: RegExp) {
-		mount();
-		await linkAgain();
+		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
 		fireEvent.click(screen.getByRole("radio", { name }));
 		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
@@ -275,8 +284,7 @@ describe("when both sides have entries", () => {
 
 	it("asks combine or keep separate, with neither chosen for the user", async () => {
 		twoVaults();
-		mount();
-		await linkAgain();
+		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
 
 		for (const radio of screen.getAllByRole("radio"))
@@ -291,7 +299,8 @@ describe("when both sides have entries", () => {
 		twoVaults();
 		await choose(/combine into one/i);
 
-		await waitFor(() => expect(h.steps).toEqual(["join", "import"]));
+		// The link attaches to the vault the join opened before anything is copied into it.
+		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined", "import"]));
 		expect(h.imported).toHaveLength(2);
 		expect(h.imported?.[0]).not.toHaveProperty("id");
 	});
@@ -300,7 +309,7 @@ describe("when both sides have entries", () => {
 		twoVaults();
 		await choose(/keep them separate/i);
 
-		await waitFor(() => expect(h.steps).toEqual(["join"]));
+		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined"]));
 		expect(h.imported).toBeNull();
 	});
 
@@ -326,16 +335,17 @@ describe("whether the vault on screen is the one the app shares", () => {
 		expect(await screen.findByText(/this vault syncs with the desktop app/i)).toBeTruthy();
 	});
 
-	it("says the app shares a different vault when its device is absent here", async () => {
-		// The bug: the link is per-BROWSER and a sync group is per-VAULT, so "Connected" was true
-		// of the browser while implying something about whichever vault you were standing in.
+	it("offers no Link again and names no other vault: each vault's link is its own", async () => {
+		// Linking again replaced the profile's one link, so another vault lost its pairing.
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "GROUP");
 		h.rosterOf.set("v1", ["browser-key"]);
 		h.desktopKey = "desktop-key";
 		mount();
 
-		expect(await screen.findByText(/shares a different vault/i)).toBeTruthy();
+		expect(await screen.findByText(/^Linked /i)).toBeTruthy();
+		expect(screen.queryByText(/shares a different vault/i)).toBeNull();
+		expect(screen.queryByRole("button", { name: /^link again$/i })).toBeNull();
 	});
 
 	it("claims nothing when the app is not running to answer", async () => {
@@ -458,6 +468,19 @@ describe("the browser permission the link needs", () => {
 		await waitFor(() => expect(h.steps).toEqual(["unlink", "drop"]));
 	});
 
+	it("keeps the permission while another vault still has a link", async () => {
+		h.askable = true;
+		h.remaining = 1;
+		mount();
+
+		fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
+		fireEvent.click(await screen.findByRole("button", { name: /stop using the app/i }));
+
+		await waitFor(() => expect(h.steps).toEqual(["unlink"]));
+		await new Promise((r) => setTimeout(r, 20));
+		expect(h.steps).toEqual(["unlink"]);
+	});
+
 	it("stays out of the way where the host has no permission to ask for", async () => {
 		// Mobile and desktop hold it from install. Absent must read as allowed, or the section
 		// would offer a grant button on hosts with nothing to grant.
@@ -483,6 +506,7 @@ describe("in the toolbar popup", () => {
 	});
 
 	it("leaves an invite unclaimed for the window, and offers it", async () => {
+		h.paired = false;
 		h.canPopOut = true;
 		h.invite = "INVITE";
 		mount();
@@ -543,12 +567,38 @@ describe("an older desktop app's copy", () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
 		h.invite = "code";
-		mount();
-		await linkAgain();
+		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
 		act(() =>
 			h.syncEvent?.({ kind: "sas", sas: "1234 5678 9012", sasEmoji: [0, 1, 2, 3, 4, 5, 6] }),
 		);
 		expect(await screen.findByText(/approve only if they match/i)).toBeTruthy();
+	});
+});
+
+describe("a pairing is never half made", () => {
+	it("offers no Not now: closing the vault's offer lets the link go", async () => {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.invite = "INVITE";
+		await mountAndLink();
+		expect(await screen.findByText(/sync with the desktop app/i)).toBeTruthy();
+		expect(screen.queryByRole("button", { name: /not now/i })).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+
+		await waitFor(() => expect(h.steps).toContain("abandon"));
+	});
+
+	it("offers Try again beside a claim that brought no vault, and claims again", async () => {
+		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
+		h.invite = null;
+		await mountAndLink();
+		expect(await screen.findByText(/didn't send its vault/i)).toBeTruthy();
+
+		h.invite = "INVITE";
+		fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+
+		expect(await screen.findByText(/sync with the desktop app/i)).toBeTruthy();
+		expect(h.claims).toBe(2);
 	});
 });

@@ -2202,8 +2202,8 @@ msgid "Link"
 msgstr "Vincular"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Link again"
-msgstr "Vincular novamente"
+#~ msgid "Link again"
+#~ msgstr "Vincular novamente"
 
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkBanner.tsx
 msgid "Link it instead of making a new vault."
@@ -2223,12 +2223,16 @@ msgid "Linked to the Bramble desktop app."
 msgstr "Vinculado ao aplicativo de desktop do Bramble."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Linked to this browser, but the app shares a different vault, not this one."
-msgstr "Vinculado a este navegador, mas o app compartilha um cofre diferente, não este."
+#~ msgid "Linked to this browser, but the app shares a different vault, not this one."
+#~ msgstr "Vinculado a este navegador, mas o app compartilha um cofre diferente, não este."
 
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 #~ msgid "Linking continues in a window, which stays open while you switch to the desktop app."
 #~ msgstr "A vinculação continua em uma janela, que permanece aberta enquanto você alterna para o aplicativo de desktop."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Linking didn't finish. Link again."
+msgstr "A vinculação não foi concluída. Vincule novamente."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Lion"
@@ -2468,7 +2472,6 @@ msgstr "Não incluído no backup: os anexos deste cofre não podem ser listados 
 #~ msgstr "Não concluído: o Bramble foi fechado antes da conclusão deste backup. Ele será executado novamente na próxima vez que o Bramble for aberto."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Not now"
 msgstr "Agora não"
 
@@ -4008,12 +4011,12 @@ msgid "Title"
 msgstr "Título"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "To add the desktop app's vault, continue in a window."
-msgstr "Para adicionar o cofre do aplicativo de desktop, continue em uma janela."
+#~ msgid "To add the desktop app's vault, continue in a window."
+#~ msgstr "Para adicionar o cofre do aplicativo de desktop, continue em uma janela."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "To bring in the desktop app's vault, open Connect a browser there and link again."
-msgstr "Para trazer o cofre do aplicativo de desktop, abra Conectar um navegador lá e vincule novamente."
+#~ msgid "To bring in the desktop app's vault, open Connect a browser there and link again."
+#~ msgstr "Para trazer o cofre do aplicativo de desktop, abra Conectar um navegador lá e vincule novamente."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle autofill on web pages"
@@ -4097,6 +4100,8 @@ msgid "Trumpet"
 msgstr "Trompete"
 
 #: packages/core/src/app/ErrorBoundary.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Try again"
 msgstr "Tentar novamente"
 

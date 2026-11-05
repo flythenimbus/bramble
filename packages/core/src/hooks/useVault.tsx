@@ -476,13 +476,14 @@ export interface VaultActions {
 	joinGroup(pairingCode: string, unlock: JoinUnlock, opts?: { viaLink?: boolean }): Promise<void>;
 	/** Setup-flow join: create a NEW vault from a pairing code (dedups to an existing vault if already
 	 * a member), then run the join in that vault's context and unlock into it. Resolves when the join
-	 * completes. Drives `joining` / `joinError`. See docs/multiple-vaults.md. */
+	 * completes, with the id of the vault it opened. Drives `joining` / `joinError`. See
+	 * docs/multiple-vaults.md. */
 	startJoin(
 		pairingCode: string,
 		unlock: JoinUnlock,
 		label?: string,
 		opts?: { viaLink?: boolean },
-	): Promise<void>;
+	): Promise<string>;
 	/** Revoke a device from the sync group (roster tombstone); propagates over ongoing sync. */
 	removeDevice(deviceId: string): Promise<void>;
 }
@@ -1986,7 +1987,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 	const joinRunningRef = useRef(false);
 	// The in-flight startJoin promise, so a re-entrant call rides it instead of starting a second join.
-	const joinInFlightRef = useRef<Promise<void> | null>(null);
+	const joinInFlightRef = useRef<Promise<string> | null>(null);
 
 	// Re-entry guard. The dedup below only matches a PERSISTED sync.group, which an in-flight join
 	// hasn't written yet, so a second call would create a second registry record and overwrite
@@ -1999,7 +2000,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			method: JoinUnlock,
 			label?: string,
 			opts?: { viaLink?: boolean },
-		): Promise<void> => {
+		): Promise<string> => {
 			if (joinInFlightRef.current) return joinInFlightRef.current;
 			const run = (async () => {
 				setJoinError(null);
@@ -2009,15 +2010,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					const g = await storage.getMeta<{ groupKey?: string }>(syncKeyFor("sync.group", v.id));
 					if (g?.groupKey === code.groupKey) {
 						selectVault(v.id);
-						return;
+						return v.id;
 					}
 				}
 				// Named by the caller where it knows what this vault IS. An unlabelled vault appearing
 				// mid-flow is how "connect a browser" read as the app swallowing the user's entries.
 				const newId = await createRecord(label);
 				await shell.setActiveVault?.(newId);
-				return new Promise<void>((resolve, reject) => {
-					joinResolverRef.current = { resolve, reject };
+				return new Promise<string>((resolve, reject) => {
+					joinResolverRef.current = { resolve: () => resolve(newId), reject };
 					setPendingJoin({ code: pairingCode, method, targetId: newId, viaLink: opts?.viaLink });
 				});
 			})();

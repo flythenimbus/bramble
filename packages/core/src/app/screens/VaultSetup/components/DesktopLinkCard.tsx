@@ -198,9 +198,27 @@ export function DesktopLinkCard({
 
 	return (
 		<div className="space-y-4 rounded-xl border border-border bg-card/50 p-5">
-			{!link.joining && <BackButton onClick={onBack} />}
+			{!link.joining && (
+				<BackButton
+					onClick={() => {
+						// Leaving a link without the vault is half a pairing, so it goes too.
+						void link.abandon();
+						onBack();
+					}}
+				/>
+			)}
 			{body}
 			{link.error && <p className="text-xs text-destructive">{link.error}</p>}
+			{link.claimFailed && (
+				<Button
+					variant="secondary"
+					fullWidth
+					disabled={link.busy}
+					onClick={() => void link.retryClaim()}
+				>
+					<Trans>Try again</Trans>
+				</Button>
+			)}
 		</div>
 	);
 }

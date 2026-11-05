@@ -33,6 +33,12 @@ const h = vi.hoisted(() => ({
 	/** The open vault, as the provider sees it. Unset means the first vault in `vaults`. */
 	active: undefined as string | undefined,
 	subs: new Set<() => void>(),
+	/** The vault a join opens: a new one, or one this browser already has. */
+	joinOpens: "new",
+	/** Set to open another vault right after the join, as the user might elsewhere. */
+	afterJoin: null as string | null,
+	/** Whether the app lists the link once the vault is in. */
+	attaches: true,
 }));
 
 /** The open vault, re-rendering subscribers when a join switches it, as the provider does. */
@@ -62,7 +68,9 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 				h.steps.push("join");
 				h.joins.push(args);
 				if (h.joinFails) throw new Error("join failed");
-				switchTo("new");
+				switchTo(h.joinOpens);
+				if (h.afterJoin) switchTo(h.afterJoin);
+				return h.joinOpens;
 			},
 			importEntries: async (items: unknown[], attachments: unknown[] = []) => {
 				h.steps.push(`import@${at}`);
@@ -142,6 +150,13 @@ const platform = {
 		claimSyncInvite: async () => {
 			h.calls.push("claim");
 			return h.invite;
+		},
+		attach: async (vaultId: string) => {
+			h.calls.push(`attach:${vaultId}`);
+			return h.attaches;
+		},
+		abandon: async () => {
+			h.calls.push("abandon");
 		},
 	},
 } as unknown as Platform;
@@ -424,11 +439,13 @@ describe("an older desktop app, linked with the code", () => {
 		expect(h.joins[0]?.[3]).toEqual({ viaLink: false });
 	});
 
-	it("says nothing when it sends no vault, which an app from before invites never does", async () => {
+	it("offers Try again when it sends no vault, as an emoji link does", async () => {
+		// A link with no vault in the browser is half a pairing, however it was made.
 		h.invite = null;
 		try {
 			const result = await linkedByCode();
-			expect(result.current.error).toBeNull();
+			expect(result.current.claimFailed).toBe(true);
+			expect(result.current.error).toBeTruthy();
 		} finally {
 			h.invite = "invite";
 		}
@@ -442,6 +459,115 @@ describe("an older desktop app, linked with the code", () => {
 		expect(result.current.joinSas?.digits).toBe("1234 5678 9012");
 		act(() => h.syncEvent?.({ kind: "joined" }));
 		expect(result.current.joinSas).toBeNull();
+	});
+});
+
+describe("a pairing, start to end", () => {
+	// A link belongs to the browser vault that ends up holding the desktop's, and is never half made.
+	const reset = () => {
+		h.vaults = [];
+		h.calls = [];
+		h.joinOpens = "new";
+		h.afterJoin = null;
+		h.attaches = true;
+		h.invite = "invite";
+	};
+
+	it("attaches the link to the vault the join opened", async () => {
+		reset();
+		const result = await linkedFrom("setup");
+		await act(async () => {
+			await result.current.accept("pw");
+		});
+		expect(h.calls).toContain("attach:new");
+	});
+
+	it("attaches it to the vault the browser already had, when the join opens that one", async () => {
+		reset();
+		h.vaults = [{ id: "v1", label: "", createdAt: 1 }];
+		h.joinOpens = "v2";
+		const result = await linkedFrom("settings");
+		await act(async () => {
+			await result.current.accept("pw", { choice: "separate" });
+		});
+		expect(h.calls).toContain("attach:v2");
+	});
+
+	it("attaches it to the vault the join opened, not one opened elsewhere since", async () => {
+		reset();
+		h.afterJoin = "other";
+		const result = await linkedFrom("setup");
+		await act(async () => {
+			await result.current.accept("pw");
+		});
+		expect(h.calls).toContain("attach:new");
+		expect(h.calls).not.toContain("attach:other");
+	});
+
+	it("says so when the app will not finish the pairing", async () => {
+		reset();
+		h.attaches = false;
+		const result = await linkedFrom("setup");
+		let done: boolean | undefined;
+		await act(async () => {
+			done = await result.current.accept("pw");
+		});
+		expect(done).toBe(false);
+		expect(result.current.error).toMatch(/didn't finish/i);
+	});
+
+	it("claims again on Try again, after the desktop sent no vault", async () => {
+		reset();
+		h.invite = null;
+		const result = await linkedFrom("setup");
+		expect(result.current.claimFailed).toBe(true);
+
+		h.invite = "invite";
+		await act(async () => {
+			await result.current.retryClaim();
+		});
+		expect(result.current.invite).toBe("invite");
+		expect(result.current.claimFailed).toBe(false);
+		expect(result.current.error).toBeNull();
+	});
+
+	it("lets go of a link it made when the screen goes away before the vault is in", async () => {
+		reset();
+		const { result, unmount } = renderHook(() => useDesktopLink({ from: "setup" }), { wrapper });
+		await act(async () => {
+			await result.current.start();
+		});
+		await act(async () => {
+			await result.current.answer(true);
+		});
+		unmount();
+		expect(h.calls).toContain("abandon");
+	});
+
+	it("keeps the link when the screen goes away after it attached", async () => {
+		reset();
+		const { result, unmount } = renderHook(() => useDesktopLink({ from: "setup" }), { wrapper });
+		await act(async () => {
+			await result.current.start();
+		});
+		await act(async () => {
+			await result.current.answer(true);
+		});
+		await act(async () => {
+			await result.current.accept("pw");
+		});
+		unmount();
+		expect(h.calls).not.toContain("abandon");
+	});
+
+	it("abandons the link when the vault's offer is closed", async () => {
+		reset();
+		const result = await linkedFrom("setup");
+		await act(async () => {
+			await result.current.abandon();
+		});
+		expect(h.calls).toContain("abandon");
+		expect(result.current.invite).toBeNull();
 	});
 });
 

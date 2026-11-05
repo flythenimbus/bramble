@@ -21,6 +21,8 @@ const h = vi.hoisted(() => ({
 	sent: [] as Record<string, unknown>[],
 	/** The relay ports this page opened to lend a pipe, by name. */
 	relays: [] as string[],
+	/** How many lent relay ports this page closed. */
+	relaysClosed: 0,
 }));
 
 // No `connectNative` on this mock unless a case turns the binding on: the gate must not test for
@@ -52,7 +54,9 @@ vi.mock("./platform-api", () => ({
 					onMessage: {
 						addListener: (cb: (m: unknown) => void) => queueMicrotask(() => cb({ ready: true })),
 					},
-					disconnect: () => {},
+					disconnect: () => {
+						h.relaysClosed++;
+					},
 				};
 			},
 		},
@@ -90,6 +94,7 @@ beforeEach(() => {
 	h.binding = false;
 	h.sent = [];
 	h.relays = [];
+	h.relaysClosed = 0;
 });
 
 /** The shipping Chromium manifest: declared optional, so it is asked for at connect time. */
@@ -228,5 +233,40 @@ describe("a pipe lent to the background", () => {
 		await link?.start?.();
 
 		expect(named("DESKTOP_LINK_START")).toEqual(h.relays);
+	});
+});
+
+// A pairing ends with the link attached to a vault, or with nothing kept on either side.
+describe("a link per vault", () => {
+	const sentTypes = () =>
+		h.sent.filter((m) => m.type !== "DESKTOP_LINK_TRANSPORT_NEEDED").map((m) => ({ ...m }));
+
+	it("attaches the link to the vault the flow ended in", async () => {
+		h.reply = { ok: true, data: true };
+		const link = await load();
+
+		await expect(link?.attach?.("v2")).resolves.toBe(true);
+		expect(sentTypes()).toEqual([{ type: "DESKTOP_LINK_ATTACH", vaultId: "v2" }]);
+	});
+
+	it("lets a link go, closing the pipe this page lent for it", async () => {
+		h.binding = true;
+		h.reply = { ok: true, data: { id: "L1", sas: { emoji: [], digits: "" } } };
+		const link = await load();
+		await link?.start?.();
+		await link?.confirm?.("L1", true);
+		expect(h.relaysClosed).toBe(0);
+
+		await link?.abandon?.();
+
+		expect(sentTypes().at(-1)).toEqual({ type: "DESKTOP_LINK_ABANDON" });
+		expect(h.relaysClosed).toBe(1);
+	});
+
+	it("says how many vaults still have a link after one is disconnected", async () => {
+		h.reply = { ok: true, data: { remaining: 1 } };
+		const link = await load();
+
+		await expect(link?.unlink()).resolves.toEqual({ remaining: 1 });
 	});
 });

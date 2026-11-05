@@ -71,6 +71,10 @@ export function useDesktopLink({
 	/** The invite the app handed over, waiting on the master password. */
 	const [invite, setInvite] = useState<string | null>(null);
 	const [outcome, setOutcome] = useState<LinkOutcome | null>(null);
+	/** The desktop sent no vault after a link: Try again claims again. */
+	const [claimFailed, setClaimFailed] = useState(false);
+	/** A link this screen made that has not attached to a vault yet, let go if the screen goes. */
+	const unattached = useRef(false);
 	const [summary, setSummary] = useState<DesktopVaultSummary | null>(null);
 	const [joining, setJoining] = useState(false);
 	const [inviteError, setInviteError] = useState<string | null>(null);
@@ -149,6 +153,33 @@ export function useDesktopLink({
 		}
 	}, [desktopLink, t]);
 
+	/** After a link, the desktop's vault must follow: a pairing is never half made. */
+	const claimAfterLink = useCallback(async () => {
+		const claimed = await afterLinked();
+		setClaimFailed(!claimed);
+		setError(claimed ? null : t`The desktop app didn't send its vault.`);
+	}, [afterLinked, t]);
+
+	const retryClaim = useCallback(async () => {
+		setBusy(true);
+		try {
+			await claimAfterLink();
+		} finally {
+			setBusy(false);
+		}
+	}, [claimAfterLink]);
+
+	/** Close the vault's offer: the link it came with goes too, on both sides. */
+	const abandon = useCallback(async () => {
+		setInvite(null);
+		setOutcome(null);
+		setInviteError(null);
+		setClaimFailed(false);
+		if (!unattached.current) return;
+		unattached.current = false;
+		await desktopLink?.abandon?.();
+	}, [desktopLink]);
+
 	/** This screen's answer to the emoji. The app is trusted only after both screens say yes. */
 	const answer = useCallback(
 		async (matches: boolean) => {
@@ -158,10 +189,10 @@ export function useDesktopLink({
 			setError(null);
 			try {
 				await desktopLink.confirm(linking.id, matches);
+				unattached.current = true;
 				setLinking(null);
 				setLinkedBy("emoji");
-				// An app that links by emoji always arms an invite, so none is a fault.
-				if (!(await afterLinked())) setError(t`The desktop app didn't send its vault.`);
+				await claimAfterLink();
 			} catch (e) {
 				setLinking(null);
 				setError(e instanceof Error && e.message ? e.message : t`Nothing was linked.`);
@@ -170,7 +201,7 @@ export function useDesktopLink({
 				setAwaitingApp(false);
 			}
 		},
-		[linking, desktopLink, afterLinked, t],
+		[linking, desktopLink, claimAfterLink, t],
 	);
 
 	/** Link with the code, for a desktop app that predates the emoji. */
@@ -180,9 +211,10 @@ export function useDesktopLink({
 		setError(null);
 		try {
 			await desktopLink.pair(code);
+			unattached.current = true;
 			setCode("");
 			setLinkedBy("code");
-			await afterLinked();
+			await claimAfterLink();
 		} catch (e) {
 			// The app refuses a wrong, expired and already-used code identically.
 			setError(
@@ -191,7 +223,7 @@ export function useDesktopLink({
 		} finally {
 			setBusy(false);
 		}
-	}, [desktopLink, code, afterLinked, t]);
+	}, [desktopLink, code, claimAfterLink, t]);
 
 	// A link nobody answered is let go when this screen goes away, rather than held open.
 	const linkingRef = useRef(linking);
@@ -200,6 +232,8 @@ export function useDesktopLink({
 		() => () => {
 			const open = linkingRef.current;
 			if (open) void desktopLink?.cancel?.(open.id);
+			// A link made here and not attached would be half a pairing.
+			if (unattached.current) void desktopLink?.abandon?.();
 		},
 		[desktopLink],
 	);
@@ -258,12 +292,19 @@ export function useDesktopLink({
 					combining && oldId
 						? await collectCarry(entries, files, platformFiles?.forVault(oldId) ?? null)
 						: null;
-				await startJoin(invite, { kind: "password", password }, undefined, {
+				const opened = await startJoin(invite, { kind: "password", password }, undefined, {
 					viaLink: linkedBy === "emoji",
 				});
 				joined = true;
 				setInvite(null);
 				setOutcome(null);
+				// The pairing is complete now: the link belongs to the vault the join opened.
+				const attached = (await desktopLink?.attach?.(opened)) ?? true;
+				unattached.current = false;
+				if (!attached) {
+					setError(t`Linking didn't finish. Link again.`);
+					return false;
+				}
 				const now = await vaultSwitchedFrom(oldId);
 				if (carry && oldId) {
 					copying = true;
@@ -301,6 +342,7 @@ export function useDesktopLink({
 			}
 		},
 		[
+			desktopLink,
 			linkedBy,
 			invite,
 			outcome,
@@ -325,12 +367,6 @@ export function useDesktopLink({
 		setCombined({ ...combined, heldBack: { items: [], attachments: [] } });
 	}, [combined]);
 
-	const dismissInvite = useCallback(() => {
-		setInvite(null);
-		setOutcome(null);
-		setInviteError(null);
-	}, []);
-
 	return {
 		busy,
 		error,
@@ -349,7 +385,9 @@ export function useDesktopLink({
 		answer,
 		pairWithCode,
 		accept,
-		dismissInvite,
+		abandon,
+		claimFailed,
+		retryClaim,
 		combined,
 		copyHeldBack,
 		otherDevices,

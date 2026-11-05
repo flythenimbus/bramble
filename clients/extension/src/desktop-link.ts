@@ -205,6 +205,16 @@ const adapter: DesktopLinkAdapter = {
 		// Kept while this page is open: a lent pipe is now the background's held link, which
 		// carries the vault copy and sync until its worker can open a pipe of its own.
 	},
+	// The flow ended with this vault holding the desktop's: the pairing is complete.
+	attach: (vaultId) => dispatch<boolean>("DESKTOP_LINK_ATTACH", { vaultId }),
+	// The flow ended without a vault, so the link goes, and with it the pipe lent for it.
+	abandon: async () => {
+		try {
+			await dispatch("DESKTOP_LINK_ABANDON");
+		} finally {
+			releaseLinkProxy();
+		}
+	},
 	connect: () => withNativeProxy(() => dispatch<boolean>("DESKTOP_LINK_CONNECT")),
 	query: async (hostname) => {
 		const answer = await dispatch<{ ok: boolean; error?: string; matches?: unknown[] }>(
@@ -232,9 +242,7 @@ const adapter: DesktopLinkAdapter = {
 				{ via },
 			),
 		),
-	unlink: async () => {
-		await dispatch("DESKTOP_LINK_UNLINK");
-	},
+	unlink: () => dispatch<{ remaining: number }>("DESKTOP_LINK_UNLINK"),
 	// Omitted where the permission is required rather than optional, which callers read as
 	// already-allowed. See the `permission` docs on DesktopLinkAdapter.
 	...(isOptional() ? { permission } : {}),

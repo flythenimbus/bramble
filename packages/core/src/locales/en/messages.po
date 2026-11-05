@@ -2202,8 +2202,8 @@ msgid "Link"
 msgstr "Link"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Link again"
-msgstr "Link again"
+#~ msgid "Link again"
+#~ msgstr "Link again"
 
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkBanner.tsx
 msgid "Link it instead of making a new vault."
@@ -2223,12 +2223,16 @@ msgid "Linked to the Bramble desktop app."
 msgstr "Linked to the Bramble desktop app."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Linked to this browser, but the app shares a different vault, not this one."
-msgstr "Linked to this browser, but the app shares a different vault, not this one."
+#~ msgid "Linked to this browser, but the app shares a different vault, not this one."
+#~ msgstr "Linked to this browser, but the app shares a different vault, not this one."
 
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 #~ msgid "Linking continues in a window, which stays open while you switch to the desktop app."
 #~ msgstr "Linking continues in a window, which stays open while you switch to the desktop app."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Linking didn't finish. Link again."
+msgstr "Linking didn't finish. Link again."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Lion"
@@ -2468,7 +2472,6 @@ msgstr "Not backed up: this vault's attachments can't be listed while it's locke
 #~ msgstr "Not finished: Bramble was closed before this backup completed. It will run again next time you open Bramble."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Not now"
 msgstr "Not now"
 
@@ -4008,12 +4011,12 @@ msgid "Title"
 msgstr "Title"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "To add the desktop app's vault, continue in a window."
-msgstr "To add the desktop app's vault, continue in a window."
+#~ msgid "To add the desktop app's vault, continue in a window."
+#~ msgstr "To add the desktop app's vault, continue in a window."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "To bring in the desktop app's vault, open Connect a browser there and link again."
-msgstr "To bring in the desktop app's vault, open Connect a browser there and link again."
+#~ msgid "To bring in the desktop app's vault, open Connect a browser there and link again."
+#~ msgstr "To bring in the desktop app's vault, open Connect a browser there and link again."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle autofill on web pages"
@@ -4097,6 +4100,8 @@ msgid "Trumpet"
 msgstr "Trumpet"
 
 #: packages/core/src/app/ErrorBoundary.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Try again"
 msgstr "Try again"
 

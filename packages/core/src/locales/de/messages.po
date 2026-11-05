@@ -2202,8 +2202,8 @@ msgid "Link"
 msgstr "Verknüpfen"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Link again"
-msgstr "Erneut verknüpfen"
+#~ msgid "Link again"
+#~ msgstr "Erneut verknüpfen"
 
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkBanner.tsx
 msgid "Link it instead of making a new vault."
@@ -2223,12 +2223,16 @@ msgid "Linked to the Bramble desktop app."
 msgstr "Mit der Bramble-Desktop-App verknüpft."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Linked to this browser, but the app shares a different vault, not this one."
-msgstr "Mit diesem Browser verknüpft, aber die App verwendet einen anderen Tresor, nicht diesen."
+#~ msgid "Linked to this browser, but the app shares a different vault, not this one."
+#~ msgstr "Mit diesem Browser verknüpft, aber die App verwendet einen anderen Tresor, nicht diesen."
 
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 #~ msgid "Linking continues in a window, which stays open while you switch to the desktop app."
 #~ msgstr "Die Verknüpfung wird in einem Fenster fortgesetzt, das geöffnet bleibt, während Sie zur Desktop-App wechseln."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Linking didn't finish. Link again."
+msgstr "Das Verknüpfen wurde nicht abgeschlossen. Erneut verknüpfen."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Lion"
@@ -2468,7 +2472,6 @@ msgstr "Nicht gesichert: Die Anhänge dieses Tresors können nicht aufgelistet w
 #~ msgstr "Nicht abgeschlossen: Bramble wurde geschlossen, bevor dieses Backup abgeschlossen wurde. Es wird erneut ausgeführt, wenn Sie Bramble das nächste Mal öffnen."
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
-#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Not now"
 msgstr "Nicht jetzt"
 
@@ -4008,12 +4011,12 @@ msgid "Title"
 msgstr "Titel"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "To add the desktop app's vault, continue in a window."
-msgstr "Um den Tresor der Desktop-App hinzuzufügen, fahren Sie in einem Fenster fort."
+#~ msgid "To add the desktop app's vault, continue in a window."
+#~ msgstr "Um den Tresor der Desktop-App hinzuzufügen, fahren Sie in einem Fenster fort."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "To bring in the desktop app's vault, open Connect a browser there and link again."
-msgstr "Um den Tresor der Desktop-App zu übernehmen, öffnen Sie dort „Browser verbinden“ und stellen Sie die Verknüpfung erneut her."
+#~ msgid "To bring in the desktop app's vault, open Connect a browser there and link again."
+#~ msgstr "Um den Tresor der Desktop-App zu übernehmen, öffnen Sie dort „Browser verbinden“ und stellen Sie die Verknüpfung erneut her."
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle autofill on web pages"
@@ -4097,6 +4100,8 @@ msgid "Trumpet"
 msgstr "Trompete"
 
 #: packages/core/src/app/ErrorBoundary.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Try again"
 msgstr "Erneut versuchen"
 

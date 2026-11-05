@@ -22,6 +22,10 @@ const h = vi.hoisted(() => ({
 	joining: false,
 	/** How often a card using the hook went away; the flow it runs dies with it. */
 	unmounts: 0,
+	/** The desktop sent no vault after a link. */
+	claimFailed: false,
+	error: null as string | null,
+	calls: [] as string[],
 }));
 
 vi.mock("../../hooks/useDesktopLink", () => ({
@@ -34,7 +38,14 @@ vi.mock("../../hooks/useDesktopLink", () => ({
 		);
 		return {
 			busy: false,
-			error: null,
+			error: h.error,
+			claimFailed: h.claimFailed,
+			retryClaim: async () => {
+				h.calls.push("retryClaim");
+			},
+			abandon: async () => {
+				h.calls.push("abandon");
+			},
 			linking: h.linking,
 			awaitingApp: h.awaitingApp,
 			legacy: false,
@@ -176,6 +187,34 @@ describe("the desktop link on the setup screen", () => {
 			expect(screen.queryByRole("button", { name: /back/i })).toBeNull();
 		} finally {
 			h.joining = false;
+		}
+	});
+
+	it("lets the link go when going back from the password step", async () => {
+		// Back from here is leaving the pairing half made, so nothing is kept.
+		h.invite = "invite";
+		h.calls = [];
+		try {
+			const onModeChange = mount(withLink, "desktop");
+			fireEvent.click(screen.getByRole("button", { name: /back/i }));
+			await waitFor(() => expect(h.calls).toContain("abandon"));
+			expect(onModeChange).toHaveBeenCalledWith("create");
+		} finally {
+			h.invite = null;
+		}
+	});
+
+	it("offers Try again beside a claim that brought no vault", () => {
+		h.claimFailed = true;
+		h.error = "The desktop app didn't send its vault.";
+		h.calls = [];
+		try {
+			mount(withLink, "desktop");
+			fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+			expect(h.calls).toEqual(["retryClaim"]);
+		} finally {
+			h.claimFailed = false;
+			h.error = null;
 		}
 	});
 

@@ -65,8 +65,8 @@ describe("startJoin re-entry", () => {
 		const getActions = mountVaultActions(platform);
 		await act(async () => {}); // flush the registry load
 
-		let first: Promise<void> | null = null;
-		let second: Promise<void> | null = null;
+		let first: Promise<string> | null = null;
+		let second: Promise<string> | null = null;
 		await act(async () => {
 			first = getActions().startJoin(CODE, { kind: "password", password: "pw" });
 			second = getActions().startJoin(CODE, { kind: "password", password: "pw" });
@@ -124,6 +124,26 @@ describe("the vault a join creates", () => {
 		await act(async () => {});
 
 		expect(createdLabels(storage)).toEqual([""]);
+	});
+});
+
+describe("what a join resolves with", () => {
+	it("is the vault it opened: here the one already in the group", async () => {
+		// The desktop link attaches to this vault, whatever else opens meanwhile.
+		const { platform, storage } = makePlatform();
+		const meta: Record<string, unknown> = {
+			[VAULT_REGISTRY_KEY]: { vaults: [{ id: "v-home", label: "", createdAt: 1 }] },
+			"sync.group:v-home": { groupKey: "Z3JvdXA=" },
+		};
+		storage.getMeta.mockImplementation((async (k: string) => meta[k]) as never);
+		const getActions = mountVaultActions(platform);
+		await act(async () => {});
+
+		let opened: unknown;
+		await act(async () => {
+			opened = await getActions().startJoin(CODE, { kind: "password", password: "pw" });
+		});
+		expect(opened).toBe("v-home");
 	});
 });
 
