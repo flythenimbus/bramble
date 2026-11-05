@@ -22,7 +22,11 @@ export function symbolsIn(text: string): string {
 export async function desktopConnect(): Promise<void> {
 	await desk(`
 		await front();
-		if (!find(/^Connect a browser$/, "p,span,div")) { await click(/^Settings$/); await click(/^Sync$/); }
+		if (!find(/^Connect a browser$/, "p,span,div")) {
+			// A dialog still waiting on a browser that went away: cancel it, as a person would.
+			if (find(/^Cancel$/)) await click(/^Cancel$/);
+			else { await click(/^Settings$/); await click(/^Sync$/); }
+		}
 		await click(/^Connect$/);
 		await waitFor(() => find(/Confirm it.s you/, "h2"));
 		await fillPasswords(${JSON.stringify(DESKTOP_PW)});
@@ -55,17 +59,9 @@ export async function desktopHide(): Promise<void> {
 	await expect.poll(desktopVisible).toBe(false);
 }
 
-/** The browsers the open vault's Settings lists as linked to it. */
+/** The browsers linked to the open vault, as the app's own list says. */
 export async function desktopListedBrowsers(): Promise<number> {
-	return desk<number>(`
-		await front();
-		if (!find(/^Connect a browser$/, "p,span,div")) { await click(/^Settings$/); await click(/^Sync$/); }
-		await waitFor(() => find(/^Connect a browser$/, "p,span,div"));
-		await sleep(500);
-		return [...document.querySelectorAll("button")]
-			.filter(visible)
-			.filter((b) => b.getAttribute("aria-label") === "Disconnect this browser").length;
-	`);
+	return desk<number>(`return (await window.__TAURI_INTERNALS__.invoke("pairing_list")).length;`);
 }
 
 /** Lock, then make another vault from the unlock screen; it opens empty. */
@@ -94,6 +90,53 @@ export async function desktopOpenVault(title: string): Promise<void> {
 		await click(/^Unlock Vault$/);
 		await waitFor(() => find(/^Add New$/));
 	`);
+}
+
+/** Browsers connected to the desktop now, over any vault. Nothing is pushed to any other. */
+export async function desktopConnectedBrowsers(): Promise<number> {
+	return desk<number>(
+		`return (await window.__TAURI_INTERNALS__.invoke("link_sync_peers")).length;`,
+	);
+}
+
+/** Disconnect every browser the open vault lists, from its Settings, confirming each in its own
+ * row: an armed row shows its confirm where the trigger was. */
+export async function desktopDisconnectAll(): Promise<void> {
+	await desk(`
+		await front();
+		if (!find(/^Connect a browser$/, "p,span,div")) { await click(/^Settings$/); await click(/^Sync$/); }
+		for (let i = 0; i < 50; i++) {
+			const trigger = [...document.querySelectorAll("button")]
+				.filter(visible)
+				.find((b) => b.getAttribute("aria-label") === "Disconnect this browser");
+			if (!trigger) return;
+			const row = trigger.parentElement;
+			trigger.click();
+			await sleep(150);
+			const confirm = await waitFor(() =>
+				[...row.querySelectorAll("button")].filter(visible).find((b) => /^Disconnect$/.test(b.textContent.trim())),
+			);
+			confirm.click();
+			await sleep(300);
+		}
+	`);
+}
+
+/** In the browser's popup, lock and open the vault at `index` in its picker, as a person would. */
+export async function browserOpenVaultAt(popup: Page, index: number): Promise<void> {
+	await popup.getByRole("button", { name: "Lock vault", exact: true }).click();
+	const picker = popup.getByRole("heading", { name: /Choose a vault/i });
+	const switchLink = popup.getByRole("button", { name: /Choose a different vault/i });
+	await expect(picker.or(switchLink)).toBeVisible();
+	if (!(await picker.isVisible())) await switchLink.click();
+	await popup
+		.getByRole("button")
+		.filter({ hasText: /Created on/ })
+		.nth(index)
+		.click();
+	await popup.locator('input[type="password"]').first().fill(DESKTOP_PW);
+	await popup.getByRole("button", { name: "Unlock Vault" }).click();
+	await expect(popup.getByRole("button", { name: "Lock vault", exact: true })).toBeVisible();
 }
 
 export async function desktopGoToVault(): Promise<void> {

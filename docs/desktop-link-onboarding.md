@@ -357,8 +357,10 @@ weaker than typing for users who don't really look.
 
 ## Piece 3: one browser vault, one desktop vault
 
-Design (2026-11-05), not built. The desktop's half of "A browser is linked to a vault" above is
-done; the extension's is not. A browser profile holds one link (`desktopLink` in `storage.local`),
+**Status (2026-11-05):** built and run end to end on macOS in Chromium (`pnpm
+test:e2e:desktop-link`, "a link per vault"); not run on Firefox, Windows or Linux, or against an
+upgraded install's single link. Before it, the desktop's half of "A browser is linked to a vault"
+above was done and the extension's was not. A browser profile holds one link (`desktopLink` in `storage.local`),
 whichever vault it was made from. So with one browser profile holding ext-a and ext-b, and one
 desktop app holding desk-a and desk-b:
 

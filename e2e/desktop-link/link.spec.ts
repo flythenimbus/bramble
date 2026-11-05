@@ -1,11 +1,15 @@
-import { createVault } from "../extension/helpers";
+import type { Page } from "@playwright/test";
+import { createVault, optionsUrl } from "../extension/helpers";
 import { BROWSER_PW, DESKTOP_ENTRY, DESKTOP_PW, desk, expect, RELAY_URL, test } from "./fixtures";
 import {
 	addLogin,
+	browserOpenVaultAt,
 	desktopAddLogin,
 	desktopApprove,
 	desktopConnect,
+	desktopConnectedBrowsers,
 	desktopCreateAnotherVault,
+	desktopDisconnectAll,
 	desktopEntryText,
 	desktopHide,
 	desktopListedBrowsers,
@@ -201,8 +205,12 @@ test.describe("granting the permission at link time", () => {
 		await expect(ext.page.getByText(/Enter the master password of Vault 1/)).toBeVisible();
 		await expect
 			.poll(() => desk<string>("return text();"), { timeout: 10_000 })
-			.toMatch(/Connected to .+\. It is syncing this vault/);
+			.toMatch(/Waiting for .+ to finish linking/);
+		// Listed, and connected, once the browser holds the vault.
 		await joinFromSetup(ext.page);
+		await expect
+			.poll(() => desk<string>("return text();"), { timeout: 10_000 })
+			.toMatch(/Connected to .+\. It is syncing this vault/);
 		const popup = await ext.popup();
 		await expect(popup.getByText(DESKTOP_ENTRY)).toBeVisible();
 	});
@@ -215,6 +223,8 @@ test("a browser is linked to the vault that was open, not to every vault", async
 	await ext.page.getByRole("button", { name: "They match" }).click();
 	await desktopApprove();
 	await expect(ext.page.getByText(/Enter the master password of Vault 1/)).toBeVisible();
+	// Listed once the browser holds the vault, not before.
+	await joinFromSetup(ext.page);
 	const linked = await desktopListedBrowsers();
 	expect(linked).toBeGreaterThan(0);
 
@@ -224,4 +234,80 @@ test("a browser is linked to the vault that was open, not to every vault", async
 
 	await desktopOpenVault("Vault 1");
 	expect(await desktopListedBrowsers()).toBe(linked);
+});
+
+// Piece 3: one browser vault, one desktop vault. After the test above, the desktop holds Vault 1
+// (open) and Second. docs/desktop-link-onboarding.md has the rule.
+test.describe("a link per vault", () => {
+	/** Link from the open setup screen and take the desktop's vault into a new browser vault. */
+	async function linkAndJoin(ext: { page: Page }) {
+		await desktopConnect();
+		await linkFromSetup(ext.page);
+		await ext.page.getByRole("button", { name: "They match" }).click();
+		await desktopApprove();
+		await joinFromSetup(ext.page);
+	}
+
+	test("two pairs in one browser profile, and nothing crosses between them", async ({ ext }) => {
+		// ext-a with Vault 1.
+		await linkAndJoin(ext);
+		const first = await ext.storedKeys("desktopLink:");
+		expect(first).toHaveLength(1);
+
+		// A link to Second abandoned at the copy step leaves nothing on either side.
+		await desktopOpenVault("Second");
+		await ext.page.goto(optionsUrl(ext.extensionId));
+		await desktopConnect();
+		await linkFromSetup(ext.page);
+		await ext.page.getByRole("button", { name: "They match" }).click();
+		await desktopApprove();
+		await expect(ext.page.getByText(/Enter the master password of Second/)).toBeVisible();
+		await ext.page.getByRole("button", { name: /back/i }).click();
+		expect(await ext.storedKeys("desktopLink:")).toEqual(first);
+		expect(await desktopListedBrowsers()).toBe(0);
+
+		// ext-b with Second, made from the browser's Add a vault screen. ext-a's link is untouched.
+		await linkAndJoin(ext);
+		const both = await ext.storedKeys("desktopLink:");
+		expect(both).toHaveLength(2);
+		expect(both).toEqual(expect.arrayContaining(first));
+		const popup = await ext.popup();
+		const inSecond = `In Second ${Date.now().toString(36)}`;
+		await desktopAddLogin(inSecond);
+		await expect(popup.getByText(inSecond)).toBeVisible({ timeout: 30_000 });
+
+		// ext-b open in the browser, Vault 1 open in the app: not a pair, so no link at all, and
+		// nothing (sync, fills) can reach the browser.
+		await desktopOpenVault("Vault 1");
+		await expect.poll(desktopConnectedBrowsers, { timeout: 30_000 }).toBe(0);
+
+		// Open ext-a in the browser: its own link comes back, and Vault 1's entries arrive.
+		await browserOpenVaultAt(popup, 0);
+		const inFirst = `In Vault 1 ${Date.now().toString(36)}`;
+		await desktopAddLogin(inFirst);
+		await expect(popup.getByText(inFirst)).toBeVisible({ timeout: 30_000 });
+		await expect(popup.getByText(inSecond)).not.toBeVisible();
+	});
+
+	test("a browser removed on the desktop drops its link", async ({ ext }) => {
+		await linkAndJoin(ext);
+		expect(await ext.storedKeys("desktopLink:")).toHaveLength(1);
+
+		await desktopDisconnectAll();
+		expect(await desktopListedBrowsers()).toBe(0);
+		// Its connection goes at once, rather than at its next frame.
+		await expect.poll(desktopConnectedBrowsers, { timeout: 10_000 }).toBe(0);
+
+		// Told at its next connect (the keepalive, every 20 s) that nothing here is linked to it.
+		await expect.poll(() => ext.storedKeys("desktopLink:"), { timeout: 45_000 }).toEqual([]);
+	});
+
+	test("two browser profiles both pair with one desktop vault", async ({ ext, ext2 }) => {
+		await linkAndJoin(ext);
+		await linkAndJoin(ext2);
+
+		expect(await ext.storedKeys("desktopLink:")).toHaveLength(1);
+		expect(await ext2.storedKeys("desktopLink:")).toHaveLength(1);
+		expect(await desktopListedBrowsers()).toBe(2);
+	});
 });

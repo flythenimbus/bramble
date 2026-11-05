@@ -297,6 +297,8 @@ export interface Browser {
 	popup(): Promise<Page>;
 	/** What the extension holds in storage.local under `key`. */
 	stored(key: string): Promise<unknown>;
+	/** The storage.local keys starting with `prefix`, sorted. */
+	storedKeys(prefix: string): Promise<string[]>;
 }
 
 /**
@@ -394,6 +396,16 @@ async function launchBrowser(
 			const worker = context.serviceWorkers().find((w) => w.url().includes(extensionId)) ?? sw;
 			return worker.evaluate(async (k) => (await chrome.storage.local.get(k))[k], key);
 		},
+		storedKeys: async (prefix) => {
+			const worker = context.serviceWorkers().find((w) => w.url().includes(extensionId)) ?? sw;
+			return worker.evaluate(
+				async (p) =>
+					Object.keys(await chrome.storage.local.get(null))
+						.filter((k) => k.startsWith(p))
+						.sort(),
+				prefix,
+			);
+		},
 	};
 	return {
 		browser,
@@ -405,7 +417,16 @@ async function launchBrowser(
 	};
 }
 
-export const test = base.extend<{ ext: Browser; borrowsPipe: boolean }, { desktop: Desktop }>({
+export const test = base.extend<
+	{ ext: Browser; ext2: Browser; borrowsPipe: boolean },
+	{ desktop: Desktop }
+>({
+	/** A second browser profile beside `ext`, for a desktop vault paired with more than one. */
+	ext2: async ({ desktop, borrowsPipe }, use) => {
+		const { browser, close } = await launchBrowser(desktop.home, { borrowsPipe });
+		await use(browser);
+		await close();
+	},
 	/** See launchBrowser. Off by default: most tests are about the link, not the grant. */
 	borrowsPipe: [false, { option: true }],
 	desktop: [

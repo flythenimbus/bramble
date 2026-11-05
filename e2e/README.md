@@ -196,8 +196,11 @@ The desktop app's debug build and the extension in Chromium, linked on one machi
 docs/desktop-link-onboarding.md describes: the first-run banner, Settings with Combine (a file
 included), approving and then leaving the screen, linking again after backing out, a browser that
 granted the permission at link time (Settings taking the desktop's vault, and the app coming
-forward and approving first), and a browser listed only by the vault it linked to. Each test is a
-flow that once failed when run this way.
+forward and approving first), a browser listed only by the vault it linked to, and a link per
+vault: two pairs in one browser profile with nothing crossing between them, a link abandoned at the
+copy step leaving nothing on either side, a browser removed on the desktop dropping its link, and
+two profiles pairing with one desktop vault. Each test is a flow that once failed when run this
+way.
 
 ```sh
 pnpm test:e2e:desktop-link
