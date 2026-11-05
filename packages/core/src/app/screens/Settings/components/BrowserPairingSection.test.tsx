@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
 	onPending: null as ((p: { sasHashB64: string; label: string }) => void) | null,
 	onDone: null as ((paired: boolean) => void) | null,
 	summaries: [] as unknown[],
+	/** Arming the invite waits on this, as deriving the admission key does in the app. */
+	armed: Promise.resolve() as Promise<void>,
 }));
 
 vi.mock("../../../../hooks/useVaultRegistry", () => ({
@@ -33,7 +35,10 @@ const pairing = {
 	list: async () => [],
 	identity: async () => "id",
 	forget: async () => true,
-	armSyncInvite: async () => {},
+	armSyncInvite: async () => {
+		h.calls.push("arming");
+		await h.armed;
+	},
 	clearSyncInvite: async () => {
 		h.calls.push("clearInvite");
 	},
@@ -96,6 +101,7 @@ afterEach(() => {
 	h.onPending = null;
 	h.onDone = null;
 	h.summaries.length = 0;
+	h.armed = Promise.resolve();
 });
 
 describe("connecting a browser by emoji", () => {
@@ -103,6 +109,23 @@ describe("connecting a browser by emoji", () => {
 		await connect();
 		expect(screen.queryByRole("button", { name: /older extension/i })).toBeNull();
 		expect(screen.getByText(/in the bramble extension, press link/i)).toBeTruthy();
+	});
+
+	it("says to press Link only once this vault's invite is ready", async () => {
+		// A browser that linked sooner got the link and never the vault.
+		let ready!: () => void;
+		h.armed = new Promise<void>((resolve) => {
+			ready = resolve;
+		});
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^connect$/i }));
+		fireEvent.change(screen.getByLabelText(/master password/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+		await waitFor(() => expect(h.calls).toContain("arming"));
+		expect(screen.queryByText(/press link/i)).toBeNull();
+
+		ready();
+		expect(await screen.findByText(/in the bramble extension, press link/i)).toBeTruthy();
 	});
 
 	it("shows the browser's emoji and approves when they match", async () => {

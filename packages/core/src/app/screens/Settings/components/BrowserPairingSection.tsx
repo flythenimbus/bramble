@@ -144,13 +144,14 @@ export function BrowserPairingSection() {
 		try {
 			await publishSummary();
 			await pairing.beginLinkWindow?.();
+			// "Press Link" shows once the invite is armed: a browser that linked sooner got the link
+			// and never the vault. Opened either way, so a failed invite still links for filling.
+			const failed = await armInvite(password).then(
+				() => null,
+				(e: unknown) => e,
+			);
 			setOpen(true);
-			if (!pairing.armSyncInvite) return; // link only: this platform cannot deliver an invite
-			const relay = (await storage.getMeta<string>("sync.relay")) ?? DEFAULT_RELAY;
-			const iceUrl = (await storage.getMeta<string>("sync.iceUrl")) ?? undefined;
-			// Armed for as long as the dialog is open, so the two windows cannot disagree.
-			const invite = await inviteDevice(relay, iceUrl || undefined, password, { viaLink: true });
-			await pairing.armSyncInvite(invite, WINDOW_SECONDS * 1000);
+			if (failed) throw failed;
 		} catch (e) {
 			// The link may be up even though the invite failed. Say so rather than looking as if
 			// nothing happened: delegation will work and sync will not.
@@ -162,6 +163,16 @@ export function BrowserPairingSection() {
 						: String(e),
 			);
 		}
+	};
+
+	/** The sync invite a linked browser claims, armed for as long as the dialog is open so the two
+	 * windows cannot disagree. `password` admission-signs it. */
+	const armInvite = async (password: string) => {
+		if (!pairing.armSyncInvite) return; // link only: this platform cannot deliver an invite
+		const relay = (await storage.getMeta<string>("sync.relay")) ?? DEFAULT_RELAY;
+		const iceUrl = (await storage.getMeta<string>("sync.iceUrl")) ?? undefined;
+		const invite = await inviteDevice(relay, iceUrl || undefined, password, { viaLink: true });
+		await pairing.armSyncInvite(invite, WINDOW_SECONDS * 1000);
 	};
 
 	/** What this vault holds, for the browser deciding whether to take, combine or ask. */
@@ -197,10 +208,10 @@ export function BrowserPairingSection() {
 				setGateError(t`Incorrect master password`);
 				return;
 			}
-			const password = gatePassword;
+			// Open, and busy, until the browser can be told to press Link.
+			await start(gatePassword);
 			setGateOpen(false);
 			setGatePassword("");
-			await start(password);
 		} finally {
 			setGateBusy(false);
 		}
