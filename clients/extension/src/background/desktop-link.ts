@@ -18,6 +18,7 @@
 
 import { linkNonceCommit, linkSas, linkSasMaterial } from "@core/sync/link-sas";
 import type { PairingSas } from "@core/sync/pairing-sas";
+import { syncKeyFor } from "@core/sync/sync-keys";
 import { bytesToBase64 } from "@core/util/bytes";
 import { defaultDeviceLabel } from "@core/util/device-label";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
@@ -103,11 +104,47 @@ async function loadLink(key: string): Promise<LinkState | null> {
  */
 let inProgress: { state: LinkState; listed: boolean } | null = null;
 
-/** The link to speak with now: the one being made, else the open vault's. */
-async function currentLink(): Promise<LinkState | null> {
-	if (inProgress) return inProgress.state;
+/** The link to speak with now: the one being made, else the open vault's, else the single link
+ * an earlier build kept (`legacy`), which works as it did until `adoptLegacyLink` places it. */
+async function linkSource(): Promise<{ state: LinkState; legacy: boolean } | null> {
+	if (inProgress) return { state: inProgress.state, legacy: false };
 	const vaultId = getActiveVaultId();
-	return vaultId ? loadLink(linkKeyFor(vaultId)) : null;
+	const own = vaultId ? await loadLink(linkKeyFor(vaultId)) : null;
+	if (own) return { state: own, legacy: false };
+	const legacy = await loadLink(STORAGE_KEY);
+	return legacy ? { state: legacy, legacy: true } : null;
+}
+
+async function currentLink(): Promise<LinkState | null> {
+	return (await linkSource())?.state ?? null;
+}
+
+/**
+ * Give the single link an earlier build kept to the vault that syncs with the app: the one whose
+ * roster holds the app's sync identity. With none, it goes and the user links again. Unanswered,
+ * it stays as it was.
+ */
+async function adoptLegacyLink(link: HeldLink): Promise<void> {
+	const legacy = await loadLink(STORAGE_KEY);
+	if (!legacy) return;
+	const answer = await askOverHeld(link, { op: "syncIdentity" }).catch(() => null);
+	const identity = answer?.ok === true ? answer.identity : null;
+	if (typeof identity !== "string") return;
+	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY).catch(() => null));
+	let home: string | null = null;
+	for (const v of reg.vaults) {
+		const group = (await extensionStorage
+			.getMeta(syncKeyFor("sync.group", v.id))
+			.catch(() => null)) as { roster?: { devices?: { publicKey: string }[] } } | null;
+		if (group?.roster?.devices?.some((d) => d.publicKey === identity)) {
+			home = v.id;
+			break;
+		}
+	}
+	if (home) await api.storage.local.set({ [linkKeyFor(home)]: legacy });
+	await api.storage.local.remove(STORAGE_KEY);
+	if (home && home === getActiveVaultId()) link.vaultId = home;
+	else if (held === link) await dropHeld();
 }
 
 /** The app knows nothing of the link this browser just spoke with: let it go. */
@@ -975,7 +1012,8 @@ async function connectHeld(): Promise<HeldLink | null> {
 	if (held) await dropHeld();
 	if (!linkWanted) return null; // nothing wants the pipe held open
 
-	const state = await currentLink();
+	const source = await linkSource();
+	const state = source?.state;
 	// Not paired. The ordinary case, and openDesktopLink already declined to arm anything, so this
 	// is only reachable if a pairing was removed while the keepalive was live. Not worth a line.
 	if (!state) return null;
@@ -1036,6 +1074,7 @@ async function connectHeld(): Promise<HeldLink | null> {
 		.then((answer) => Array.isArray(answer?.caps) && answer.caps.includes(CAP_FILES))
 		.catch(() => false);
 	held = link;
+	if (source?.legacy) void adoptLegacyLink(link);
 	return link;
 }
 

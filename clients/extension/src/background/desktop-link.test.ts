@@ -38,6 +38,8 @@ const h = vi.hoisted(() => ({
 	appCaps: ["files"] as string[] | null,
 	/** Whether the app offers sync again when asked (`syncRestart`); an older one does not know it. */
 	appRestarts: false,
+	/** The app's sync identity, answered to `syncIdentity`; null for an app that does not answer. */
+	appIdentity: null as string | null,
 	/** A seal whose plaintext contains this takes a while, as a busy crypto host's might. */
 	slowSeal: null as string | null,
 	/** What was written to storage.local, in order. */
@@ -65,6 +67,10 @@ const nativePort = () => {
 				const answer = h.appCaps
 					? { ok: true, caps: h.appCaps }
 					: { ok: false, error: "bad request: unknown variant `caps`" };
+				queueMicrotask(() => deliver({ sealed: `sealed:${JSON.stringify(answer)}` }));
+			}
+			if (plain && JSON.parse(plain).op === "syncIdentity" && h.appIdentity) {
+				const answer = { ok: true, identity: h.appIdentity };
 				queueMicrotask(() => deliver({ sealed: `sealed:${JSON.stringify(answer)}` }));
 			}
 			if (plain && JSON.parse(plain).op === "syncRestart") {
@@ -212,6 +218,7 @@ async function load() {
 	h.sealed.clear();
 	h.appCaps = ["files"];
 	h.appRestarts = false;
+	h.appIdentity = null;
 	h.slowSeal = null;
 	h.activeVault = "v1";
 	h.linkCompleteAnswer = { ok: true };
@@ -685,6 +692,57 @@ describe("a link per vault, over this worker's own pipe", () => {
 		await expect(mod.unlinkDesktop("v1")).resolves.toEqual({ remaining: 1 });
 		expect(h.stored["desktopLink:v2"]).toBe(second);
 		await expect(mod.unlinkDesktop("v2")).resolves.toEqual({ remaining: 0 });
+	});
+});
+
+// An earlier build kept one link for the whole profile. It goes to the vault that syncs with the
+// app, which the app's sync identity in that vault's roster shows; with none, it goes.
+describe("the single link an earlier build kept", () => {
+	const legacy = { privateKey: "priv", publicKey: "pub", appPublicKey: "app-pub", pairedAt: 1 };
+	const roster = (...keys: string[]) => ({
+		roster: { devices: keys.map((publicKey) => ({ publicKey })) },
+	});
+
+	async function connectOnLegacy(mod: Awaited<ReturnType<typeof load>>) {
+		h.stored = { desktopLink: legacy };
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		return opening;
+	}
+
+	it("moves to the vault whose roster holds the app", async () => {
+		const mod = await load();
+		h.appIdentity = "desk-identity";
+		h.meta["sync.group:v1"] = roster("someone-else");
+		h.meta["sync.group:v2"] = roster("desk-identity");
+
+		expect(await connectOnLegacy(mod)).toBe(true);
+
+		await vi.waitFor(() => expect(h.stored["desktopLink:v2"]).toEqual(legacy));
+		expect(h.stored.desktopLink).toBeUndefined();
+	});
+
+	it("is dropped when no vault syncs with the app", async () => {
+		const mod = await load();
+		h.appIdentity = "desk-identity";
+		h.meta["sync.group:v1"] = roster("someone-else");
+
+		await connectOnLegacy(mod);
+
+		await vi.waitFor(() => expect(h.stored.desktopLink).toBeUndefined());
+		expect(Object.keys(h.stored).filter((k) => k.startsWith("desktopLink"))).toEqual([]);
+	});
+
+	it("stays, and is used, while the app does not answer", async () => {
+		const mod = await load();
+
+		expect(await connectOnLegacy(mod)).toBe(true);
+		await new Promise((r) => setTimeout(r, 20));
+
+		expect(h.stored.desktopLink).toEqual(legacy);
+		const hellos = h.posted.filter((m) => m.kind === "hello").map((m) => m.publicKey);
+		expect(hellos).toEqual(["pub"]);
 	});
 });
 
