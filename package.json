@@ -27,6 +27,8 @@
 		"dev:website": "pnpm --filter @vault/website run dev",
 		"dev:desktop": "pnpm --filter @vault/platform-desktop run dev:app",
 		"run:macos": "node scripts/run-desktop.ts macos",
+		"run:chromium": "node scripts/run-chromium.ts",
+		"run:firefox": "pnpm --filter @vault/platform-extension run run:firefox",
 		"run:debian": "node scripts/run-desktop.ts debian",
 		"run:linux": "node scripts/run-desktop.ts linux",
 		"wasm:build": "export RUSTFLAGS=\"$(bash scripts/rustflags-reproducible.sh)\"; cd packages/core-rust && wasm-pack build --target web --out-dir ../../clients/extension/public/wasm -- --locked",

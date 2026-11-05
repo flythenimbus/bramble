@@ -38,6 +38,11 @@ Individual dev targets: `pnpm run dev:chrome`, `pnpm run dev:firefox`,
 `pnpm run dev:website`, `pnpm run mobile:dev`. The iOS and Android apps
 additionally need Xcode or Android Studio; the browser extension does not.
 
+To try a built extension in a fresh browser profile, thrown away when the
+browser closes: `pnpm run:chromium` (Playwright's Chromium, loading
+`dist-chromium`) and `pnpm run:firefox` (web-ext, loading `dist-firefox`). Both
+reach the desktop app that ran last, so start that first to test the link.
+
 ### The desktop app on Windows
 
 The root `wasm:build` and `dev` scripts assume a POSIX shell (`export
