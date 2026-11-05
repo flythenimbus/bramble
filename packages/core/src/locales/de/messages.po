@@ -1626,8 +1626,8 @@ msgid "Expires in {0} · keep this window open until pairing finishes"
 msgstr "Läuft in {0} ab · Fenster geöffnet lassen, bis die Kopplung abgeschlossen ist."
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
-msgid "Expires in {minutes}:{seconds}. It can only be used once."
-msgstr "Läuft ab in {minutes}:{seconds}. Er kann nur einmal verwendet werden."
+#~ msgid "Expires in {minutes}:{seconds}. It can only be used once."
+#~ msgstr "Läuft ab in {minutes}:{seconds}. Er kann nur einmal verwendet werden."
 
 #: packages/core/src/app/entry-modes/card.tsx
 msgid "expiry"
@@ -4368,8 +4368,8 @@ msgid "Username or email"
 msgstr "Benutzername oder E-Mail"
 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
-msgid "Using an older extension? Show a code instead"
-msgstr "Verwenden Sie eine ältere Erweiterung? Zeigen Sie stattdessen einen Code an."
+#~ msgid "Using an older extension? Show a code instead"
+#~ msgstr "Verwenden Sie eine ältere Erweiterung? Zeigen Sie stattdessen einen Code an."
 
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkBanner.tsx
 msgid "Using Bramble desktop?"
@@ -4435,11 +4435,17 @@ msgstr "Sehr schwach"
 msgid "Visible"
 msgstr "Sichtbar"
 
+#. placeholder {0}: linkPending.label
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Waiting for {0}…"
+msgstr "Warten auf {0}…"
+
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Waiting for a device to join…"
 msgstr "Wartet darauf, dass ein Gerät beitritt…"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Waiting for the desktop app…"
 msgstr "Warten auf die Desktop-App…"
 

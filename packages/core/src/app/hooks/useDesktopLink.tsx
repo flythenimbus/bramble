@@ -63,6 +63,8 @@ export function useDesktopLink({
 	const [error, setError] = useState<string | null>(null);
 	/** An emoji link waiting on this screen's answer. */
 	const [linking, setLinking] = useState<{ id: string; sas: PairingSas } | null>(null);
+	/** This screen said they match; the link completes once the desktop app approves too. */
+	const [awaitingApp, setAwaitingApp] = useState(false);
 	/** The desktop app predates the emoji, so the code is the way to link. */
 	const [legacy, setLegacy] = useState(false);
 	const [code, setCode] = useState("");
@@ -152,6 +154,7 @@ export function useDesktopLink({
 		async (matches: boolean) => {
 			if (!linking || !desktopLink?.confirm) return;
 			setBusy(true);
+			setAwaitingApp(matches);
 			setError(null);
 			try {
 				await desktopLink.confirm(linking.id, matches);
@@ -164,6 +167,7 @@ export function useDesktopLink({
 				setError(e instanceof Error && e.message ? e.message : t`Nothing was linked.`);
 			} finally {
 				setBusy(false);
+				setAwaitingApp(false);
 			}
 		},
 		[linking, desktopLink, afterLinked, t],
@@ -332,6 +336,7 @@ export function useDesktopLink({
 		error,
 		setError,
 		linking,
+		awaitingApp,
 		legacy,
 		code,
 		setCode,

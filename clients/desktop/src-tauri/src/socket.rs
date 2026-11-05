@@ -480,6 +480,16 @@ pub fn attach(app: AppHandle) {
     let _ = APP.set(app);
 }
 
+/// Bring the vault window forward. Whoever pressed Link is looking at the browser, and the
+/// symbols they have to compare just appeared here. On the main thread, which macOS wants for
+/// the Dock icon the window brings back with it.
+fn bring_forward() {
+    if let Some(app) = APP.get() {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || crate::lifetime::show_main(&handle));
+    }
+}
+
 fn emit(event: &str, payload: serde_json::Value) {
     if let Some(app) = APP.get() {
         let _ = app.emit(event, payload);
@@ -1194,6 +1204,7 @@ fn confirm_link(
         "link-pair-pending",
         serde_json::json!({ "sasHashB64": hash, "label": label }),
     );
+    bring_forward();
 
     let confirmed = await_desktop_answer()
         && browser_confirms(session_id, stream, generation)

@@ -14,13 +14,17 @@ const h = vi.hoisted(() => ({
 	invite: null as string | null,
 	/** What joining the desktop's vault reports. */
 	joined: true,
+	/** The symbols on screen, and whether this screen has said they match. */
+	linking: null as unknown,
+	awaitingApp: false,
 }));
 
 vi.mock("../../hooks/useDesktopLink", () => ({
 	useDesktopLink: () => ({
 		busy: false,
 		error: null,
-		linking: null,
+		linking: h.linking,
+		awaitingApp: h.awaitingApp,
 		legacy: false,
 		invite: h.invite,
 		outcome: null,
@@ -111,6 +115,19 @@ describe("the desktop link on the setup screen", () => {
 		} finally {
 			h.invite = null;
 			h.joined = true;
+		}
+	});
+
+	it("says it is waiting for the desktop app once they match", () => {
+		h.linking = { id: "L1", sas: { digits: "1234 5678 9012", emoji: [0, 1, 2, 3, 4, 5, 6] } };
+		h.awaitingApp = true;
+		try {
+			mount(withLink, "desktop");
+			expect(screen.getByText(/waiting for the desktop app/i)).toBeTruthy();
+			expect(screen.queryByRole("button", { name: /they match/i })).toBeNull();
+		} finally {
+			h.linking = null;
+			h.awaitingApp = false;
 		}
 	});
 

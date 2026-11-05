@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Chrome, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PairedBrowser } from "../../../../adapters/pairing";
 import { usePlatform } from "../../../../context/PlatformContext";
@@ -11,6 +11,7 @@ import type { PairingSas } from "../../../../sync/pairing-sas";
 import { formatDate } from "../../../../util/format-date";
 import { isVaultEmpty, readVaultContents } from "../../../../vault/vault-empty";
 import { displayLabel } from "../../../../vault/vault-registry";
+import { Puzzle } from "../../../components/icons/Puzzle";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
 import { InlineConfirm } from "../../../components/ui/inline-confirm";
@@ -18,9 +19,9 @@ import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
 import { Row, Section } from "./primitives";
 
-/** Matches the code's server-side lifetime; shown as a countdown so an expired code on screen
- * cannot be mistaken for one that still works. */
-const CODE_TTL_SECONDS = 180;
+/** Matches the link window's lifetime in the app (pairing.rs `LINK_WINDOW`), after which a
+ * browser pressing Link is refused, so the screen closes with it. */
+const WINDOW_SECONDS = 180;
 
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
@@ -33,8 +34,8 @@ export function BrowserPairingSection() {
 	const { hasPasswordSlot, entries, files } = useVault();
 	const { vaults, activeId } = useVaultRegistry();
 	const [browsers, setBrowsers] = useState<PairedBrowser[]>([]);
-	const [code, setCode] = useState<string | null>(null);
-	const [remaining, setRemaining] = useState(0);
+	/** The Connect dialog is open: a browser pressing Link now reaches this vault. */
+	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	// The master-password gate. Connecting a browser now also enrols it in this vault's sync
 	// group, and admitting a device is signed with a key derived from a freshly typed password.
@@ -42,16 +43,16 @@ export function BrowserPairingSection() {
 	const [gatePassword, setGatePassword] = useState("");
 	const [gateError, setGateError] = useState<string | null>(null);
 	const [gateBusy, setGateBusy] = useState(false);
-	/** The browser that paired while the code was up, so the screen confirms rather than just
+	/** The browser that linked while the dialog was open, so the screen confirms rather than just
 	 * counting down to nothing. */
 	const [connected, setConnected] = useState<string | null>(null);
-	/** Who was already paired when the code went up. In a ref because it is a snapshot of that
+	/** Who was already linked when the dialog opened. In a ref because it is a snapshot of that
 	 * moment: as state it would re-arm the watcher on every list change and lose the baseline. */
 	const knownBefore = useRef<Set<string>>(new Set());
 	/** A browser waiting on this screen's answer, with the emoji both screens show. */
 	const [linkPending, setLinkPending] = useState<{ sas: PairingSas; label: string } | null>(null);
-	/** The code, for an extension that predates the emoji, shown only when asked for. */
-	const [showCode, setShowCode] = useState(false);
+	/** This screen said yes; the link completes once the browser does too. */
+	const [approved, setApproved] = useState(false);
 
 	const refresh = useCallback(async () => {
 		if (!pairing) return;
@@ -71,48 +72,37 @@ export function BrowserPairingSection() {
 		void refresh();
 	}, [refresh]);
 
-	// Count the code down and drop it when it expires. Without this the screen would keep
-	// showing a secret the app has already stopped accepting, and the user would type it and
-	// be told, with no explanation, that pairing failed.
+	// Close the dialog when the app's link window closes. Without this the screen would keep
+	// inviting the user to press Link in a browser the app will now refuse.
 	useEffect(() => {
-		if (code === null) return;
-		const tick = setInterval(() => {
-			setRemaining((seconds) => {
-				if (seconds <= 1) {
-					setCode(null);
-					return 0;
-				}
-				return seconds - 1;
-			});
-		}, 1000);
-		return () => clearInterval(tick);
-	}, [code]);
+		if (!open) return;
+		const timer = setTimeout(() => setOpen(false), WINDOW_SECONDS * 1000);
+		return () => clearTimeout(timer);
+	}, [open]);
 
-	// A pairing completes on the app's own thread, so nothing here is told about it. While a code
-	// is up, watch the list: a new browser means it worked, which is the only feedback this screen
-	// can give and the difference between "done" and a code that silently expires.
+	// A link completes on the app's own thread, so nothing here is told about it. While the dialog
+	// is open, watch the list: a new browser means it worked, which is the only feedback this
+	// screen can give and the difference between "done" and a window that silently expires.
 	useEffect(() => {
-		if (code === null || !pairing) return;
+		if (!open || !pairing) return;
 		const id = setInterval(() => {
 			void pairing.list().then((list) => {
 				const fresh = list.find((b) => !knownBefore.current.has(b.publicKey));
 				if (!fresh) return;
 				setBrowsers(list);
 				setConnected(fresh.label);
-				setCode(null);
-				setRemaining(0);
+				setOpen(false);
 			});
 		}, 1500);
 		return () => clearInterval(id);
-	}, [code, pairing]);
+	}, [open, pairing]);
 
-	// A code outlives the screen it is shown on unless something closes it. Leaving the
-	// section (or the window) has to burn it, or it stays usable while nobody is looking. The
+	// The link window outlives the screen it is opened from unless something closes it. Leaving
+	// the section (or the window) has to close it, or it stays open while nobody is looking. The
 	// sync invite goes with it: a browser must not be able to claim the vault from a dialog the
 	// user walked away from.
 	useEffect(() => {
 		return () => {
-			void pairing?.cancel();
 			void pairing?.cancelLinkWindow?.();
 			void pairing?.setVaultSummary?.(null);
 			void pairing?.clearSyncInvite?.();
@@ -123,10 +113,12 @@ export function BrowserPairingSection() {
 	useEffect(() => {
 		if (!pairing?.onLinkPending || !pairing.onLinkDone) return;
 		const offPending = pairing.onLinkPending(({ sasHashB64, label }) => {
+			setApproved(false);
 			void linkSas(sasHashB64).then((sas) => setLinkPending({ sas, label }));
 		});
 		const offDone = pairing.onLinkDone((paired) => {
 			setLinkPending(null);
+			setApproved(false);
 			if (!paired) setError(t`The browser was not linked.`);
 		});
 		return () => {
@@ -138,8 +130,8 @@ export function BrowserPairingSection() {
 	if (!pairing) return null;
 
 	/**
-	 * One code for both halves: the link that lets the browser delegate, and the sync invite that
-	 * gives it this vault.
+	 * One dialog for both halves: the link that lets the browser delegate, and the sync invite
+	 * that gives it this vault.
 	 *
 	 * The invite is ARMED rather than sent. The browser claims it over the link once it has
 	 * paired, and the app answers only while this window is open, so an old pairing cannot be
@@ -150,19 +142,15 @@ export function BrowserPairingSection() {
 		setConnected(null);
 		knownBefore.current = new Set(browsers.map((b) => b.publicKey));
 		try {
-			const linkCode = await pairing.begin();
 			await publishSummary();
 			await pairing.beginLinkWindow?.();
-			setShowCode(!pairing.beginLinkWindow);
-			setCode(linkCode);
-			setRemaining(CODE_TTL_SECONDS);
+			setOpen(true);
 			if (!pairing.armSyncInvite) return; // link only: this platform cannot deliver an invite
 			const relay = (await storage.getMeta<string>("sync.relay")) ?? DEFAULT_RELAY;
 			const iceUrl = (await storage.getMeta<string>("sync.iceUrl")) ?? undefined;
-			// The same string the user would otherwise carry by hand. Armed for as long as the
-			// code is on screen, so the two windows cannot disagree.
+			// Armed for as long as the dialog is open, so the two windows cannot disagree.
 			const invite = await inviteDevice(relay, iceUrl || undefined, password, { viaLink: true });
-			await pairing.armSyncInvite(invite, CODE_TTL_SECONDS * 1000);
+			await pairing.armSyncInvite(invite, WINDOW_SECONDS * 1000);
 		} catch (e) {
 			// The link may be up even though the invite failed. Say so rather than looking as if
 			// nothing happened: delegation will work and sync will not.
@@ -219,14 +207,13 @@ export function BrowserPairingSection() {
 	};
 
 	const stop = async () => {
-		setCode(null);
-		setRemaining(0);
+		setOpen(false);
 		setLinkPending(null);
-		await pairing.cancel();
+		setApproved(false);
 		await pairing.cancelLinkWindow?.();
 		await pairing.setVaultSummary?.(null);
 		await pairing.clearSyncInvite?.();
-		// A pairing may have completed while the code was up.
+		// A link may have completed while the dialog was open.
 		await refresh();
 	};
 
@@ -239,20 +226,17 @@ export function BrowserPairingSection() {
 		}
 	};
 
-	const minutes = Math.floor(remaining / 60);
-	const seconds = String(remaining % 60).padStart(2, "0");
-
 	return (
-		<Section icon={<Chrome className="w-4 h-4" />} title={t`Browser extension`}>
+		<Section icon={<Puzzle className="w-4 h-4" />} title={t`Browser extension`}>
 			{connected !== null && (
 				<p className="text-xs text-primary">
 					<Trans>Connected to {connected}. It is syncing this vault and can fill from it.</Trans>
 				</p>
 			)}
-			{code === null ? (
+			{!open ? (
 				<>
 					<Row
-						icon={<Chrome className="w-4 h-4 text-primary" />}
+						icon={<Puzzle className="w-4 h-4 text-primary" />}
 						title={t`Connect a browser`}
 						subtitle={t`Sync this vault to the Bramble extension and fill from it without unlocking twice.`}
 					>
@@ -302,17 +286,36 @@ export function BrowserPairingSection() {
 						<Trans>Check these match {linkPending.label}</Trans>
 					</p>
 					<SasDisplay digits={linkPending.sas.digits} emoji={linkPending.sas.emoji} large />
-					<p className="text-xs text-muted-foreground">
-						<Trans>Approve only if your browser shows the same symbols.</Trans>
-					</p>
-					<div className="flex justify-center gap-2">
-						<Button variant="secondary" size="sm" onClick={() => void pairing.answerLink?.(false)}>
-							<Trans>They don't match</Trans>
-						</Button>
-						<Button size="sm" onClick={() => void pairing.answerLink?.(true)}>
-							<Trans>Approve</Trans>
-						</Button>
-					</div>
+					{approved ? (
+						// The link completes once the browser confirms too, whichever answers last.
+						<p className="text-sm text-muted-foreground">
+							<Trans>Waiting for {linkPending.label}…</Trans>
+						</p>
+					) : (
+						<>
+							<p className="text-xs text-muted-foreground">
+								<Trans>Approve only if your browser shows the same symbols.</Trans>
+							</p>
+							<div className="flex justify-center gap-2">
+								<Button
+									variant="secondary"
+									size="sm"
+									onClick={() => void pairing.answerLink?.(false)}
+								>
+									<Trans>They don't match</Trans>
+								</Button>
+								<Button
+									size="sm"
+									onClick={() => {
+										setApproved(true);
+										void pairing.answerLink?.(true);
+									}}
+								>
+									<Trans>Approve</Trans>
+								</Button>
+							</div>
+						</>
+					)}
 				</div>
 			) : (
 				<div className="space-y-3 text-center">
@@ -322,24 +325,6 @@ export function BrowserPairingSection() {
 							app. Both screens will then show the same symbols.
 						</Trans>
 					</p>
-					{showCode ? (
-						<>
-							{/* Spaced and monospaced because it is read off this screen and typed into
-							    another; the alphabet already excludes characters that look alike. */}
-							<p className="text-3xl font-mono tracking-[0.3em] select-all" data-selectable>
-								{code}
-							</p>
-							<p className="text-xs text-muted-foreground">
-								<Trans>
-									Expires in {minutes}:{seconds}. It can only be used once.
-								</Trans>
-							</p>
-						</>
-					) : (
-						<Button variant="link" size="sm" onClick={() => setShowCode(true)}>
-							<Trans>Using an older extension? Show a code instead</Trans>
-						</Button>
-					)}
 					<div>
 						<Button variant="secondary" size="sm" onClick={() => void stop()}>
 							<Trans>Cancel</Trans>

@@ -15,6 +15,8 @@ const h = vi.hoisted(() => ({
 	joins: [] as unknown[][],
 	vaults: [] as { id: string; label: string; createdAt: number }[],
 	summary: { name: "Home", empty: false, entries: 380 } as unknown,
+	/** Resolves when the desktop app answers the link; held open to see the wait in between. */
+	confirmHold: Promise.resolve() as Promise<void>,
 	/** What claiming the desktop's invite returns; null when it hands over none. */
 	invite: "invite" as string | null,
 	start: { id: "L1", sas: { emoji: [0, 1, 2, 3, 4, 5, 6], digits: "1" } } as unknown,
@@ -125,6 +127,7 @@ const platform = {
 		start: async () => h.start,
 		confirm: async () => {
 			h.calls.push("confirm");
+			await h.confirmHold;
 		},
 		cancel: async (id: string) => {
 			h.calls.push(`cancel:${id}`);
@@ -189,6 +192,34 @@ describe("useDesktopLink", () => {
 		h.calls = [];
 		await linkedFrom("setup");
 		expect(h.calls).toEqual(["confirm", "summary", "claim"]);
+	});
+
+	it("says it is waiting for the desktop app once they match, until the app answers", async () => {
+		// The link completes when both screens have said yes, whichever is last. Without this the
+		// browser looked as though "They match" had done nothing.
+		h.vaults = [];
+		let release = () => {};
+		h.confirmHold = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		try {
+			const { result } = renderHook(() => useDesktopLink({ from: "setup" }), { wrapper });
+			await act(async () => {
+				await result.current.start();
+			});
+			let answering: Promise<void> = Promise.resolve();
+			act(() => {
+				answering = result.current.answer(true);
+			});
+			expect(result.current.awaitingApp).toBe(true);
+			await act(async () => {
+				release();
+				await answering;
+			});
+			expect(result.current.awaitingApp).toBe(false);
+		} finally {
+			h.confirmHold = Promise.resolve();
+		}
 	});
 
 	it("says so when the desktop sends no vault after an emoji link", async () => {

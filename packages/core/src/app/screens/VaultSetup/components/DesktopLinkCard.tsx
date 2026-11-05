@@ -69,14 +69,24 @@ export function DesktopLinkCard({
 					<Trans>Check these match your desktop app</Trans>
 				</p>
 				<SasDisplay digits={link.linking.sas.digits} emoji={link.linking.sas.emoji} large />
-				<div className="flex justify-center gap-2">
-					<Button variant="secondary" disabled={link.busy} onClick={() => void link.answer(false)}>
-						<Trans>They don't match</Trans>
-					</Button>
-					<Button disabled={link.busy} onClick={() => void link.answer(true)}>
-						<Trans>They match</Trans>
-					</Button>
-				</div>
+				{link.awaitingApp ? (
+					<p className="text-sm text-muted-foreground">
+						<Trans>Waiting for the desktop app…</Trans>
+					</p>
+				) : (
+					<div className="flex justify-center gap-2">
+						<Button
+							variant="secondary"
+							disabled={link.busy}
+							onClick={() => void link.answer(false)}
+						>
+							<Trans>They don't match</Trans>
+						</Button>
+						<Button disabled={link.busy} onClick={() => void link.answer(true)}>
+							<Trans>They match</Trans>
+						</Button>
+					</div>
+				)}
 			</div>
 		);
 	} else if (link.invite) {

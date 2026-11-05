@@ -160,24 +160,32 @@ export function DesktopLinkSection() {
 				<Trans>Check these match your desktop app</Trans>
 			</p>
 			<SasDisplay digits={link.linking.sas.digits} emoji={link.linking.sas.emoji} large />
-			<p className="text-xs text-muted-foreground">
-				<Trans>
-					Confirm here and approve in the desktop app, only if both show the same symbols.
-				</Trans>
-			</p>
-			<div className="flex justify-center gap-2">
-				<Button
-					variant="secondary"
-					size="sm"
-					disabled={busy}
-					onClick={() => void link.answer(false)}
-				>
-					<Trans>They don't match</Trans>
-				</Button>
-				<Button size="sm" disabled={busy} onClick={() => void link.answer(true)}>
-					<Trans>They match</Trans>
-				</Button>
-			</div>
+			{link.awaitingApp ? (
+				<p className="text-sm text-muted-foreground">
+					<Trans>Waiting for the desktop app…</Trans>
+				</p>
+			) : (
+				<>
+					<p className="text-xs text-muted-foreground">
+						<Trans>
+							Confirm here and approve in the desktop app, only if both show the same symbols.
+						</Trans>
+					</p>
+					<div className="flex justify-center gap-2">
+						<Button
+							variant="secondary"
+							size="sm"
+							disabled={busy}
+							onClick={() => void link.answer(false)}
+						>
+							<Trans>They don't match</Trans>
+						</Button>
+						<Button size="sm" disabled={busy} onClick={() => void link.answer(true)}>
+							<Trans>They match</Trans>
+						</Button>
+					</div>
+				</>
+			)}
 		</div>
 	);
 

@@ -7,7 +7,7 @@ import { type Platform, PlatformProvider } from "../../../../context/PlatformCon
 import { BrowserPairingSection } from "./BrowserPairingSection";
 
 // The desktop's half of linking a browser: one emoji comparison, confirmed here and in the
-// browser. The code survives only for an extension that predates the emoji.
+// browser. No code: an extension that predates the emoji cannot link to this app.
 
 const h = vi.hoisted(() => ({
 	calls: [] as string[],
@@ -30,7 +30,10 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 }));
 
 const pairing = {
-	begin: async () => "ABCD2345",
+	begin: async () => {
+		h.calls.push("begin");
+		return "ABCD2345";
+	},
 	cancel: async () => {
 		h.calls.push("cancel");
 	},
@@ -104,16 +107,13 @@ afterEach(() => {
 });
 
 describe("connecting a browser by emoji", () => {
-	it("opens the link window and keeps the code out of sight", async () => {
+	it("opens the link window and arms no code at all", async () => {
+		// A code nobody can see is only something a fake proxy could try to guess.
 		await connect();
+		expect(h.calls).not.toContain("begin");
 		expect(screen.queryByText("ABCD2345")).toBeNull();
+		expect(screen.queryByRole("button", { name: /older extension/i })).toBeNull();
 		expect(screen.getByText(/in the bramble extension, press link/i)).toBeTruthy();
-	});
-
-	it("shows the code only when asked, for an older extension", async () => {
-		await connect();
-		fireEvent.click(screen.getByRole("button", { name: /older extension/i }));
-		expect(screen.getByText("ABCD2345")).toBeTruthy();
 	});
 
 	it("shows the browser's emoji and approves when they match", async () => {
@@ -122,6 +122,14 @@ describe("connecting a browser by emoji", () => {
 		expect(await screen.findByText(/chrome on mac/i)).toBeTruthy();
 		fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
 		await waitFor(() => expect(h.calls).toContain("answer:true"));
+	});
+
+	it("waits for the browser once approved, rather than looking unchanged", async () => {
+		await connect();
+		h.onPending?.({ sasHashB64: HASH, label: "Chrome on Mac" });
+		fireEvent.click(await screen.findByRole("button", { name: /^approve$/i }));
+		expect(await screen.findByText(/waiting for chrome on mac/i)).toBeTruthy();
+		expect(screen.queryByRole("button", { name: /^approve$/i })).toBeNull();
 	});
 
 	it("refuses when they do not match", async () => {
