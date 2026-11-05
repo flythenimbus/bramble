@@ -254,8 +254,9 @@ What it has to guarantee:
 - **Skipping the second check applies only to link invites.** The decision comes from the
   desktop's own state, never from anything the joiner sends. Phone and QR joins keep their own
   emoji check, and link invites are never shown as text or QR.
-- **Older versions fall back to today's flow.** A new extension and an old app (or the reverse)
-  negotiate through `caps` and use the code plus emoji as now. A relay invite can never be talked
+- **A new extension still links with an older app**, through the code plus emoji, the only way
+  that app knows. The reverse is gone: this app offers no code, so an extension from before the
+  emoji cannot link to it (decided 2026-11-04, after testing). A relay invite can never be talked
   into skipping approval.
 
 **My call, keeping it feeling distinct:** the link screens use their own words. They never say
@@ -367,6 +368,7 @@ weaker than typing for users who don't really look.
 - One browser, one desktop: fills and the reported page are per browser.
 - Linked browsers are per vault. A browser gets nothing while another vault is open, and
   existing links go to the vaults that existed when each was made.
+- No code from the desktop for an extension from before the emoji, and none armed.
 - No browser-to-desktop direction, ever.
 - The link is all local: the vault copy and desktop-to-browser sync never use the internet.
 

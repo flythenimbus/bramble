@@ -84,6 +84,7 @@ own WebRTC, the browser link, and the whole release and packaging story below.
   is a query and grows anchored at its top-left. No results yet: that is the next slice.
 - **The browser link works end to end.** Verified in Vivaldi through both UIs: the desktop
   app shows a code, the extension takes it, and `Test` then reconnects over KK with no code.
+  (The code has since given way to an emoji link: see desktop-link-onboarding.md.)
   The chain is the desktop's socket, a native-messaging proxy Chrome spawns, a host manifest
   the app installs for every Chromium browser present, and the extension's own client. The
   pairing key lives in the OS credential store; the allowlist is a sealed file beside the

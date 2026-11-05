@@ -30,14 +30,6 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 }));
 
 const pairing = {
-	begin: async () => {
-		h.calls.push("begin");
-		return "ABCD2345";
-	},
-	cancel: async () => {
-		h.calls.push("cancel");
-	},
-	isOpen: async () => true,
 	list: async () => [],
 	identity: async () => "id",
 	forget: async () => true,
@@ -107,11 +99,8 @@ afterEach(() => {
 });
 
 describe("connecting a browser by emoji", () => {
-	it("opens the link window and arms no code at all", async () => {
-		// A code nobody can see is only something a fake proxy could try to guess.
+	it("opens the link window and offers no code for an older extension", async () => {
 		await connect();
-		expect(h.calls).not.toContain("begin");
-		expect(screen.queryByText("ABCD2345")).toBeNull();
 		expect(screen.queryByRole("button", { name: /older extension/i })).toBeNull();
 		expect(screen.getByText(/in the bramble extension, press link/i)).toBeTruthy();
 	});

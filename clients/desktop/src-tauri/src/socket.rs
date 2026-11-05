@@ -51,13 +51,6 @@ const PROTOCOL_VERSION: u32 = 1;
     rename_all_fields = "camelCase"
 )]
 enum Hello {
-    /// First contact: complete a pairing using the code the user is looking at.
-    Pair {
-        v: u32,
-        /// The extension id the caller claims. Attacker-assertable, so it is stored for the
-        /// user to read and never trusted for a decision.
-        label: String,
-    },
     /// An established browser reconnecting, identified by its allowlisted static key.
     Hello { v: u32, public_key: String },
     /// First contact with no code: both screens show emoji from the handshake and the user
@@ -856,10 +849,6 @@ fn serve(root: &Path, stream: &mut ipc::Stream) -> Result<(), String> {
     let hello: Hello = serde_json::from_slice(&first).map_err(|e| format!("bad hello: {e}"))?;
 
     let handshake = match hello {
-        Hello::Pair { v, label } => {
-            check_version(v)?;
-            pairing::accept_pairing(root, &label)
-        }
         Hello::Hello { v, public_key } => {
             check_version(v)?;
             pairing::accept_known(root, &public_key)
@@ -917,7 +906,7 @@ fn drive(
             format!("bad handshake frame: {e}")
         })?;
 
-        let step = match pairing::read_message(root, handshake, &parsed.message) {
+        let step = match pairing::read_message(handshake, &parsed.message) {
             Ok(step) => step,
             Err(e) => {
                 abandon();
@@ -930,17 +919,6 @@ fn drive(
         if done {
             if let Some(label) = handshake.link_label() {
                 return confirm_link(root, handshake.session_id, stream, label);
-            }
-            if handshake.is_pairing() {
-                let peer = handshake::handshake_remote_static(handshake.session_id)
-                    .map_err(|e| format!("remote static: {e:?}"))?;
-                // Rust alone decides which browser the invite is for; the webview follows the event.
-                if bind_invite(&peer) {
-                    emit(
-                        "link-paired",
-                        serde_json::json!({ "peerId": peer, "via": "code" }),
-                    );
-                }
             }
             // Authenticated from here, so the same connection carries application traffic,
             // sealed under the session the handshake just established.
@@ -1236,11 +1214,9 @@ fn confirm_link(
         return Ok(());
     }
     pairing::finish_link(root, &peer, label)?;
+    // Rust alone decides which browser the invite is for; the webview follows the event.
     if bind_invite(&peer) {
-        emit(
-            "link-paired",
-            serde_json::json!({ "peerId": peer, "via": "emoji" }),
-        );
+        emit("link-paired", serde_json::json!({ "peerId": peer }));
     }
     emit("link-pair-done", serde_json::json!({ "paired": true }));
     write_sealed(
@@ -1336,62 +1312,26 @@ mod tests {
         dir
     }
 
-    /// Complete a pairing over the socket, returning the client's keypair.
-    fn pair_over_socket(dir: &TempDir, code: &str) -> Result<(String, String), String> {
+    /// A browser that has linked, as its keypair: allowlisted and bound to any armed invite,
+    /// the two steps `confirm_link` ends with once both screens have confirmed.
+    fn linked_client(dir: &TempDir) -> (String, String) {
+        // The app's identity exists before any link: accept_link sets it up for the handshake.
+        pairing::public_key(dir.path()).unwrap();
         let kp = handshake::handshake_generate_keypair().unwrap();
-        let start =
-            handshake::handshake_enroll_initiator(kp.private_key.clone(), pairing::psk_for(code))
-                .map_err(|e| format!("{e:?}"))?;
-
-        let mut client = Client::connect(dir.path());
-        client.send(serde_json::json!({
-            "kind": "pair", "v": 1, "label": "chrome-extension://abc"
-        }));
-        client.send(serde_json::json!({ "message": start.message }));
-
-        let reply = client.recv();
-        if reply["ok"] != true {
-            return Err(format!("refused: {reply}"));
-        }
-        let msg2 = reply["message"].as_str().ok_or("no msg2")?.to_string();
-        let msg3 = handshake::handshake_read(start.session_id, msg2)
-            .map_err(|e| format!("{e:?}"))?
-            .message
-            .ok_or("no msg3")?;
-
-        client.send(serde_json::json!({ "message": msg3 }));
-        let done = client.recv();
-        if done["done"] != true {
-            return Err(format!("not done: {done}"));
-        }
-        handshake::handshake_close(start.session_id);
-        Ok((kp.private_key, kp.public_key))
+        pairing::finish_link(dir.path(), &kp.public_key, "Chrome on Mac").unwrap();
+        bind_invite(&kp.public_key);
+        (kp.private_key, kp.public_key)
     }
 
     #[test]
-    fn a_pairing_completes_over_the_socket() {
+    fn a_linked_browser_reconnects_over_the_socket() {
+        // The everyday path, and the one that runs every time a browser starts. Linking is the
+        // rare event; this is the one that has to keep working.
         let _g = pairing::test_lock();
         let dir = started();
-        let code = pairing::begin_pairing().unwrap();
+        let (client_priv, client_pub) = linked_client(&dir);
 
-        let (_, client_pub) = pair_over_socket(&dir, &code).unwrap();
-
-        let peers = pairing::paired_peers(dir.path()).unwrap();
-        assert_eq!(peers.len(), 1);
-        assert_eq!(peers[0].public_key, client_pub);
-    }
-
-    #[test]
-    fn a_paired_client_reconnects_over_the_socket_without_a_code() {
-        // The everyday path, and the one that runs every time a browser starts. Pairing is
-        // the rare event; this is the one that has to keep working.
-        let _g = pairing::test_lock();
-        let dir = started();
-        let code = pairing::begin_pairing().unwrap();
-        let (client_priv, client_pub) = pair_over_socket(&dir, &code).unwrap();
-
-        // No pairing window open, no code anywhere: KK authenticates from the allowlist alone.
-        assert!(!pairing::pairing_open());
+        // No dialog open: KK authenticates from the allowlist alone.
         let app_pub = pairing::public_key(dir.path()).unwrap();
         let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
 
@@ -1409,8 +1349,7 @@ mod tests {
 
     /// Pair, then drive one sealed request over the session the handshake established.
     fn ask(dir: &TempDir, request: serde_json::Value) -> serde_json::Value {
-        let code = pairing::begin_pairing().unwrap();
-        let (client_priv, client_pub) = pair_over_socket(dir, &code).unwrap();
+        let (client_priv, client_pub) = linked_client(dir);
 
         let app_pub = pairing::public_key(dir.path()).unwrap();
         let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
@@ -1451,8 +1390,7 @@ mod tests {
 
     impl Linked {
         fn open(dir: &TempDir) -> Self {
-            let code = pairing::begin_pairing().unwrap();
-            let (client_priv, client_pub) = pair_over_socket(dir, &code).unwrap();
+            let (client_priv, client_pub) = linked_client(dir);
             let app_pub = pairing::public_key(dir.path()).unwrap();
             let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
             let mut client = Client::connect(dir.path());
@@ -1873,8 +1811,7 @@ mod tests {
     fn a_revoked_client_cannot_reconnect() {
         let _g = pairing::test_lock();
         let dir = started();
-        let code = pairing::begin_pairing().unwrap();
-        let (_, client_pub) = pair_over_socket(&dir, &code).unwrap();
+        let (_, client_pub) = linked_client(&dir);
 
         assert!(pairing::forget_peer(dir.path(), &client_pub).unwrap());
 
@@ -1890,29 +1827,19 @@ mod tests {
     }
 
     #[test]
-    fn a_wrong_code_is_refused_over_the_socket() {
+    fn a_code_pairing_attempt_is_refused() {
+        // What an extension from before the emoji sends. The app offers no code any more, so
+        // this gets no further than its hello, and nothing is allowlisted.
         let _g = pairing::test_lock();
         let dir = started();
-        pairing::begin_pairing().unwrap();
-
-        assert!(pair_over_socket(&dir, "WRONGCOD").is_err());
-        assert!(pairing::paired_peers(dir.path()).unwrap().is_empty());
-    }
-
-    #[test]
-    fn connecting_with_no_pairing_open_is_refused() {
-        let _g = pairing::test_lock();
-        let dir = started();
-        pairing::cancel_pairing();
 
         let mut client = Client::connect(dir.path());
         client.send(serde_json::json!({
-            "kind": "pair", "v": 1, "label": "chrome-extension://evil"
+            "kind": "pair", "v": 1, "label": "chrome-extension://abc"
         }));
-        let reply = client.recv();
-        assert_eq!(reply["ok"], false);
-        // Deliberately uninformative: a caller that cannot get in learns nothing about why.
-        assert_eq!(reply["error"], "refused");
+        let mut len = [0u8; 4];
+        assert!(client.stream.read_exact(&mut len).is_err());
+        assert!(pairing::paired_peers(dir.path()).unwrap().is_empty());
     }
 
     #[test]
@@ -1932,10 +1859,9 @@ mod tests {
     fn a_wrong_protocol_version_is_refused() {
         let _g = pairing::test_lock();
         let dir = started();
-        pairing::begin_pairing().unwrap();
 
         let mut client = Client::connect(dir.path());
-        client.send(serde_json::json!({ "kind": "pair", "v": 99, "label": "future" }));
+        client.send(serde_json::json!({ "kind": "link", "v": 99, "label": "future" }));
         // The connection closes; the point is that it does not proceed into a handshake.
         let mut len = [0u8; 4];
         assert!(client.stream.read_exact(&mut len).is_err());

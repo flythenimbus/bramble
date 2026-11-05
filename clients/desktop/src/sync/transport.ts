@@ -150,8 +150,8 @@ export async function startEnrollInvite(opts: {
 	// A new invite supersedes any prompt left over from the last one.
 	settleApproval(false);
 
-	/** Start the copy: over the link with no second check for an emoji link, or over the relay
-	 * behind the emoji prompt for a phone or an older extension that paired by code. */
+	/** Start the copy: over the link with no second check for a browser that linked by emoji, or
+	 * over the relay behind the emoji prompt for a phone. */
 	const begin = async (overLink: boolean, boundPeer?: string) => {
 		session = await startEnroll("inviter", {
 			vekB64,
@@ -202,13 +202,13 @@ export async function startEnrollInvite(opts: {
 	stopLinkPaired?.();
 	stopLinkPaired = null;
 	if (!opts.viaLink) return begin(false);
-	// Rust binds the invite to the first browser that links while it is armed, and says how it
-	// linked. Nothing starts until then.
+	// Rust binds the invite to the first browser that links while it is armed. Nothing starts
+	// until then.
 	let started = false;
-	stopLinkPaired = await listen<{ peerId: string; via?: string }>("link-paired", (e) => {
+	stopLinkPaired = await listen<{ peerId: string }>("link-paired", (e) => {
 		if (started) return;
 		started = true;
-		void begin(e.payload.via !== "code", e.payload.peerId);
+		void begin(true, e.payload.peerId);
 	});
 }
 

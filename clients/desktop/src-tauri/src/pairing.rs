@@ -34,26 +34,6 @@ use crate::storage;
 
 type Res<T> = Result<T, String>;
 
-/// Unambiguous alphabet: no I/L/O/U or digits that read as letters, so a code read off one
-/// window and typed into another does not fail on a character the user cannot distinguish.
-const CODE_ALPHABET: &[u8] = b"23456789ABCDEFGHJKMNPQRSTVWXYZ";
-
-/// 8 characters over a 30-character alphabet is a little over 39 bits. Ample against online
-/// guessing, given the code is single-use, expires, and burns after a handful of attempts.
-const CODE_LEN: usize = 8;
-
-/// Long enough to read a code off the screen and type it, short enough that an abandoned
-/// pairing does not leave a usable secret lying around.
-const CODE_TTL_MS: u64 = 3 * 60 * 1000;
-
-/// Wrong guesses before the code is destroyed. The window is already tiny; this removes
-/// online grinding as a consideration entirely.
-const MAX_ATTEMPTS: u8 = 5;
-
-/// HKDF-style domain separation, so a code can never be mistaken for key material from
-/// anywhere else in the system.
-const PSK_INFO: &[u8] = b"bramble/desktop/extension-pairing/psk/v1";
-
 /// Derives the key that seals pairing.json from the identity's private key.
 const SEAL_INFO: &[u8] = b"bramble/desktop/extension-pairing/allowlist-seal/v1";
 
@@ -126,15 +106,6 @@ struct Identity {
     #[serde(default)]
     sealed: bool,
 }
-
-/// A pairing the user has opened but no extension has completed yet.
-struct PendingCode {
-    code: String,
-    expires_at: u64,
-    attempts: u8,
-}
-
-static PENDING: Mutex<Option<PendingCode>> = Mutex::new(None);
 
 /// How long a Connect dialog accepts an emoji link, and how long one link waits on both answers.
 pub const LINK_WINDOW_MS: u64 = 3 * 60 * 1000;
@@ -483,88 +454,18 @@ pub fn forget_peer(root: &Path, public_key: &str) -> Res<bool> {
     Ok(removed)
 }
 
-fn random_code() -> Res<String> {
-    let mut bytes = vec![0u8; CODE_LEN];
-    getrandom::fill(&mut bytes).map_err(|e| format!("random: {e}"))?;
-    // Modulo bias over a 30-character alphabet is at most ~2^-4 of a bit across 8 draws and
-    // does not matter for a single-use secret that expires in three minutes.
-    Ok(bytes
-        .iter()
-        .map(|b| CODE_ALPHABET[*b as usize % CODE_ALPHABET.len()] as char)
-        .collect())
-}
+// The connection-accepting half, driven by the socket listener. Kept apart from any I/O so the
+// protocol is testable end to end without it, which is where the security-critical logic wants
+// its tests anyway.
 
-/// Open a pairing window and return the code to show the user. Replaces any code already
-/// outstanding, so opening the dialog twice cannot leave two valid secrets.
-pub fn begin_pairing() -> Res<String> {
-    let code = random_code()?;
-    *PENDING.lock().unwrap() = Some(PendingCode {
-        code: code.clone(),
-        expires_at: now_ms() + CODE_TTL_MS,
-        attempts: 0,
-    });
-    Ok(code)
-}
-
-/// Close the pairing window. Called when the user dismisses the dialog: the code is a bearer
-/// secret, so it must stop working the moment they stop looking at it.
-pub fn cancel_pairing() {
-    *PENDING.lock().unwrap() = None;
-}
-
-pub fn pairing_open() -> bool {
-    let mut pending = PENDING.lock().unwrap();
-    if pending.as_ref().is_some_and(|p| p.expires_at <= now_ms()) {
-        *pending = None;
-    }
-    pending.is_some()
-}
-
-/// Take the live code, consuming an attempt. `None` once it has expired or been exhausted.
-fn claim_attempt() -> Option<String> {
-    let mut guard = PENDING.lock().unwrap();
-    let pending = guard.as_mut()?;
-    if pending.expires_at <= now_ms() {
-        *guard = None;
-        return None;
-    }
-    pending.attempts += 1;
-    let code = pending.code.clone();
-    if pending.attempts >= MAX_ATTEMPTS {
-        *guard = None;
-    }
-    Some(code)
-}
-
-/// The 32-byte PSK the handshake wants, derived from the typed code. Domain-separated so the
-/// code cannot collide with key material from elsewhere.
-pub(crate) fn psk_for(code: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(PSK_INFO);
-    // Case-fold: the alphabet is uppercase and users will type lowercase.
-    hasher.update(code.trim().to_ascii_uppercase().as_bytes());
-    B64.encode(hasher.finalize())
-}
-
-// The four below are the connection-accepting half, consumed by the socket listener in the
-// next slice. Kept here rather than held back so the protocol is testable end to end without
-// any I/O, which is where the security-critical logic wants its tests anyway.
-#[allow(dead_code)]
 /// A handshake in flight, before it has earned a place in the allowlist.
 pub struct Handshake {
     pub session_id: u32,
-    /// Set only for a pairing handshake; `None` for an established peer.
-    paired_label: Option<String>,
     /// Set only for an emoji link handshake: the label the browser gave itself.
     link_label: Option<String>,
 }
 
 impl Handshake {
-    /// Whether this handshake pairs a new browser, rather than reconnecting a known one.
-    pub fn is_pairing(&self) -> bool {
-        self.paired_label.is_some()
-    }
-
     /// The browser's label when this is an emoji link handshake.
     pub fn link_label(&self) -> Option<&str> {
         self.link_label.as_deref()
@@ -572,7 +473,6 @@ impl Handshake {
 }
 
 /// Begin answering a connection from an established peer.
-#[allow(dead_code)]
 pub fn accept_known(root: &Path, peer_public_key: &str) -> Res<Handshake> {
     let (priv_key, _) = identity(root)?;
     if !admitted(root, peer_public_key) {
@@ -582,22 +482,6 @@ pub fn accept_known(root: &Path, peer_public_key: &str) -> Res<Handshake> {
         .map_err(|e| format!("start responder: {e:?}"))?;
     Ok(Handshake {
         session_id,
-        paired_label: None,
-        link_label: None,
-    })
-}
-
-/// Begin answering a pairing attempt. Fails when no pairing window is open, which is what
-/// stops a background process from pairing itself while the user is not looking.
-#[allow(dead_code)]
-pub fn accept_pairing(root: &Path, label: &str) -> Res<Handshake> {
-    let code = claim_attempt().ok_or("no pairing in progress")?;
-    let (priv_key, _) = identity(root)?;
-    let session_id = handshake::handshake_enroll_responder(priv_key, psk_for(&code))
-        .map_err(|e| format!("start enroll responder: {e:?}"))?;
-    Ok(Handshake {
-        session_id,
-        paired_label: Some(label.to_string()),
         link_label: None,
     })
 }
@@ -623,7 +507,6 @@ pub fn accept_link(root: &Path, label: &str) -> Res<Handshake> {
     match started {
         Ok(session_id) => Ok(Handshake {
             session_id,
-            paired_label: None,
             link_label: Some(label.to_string()),
         }),
         Err(e) => {
@@ -639,22 +522,11 @@ pub fn finish_link(root: &Path, public_key: &str, label: &str) -> Res<()> {
     add_peer(root, public_key, label)
 }
 
-/// Feed a handshake message through. On the message that completes a *pairing* handshake the
-/// peer's static key is allowlisted, which is the only place a peer is ever added: a wrong
-/// code fails the AEAD before reaching here, so completion is the proof.
-#[allow(dead_code)]
-pub fn read_message(root: &Path, hs: &Handshake, message_b64: &str) -> Res<Step> {
+/// Feed a handshake message through. Nothing is allowlisted here: a browser is added only once
+/// both screens have confirmed its link (`finish_link`).
+pub fn read_message(hs: &Handshake, message_b64: &str) -> Res<Step> {
     let result = handshake::handshake_read(hs.session_id, message_b64.to_string())
         .map_err(|e| format!("handshake read: {e:?}"))?;
-    if result.done {
-        if let Some(label) = &hs.paired_label {
-            let peer = handshake::handshake_remote_static(hs.session_id)
-                .map_err(|e| format!("remote static: {e:?}"))?;
-            add_peer(root, &peer, label)?;
-            // The code has done its job; leaving it live would allow a second pairing.
-            cancel_pairing();
-        }
-    }
     Ok(Step {
         message: result.message,
         done: result.done,
@@ -662,7 +534,6 @@ pub fn read_message(root: &Path, hs: &Handshake, message_b64: &str) -> Res<Step>
 }
 
 /// One turn of a handshake: what to send back, if anything, and whether that was the last.
-#[allow(dead_code)]
 pub struct Step {
     pub message: Option<String>,
     pub done: bool,
@@ -685,7 +556,6 @@ fn add_peer(root: &Path, public_key: &str, label: &str) -> Res<()> {
     save(root, &mut file)
 }
 
-#[allow(dead_code)]
 pub fn close(hs: &Handshake) {
     handshake::handshake_close(hs.session_id);
 }
@@ -722,30 +592,13 @@ mod tests {
         guard
     }
 
-    /// Drive the extension's half in-process. The real one runs this in WASM through the same
-    /// `vault_crypto::handshake`, so the protocol under test is the shipped one.
-    fn extension_pairs(code: &str) -> Res<(String, u32, String)> {
-        let kp = handshake::handshake_generate_keypair().map_err(|e| format!("{e:?}"))?;
-        let start = handshake::handshake_enroll_initiator(kp.private_key.clone(), psk_for(code))
-            .map_err(|e| format!("{e:?}"))?;
-        Ok((kp.public_key, start.session_id, start.message))
-    }
-
-    /// Run a pairing to completion against the module, returning the extension's public key.
-    fn pair(root: &Path, code: &str, label: &str) -> Res<String> {
-        let (ext_pub, ext_session, msg1) = extension_pairs(code)?;
-        let hs = accept_pairing(root, label)?;
-        let msg2 = read_message(root, &hs, &msg1)?
-            .message
-            .ok_or("expected msg2")?;
-        let msg3 = handshake::handshake_read(ext_session, msg2)
-            .map_err(|e| format!("{e:?}"))?
-            .message
-            .ok_or("expected msg3")?;
-        read_message(root, &hs, &msg3)?;
-        close(&hs);
-        handshake::handshake_close(ext_session);
-        Ok(ext_pub)
+    /// Link a browser the way a link both screens confirmed ends, returning its public key.
+    fn link(root: &Path, label: &str) -> String {
+        // The app's identity exists before any link: accept_link sets it up for the handshake.
+        identity(root).unwrap();
+        let kp = handshake::handshake_generate_keypair().unwrap();
+        finish_link(root, &kp.public_key, label).unwrap();
+        kp.public_key
     }
 
     #[test]
@@ -802,83 +655,24 @@ mod tests {
     }
 
     #[test]
-    fn pairing_allowlists_the_peer() {
+    fn a_confirmed_link_allowlists_the_browser() {
         let _g = setup();
         let d = root();
-        let code = begin_pairing().unwrap();
-        let ext_pub = pair(d.path(), &code, "chrome-extension://abc").unwrap();
+        let ext_pub = link(d.path(), "Chrome on Mac");
 
         let peers = paired_peers(d.path()).unwrap();
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].public_key, ext_pub);
-        assert_eq!(peers[0].label, "chrome-extension://abc");
+        assert_eq!(peers[0].label, "Chrome on Mac");
     }
 
     #[test]
-    fn a_wrong_code_never_completes() {
+    fn a_linked_browser_reconnects() {
         let _g = setup();
         let d = root();
-        begin_pairing().unwrap();
-        // The attacker guesses. XXpsk3 mixes the PSK in, so this fails inside the AEAD
-        // rather than at any check of ours.
-        assert!(pair(d.path(), "WRONGCOD", "chrome-extension://evil").is_err());
-        assert!(paired_peers(d.path()).unwrap().is_empty());
-    }
+        let ext_pub = link(d.path(), "chrome");
 
-    #[test]
-    fn no_pairing_window_means_no_pairing() {
-        let _g = setup();
-        let d = root();
-        cancel_pairing();
-        // A process connecting while the user is not pairing gets nowhere, whatever it claims.
-        assert!(accept_pairing(d.path(), "chrome-extension://evil").is_err());
-    }
-
-    #[test]
-    fn the_code_is_single_use() {
-        let _g = setup();
-        let d = root();
-        let code = begin_pairing().unwrap();
-        pair(d.path(), &code, "first").unwrap();
-        // Completion closed the window, so the same code cannot pair a second browser.
-        assert!(!pairing_open());
-        assert!(accept_pairing(d.path(), "second").is_err());
-        assert_eq!(paired_peers(d.path()).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn the_code_burns_after_repeated_failures() {
-        let _g = setup();
-        let d = root();
-        begin_pairing().unwrap();
-        for _ in 0..MAX_ATTEMPTS {
-            let _ = accept_pairing(d.path(), "guesser");
-        }
-        assert!(!pairing_open(), "code should be spent");
-        assert!(accept_pairing(d.path(), "guesser").is_err());
-    }
-
-    #[test]
-    fn an_expired_code_is_refused() {
-        let _g = setup();
-        let d = root();
-        let code = begin_pairing().unwrap();
-        // Reach in and age it, rather than sleeping out a three-minute TTL.
-        PENDING.lock().unwrap().as_mut().unwrap().expires_at = now_ms() - 1;
-        assert!(!pairing_open());
-        assert!(pair(d.path(), &code, "late").is_err());
-        assert!(paired_peers(d.path()).unwrap().is_empty());
-    }
-
-    #[test]
-    fn a_paired_peer_reconnects_without_a_code() {
-        let _g = setup();
-        let d = root();
-        let code = begin_pairing().unwrap();
-        let ext_pub = pair(d.path(), &code, "chrome").unwrap();
-
-        // No pairing window open: this is the everyday path.
-        assert!(!pairing_open());
+        // No dialog open: this is the everyday path.
         let hs = accept_known(d.path(), &ext_pub).unwrap();
         close(&hs);
     }
@@ -895,8 +689,7 @@ mod tests {
     fn forgetting_a_peer_revokes_it() {
         let _g = setup();
         let d = root();
-        let code = begin_pairing().unwrap();
-        let ext_pub = pair(d.path(), &code, "chrome").unwrap();
+        let ext_pub = link(d.path(), "chrome");
 
         assert!(forget_peer(d.path(), &ext_pub).unwrap());
         assert!(accept_known(d.path(), &ext_pub).is_err());
@@ -961,8 +754,7 @@ mod tests {
     fn a_peer_written_into_the_file_is_not_trusted() {
         let _g = setup();
         let d = root();
-        let code = begin_pairing().unwrap();
-        pair(d.path(), &code, "chrome").unwrap();
+        link(d.path(), "chrome");
 
         // Keep the real identity's public key and seal, and append a peer of one's own.
         let rogue = handshake::handshake_generate_keypair().unwrap();
@@ -1015,8 +807,8 @@ mod tests {
     fn forgetting_one_browser_keeps_the_others_trusted() {
         let _g = setup();
         let d = root();
-        let first = pair(d.path(), &begin_pairing().unwrap(), "first").unwrap();
-        let second = pair(d.path(), &begin_pairing().unwrap(), "second").unwrap();
+        let first = link(d.path(), "first");
+        let second = link(d.path(), "second");
 
         assert!(forget_peer(d.path(), &first).unwrap());
         assert!(accept_known(d.path(), &first).is_err());
@@ -1027,8 +819,7 @@ mod tests {
     fn an_allowlist_from_another_identity_is_refused() {
         let _g = setup();
         let d = root();
-        let code = begin_pairing().unwrap();
-        pair(d.path(), &code, "chrome").unwrap();
+        link(d.path(), "chrome");
 
         // A restore from another machine: different credential store, same allowlist file.
         // The cache goes too, because this is a scenario a fresh process would meet.
@@ -1088,7 +879,7 @@ mod tests {
         let d = root();
         register(d.path(), &[("vault-a", 1), ("vault-b", 1)]);
         open_vault(d.path(), "vault-a");
-        let browser = pair(d.path(), &begin_pairing().unwrap(), "chrome").unwrap();
+        let browser = link(d.path(), "chrome");
 
         open_vault(d.path(), "vault-b");
         assert!(accept_known(d.path(), &browser).is_err());
@@ -1138,7 +929,7 @@ mod tests {
         let d = root();
         register(d.path(), &[("vault-a", 1), ("vault-b", 1)]);
         open_vault(d.path(), "vault-a");
-        pair(d.path(), &begin_pairing().unwrap(), "chrome").unwrap();
+        link(d.path(), "chrome");
 
         let rogue = handshake::handshake_generate_keypair().unwrap();
         let mut file: serde_json::Value =
@@ -1164,24 +955,6 @@ mod tests {
         assert!(accept_known(d.path(), &browser.public_key).is_err());
         assert!(paired_peers(d.path()).unwrap().is_empty());
     }
-
-    #[test]
-    fn codes_use_an_unambiguous_alphabet() {
-        let _g = setup();
-        let code = begin_pairing().unwrap();
-        assert_eq!(code.len(), CODE_LEN);
-        assert!(
-            code.chars().all(|c| CODE_ALPHABET.contains(&(c as u8))),
-            "code {code} strayed outside the alphabet"
-        );
-    }
-
-    #[test]
-    fn the_psk_is_case_insensitive_but_code_specific() {
-        assert_eq!(psk_for("ABC23456"), psk_for("abc23456"));
-        assert_eq!(psk_for(" ABC23456 "), psk_for("ABC23456"));
-        assert_ne!(psk_for("ABC23456"), psk_for("ABC23457"));
-    }
 }
 
 // ---- commands: the pairing UI's surface ----
@@ -1189,25 +962,6 @@ mod tests {
 use tauri::AppHandle;
 
 use crate::storage::data_dir;
-
-/// Open a pairing window and hand back the code to display. The code is a bearer secret for
-/// its lifetime, so the UI must show it and nothing else must log it.
-#[tauri::command]
-pub fn pairing_begin() -> Result<String, String> {
-    begin_pairing()
-}
-
-/// Called when the user closes the pairing dialog. Not merely tidiness: an abandoned code
-/// that stayed live would be a usable secret nobody is watching.
-#[tauri::command]
-pub fn pairing_cancel() {
-    cancel_pairing();
-}
-
-#[tauri::command]
-pub fn pairing_is_open() -> bool {
-    pairing_open()
-}
 
 #[tauri::command]
 pub fn pairing_list(app: AppHandle) -> Result<Vec<PairedPeer>, String> {
