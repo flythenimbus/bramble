@@ -68,8 +68,8 @@ export interface RosterSyncOptions {
 	peerSource?: PeerSource;
 	/** Relay only: a device to leave to the local link. Ignored with a peerSource. */
 	skipPeer?: (peerPub: string) => boolean;
-	/** A peer passed roster-auth, by its device key. */
-	onAuthenticated?: (peerPub: string) => void;
+	/** A peer passed roster-auth: its device key, and the key the session is named by. */
+	onAuthenticated?: (peerPub: string, remote: string) => void;
 }
 
 /** What a peer broadcast carries: entries and the roster when it changed, nothing on a heartbeat,
@@ -289,7 +289,7 @@ async function syncPeer(
 	);
 	if (!authed) return;
 	const { peerPub } = authed;
-	opts.onAuthenticated?.(peerPub);
+	opts.onAuthenticated?.(peerPub, peer.remotePubkey);
 	const sess = { sessionId: authed.sessionId };
 	let wakeAbort: (() => void) | null = null;
 	const aborted = new Promise<null>((resolve) => {

@@ -385,6 +385,34 @@ describe("what each tick sends", () => {
 		expect(authed).toEqual(["aaaa"]);
 	});
 
+	it("says which session each peer authenticated on", async () => {
+		// Over the desktop link the session is named by the browser's link key, not its roster key:
+		// the desktop pins an old link to the vault the browser just proved it is in.
+		const ab = pipe("aaaa", "bbbb");
+		await device("aaaa", [ab.aaaa!], { payload: "a" });
+		const authed: [string, string][] = [];
+		sessions.push(
+			await startRosterSync({
+				relayUrl: "wss://relay.invalid",
+				groupKeyB64: "unused",
+				devicePrivB64: "priv-bbbb",
+				devicePubB64: "bbbb",
+				roster: rosterOf(["aaaa", "bbbb", "cccc"]),
+				wasm: identityWasm(),
+				report: () => {},
+				fetchLocalPayload: async () => "b",
+				pushRemotePayload: async () => {},
+				peerSource: async ({ onPeer }) => {
+					onPeer({ ...ab.bbbb!, remotePubkey: "link-key-of-aaaa" });
+					return { stop() {} };
+				},
+				onAuthenticated: (pub, remote) => authed.push([pub, remote]),
+			}),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(authed).toEqual([["aaaa", "link-key-of-aaaa"]]);
+	});
+
 	it("ignores skipPeer over a local peer source", async () => {
 		const ab = pipe("aaaa", "bbbb");
 		await device("aaaa", [ab.aaaa!], { payload: "from-a" });

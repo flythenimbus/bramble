@@ -14,11 +14,17 @@ const h = vi.hoisted(() => ({
 	/** Frames handed to the Rust side for delivery, and whether that delivery fails. */
 	sent: [] as { peerId: string; frame: string; room?: string }[],
 	sendFails: false,
+	/** Link keys the Rust side was asked to pin to the open vault. */
+	pinned: [] as string[],
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: async (cmd: string, args?: Record<string, unknown>) => {
 		if (cmd === "link_sync_peers") return h.connected;
+		if (cmd === "pairing_pin_link") {
+			h.pinned.push((args as { publicKey: string }).publicKey);
+			return true;
+		}
 		if (cmd === "link_sync_send") {
 			if (h.sendFails) throw new Error("no such peer");
 			h.sent.push(args as unknown as { peerId: string; frame: string });
@@ -60,6 +66,7 @@ beforeEach(() => {
 	h.connected = [];
 	h.sent.length = 0;
 	h.sendFails = false;
+	h.pinned.length = 0;
 	vi.useRealTimers();
 });
 
@@ -228,6 +235,15 @@ describe("a browser whose sync starts after its link", () => {
 		fire("link-sync-restart", { peerId: "browser-a", link: 1 });
 
 		expect(peers).toEqual([]);
+	});
+});
+
+describe("a browser that passed sync's check over the link", () => {
+	it("has its link pinned to the open vault", async () => {
+		// An old app-wide link may be taken by several vaults; this is the one it syncs with.
+		const { pinLink } = await import("./link-peers");
+		pinLink("browser-a");
+		await vi.waitFor(() => expect(h.pinned).toEqual(["browser-a"]));
 	});
 });
 

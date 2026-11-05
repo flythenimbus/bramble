@@ -50,7 +50,13 @@ import { desktopSyncCrypto } from "../sync-crypto";
 import { emit, report } from "./bus";
 import { deviceKeypair, publishSyncIdentity } from "./keys";
 import { linkBlobSource } from "./link-blob";
-import { linkDevicePubs, linkPeerSource, loadLinkDevices, recordLinkDevice } from "./link-peers";
+import {
+	linkDevicePubs,
+	linkPeerSource,
+	loadLinkDevices,
+	pinLink,
+	recordLinkDevice,
+} from "./link-peers";
 
 const onTheLink = (pub: string): boolean => linkDevicePubs().has(pub);
 
@@ -267,7 +273,10 @@ async function startRoster(): Promise<void> {
 		await startRosterSync({
 			...common,
 			peerSource: linkPeerSource,
-			onAuthenticated: recordLinkDevice,
+			onAuthenticated: (pub, linkKey) => {
+				recordLinkDevice(pub);
+				pinLink(linkKey);
+			},
 		}),
 	];
 	if (gen !== sessionGen) return; // torn down while the sessions started

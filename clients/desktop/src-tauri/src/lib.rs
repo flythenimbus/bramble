@@ -312,6 +312,7 @@ pub fn run() {
             spotlight::spotlight_set_height,
             pairing::pairing_list,
             pairing::pairing_forget,
+            pairing::pairing_pin_link,
             pairing::pairing_public_key,
             index_store::spotlight_search,
             index_store::spotlight_copy_password,

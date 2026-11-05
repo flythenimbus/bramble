@@ -60,6 +60,12 @@ export async function loadLinkDevices(): Promise<void> {
 	for (const pub of saved ?? []) linkDevices.add(pub);
 }
 
+/** Pin an old app-wide link to the open vault, which its browser just proved it syncs with. Best
+ * effort: a failed pin leaves the link as it was. */
+export function pinLink(linkKey: string): void {
+	void invoke("pairing_pin_link", { publicKey: linkKey }).catch(() => {});
+}
+
 export function recordLinkDevice(pub: string): void {
 	if (linkDevices.has(pub)) return;
 	linkDevices.add(pub);

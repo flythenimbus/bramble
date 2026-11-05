@@ -547,6 +547,32 @@ pub fn forget_peer(root: &Path, public_key: &str) -> Res<bool> {
     Ok(removed)
 }
 
+/// Pin a link from before the per-vault lists to the vault open now, which it has just proved it
+/// syncs with, so no other vault takes it after this. A link made since is never touched.
+pub fn pin_link(root: &Path, public_key: &str) -> Res<bool> {
+    let Some(vault_id) = open_vault_id(root)? else {
+        return Ok(false);
+    };
+    let mut file = read_trusted(root)?;
+    if !file.peers.iter().any(|p| p.public_key == public_key) {
+        return Ok(false);
+    }
+    let peers = vault_peers(root, &file, &vault_id)?;
+    if !peers.iter().any(|p| p.public_key == public_key) {
+        return Ok(false);
+    }
+    // Its own list first, so the open vault keeps every link it takes from the old one.
+    file.vaults.insert(vault_id.clone(), peers);
+    file.peers.retain(|p| p.public_key != public_key);
+    for (id, list) in file.vaults.iter_mut() {
+        if *id != vault_id {
+            list.retain(|p| p.public_key != public_key);
+        }
+    }
+    save(root, &mut file)?;
+    Ok(true)
+}
+
 // The connection-accepting half, driven by the socket listener. Kept apart from any I/O so the
 // protocol is testable end to end without it, which is where the security-critical logic wants
 // its tests anyway.
@@ -1122,6 +1148,39 @@ mod tests {
     }
 
     #[test]
+    fn an_old_link_is_pinned_to_the_vault_it_syncs_with() {
+        let _g = setup();
+        let d = root();
+        let browser = handshake::handshake_generate_keypair().unwrap();
+        let other = handshake::handshake_generate_keypair().unwrap();
+        legacy_link(d.path(), &browser.public_key, 100);
+        legacy_link(d.path(), &other.public_key, 100);
+        register(d.path(), &[("vault-a", 10), ("vault-b", 20)]);
+
+        open_vault(d.path(), "vault-a");
+        assert!(pin_link(d.path(), &browser.public_key).unwrap());
+        assert!(admitted(d.path(), &browser.public_key));
+
+        // The other vault no longer takes it, and still takes the other old links.
+        open_vault(d.path(), "vault-b");
+        assert!(!admitted(d.path(), &browser.public_key));
+        assert!(admitted(d.path(), &other.public_key));
+    }
+
+    #[test]
+    fn a_new_link_is_never_pinned() {
+        let _g = setup();
+        let d = root();
+        register(d.path(), &[("vault-a", 1), ("vault-b", 1)]);
+        open_vault(d.path(), "vault-a");
+        let browser = link(d.path(), "chrome");
+        let before = fs::read(path(d.path())).unwrap();
+
+        assert!(!pin_link(d.path(), &browser).unwrap());
+        assert_eq!(fs::read(path(d.path())).unwrap(), before);
+    }
+
+    #[test]
     fn with_several_vaults_and_none_open_nobody_is_admitted() {
         let _g = setup();
         let d = root();
@@ -1152,6 +1211,13 @@ pub fn pairing_forget(app: AppHandle, public_key: String) -> Result<bool, String
     // Its open connection goes now, so it learns at once rather than on its next frame.
     crate::socket::vault_opened(&root);
     Ok(removed)
+}
+
+/// Pin an old app-wide link to the vault open now (`pin_link`), once that browser has passed
+/// sync's check over the link.
+#[tauri::command]
+pub fn pairing_pin_link(app: AppHandle, public_key: String) -> Result<bool, String> {
+    pin_link(&data_dir(&app)?, &public_key)
 }
 
 /// This device's static public key, for showing the user which identity a browser paired to.
