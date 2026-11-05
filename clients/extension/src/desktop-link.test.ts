@@ -14,16 +14,47 @@ const h = vi.hoisted(() => ({
 	/** Every permissions call, so the tests can assert what was asked for, not just that it ran. */
 	calls: [] as { fn: string; arg: unknown }[],
 	/** What the background answers every message with. */
-	reply: { ok: true } as { ok: boolean; error?: string },
+	reply: { ok: true } as { ok: boolean; error?: string; data?: unknown },
+	/** Whether this page has the connectNative binding, so it can lend the background a pipe. */
+	binding: false,
+	/** Every message sent to the background, in order. */
+	sent: [] as Record<string, unknown>[],
+	/** The relay ports this page opened to lend a pipe, by name. */
+	relays: [] as string[],
 }));
 
-// Deliberately no `connectNative` on this mock: the gate must not test for the binding, which is
-// stale in both directions across a grant or a revoke.
+// No `connectNative` on this mock unless a case turns the binding on: the gate must not test for
+// it, which is stale in both directions across a grant or a revoke.
 vi.mock("./platform-api", () => ({
 	api: {
 		runtime: {
 			getManifest: () => ({ permissions: h.permissions, optional_permissions: h.optional }),
-			sendMessage: async () => h.reply,
+			sendMessage: async (msg: Record<string, unknown>) => {
+				h.sent.push(msg);
+				// Asked before lending; the background cannot open its own pipe here.
+				if (msg.type === "DESKTOP_LINK_TRANSPORT_NEEDED") return { ok: true, data: true };
+				return h.reply;
+			},
+			get connectNative() {
+				if (!h.binding) return undefined;
+				return () => ({
+					postMessage: () => {},
+					onMessage: { addListener: () => {} },
+					onDisconnect: { addListener: () => {} },
+					disconnect: () => {},
+				});
+			},
+			connect: ({ name }: { name: string }) => {
+				h.relays.push(name);
+				return {
+					postMessage: () => {},
+					// The background acks a lent port as soon as it registers it.
+					onMessage: {
+						addListener: (cb: (m: unknown) => void) => queueMicrotask(() => cb({ ready: true })),
+					},
+					disconnect: () => {},
+				};
+			},
 		},
 		permissions: {
 			contains: async (arg: unknown) => {
@@ -56,6 +87,9 @@ beforeEach(() => {
 	h.held = false;
 	h.calls = [];
 	h.reply = { ok: true };
+	h.binding = false;
+	h.sent = [];
+	h.relays = [];
 });
 
 /** The shipping Chromium manifest: declared optional, so it is asked for at connect time. */
@@ -163,5 +197,36 @@ describe("a failure the background reports", () => {
 		await expect(link?.confirm?.("L1", true)).rejects.toThrow(
 			/^The desktop app did not approve the link\.$/,
 		);
+	});
+});
+
+// The app reads a connection as one session. Settings asks for the app's key while the link flow
+// asks for its vault, and on one shared pipe the second hello broke the first: no invite came.
+describe("a pipe lent to the background", () => {
+	/** The lent pipe each request named, as the relay port name it would match. */
+	const named = (type: string) =>
+		h.sent.filter((m) => m.type === type).map((m) => `link-native-proxy:${String(m.via)}`);
+
+	it("is its own for each request, even when two run at once", async () => {
+		h.binding = true;
+		h.reply = { ok: true, data: null };
+		const link = await load();
+
+		await Promise.all([link?.vaultSummary?.(), link?.desktopSyncKey?.()]);
+
+		expect(new Set(h.relays).size).toBe(2);
+		expect([...named("DESKTOP_LINK_VAULT_SUMMARY"), ...named("DESKTOP_LINK_SYNC_KEY")]).toEqual(
+			expect.arrayContaining(h.relays),
+		);
+	});
+
+	it("is named by the emoji link's start, which keeps it until the answer", async () => {
+		h.binding = true;
+		h.reply = { ok: true, data: { legacy: true } };
+		const link = await load();
+
+		await link?.start?.();
+
+		expect(named("DESKTOP_LINK_START")).toEqual(h.relays);
 	});
 });

@@ -86,7 +86,7 @@ const HOST_NAME = "app.bramble.desktop";
  * Null when this context has no binding either, which means the grant has not happened or this
  * page predates it. The caller then pairs the ordinary way and the background decides.
  */
-function openNativeProxy(): { ready: Promise<void>; close(): void } | null {
+function openNativeProxy(): { via: string; ready: Promise<void>; close(): void } | null {
 	if (typeof api.runtime.connectNative !== "function") return null;
 
 	let native: chrome.runtime.Port;
@@ -97,7 +97,9 @@ function openNativeProxy(): { ready: Promise<void>; close(): void } | null {
 		// and here. Nothing to lend.
 		return null;
 	}
-	const relay = api.runtime.connect({ name: NATIVE_PROXY_PORT });
+	// Named, so the request it is lent for can say which pipe is its own.
+	const via = crypto.randomUUID();
+	const relay = api.runtime.connect({ name: `${NATIVE_PROXY_PORT}:${via}` });
 
 	let settle: () => void;
 	const ready = new Promise<void>((resolve) => {
@@ -124,6 +126,7 @@ function openNativeProxy(): { ready: Promise<void>; close(): void } | null {
 	setTimeout(() => settle(), 2000);
 
 	return {
+		via,
 		ready,
 		close: () => {
 			native.disconnect();
@@ -141,7 +144,7 @@ function openNativeProxy(): { ready: Promise<void>; close(): void } | null {
  * sync goes quiet with nothing reporting a fault. Lending is only safe when there is nothing to
  * displace, which is exactly when the background says it needs it.
  */
-async function withNativeProxy<T>(run: () => Promise<T>): Promise<T> {
+async function withNativeProxy<T>(run: (via?: string) => Promise<T>): Promise<T> {
 	// Lend on an unclear answer. Failing to lend is the bug this exists to fix; lending when it
 	// was not needed costs one short-lived connection.
 	const needed = await dispatch<boolean>("DESKTOP_LINK_TRANSPORT_NEEDED").catch(() => true);
@@ -149,7 +152,7 @@ async function withNativeProxy<T>(run: () => Promise<T>): Promise<T> {
 	const proxy = openNativeProxy();
 	try {
 		await proxy?.ready;
-		return await run();
+		return await run(proxy?.via);
 	} finally {
 		proxy?.close();
 	}
@@ -166,7 +169,8 @@ function releaseLinkProxy(): void {
 const adapter: DesktopLinkAdapter = {
 	status: () => dispatch<DesktopLinkStatus>("DESKTOP_LINK_STATUS"),
 	// The code goes straight through to the background and is never stored here.
-	pair: (code) => withNativeProxy(async () => void (await dispatch("DESKTOP_LINK_PAIR", { code }))),
+	pair: (code) =>
+		withNativeProxy(async (via) => void (await dispatch("DESKTOP_LINK_PAIR", { code, via }))),
 	// The emoji link spans two calls on one pipe, so the lent port stays open until the answer.
 	start: async () => {
 		linkProxy?.close();
@@ -175,6 +179,7 @@ const adapter: DesktopLinkAdapter = {
 		await linkProxy?.ready;
 		const started = await dispatch<{ id: string; sas: PairingSas } | { legacy: true }>(
 			"DESKTOP_LINK_START",
+			{ via: linkProxy?.via },
 		).catch((e) => {
 			releaseLinkProxy();
 			throw e;
@@ -213,12 +218,14 @@ const adapter: DesktopLinkAdapter = {
 	// paired, which has no binding of its own. Without it the claim silently answered "no invite"
 	// on every first-time pairing, so the browser got the link and never the vault.
 	claimSyncInvite: () =>
-		withNativeProxy(() => dispatch<string | null>("DESKTOP_LINK_CLAIM_INVITE")),
-	desktopSyncKey: () => withNativeProxy(() => dispatch<string | null>("DESKTOP_LINK_SYNC_KEY")),
+		withNativeProxy((via) => dispatch<string | null>("DESKTOP_LINK_CLAIM_INVITE", { via })),
+	desktopSyncKey: () =>
+		withNativeProxy((via) => dispatch<string | null>("DESKTOP_LINK_SYNC_KEY", { via })),
 	vaultSummary: () =>
-		withNativeProxy(() =>
+		withNativeProxy((via) =>
 			dispatch<{ name: string; empty: boolean; entries: number } | null>(
 				"DESKTOP_LINK_VAULT_SUMMARY",
+				{ via },
 			),
 		),
 	unlink: async () => {

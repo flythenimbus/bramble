@@ -160,6 +160,15 @@ The app keys its outbound queue by our static key, so a second connection displa
 the target for its pushes and closing the second takes that queue with it, which would leave sync
 quiet with nothing reporting a fault. Lending is only safe when there is nothing to displace.
 
+Each lent pipe carries one session. The app reads a connection as one Noise session, so a second
+`hello` on a pipe already in use arrives where it expects a sealed frame, and the app drops the
+connection. The page names each relay port `link-native-proxy:<id>` and sends that id as `via`
+with the one request it lent the pipe for; the background takes the port out of its map when that
+session starts. Nothing else can ride it, including background-initiated asks such as sync's
+`desktopSyncKey`. This used to be one global port: Settings asked for the app's sync key while the
+link flow asked for its vault summary, both rode the same pipe, and the invite claim that followed
+answered "no invite".
+
 Step 5 is the only architectural move, and the smallest one that works. The obvious reading of
 finding 1 is "pairing must move to the page", which would mean a second copy of the Noise handshake
 living next to the first and drifting from it. It does not have to. Only the TRANSPORT is
@@ -205,7 +214,7 @@ Implement it in the page against `api.permissions`, never dispatched to the back
 `clients/extension/src/background/desktop-link.ts` splits the pipe from the handshake, and
 `ProxiedSession` implements it over a runtime port from the page. `openNativeProxy()` in
 `clients/extension/src/desktop-link.ts` is the page half: native port in, runtime port
-out, no frame ever read. `pairWithDesktop` picks the lent transport when one is registered and a
+out, no frame ever read. `pairWithDesktop` picks the lent transport its request names and a
 direct `NativeSession` otherwise, so a worker that restarted after the grant needs no page at all.
 One state machine, one wire format, nothing to keep in sync.
 
@@ -245,11 +254,13 @@ failure.
 **Phase 6: tests, i18n, docs (done).** Tests landed with the phase that motivated each, rather than
 in a batch at the end, so a failing one names the change that broke it.
 
-- `desktop-link.test.ts` (page): the gate counts both arrays, and the sub-adapter is withheld where
-  the permission is required. One case gives the mock no `connectNative` at all, so any future
-  shortcut through `typeof` throws instead of quietly passing.
+- `desktop-link.test.ts` (page): the gate counts both arrays, the sub-adapter is withheld where
+  the permission is required, and each request lends its own named pipe and names it. One case
+  gives the mock no `connectNative` at all, so any future shortcut through `typeof` throws instead
+  of quietly passing.
 - `background/desktop-link.test.ts`: the lent transport, a content-script port being refused, a
-  window closed mid-handshake, and both unusable-while-paired causes kept apart.
+  window closed mid-handshake, both unusable-while-paired causes kept apart, and one session per
+  lent pipe (two at once, a request it was not lent for, a second session on a used one).
 - `DesktopLinkSection.test.tsx`: ungranted, declined, revoked-while-paired, `drop()` ordering on
   unlink, and a host with no permission to ask for.
 - `e2e/extension/desktop-link-permission.spec.ts`: the shipped ungranted state and the

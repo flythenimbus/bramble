@@ -581,13 +581,13 @@ describe("a browser with no desktop app", () => {
 // lends a pipe and the handshake, the keys and the storage write all stay here.
 describe("pairing borrows the page's native transport", () => {
 	/** Hand the background a proxy port, as runtime.onConnect would. */
-	function lend(sender: unknown) {
+	function lend(sender: unknown, id = "lent") {
 		const sent: Record<string, unknown>[] = [];
 		let onMessage: ((m: unknown) => void) | undefined;
 		let onDisconnect: (() => void) | undefined;
 		let disconnected = false;
 		const port = {
-			name: "link-native-proxy",
+			name: `link-native-proxy:${id}`,
 			sender,
 			postMessage: (m: Record<string, unknown>) => sent.push(m),
 			onMessage: {
@@ -606,6 +606,7 @@ describe("pairing borrows the page's native transport", () => {
 		};
 		for (const cb of h.onConnect) cb(port);
 		return {
+			id,
 			sent,
 			get disconnected() {
 				return disconnected;
@@ -624,10 +625,10 @@ describe("pairing borrows the page's native transport", () => {
 
 	/** Drive a pairing to completion over `page`, resolving what pairWithDesktop returned. */
 	async function pairOver(
-		mod: { pairWithDesktop: (c: string) => Promise<unknown> },
+		mod: { pairWithDesktop: (c: string, via?: string) => Promise<unknown> },
 		page: ReturnType<typeof lend>,
 	) {
-		const paired = mod.pairWithDesktop("ABCD1234");
+		const paired = mod.pairWithDesktop("ABCD1234", page.id);
 		await vi.waitFor(() => expect(page.sent.length).toBe(3));
 		page.deliver({ ok: true, message: "xx2" });
 		await vi.waitFor(() => expect(page.sent.length).toBe(4));
@@ -680,7 +681,7 @@ describe("pairing borrows the page's native transport", () => {
 		expect(evil.disconnected).toBe(true);
 		// Rejecting the port is only half of it; it must also never have become the transport.
 		// Falling back to a direct session is what proves it did not.
-		void mod.pairWithDesktop("ABCD1234").catch(() => {});
+		void mod.pairWithDesktop("ABCD1234", evil.id).catch(() => {});
 		await vi.waitFor(() => expect(h.connects).toBe(1));
 		expect(evil.sent).toEqual([]);
 	});
@@ -689,7 +690,7 @@ describe("pairing borrows the page's native transport", () => {
 		const mod = await load();
 		const page = lend(EXT_SENDER);
 
-		const paired = mod.pairWithDesktop("ABCD1234");
+		const paired = mod.pairWithDesktop("ABCD1234", page.id);
 		await vi.waitFor(() => expect(page.sent.length).toBe(3));
 		page.drop();
 
@@ -701,7 +702,7 @@ describe("pairing borrows the page's native transport", () => {
 		const mod = await load();
 		const page = lend(EXT_SENDER);
 
-		const paired = mod.pairWithDesktop("ABCD1234");
+		const paired = mod.pairWithDesktop("ABCD1234", page.id);
 		await vi.waitFor(() => expect(page.sent.length).toBe(3));
 		// The ordinary "desktop app is not installed" case: Chrome reports it as a bare
 		// disconnect and the page forwards the reason.
@@ -712,7 +713,7 @@ describe("pairing borrows the page's native transport", () => {
 
 	/** Run the emoji link handshake over `page`, resolving what startDesktopLink returned. */
 	async function linkOver(mod: Awaited<ReturnType<typeof load>>, page: ReturnType<typeof lend>) {
-		const started = mod.startDesktopLink();
+		const started = mod.startDesktopLink(page.id);
 		await vi.waitFor(() => expect(page.sent.length).toBe(3));
 		page.deliver({ ok: true, message: "xl2" });
 		await vi.waitFor(() => expect(page.sent.length).toBe(4));
@@ -836,7 +837,7 @@ describe("pairing borrows the page's native transport", () => {
 	it("falls back to the code for an app that does not know the link hello", async () => {
 		const mod = await load();
 		const page = lend(EXT_SENDER);
-		const started = mod.startDesktopLink();
+		const started = mod.startDesktopLink(page.id);
 		await vi.waitFor(() => expect(page.sent.length).toBe(3));
 		// An older app closes the connection on an unknown hello without a word.
 		page.die("Native host has exited.");
@@ -872,7 +873,7 @@ describe("pairing borrows the page's native transport", () => {
 	it("says the app is missing on Firefox too, rather than offering the code", async () => {
 		const mod = await load();
 		const page = lend(EXT_SENDER);
-		const started = mod.startDesktopLink();
+		const started = mod.startDesktopLink(page.id);
 		await vi.waitFor(() => expect(page.sent.length).toBe(3));
 		// Firefox's wording for a native host that is not installed.
 		page.die("No such native application app.bramble.desktop");
@@ -883,7 +884,7 @@ describe("pairing borrows the page's native transport", () => {
 	it("says to open the app's Connect dialog when the app refuses the hello", async () => {
 		const mod = await load();
 		const page = lend(EXT_SENDER);
-		const started = mod.startDesktopLink();
+		const started = mod.startDesktopLink(page.id);
 		await vi.waitFor(() => expect(page.sent.length).toBe(3));
 		page.deliver({ ok: false, error: "refused" });
 
@@ -985,11 +986,11 @@ describe("a paired browser that cannot use native messaging", () => {
 // gated on this worker's own ability the claim silently answered "no invite" every time: the
 // browser got the link and never the vault.
 describe("a borrowed pipe serves link requests, not just pairing", () => {
-	function lend() {
+	function lend(id = "lent") {
 		const sent: Record<string, unknown>[] = [];
 		let onMessage: ((m: unknown) => void) | undefined;
 		const port = {
-			name: "link-native-proxy",
+			name: `link-native-proxy:${id}`,
 			sender: { origin: "https://bramble-test.example" },
 			postMessage: (m: Record<string, unknown>) => sent.push(m),
 			onMessage: {
@@ -1009,7 +1010,7 @@ describe("a borrowed pipe serves link requests, not just pairing", () => {
 		h.hasBinding = false; // the worker that just paired
 		const page = lend();
 
-		const asked = mod.askDesktop({ op: "syncInvite" });
+		const asked = mod.askDesktop({ op: "syncInvite" }, "lent");
 		// hello, then the KK handshake message.
 		await vi.waitFor(() => expect(page.sent.length).toBe(3));
 		page.deliver({ ok: true, done: true, message: "kk2" });
@@ -1019,6 +1020,59 @@ describe("a borrowed pipe serves link requests, not just pairing", () => {
 		// Before this fix the claim rejected here, and the caller reported "no invite armed".
 		await expect(asked).resolves.toEqual({ ok: true, invite: "INVITE-CODE" });
 		expect(h.connects).toBe(0);
+	});
+
+	const hellos = (page: ReturnType<typeof lend>) =>
+		page.sent.filter((m) => (m.frame as { kind?: string } | undefined)?.kind === "hello").length;
+
+	it("gives each request its own lent pipe, even when two run at once", async () => {
+		// The app reads a connection as one session. Settings asks for the app's sync key while the
+		// link flow asks for its vault: on one shared pipe the second hello arrived where the app
+		// expected a sealed frame, the app dropped the connection, and the invite never came.
+		const mod = await load();
+		h.hasBinding = false;
+		const a = lend("a");
+		const b = lend("b");
+
+		const first = mod.askDesktop({ op: "vaultSummary" }, "a");
+		const second = mod.askDesktop({ op: "syncIdentity" }, "b");
+		await vi.waitFor(() => expect(hellos(a) + hellos(b)).toBe(2));
+		expect(hellos(a)).toBe(1);
+		expect(hellos(b)).toBe(1);
+
+		for (const page of [a, b]) page.deliver({ ok: true, done: true, message: "kk2" });
+		await vi.waitFor(() => expect(a.sent.length).toBe(4));
+		await vi.waitFor(() => expect(b.sent.length).toBe(4));
+		a.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, summary: "A" })}` });
+		b.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, identity: "B" })}` });
+		await expect(first).resolves.toEqual({ ok: true, summary: "A" });
+		await expect(second).resolves.toEqual({ ok: true, identity: "B" });
+	});
+
+	it("keeps a pipe lent for one request away from every other", async () => {
+		// Sync asks for the app's key on its own. A pipe a page lent for the emoji link must not
+		// carry it: the app would read its hello as the link's next frame.
+		const mod = await load();
+		h.hasBinding = false;
+		const page = lend("link");
+
+		await expect(mod.askDesktop({ op: "syncIdentity" })).rejects.toThrow(
+			/cannot reach the desktop app/,
+		);
+		expect(page.sent).toEqual([{ ready: true }]);
+	});
+
+	it("carries one session per lent pipe, never a second", async () => {
+		const mod = await load();
+		h.hasBinding = false;
+		const page = lend("once");
+
+		void mod.askDesktop({ op: "syncInvite" }, "once").catch(() => {});
+		await vi.waitFor(() => expect(hellos(page)).toBe(1));
+		await expect(mod.askDesktop({ op: "syncInvite" }, "once")).rejects.toThrow(
+			/cannot reach the desktop app/,
+		);
+		expect(hellos(page)).toBe(1);
 	});
 
 	it("still refuses when there is neither a binding nor a lent pipe", async () => {

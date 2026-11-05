@@ -151,23 +151,42 @@ class ProxiedSession implements LinkTransport {
 	}
 }
 
-/** The pairing window's borrowed transport, while one is open. At most one: pairing is modal. */
-let proxyPort: chrome.runtime.Port | null = null;
+/** Pipes pages have lent, by the id each port is named with. The page sends that id with the
+ * one request it lent the pipe for. */
+const lentPorts = new Map<string, chrome.runtime.Port>();
+
+/** The lent pipe a page's request names, if any. */
+const viaOf = (message: unknown): string | undefined => {
+	const via = (message as { via?: unknown } | null)?.via;
+	return typeof via === "string" ? via : undefined;
+};
 
 api.runtime.onConnect.addListener((port) => {
-	if (port.name !== NATIVE_PROXY_PORT) return;
+	if (!port.name.startsWith(`${NATIVE_PROXY_PORT}:`)) return;
 	// A page-origin sender must never drive native messaging. Same rule as extensionOnly() on the
 	// message router; a port is just another way in. See docs/sec-audit-7726.md (A3).
 	if (!port.sender || !isExtensionSender(port.sender)) return port.disconnect();
-	proxyPort = port;
+	const id = port.name.slice(NATIVE_PROXY_PORT.length + 1);
+	lentPorts.set(id, port);
 	port.onDisconnect.addListener(() => {
-		if (proxyPort === port) proxyPort = null;
+		if (lentPorts.get(id) === port) lentPorts.delete(id);
 	});
 	// Acked so the page can wait for this before asking to pair. Without it the pair request can
 	// overtake the connect and find no transport registered, which is a race that only shows up
 	// on a cold worker.
 	port.postMessage({ ready: true });
 });
+
+/** The pipe lent for this request, else this worker's own. A lent one is taken: the app reads a
+ * connection as one session, so a second hello on it ends both. */
+async function pipeFor(via: string | undefined): Promise<LinkTransport | null> {
+	if (via !== undefined) {
+		const lent = lentPorts.get(via);
+		lentPorts.delete(via);
+		if (lent) return new ProxiedSession(lent);
+	}
+	return (await canOpenNativePipe()) ? new NativeSession() : null;
+}
 
 /** A single request/response over a freshly spawned host. */
 class NativeSession {
@@ -256,7 +275,7 @@ async function offscreen(type: string, payload?: Record<string, unknown>): Promi
  * check of ours, so it surfaces as a refusal from the app rather than a distinguishable error,
  * which is deliberate on the app's side.
  */
-export async function pairWithDesktop(code: string): Promise<LinkState> {
+export async function pairWithDesktop(code: string, via?: string): Promise<LinkState> {
 	const kp = (await offscreen("SYNC_GENERATE_KEYPAIR")) as {
 		privateKey: string;
 		publicKey: string;
@@ -270,11 +289,11 @@ export async function pairWithDesktop(code: string): Promise<LinkState> {
 	// The pairing window's transport when it lent one, which is the ordinary case on a browser
 	// that has just granted the permission. A direct session otherwise: a worker that started
 	// after the grant has the binding and needs no help.
-	if (!proxyPort && !(await canOpenNativePipe())) {
+	const session = await pipeFor(via);
+	if (!session) {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		throw new Error("This browser cannot reach the desktop app yet.");
 	}
-	const session: LinkTransport = proxyPort ? new ProxiedSession(proxyPort) : new NativeSession();
 	try {
 		session.send({
 			kind: "pair",
@@ -345,9 +364,9 @@ const HOST_MISSING = /not found|no such native application/i;
  * Nothing is stored here: the app is trusted only after `confirmDesktopLink` with the user's
  * "They match" AND the app's own approval.
  */
-export async function startDesktopLink(): Promise<
-	{ id: string; sas: PairingSas } | { legacy: true }
-> {
+export async function startDesktopLink(
+	via?: string,
+): Promise<{ id: string; sas: PairingSas } | { legacy: true }> {
 	const kp = (await offscreen("SYNC_GENERATE_KEYPAIR")) as {
 		privateKey: string;
 		publicKey: string;
@@ -356,11 +375,11 @@ export async function startDesktopLink(): Promise<
 		sessionId: number;
 		message: string;
 	};
-	if (!proxyPort && !(await canOpenNativePipe())) {
+	const session = await pipeFor(via);
+	if (!session) {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		throw new Error("This browser cannot reach the desktop app yet.");
 	}
-	const session: LinkTransport = proxyPort ? new ProxiedSession(proxyPort) : new NativeSession();
 	const fail = async () => {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		session.close();
@@ -481,7 +500,7 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
  * A session per request rather than a held-open one, for now: the browser spawns a fresh proxy
  * anyway, and a long-lived port would need reconnect handling for a link that is idle most of
  * the time. */
-export async function askDesktop(request: Record<string, unknown>): Promise<any> {
+export async function askDesktop(request: Record<string, unknown>, via?: string): Promise<any> {
 	const state = await loadState();
 	if (!state) throw new Error("Not linked to the desktop app.");
 
@@ -496,15 +515,16 @@ export async function askDesktop(request: Record<string, unknown>): Promise<any>
 	// still has no binding of its own and will not until it restarts. Claiming the desktop's sync
 	// invite is exactly that, and it is why a first pairing used to hand over the link and never
 	// the vault. See docs/desktop-link-optional-permission.md.
-	if (!proxyPort && !(await canOpenNativePipe()))
-		throw new Error("This browser cannot reach the desktop app yet.");
-
 	const start = (await offscreen("LINK_START_INITIATOR", {
 		privateKey: state.privateKey,
 		remotePublicKey: state.appPublicKey,
 	})) as { sessionId: number; message: string };
 
-	const session: LinkTransport = proxyPort ? new ProxiedSession(proxyPort) : new NativeSession();
+	const session = await pipeFor(via);
+	if (!session) {
+		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
+		throw new Error("This browser cannot reach the desktop app yet.");
+	}
 	try {
 		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
 		const reply = await session.request({ message: start.message });
@@ -1041,9 +1061,9 @@ on(
 	"DESKTOP_LINK_CLAIM_INVITE",
 	// Ask the app for the sync invite it armed. The app answers only while its dialog is open, so
 	// a refusal here is the ordinary case and not something to surface as a failure.
-	extensionOnly(async () => {
+	extensionOnly(async (message) => {
 		try {
-			const answer = (await askDesktop({ op: "syncInvite" })) as {
+			const answer = (await askDesktop({ op: "syncInvite" }, viaOf(message))) as {
 				ok?: boolean;
 				invite?: string;
 			};
@@ -1056,13 +1076,13 @@ on(
 
 /** What the app's vault holds, for deciding what linking does. Null when it will not say: not
  * the browser that just linked, the app is locked, or it predates this. */
-export async function desktopVaultSummary(): Promise<{
+export async function desktopVaultSummary(via?: string): Promise<{
 	name: string;
 	empty: boolean;
 	entries: number;
 } | null> {
 	try {
-		const answer = (await askDesktop({ op: "vaultSummary" })) as {
+		const answer = (await askDesktop({ op: "vaultSummary" }, via)) as {
 			ok?: boolean;
 			summary?: { name: string; empty: boolean; entries: number };
 		};
@@ -1074,13 +1094,13 @@ export async function desktopVaultSummary(): Promise<{
 
 on(
 	"DESKTOP_LINK_VAULT_SUMMARY",
-	extensionOnly(async () => ({ ok: true, data: await desktopVaultSummary() })),
+	extensionOnly(async (message) => ({ ok: true, data: await desktopVaultSummary(viaOf(message)) })),
 );
 
 /** The app's sync device key, or null when it is not linked or not running. */
-export async function desktopSyncKey(): Promise<string | null> {
+export async function desktopSyncKey(via?: string): Promise<string | null> {
 	try {
-		const answer = (await askDesktop({ op: "syncIdentity" })) as {
+		const answer = (await askDesktop({ op: "syncIdentity" }, via)) as {
 			ok?: boolean;
 			identity?: string;
 		};
@@ -1094,7 +1114,7 @@ on(
 	"DESKTOP_LINK_SYNC_KEY",
 	// The app's own sync key. Null rather than an error when it is not running: the UI says less
 	// in that case rather than claiming something it cannot check.
-	extensionOnly(async () => ({ ok: true, data: await desktopSyncKey() })),
+	extensionOnly(async (message) => ({ ok: true, data: await desktopSyncKey(viaOf(message)) })),
 );
 
 on(
@@ -1131,7 +1151,7 @@ on(
 
 on(
 	"DESKTOP_LINK_START",
-	extensionOnly(async () => ({ ok: true, data: await startDesktopLink() })),
+	extensionOnly(async (message) => ({ ok: true, data: await startDesktopLink(viaOf(message)) })),
 );
 
 on(
@@ -1160,7 +1180,7 @@ on(
 	extensionOnly(async (message) => {
 		const code = String((message as { code?: unknown }).code ?? "");
 		if (!code) return { ok: false, error: "no code" };
-		const state = await pairWithDesktop(code);
+		const state = await pairWithDesktop(code, viaOf(message));
 		// A link is possible from this moment; without this it would wait for a browser restart,
 		// since openDesktopLink now declines to arm anything for an unpaired browser.
 		void openDesktopLink().catch(() => {});
@@ -1182,7 +1202,7 @@ on(
  * nothing reporting a fault. Lending is only safe when there is nothing to displace.
  */
 export async function transportNeeded(): Promise<boolean> {
-	return !proxyPort && !(await canOpenNativePipe());
+	return !(await canOpenNativePipe());
 }
 
 on(
