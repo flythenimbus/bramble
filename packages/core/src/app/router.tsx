@@ -194,6 +194,7 @@ const generatorRoute = createRoute({
 const passkeyVerifyRoute = createRoute({
 	getParentRoute: () => appLayoutRoute,
 	path: "/passkey-verify",
+	staticData: { persistRoute: false },
 	validateSearch: passkeyVerifySearchSchema,
 	component: PasskeyVerifyRoute,
 });
@@ -239,6 +240,14 @@ export function createAppRouter(initialPath = "/") {
 
 export type AppRouter = ReturnType<typeof createAppRouter>;
 
+/** The href a later view should reopen on: null for the unlock screen and one-shot routes. */
+export function persistableHref(router: AppRouter): string | null {
+	const { location, matches } = router.state;
+	if (!location.href || location.href === "/") return null;
+	if (matches.some((m) => m.staticData?.persistRoute === false)) return null;
+	return location.href;
+}
+
 declare module "@tanstack/react-router" {
 	interface Register {
 		router: AppRouter;
@@ -249,5 +258,7 @@ declare module "@tanstack/react-router" {
 	// path params `to` needs, resolved in AppLayout from the current params.
 	interface StaticDataRouteOption {
 		back?: { to: string; paramKeys?: readonly string[] };
+		/** False for a one-shot window's route, which a later view must never reopen on. */
+		persistRoute?: false;
 	}
 }

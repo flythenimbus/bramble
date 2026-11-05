@@ -16,7 +16,7 @@ import { ThemeProvider } from "./hooks/useTheme";
 import { LocaleGate } from "./LocaleGate";
 import { setPendingCreateEntry } from "./pending-create-entry";
 import { setPendingTotp } from "./pending-totp";
-import { type AppRouter, createAppRouter } from "./router";
+import { type AppRouter, createAppRouter, persistableHref } from "./router";
 
 /** A credential the mobile autofill provider captured, to seed a prefilled add-login form. */
 export interface PendingLogin {
@@ -85,7 +85,8 @@ function InnerApp({
 
 	// Stash the current route so a closed-then-reopened popup resumes it (restore in the
 	// platform boot, gated on an unlocked session). Skip the "/" unlock/redirect route, so a
-	// lock never clobbers the last real route with the unlock screen.
+	// lock never clobbers the last real route with the unlock screen, and one-shot routes
+	// like the passkey confirm, which looped the popup on a finished request (#187).
 	//
 	// The detached window persists too. Its pop-out handoff is a one-shot read consumed at boot,
 	// so it covers being opened but not being RELOADED, and a reload is how a window picks up a
@@ -94,8 +95,8 @@ function InnerApp({
 	useEffect(() => {
 		if (!shell.persistRoute) return;
 		const persist = () => {
-			const href = router.state.location.href;
-			if (href && href !== "/") shell.persistRoute?.(href);
+			const href = persistableHref(router);
+			if (href) shell.persistRoute?.(href);
 		};
 		persist();
 		return router.subscribe("onResolved", persist);
