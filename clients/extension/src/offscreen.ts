@@ -46,6 +46,9 @@ const chromeBridge: SyncBridge = {
 	linkSend: (frame, room) => askBackground("LINK_SYNC_SEND", { frame, room }),
 	linkBlobSend: (stream, frame) => askBackground("LINK_BLOB_SEND", { stream, frame }),
 	linkBlobUp: () => askBackground("LINK_BLOB_UP"),
+	linkAuthenticated: (vaultId) => {
+		void api.runtime.sendMessage({ type: "DESKTOP_LINK_PROVEN", vaultId }).catch(() => {});
+	},
 	linkDesktopSyncKey: async () => {
 		try {
 			const res = (await api.runtime.sendMessage({ type: "DESKTOP_LINK_SYNC_KEY" })) as

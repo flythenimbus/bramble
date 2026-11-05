@@ -263,6 +263,15 @@ describe("a link per vault", () => {
 		expect(h.relaysClosed).toBe(1);
 	});
 
+	it("asks the background to forget a deleted vault's link", async () => {
+		h.reply = { ok: true };
+		const link = await load();
+
+		await link?.forgetVault?.("v3");
+
+		expect(sentTypes()).toEqual([{ type: "DESKTOP_LINK_FORGET_VAULT", vaultId: "v3" }]);
+	});
+
 	it("says how many vaults still have a link after one is disconnected", async () => {
 		h.reply = { ok: true, data: { remaining: 1 } };
 		const link = await load();

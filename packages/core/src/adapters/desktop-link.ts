@@ -82,6 +82,8 @@ export interface DesktopLinkAdapter {
 	attach?(vaultId: string): Promise<boolean>;
 	/** Let go of a link made in a flow that ended without a vault. Nothing is kept on either side. */
 	abandon?(): Promise<void>;
+	/** Forget a deleted vault's link: a key the desktop app would still accept. */
+	forgetVault?(vaultId: string): Promise<void>;
 	/** Forget the open vault's link on this side, and say how many vaults still have one. Revoking
 	 * on the app's side is separate; doing both is what fully severs the link. */
 	unlink(): Promise<{ remaining: number }>;

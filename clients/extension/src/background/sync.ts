@@ -57,6 +57,7 @@ import {
 	blobLinkUp,
 	closeBlobLink,
 	closeSyncLink,
+	desktopLinkProven,
 	desktopSyncKey,
 	openBlobLink,
 	openSyncLink,
@@ -617,6 +618,7 @@ setInProcessSyncBridge({
 	linkBlobSend: sendBlobFrame,
 	linkBlobUp: async () => blobLinkUp(),
 	linkDesktopSyncKey: () => desktopSyncKey(),
+	linkAuthenticated: (vaultId) => void desktopLinkProven(vaultId).catch(() => {}),
 });
 
 // The attachment rows ask why a file hasn't arrived; the file session in the host knows.

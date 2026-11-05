@@ -40,6 +40,8 @@ const h = vi.hoisted(() => ({
 	appRestarts: false,
 	/** The app's sync identity, answered to `syncIdentity`; null for an app that does not answer. */
 	appIdentity: null as string | null,
+	/** The refusal the app seals after a handshake, in place of any answer; null to answer. */
+	refuseWith: null as string | null,
 	/** A seal whose plaintext contains this takes a while, as a busy crypto host's might. */
 	slowSeal: null as string | null,
 	/** What was written to storage.local, in order. */
@@ -63,6 +65,11 @@ const nativePort = () => {
 			h.posted.push(msg);
 			// The app answers caps as soon as the link is up, as socket.rs does.
 			const plain = typeof msg.sealed === "string" ? h.sealed.get(msg.sealed) : undefined;
+			if (plain && h.refuseWith) {
+				const refusal = { ok: false, error: h.refuseWith };
+				queueMicrotask(() => deliver({ sealed: `sealed:${JSON.stringify(refusal)}` }));
+				return;
+			}
 			if (plain && JSON.parse(plain).op === "caps") {
 				const answer = h.appCaps
 					? { ok: true, caps: h.appCaps }
@@ -219,6 +226,7 @@ async function load() {
 	h.appCaps = ["files"];
 	h.appRestarts = false;
 	h.appIdentity = null;
+	h.refuseWith = null;
 	h.slowSeal = null;
 	h.activeVault = "v1";
 	h.linkCompleteAnswer = { ok: true };
@@ -665,11 +673,12 @@ describe("a link per vault, over this worker's own pipe", () => {
 		expect(hellos()).toEqual(["pub", "pub-2"]);
 	});
 
-	it("drops the open vault's link when the app says nothing there is linked to it", async () => {
+	it("drops the open vault's link when the app says, under the session, nothing there is linked to it", async () => {
 		const mod = await load();
+		h.refuseWith = "not linked to this app";
 		const opening = mod.openDesktopLink();
 		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
-		deliver({ ok: false, error: "not linked to this app" });
+		completeHandshake();
 
 		expect(await opening).toBe(false);
 		await vi.waitFor(() => expect(h.stored["desktopLink:v1"]).toBeUndefined());
@@ -677,12 +686,68 @@ describe("a link per vault, over this worker's own pipe", () => {
 
 	it("keeps it when the app only has another vault open", async () => {
 		const mod = await load();
+		h.refuseWith = "not linked to the open vault";
 		const opening = mod.openDesktopLink();
 		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
-		deliver({ ok: false, error: "not linked to the open vault" });
+		completeHandshake();
 
 		expect(await opening).toBe(false);
 		expect(h.stored["desktopLink:v1"]).toBeDefined();
+	});
+
+	it("keeps it on a refusal that comes before any handshake, which anything could send", async () => {
+		// A second install, or a rewritten host manifest, answers the hello too. Only the app this
+		// browser paired with can tell it to drop a link, and only under the session.
+		const mod = await load();
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
+		deliver({ ok: false, error: "not linked to this app" });
+
+		expect(await opening).toBe(false);
+		expect(h.stored["desktopLink:v1"]).toBeDefined();
+	});
+
+	it("holds the vault that opens during a connect, never the one it started for", async () => {
+		const mod = await load();
+		h.stored["desktopLink:v2"] = second;
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
+
+		h.activeVault = "v2";
+		mod.retargetLink("v2");
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub", "pub-2"]));
+		completeHandshake();
+		await opening;
+
+		await vi.waitFor(() => expect(mod.linkIsHeld()).toBe(true));
+		expect(mod.heldVault()).toBe("v2");
+	});
+
+	it("forgets the link the refusal was about, not the vault opened meanwhile", async () => {
+		const mod = await load();
+		h.stored["desktopLink:v2"] = second;
+		h.refuseWith = "not linked to this app";
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
+		h.activeVault = "v2";
+		completeHandshake();
+		await opening;
+
+		await vi.waitFor(() => expect(h.stored["desktopLink:v1"]).toBeUndefined());
+		expect(h.stored["desktopLink:v2"]).toBe(second);
+	});
+
+	it("forgets a deleted vault's link, and lets go of it when it is the one held", async () => {
+		const mod = await load();
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
+		completeHandshake();
+		await opening;
+
+		await mod.forgetVaultLink("v1");
+
+		expect(h.stored["desktopLink:v1"]).toBeUndefined();
+		expect(mod.linkIsHeld()).toBe(false);
 	});
 
 	it("disconnects one vault's link and says how many remain", async () => {
@@ -732,6 +797,34 @@ describe("the single link an earlier build kept", () => {
 
 		await vi.waitFor(() => expect(h.stored.desktopLink).toBeUndefined());
 		expect(Object.keys(h.stored).filter((k) => k.startsWith("desktopLink"))).toEqual([]);
+	});
+
+	it("waits for proof when more than one vault syncs with the app, then goes to the one that did", async () => {
+		// The app has one sync identity for all its vaults, so two rosters can hold it. The link is
+		// listed by one desktop vault only, and syncing over it is what shows which.
+		const mod = await load();
+		h.appIdentity = "desk-identity";
+		h.meta["sync.group:v1"] = roster("desk-identity");
+		h.meta["sync.group:v2"] = roster("desk-identity");
+		expect(await connectOnLegacy(mod)).toBe(true);
+		await new Promise((r) => setTimeout(r, 20));
+		expect(h.stored.desktopLink).toEqual(legacy);
+
+		await mod.desktopLinkProven("v2");
+		expect(h.stored.desktopLink).toEqual(legacy);
+
+		await mod.desktopLinkProven("v1");
+		expect(h.stored["desktopLink:v1"]).toEqual(legacy);
+		expect(h.stored.desktopLink).toBeUndefined();
+	});
+
+	it("goes when the app says, under the session, it is linked to nothing there", async () => {
+		const mod = await load();
+		h.refuseWith = "not linked to this app";
+
+		await connectOnLegacy(mod);
+
+		await vi.waitFor(() => expect(h.stored.desktopLink).toBeUndefined());
 	});
 
 	it("stays, and is used, while the app does not answer", async () => {
@@ -1242,6 +1335,33 @@ describe("pairing borrows the page's native transport", () => {
 			await expect(mod.attachLink("v2")).resolves.toBe(false);
 			expect(h.stored["desktopLink:v2"]).toBeUndefined();
 			expect(mod.linkIsHeld()).toBe(false);
+		});
+
+		it("lets go of an attached link whose vault is not the one open now", async () => {
+			// The vault switched elsewhere during the copy: the link is stored for its vault, and
+			// the one held is the open vault's own.
+			const mod = await load();
+			await confirmOver(mod, lend(EXT_SENDER));
+			h.activeVault = "v1";
+
+			await expect(mod.attachLink("v2")).resolves.toBe(true);
+
+			expect(h.stored["desktopLink:v2"]).toBeDefined();
+			expect(mod.heldVault()).not.toBe("v2");
+		});
+
+		it("holds an attached code pairing as that vault's, not as one still in progress", async () => {
+			const mod = await load();
+			h.activeVault = "v2";
+			await pairOver(mod, lend(EXT_SENDER));
+			const opening = mod.openDesktopLink();
+			await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+			completeHandshake();
+			await opening;
+
+			await mod.attachLink("v2");
+
+			expect(mod.heldVault()).toBe("v2");
 		});
 
 		it("keeps a code pairing in progress too, until it attaches", async () => {

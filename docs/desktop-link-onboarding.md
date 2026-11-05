@@ -440,11 +440,14 @@ X stays unlinked.
   Connect window is open. Once that window has closed, linking starts over.
 - **The desktop's list.** A browser joins a vault's list only when it reports its pairing complete:
   the copy finished, or it switched to the vault that already holds this one. Until then it is
-  pending, served for the claim and the copy only, and forgotten when the Connect window closes,
-  the invite expires or the app quits.
+  pending, served for the claim and the copy only, and forgotten when the Connect window closes
+  (locking the app closes it too, and the copy needs the vault unlocked anyway), after five
+  minutes, or when the app quits.
 - **Removed on the desktop.** A browser removed from a vault's list there is refused from then on.
   The desktop says so in a way the browser can tell apart from "another vault is open", and that
-  browser vault drops its link and offers Link.
+  browser vault drops its link and offers Link. The refusal is sealed after the handshake, so only
+  the app this browser paired with can make it drop a link, and a hello naming a key it does not
+  hold learns nothing.
 
 ### What holds the pipe
 
@@ -474,7 +477,9 @@ the profile has a link left.
 - **Extension:** the profile's single link goes to the browser vault whose roster contains the
   desktop's sync identity, learned by asking the desktop once it answers. Until then it stays where
   it is and works as today. If no vault's roster contains it, the link is dropped and the user links
-  again.
+  again. The desktop has one sync identity for all its vaults, so when more than one browser vault's
+  roster holds it, the link waits for proof: it goes to the vault open when sync over it passes the
+  desktop's roster check. A sealed "not linked to this app" drops it too.
 - **Desktop:** a link from before the per-vault lists that two or more vaults admit is pinned to the
   first vault that syncs with that browser over the link; until then it is admitted as today.
 

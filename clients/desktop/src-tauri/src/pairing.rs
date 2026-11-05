@@ -587,12 +587,19 @@ pub struct Handshake {
     pub session_id: u32,
     /// Set only for an emoji link handshake: the label the browser gave itself.
     link_label: Option<String>,
+    /// Set for a browser that is not admitted: what it is told once the handshake is done.
+    refused: Option<&'static str>,
 }
 
 impl Handshake {
     /// The browser's label when this is an emoji link handshake.
     pub fn link_label(&self) -> Option<&str> {
         self.link_label.as_deref()
+    }
+
+    /// What a browser that is not admitted is told, sealed, once the handshake is done.
+    pub fn refused(&self) -> Option<&'static str> {
+        self.refused
     }
 }
 
@@ -607,6 +614,21 @@ pub fn accept_known(root: &Path, peer_public_key: &str) -> Res<Handshake> {
     Ok(Handshake {
         session_id,
         link_label: None,
+        refused: None,
+    })
+}
+
+/// Answer a browser that is not admitted, so its refusal can be sealed. Only the app it paired
+/// with can then tell it to drop its link, and a hello naming a key it does not hold fails the
+/// handshake and learns nothing.
+pub fn accept_refused(root: &Path, peer_public_key: &str) -> Res<Handshake> {
+    let (priv_key, _) = identity(root)?;
+    let session_id = handshake::handshake_start_responder(priv_key, peer_public_key.to_string())
+        .map_err(|e| format!("start responder: {e:?}"))?;
+    Ok(Handshake {
+        session_id,
+        link_label: None,
+        refused: Some(refusal(root, peer_public_key)),
     })
 }
 
@@ -632,6 +654,7 @@ pub fn accept_link(root: &Path, label: &str) -> Res<Handshake> {
         Ok(session_id) => Ok(Handshake {
             session_id,
             link_label: Some(label.to_string()),
+            refused: None,
         }),
         Err(e) => {
             cancel_link_window();

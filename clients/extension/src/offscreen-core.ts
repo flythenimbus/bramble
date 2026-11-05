@@ -117,6 +117,8 @@ export interface SyncBridge {
 	linkBlobUp?: () => Promise<boolean>;
 	/** The linked desktop app's sync device key, or null when unknown. */
 	linkDesktopSyncKey?: () => Promise<string | null>;
+	/** The desktop app passed the roster check over the link while syncing this vault. */
+	linkAuthenticated?: (vaultId: string) => void;
 }
 
 export interface HostResponse {
@@ -252,6 +254,7 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 		...common,
 		onAuthenticated: (pub: string) => {
 			desktopKey = pub;
+			bridge.linkAuthenticated?.(opts.vaultId);
 		},
 		peerSource: makeLinkPeerSource({
 			send: (frame) => bridge.linkSend?.(frame) ?? Promise.resolve(false),

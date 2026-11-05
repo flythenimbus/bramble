@@ -904,25 +904,21 @@ fn serve(root: &Path, stream: &mut ipc::Stream) -> Result<(), String> {
     let handshake = match hello {
         Hello::Hello { v, public_key } => {
             check_version(v)?;
-            // Says which, so a browser no vault here knows can drop its link.
-            pairing::accept_known(root, &public_key).map_err(|e| {
-                let said = if e == NOT_LINKED {
-                    pairing::refusal(root, &public_key)
-                } else {
-                    "refused"
-                };
-                (said, e)
-            })
+            // Not admitted still completes the handshake, so the refusal goes out sealed.
+            match pairing::accept_known(root, &public_key) {
+                Err(e) if e == NOT_LINKED => pairing::accept_refused(root, &public_key),
+                other => other,
+            }
         }
         Hello::Link { v, label } => {
             check_version(v)?;
-            pairing::accept_link(root, &label).map_err(|e| ("refused", e))
+            pairing::accept_link(root, &label)
         }
     };
     let handshake = match handshake {
         Ok(h) => h,
-        Err((said, e)) => {
-            let _ = reply(stream, &Reply::err(said));
+        Err(e) => {
+            let _ = reply(stream, &Reply::err("refused"));
             return Err(e);
         }
     };
@@ -978,6 +974,14 @@ fn drive(
         let done = step.done;
         reply(stream, &Reply::step(step.message, done)).map_err(|e| format!("write: {e}"))?;
         if done {
+            // Another vault is open, or nothing here knows this browser: said under the session,
+            // which proves to the browser that this is the app it paired with.
+            if let Some(said) = handshake.refused() {
+                let answer = serde_json::json!({ "ok": false, "error": said });
+                let _ = write_sealed(handshake.session_id, stream, answer);
+                ipc::shutdown(stream);
+                return Err(NOT_LINKED.into());
+            }
             if let Some(label) = handshake.link_label() {
                 return confirm_link(root, handshake.session_id, stream, label);
             }
@@ -1791,8 +1795,9 @@ mod tests {
     }
 
     #[test]
-    fn a_link_completes_while_locked() {
-        // Listing the browser needs no vault key, and the app may lock while the copy runs.
+    fn link_complete_is_answered_while_locked() {
+        // Listing needs no vault key. In the app a lock also closes Settings, whose dialog going
+        // abandons a pending link (the copy needs the vault unlocked anyway); this is the socket.
         let _g = pairing::test_lock();
         let dir = started();
         let mut link = Linked::connect(&dir, pending_client(&dir));
@@ -1823,8 +1828,9 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn a_removed_browser_is_closed_and_refused_as_unlinked() {
-        // Told apart from another vault being open, so the browser can drop its link.
+    fn a_removed_browser_is_closed_and_told_it_is_unlinked_under_the_session() {
+        // Told apart from another vault being open, so the browser can drop its link, and only
+        // once the handshake has proved this is the app it paired with.
         let _g = pairing::test_lock();
         let dir = started();
         let (client_priv, client_pub) = linked_client(&dir);
@@ -1836,14 +1842,31 @@ mod tests {
         link.await_registered(false);
         handshake::handshake_close(link.session_id);
 
+        let mut again = Linked::connect(&dir, (client_priv, client_pub));
+        let told = again.recv();
+        assert_eq!(told["ok"], false, "{told}");
+        assert_eq!(told["error"], pairing::UNLINKED);
+        handshake::handshake_close(again.session_id);
+    }
+
+    #[test]
+    fn a_hello_for_a_key_it_does_not_hold_learns_nothing() {
+        // The refusal is sealed, so naming someone else's key gets the bare refusal any failed
+        // handshake gets: nothing says whether that key is linked anywhere here.
+        let _g = pairing::test_lock();
+        let dir = started();
+        let (_, linked_pub) = linked_client(&dir);
+        pairing::forget_peer(dir.path(), &linked_pub).unwrap();
+        let impostor = handshake::handshake_generate_keypair().unwrap();
         let app_pub = pairing::public_key(dir.path()).unwrap();
-        let start = handshake::handshake_start_initiator(client_priv, app_pub).unwrap();
+        let start = handshake::handshake_start_initiator(impostor.private_key, app_pub).unwrap();
+
         let mut client = Client::connect(dir.path());
-        client.send(serde_json::json!({ "kind": "hello", "v": 1, "publicKey": client_pub }));
+        client.send(serde_json::json!({ "kind": "hello", "v": 1, "publicKey": linked_pub }));
         client.send(serde_json::json!({ "message": start.message }));
         let reply = client.recv();
         assert_eq!(reply["ok"], false, "{reply}");
-        assert_eq!(reply["error"], pairing::UNLINKED);
+        assert_eq!(reply["error"], "refused");
         handshake::handshake_close(start.session_id);
     }
 
@@ -1962,19 +1985,21 @@ mod tests {
     fn a_revoked_client_cannot_reconnect() {
         let _g = pairing::test_lock();
         let dir = started();
-        let (_, client_pub) = linked_client(&dir);
+        let keys = linked_client(&dir);
 
-        assert!(pairing::forget_peer(dir.path(), &client_pub).unwrap());
+        assert!(pairing::forget_peer(dir.path(), &keys.1).unwrap());
 
-        let mut client = Client::connect(dir.path());
-        client.send(serde_json::json!({
-            "kind": "hello", "v": 1, "publicKey": client_pub
-        }));
+        // The handshake completes so the refusal can be sealed, and nothing else follows it.
+        let mut client = Linked::connect(&dir, keys);
         assert_eq!(
             client.recv()["ok"],
             false,
             "revocation must actually revoke"
         );
+        // The app closes the connection after the refusal: nothing can be asked over it.
+        let mut len = [0u8; 4];
+        assert!(client.client.stream.read_exact(&mut len).is_err());
+        handshake::handshake_close(client.session_id);
     }
 
     #[test]
@@ -1998,12 +2023,14 @@ mod tests {
         let _g = pairing::test_lock();
         let dir = started();
         let stranger = handshake::handshake_generate_keypair().unwrap();
+        pairing::public_key(dir.path()).unwrap();
 
-        let mut client = Client::connect(dir.path());
-        client.send(serde_json::json!({
-            "kind": "hello", "v": 1, "publicKey": stranger.public_key
-        }));
-        assert_eq!(client.recv()["ok"], false);
+        // A stranger holding its own key completes the handshake, then is told, sealed.
+        let mut client = Linked::connect(&dir, (stranger.private_key, stranger.public_key));
+        let told = client.recv();
+        assert_eq!(told["ok"], false, "{told}");
+        assert_eq!(told["error"], pairing::UNLINKED);
+        handshake::handshake_close(client.session_id);
     }
 
     #[test]

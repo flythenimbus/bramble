@@ -243,6 +243,9 @@ const adapter: DesktopLinkAdapter = {
 			),
 		),
 	unlink: () => dispatch<{ remaining: number }>("DESKTOP_LINK_UNLINK"),
+	forgetVault: async (vaultId) => {
+		await dispatch("DESKTOP_LINK_FORGET_VAULT", { vaultId });
+	},
 	// Omitted where the permission is required rather than optional, which callers read as
 	// already-allowed. See the `permission` docs on DesktopLinkAdapter.
 	...(isOptional() ? { permission } : {}),

@@ -59,15 +59,17 @@ function makePlatform() {
 		isEnabled: vi.fn(async () => false),
 		disable: vi.fn(async (_id: string) => {}),
 	};
+	const desktopLink = { forgetVault: vi.fn(async (_id: string) => {}) };
 	const platform = {
 		storage,
 		crypto,
 		autofill,
 		biometric,
 		shell,
+		desktopLink,
 		clipboard: {},
 	} as unknown as Platform;
-	return { platform, shell, storage, crypto, autofill, biometric };
+	return { platform, shell, storage, crypto, autofill, biometric, desktopLink };
 }
 
 /** Mount, let the registry load, and delete the vault as the user would. */
@@ -122,6 +124,14 @@ describe("deleteVault erases everything else keyed to the vault", () => {
 		}
 		// The target list holds cloud credentials wrapped under the vek that just went away.
 		expect(storage.removeMeta).toHaveBeenCalledWith(backupTargetsKeyFor(VAULT_ID));
+	});
+
+	it("forgets the vault's desktop link, a working key the desktop app still accepts", async () => {
+		const { platform, desktopLink } = makePlatform();
+
+		await deleteWith(platform);
+
+		expect(desktopLink.forgetVault).toHaveBeenCalledWith(VAULT_ID);
 	});
 
 	it("does none of it when re-auth fails", async () => {

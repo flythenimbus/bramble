@@ -47,6 +47,14 @@ const linkKeyFor = (vaultId: string) => `${STORAGE_KEY}:${vaultId}`;
 /** What the app tells a browser no vault there is linked to. Must match `UNLINKED` in
  * pairing.rs. */
 const UNLINKED = "not linked to this app";
+/** What it tells a browser whose vault is not the one open. Must match `NOT_LINKED`. */
+const NOT_LINKED = "not linked to the open vault";
+
+/** The app's sealed refusal, its first frame on a session for a browser it does not admit. */
+const refusedBy = (answer: unknown): string | null => {
+	const a = answer as { ok?: unknown; error?: unknown } | null;
+	return a?.ok === false && (a.error === UNLINKED || a.error === NOT_LINKED) ? a.error : null;
+};
 
 /** How long a request over the held link waits. A fill the user is watching, so short. */
 const ASK_TIMEOUT_MS = 10_000;
@@ -104,16 +112,29 @@ async function loadLink(key: string): Promise<LinkState | null> {
  */
 let inProgress: { state: LinkState; listed: boolean } | null = null;
 
+/** Which link a session speaks as: a vault's own, the single link an earlier build kept
+ * (`legacy`), or the one in progress (`vaultId` null). Read once, so a vault change mid-connect
+ * cannot relabel it. */
+interface LinkSource {
+	state: LinkState;
+	legacy: boolean;
+	vaultId: string | null;
+}
+
 /** The link to speak with now: the one being made, else the open vault's, else the single link
- * an earlier build kept (`legacy`), which works as it did until `adoptLegacyLink` places it. */
-async function linkSource(): Promise<{ state: LinkState; legacy: boolean } | null> {
-	if (inProgress) return { state: inProgress.state, legacy: false };
+ * an earlier build kept, which works as it did until `adoptLegacyLink` places it. */
+async function linkSource(): Promise<LinkSource | null> {
+	if (inProgress) return { state: inProgress.state, legacy: false, vaultId: null };
 	const vaultId = getActiveVaultId();
 	const own = vaultId ? await loadLink(linkKeyFor(vaultId)) : null;
-	if (own) return { state: own, legacy: false };
+	if (own) return { state: own, legacy: false, vaultId };
 	const legacy = await loadLink(STORAGE_KEY);
-	return legacy ? { state: legacy, legacy: true } : null;
+	return legacy ? { state: legacy, legacy: true, vaultId } : null;
 }
+
+/** Bumped whenever which link should be held changes, so a connect begun before it is dropped
+ * rather than held. */
+let linkGen = 0;
 
 async function currentLink(): Promise<LinkState | null> {
 	return (await linkSource())?.state ?? null;
@@ -121,8 +142,9 @@ async function currentLink(): Promise<LinkState | null> {
 
 /**
  * Give the single link an earlier build kept to the vault that syncs with the app: the one whose
- * roster holds the app's sync identity. With none, it goes and the user links again. Unanswered,
- * it stays as it was.
+ * roster holds the app's sync identity. With none, it goes and the user links again. The app has
+ * one identity for all its vaults, so with more than one such vault the link waits for proof
+ * (`desktopLinkProven`). Unanswered, it stays as it was.
  */
 async function adoptLegacyLink(link: HeldLink): Promise<void> {
 	const legacy = await loadLink(STORAGE_KEY);
@@ -131,25 +153,39 @@ async function adoptLegacyLink(link: HeldLink): Promise<void> {
 	const identity = answer?.ok === true ? answer.identity : null;
 	if (typeof identity !== "string") return;
 	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY).catch(() => null));
-	let home: string | null = null;
+	const homes: string[] = [];
 	for (const v of reg.vaults) {
 		const group = (await extensionStorage
 			.getMeta(syncKeyFor("sync.group", v.id))
 			.catch(() => null)) as { roster?: { devices?: { publicKey: string }[] } } | null;
-		if (group?.roster?.devices?.some((d) => d.publicKey === identity)) {
-			home = v.id;
-			break;
-		}
+		if (group?.roster?.devices?.some((d) => d.publicKey === identity)) homes.push(v.id);
 	}
+	if (homes.length > 1) return;
+	const [home] = homes;
 	if (home) await api.storage.local.set({ [linkKeyFor(home)]: legacy });
 	await api.storage.local.remove(STORAGE_KEY);
-	if (home && home === getActiveVaultId()) link.vaultId = home;
+	if (home && home === link.vaultId) link.legacy = false;
 	else if (held === link) await dropHeld();
 }
 
-/** The app knows nothing of the link this browser just spoke with: let it go. */
-async function forgetRefused(vaultId: string | null): Promise<void> {
-	if (vaultId) await api.storage.local.remove(linkKeyFor(vaultId));
+/**
+ * Sync over the held link passed the app's roster check for `vaultId`, so the link it speaks is
+ * that vault's pair. Places the single link an earlier build kept, when that is what is held.
+ */
+export async function desktopLinkProven(vaultId: string): Promise<void> {
+	const link = held;
+	if (!link?.legacy || link.vaultId !== vaultId) return;
+	const legacy = await loadLink(STORAGE_KEY);
+	if (!legacy) return;
+	await api.storage.local.set({ [linkKeyFor(vaultId)]: legacy });
+	await api.storage.local.remove(STORAGE_KEY);
+	link.legacy = false;
+}
+
+/** The app, under the session, knows nothing of the link this browser spoke with: let it go. */
+async function forgetRefused(source: { vaultId: string | null; legacy: boolean }): Promise<void> {
+	if (source.legacy) await api.storage.local.remove(STORAGE_KEY);
+	else if (source.vaultId) await api.storage.local.remove(linkKeyFor(source.vaultId));
 	else await abandonLink();
 }
 
@@ -570,6 +606,7 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
 	const link: HeldLink = {
 		session,
 		vaultId: null,
+		legacy: false,
 		sessionId,
 		inbound: Promise.resolve(),
 		outbound: Promise.resolve(),
@@ -624,9 +661,9 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
  * anyway, and a long-lived port would need reconnect handling for a link that is idle most of
  * the time. */
 export async function askDesktop(request: Record<string, unknown>, via?: string): Promise<any> {
-	const state = await currentLink();
-	const vaultId = inProgress ? null : getActiveVaultId();
-	if (!state) throw new Error("Not linked to the desktop app.");
+	const source = await linkSource();
+	if (!source) throw new Error("Not linked to the desktop app.");
+	const state = source.state;
 
 	// Ride the held link when sync has one open. A second connection would displace it as the
 	// target for the app's pushes, and closing this short-lived one would take that queue with
@@ -652,7 +689,6 @@ export async function askDesktop(request: Record<string, unknown>, via?: string)
 	try {
 		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
 		const reply = await session.request({ message: start.message });
-		if (reply?.error === UNLINKED) await forgetRefused(vaultId);
 		if (reply?.ok !== true || reply?.done !== true) throw new Error("The desktop app refused.");
 		if (reply.message) {
 			await offscreen("LINK_READ", { sessionId: start.sessionId, message: reply.message });
@@ -667,7 +703,9 @@ export async function askDesktop(request: Record<string, unknown>, via?: string)
 			sessionId: start.sessionId,
 			sealed: answer.sealed,
 		})) as string;
-		return JSON.parse(plain);
+		const parsed = JSON.parse(plain);
+		if (refusedBy(parsed) === UNLINKED) await forgetRefused(source);
+		return parsed;
 	} finally {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		session.close();
@@ -770,6 +808,8 @@ interface HeldLink {
 	session: LinkTransport;
 	/** The vault whose link this speaks; null for a link in progress. */
 	vaultId: string | null;
+	/** It speaks the single link an earlier build kept, not a vault's own. */
+	legacy: boolean;
 	/** The Noise session id, held in the offscreen where the crypto lives. */
 	sessionId: number;
 	/** Opens arrive in order and must be DECRYPTED in order: Noise numbers its transport frames,
@@ -852,6 +892,11 @@ export function onDesktopFillRequest(handler: (fill: DesktopFill) => void): void
 /** Whether a link is live, so callers can skip work that only matters when one is. */
 export function linkIsHeld(): boolean {
 	return held !== null && !held.session.dead;
+}
+
+/** The vault whose link is held (null for one in progress); undefined when none is. */
+export function heldVault(): string | null | undefined {
+	return held && !held.session.dead ? held.vaultId : undefined;
 }
 
 export async function reportActiveTab(hostname: string): Promise<void> {
@@ -1000,23 +1045,29 @@ export async function sendBlobFrame(stream: number, frame: string): Promise<bool
 /** The held link, opening one if sync is running and there is none. */
 async function ensureHeld(): Promise<HeldLink | null> {
 	if (held && !held.session.dead) return held;
-	if (!connecting) {
-		connecting = connectHeld().finally(() => {
-			connecting = null;
+	// A connect begun for another link drops itself; this one is for the link wanted now.
+	if (!connecting || connectingGen !== linkGen) {
+		connectingGen = linkGen;
+		const attempt = connectHeld().finally(() => {
+			if (connecting === attempt) connecting = null;
 		});
+		connecting = attempt;
 	}
 	return connecting;
 }
+
+let connectingGen = -1;
 
 async function connectHeld(): Promise<HeldLink | null> {
 	if (held) await dropHeld();
 	if (!linkWanted) return null; // nothing wants the pipe held open
 
+	const gen = linkGen;
 	const source = await linkSource();
-	const state = source?.state;
 	// Not paired. The ordinary case, and openDesktopLink already declined to arm anything, so this
 	// is only reachable if a pairing was removed while the keepalive was live. Not worth a line.
-	if (!state) return null;
+	if (!source) return null;
+	const state = source.state;
 	// Revoked while the keepalive was live. Without this the constructor below calls an undefined
 	// connectNative and throws a TypeError into whatever happened to be awaiting.
 	if (!(await canOpenNativePipe())) return null;
@@ -1031,7 +1082,8 @@ async function connectHeld(): Promise<HeldLink | null> {
 	let transportReady!: () => void;
 	const link: HeldLink = {
 		session,
-		vaultId: inProgress ? null : getActiveVaultId(),
+		vaultId: source.vaultId,
+		legacy: source.legacy,
 		sessionId: start.sessionId,
 		inbound: new Promise<void>((resolve) => {
 			transportReady = resolve;
@@ -1051,7 +1103,6 @@ async function connectHeld(): Promise<HeldLink | null> {
 	try {
 		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
 		const reply = await session.request({ message: start.message });
-		if (reply?.error === UNLINKED) await forgetRefused(link.vaultId);
 		if (reply?.ok !== true || reply?.done !== true) throw new Error("refused");
 		// KK is two messages; feeding the reply back is what puts this side in transport mode.
 		if (reply.message) {
@@ -1070,11 +1121,20 @@ async function connectHeld(): Promise<HeldLink | null> {
 	});
 	// What the app speaks, asked before the link is published so no other request can race the
 	// answer. An app from before caps answers with an error, and gets no file frames.
-	link.files = await askOverHeld(link, { op: "caps", caps: [CAP_FILES] })
-		.then((answer) => Array.isArray(answer?.caps) && answer.caps.includes(CAP_FILES))
-		.catch(() => false);
+	const caps = await askOverHeld(link, { op: "caps", caps: [CAP_FILES] }).catch(() => null);
+	// The app seals its refusal as the session's first frame, which proves it is the app this
+	// browser paired with: only then may it make the browser drop a link.
+	const refused = refusedBy(caps);
+	// Which link should be held may have changed while this connected; if so, let it go.
+	if (refused || gen !== linkGen) {
+		if (refused === UNLINKED) await forgetRefused(link);
+		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
+		session.close();
+		return null;
+	}
+	link.files = Array.isArray(caps?.caps) && caps.caps.includes(CAP_FILES);
 	held = link;
-	if (source?.legacy) void adoptLegacyLink(link);
+	if (source.legacy) void adoptLegacyLink(link);
 	return link;
 }
 
@@ -1131,6 +1191,7 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 		});
 		return;
 	}
+	if (refusedBy(parsed) === UNLINKED) void forgetRefused(link);
 	// An answer: hand the plaintext to whoever asked. Requests over the held link resolve here.
 	link.answer?.(parsed);
 	link.answer = null;
@@ -1140,6 +1201,7 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
  * and the app binds its invite to the key that just linked. */
 async function holdInProgress(state: LinkState, listed = false): Promise<LinkState> {
 	inProgress = { state, listed };
+	linkGen++;
 	await dropHeld();
 	return state;
 }
@@ -1153,8 +1215,7 @@ export async function attachLink(vaultId: string): Promise<boolean> {
 	if (!inProgress) return false;
 	const { state, listed } = inProgress;
 	if (listed) {
-		inProgress = null;
-		await api.storage.local.set({ [linkKeyFor(vaultId)]: state });
+		await settle(vaultId, state);
 		return true;
 	}
 	const link = held?.vaultId === null ? held : await ensureHeld();
@@ -1170,16 +1231,26 @@ export async function attachLink(vaultId: string): Promise<boolean> {
 		await abandonLink();
 		return false;
 	}
-	inProgress = null;
-	if (link && held === link) link.vaultId = vaultId;
-	await api.storage.local.set({ [linkKeyFor(vaultId)]: state });
+	await settle(vaultId, state);
 	return true;
+}
+
+/** The link in progress is now `vaultId`'s. Held only while that vault is open: the flow may have
+ * ended with another one open, whose own link is the one to hold. */
+async function settle(vaultId: string, state: LinkState): Promise<void> {
+	inProgress = null;
+	linkGen++;
+	await api.storage.local.set({ [linkKeyFor(vaultId)]: state });
+	if (held?.vaultId === null) held.vaultId = vaultId;
+	if (held && held.vaultId !== getActiveVaultId()) await dropHeld();
+	void openDesktopLink().catch(() => {});
 }
 
 /** Let go of the link in progress: its flow ended without a vault. Nothing is stored. */
 export async function abandonLink(): Promise<void> {
 	if (!inProgress) return;
 	inProgress = null;
+	linkGen++;
 	if (held?.vaultId === null) await dropHeld();
 }
 
@@ -1189,6 +1260,7 @@ export async function abandonLink(): Promise<void> {
 export function retargetLink(vaultId: string | null): void {
 	queueMicrotask(() => {
 		if (inProgress) return;
+		linkGen++;
 		if (held && held.vaultId !== vaultId) void dropHeld();
 		void openDesktopLink().catch(() => {});
 	});
@@ -1442,6 +1514,31 @@ on(
 		const { vaultId } = message as { vaultId?: unknown };
 		if (typeof vaultId !== "string") return { ok: false, error: "no vault id" };
 		return { ok: true, data: await attachLink(vaultId) };
+	}),
+);
+
+/** A deleted vault's link goes with it: the desktop app would still accept the key. */
+export async function forgetVaultLink(vaultId: string): Promise<void> {
+	await api.storage.local.remove(linkKeyFor(vaultId));
+	if (held?.vaultId === vaultId) await dropHeld();
+}
+
+on(
+	"DESKTOP_LINK_FORGET_VAULT",
+	extensionOnly(async (message) => {
+		const { vaultId } = message as { vaultId?: unknown };
+		if (typeof vaultId === "string") await forgetVaultLink(vaultId);
+		return { ok: true };
+	}),
+);
+
+on(
+	"DESKTOP_LINK_PROVEN",
+	// From the offscreen sync host: the app passed the roster check over the link for this vault.
+	extensionOnly(async (message) => {
+		const { vaultId } = message as { vaultId?: unknown };
+		if (typeof vaultId === "string") await desktopLinkProven(vaultId);
+		return { ok: true };
 	}),
 );
 

@@ -537,6 +537,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		exchange,
 		backupCreds,
 		files: fileAdapter,
+		desktopLink,
 	} = usePlatform();
 	// Vault actions reject with copy the screens render directly, so it has to be translated
 	// here rather than at each call site. Internal invariants below stay untranslated on purpose.
@@ -2140,6 +2141,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// contents and its key material live on. Each is best-effort: a native or storage
 			// failure here must not abort a delete whose bytes are already erased.
 			await biometric?.disable(id).catch(() => {});
+			await desktopLink?.forgetVault?.(id).catch(() => {});
 			for (const k of PER_VAULT_SYNC_KEYS) {
 				await storage.removeMeta(syncKeyFor(k, id)).catch(() => {});
 			}
@@ -2172,7 +2174,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			await storage.removeMeta(aliasConfigKeyFor(id)).catch(() => {});
 			await storage.removeMeta(aliasConfiguredHintKeyFor(id)).catch(() => {});
 		},
-		[storage, biometric, backupCreds, fileAdapter],
+		[storage, biometric, backupCreds, fileAdapter, desktopLink],
 	);
 
 	const deleteVault = useCallback(
