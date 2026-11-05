@@ -15,7 +15,7 @@ export const LINKS = {
 	ios: "https://apps.apple.com/us/app/bramble-password-manager/id6783071787",
 	android: "https://github.com/flythenimbus/bramble/releases",
 	matrix: "https://matrix.to/#/%23general:bramble.sh",
-	kofi: "https://ko-fi.com/P0D426TW0A",
+	kofi: "https://ko-fi.com/bramble_sh",
 } as const;
 
 export const BUTTONDOWN = {
