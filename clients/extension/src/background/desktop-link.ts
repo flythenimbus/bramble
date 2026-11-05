@@ -20,10 +20,13 @@ import { linkNonceCommit, linkSas, linkSasMaterial } from "@core/sync/link-sas";
 import type { PairingSas } from "@core/sync/pairing-sas";
 import { bytesToBase64 } from "@core/util/bytes";
 import { defaultDeviceLabel } from "@core/util/device-label";
+import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api, disconnectReason } from "../platform-api";
 import { isExtensionSender } from "../sender";
+import { extensionStorage } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
 import { extensionOnly, on } from "./router";
+import { getActiveVaultId } from "./vek-store";
 
 /** Must match the `name` in the host manifest the desktop app writes. */
 const HOST_NAME = "app.bramble.desktop";
@@ -34,7 +37,15 @@ const NATIVE_PROXY_PORT = "link-native-proxy";
 /** Wire protocol version, checked by the app. */
 const PROTOCOL_VERSION = 1;
 
+/** The single link an earlier build kept for the whole profile. Each vault now has its own, at
+ * `linkKeyFor(vaultId)`, as each has its own sync identity. */
 const STORAGE_KEY = "desktopLink";
+
+const linkKeyFor = (vaultId: string) => `${STORAGE_KEY}:${vaultId}`;
+
+/** What the app tells a browser no vault there is linked to. Must match `UNLINKED` in
+ * pairing.rs. */
+const UNLINKED = "not linked to this app";
 
 /** How long a request over the held link waits. A fill the user is watching, so short. */
 const ASK_TIMEOUT_MS = 10_000;
@@ -80,9 +91,29 @@ async function canOpenNativePipe(): Promise<boolean> {
 	return typeof api.runtime.connectNative === "function" && (await permitted());
 }
 
-async function loadState(): Promise<LinkState | null> {
-	const stored = (await api.storage.local.get(STORAGE_KEY))[STORAGE_KEY] as LinkState | undefined;
+async function loadLink(key: string): Promise<LinkState | null> {
+	const stored = (await api.storage.local.get(key))[key] as LinkState | undefined;
 	return stored?.privateKey && stored?.appPublicKey ? stored : null;
+}
+
+/**
+ * A link both screens confirmed that has not attached to a vault yet: the pairing is complete
+ * only once the browser holds the desktop's vault. In memory, so a worker that restarts mid-copy
+ * abandons it, and the app forgets its half when its window closes.
+ */
+let inProgress: { state: LinkState; listed: boolean } | null = null;
+
+/** The link to speak with now: the one being made, else the open vault's. */
+async function currentLink(): Promise<LinkState | null> {
+	if (inProgress) return inProgress.state;
+	const vaultId = getActiveVaultId();
+	return vaultId ? loadLink(linkKeyFor(vaultId)) : null;
+}
+
+/** The app knows nothing of the link this browser just spoke with: let it go. */
+async function forgetRefused(vaultId: string | null): Promise<void> {
+	if (vaultId) await api.storage.local.remove(linkKeyFor(vaultId));
+	else await abandonLink();
 }
 
 /**
@@ -342,12 +373,11 @@ export async function pairWithDesktop(code: string, via?: string): Promise<LinkS
 			sessionId: start.sessionId,
 		})) as string;
 
-		return storeLink({
-			privateKey: kp.privateKey,
-			publicKey: kp.publicKey,
-			appPublicKey,
-			pairedAt: Date.now(),
-		});
+		// Only an app from before the emoji link pairs by code, and it lists a browser as it pairs.
+		return holdInProgress(
+			{ privateKey: kp.privateKey, publicKey: kp.publicKey, appPublicKey, pairedAt: Date.now() },
+			true,
+		);
 	} finally {
 		await offscreen("LINK_CLOSE", { sessionId: start.sessionId }).catch(() => {});
 		session.close();
@@ -502,6 +532,7 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
 	}
 	const link: HeldLink = {
 		session,
+		vaultId: null,
 		sessionId,
 		inbound: Promise.resolve(),
 		outbound: Promise.resolve(),
@@ -526,7 +557,7 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
 			sealAndSend(link, { op: "linkConfirm" }).catch(() => reject(new Error(refused)));
 		})) as { ok?: boolean; paired?: boolean };
 		if (verdict.ok !== true || verdict.paired !== true) throw new Error(refused);
-		const state = await storeLink({
+		const state = await holdInProgress({
 			privateKey: pending.privateKey,
 			publicKey: pending.publicKey,
 			appPublicKey: pending.appPublicKey,
@@ -556,7 +587,8 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
  * anyway, and a long-lived port would need reconnect handling for a link that is idle most of
  * the time. */
 export async function askDesktop(request: Record<string, unknown>, via?: string): Promise<any> {
-	const state = await loadState();
+	const state = await currentLink();
+	const vaultId = inProgress ? null : getActiveVaultId();
 	if (!state) throw new Error("Not linked to the desktop app.");
 
 	// Ride the held link when sync has one open. A second connection would displace it as the
@@ -583,6 +615,7 @@ export async function askDesktop(request: Record<string, unknown>, via?: string)
 	try {
 		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
 		const reply = await session.request({ message: start.message });
+		if (reply?.error === UNLINKED) await forgetRefused(vaultId);
 		if (reply?.ok !== true || reply?.done !== true) throw new Error("The desktop app refused.");
 		if (reply.message) {
 			await offscreen("LINK_READ", { sessionId: start.sessionId, message: reply.message });
@@ -655,7 +688,7 @@ function sealAndSend(link: HeldLink, message: Record<string, unknown>): Promise<
 
 /** Reconnect over KK, which is what every session after the first one does. */
 export async function connectToDesktop(): Promise<boolean> {
-	const state = await loadState();
+	const state = await currentLink();
 	if (!state) return false;
 	if (!(await canOpenNativePipe())) return false;
 
@@ -698,6 +731,8 @@ export async function connectToDesktop(): Promise<boolean> {
  */
 interface HeldLink {
 	session: LinkTransport;
+	/** The vault whose link this speaks; null for a link in progress. */
+	vaultId: string | null;
 	/** The Noise session id, held in the offscreen where the crypto lives. */
 	sessionId: number;
 	/** Opens arrive in order and must be DECRYPTED in order: Noise numbers its transport frames,
@@ -816,7 +851,7 @@ export async function openDesktopLink(): Promise<boolean> {
 	// Nothing to connect to. Checked BEFORE arming anything: almost nobody has a desktop app
 	// paired, and an unconditional keepalive woke every one of those service workers every twenty
 	// seconds, forever, to discover the same thing each time.
-	if (!(await loadState())) return false;
+	if (!(await currentLink())) return false;
 	// Paired but unreachable from here: the permission was revoked, or this worker predates the
 	// grant. Arming the keepalive would poll a pipe this context can never open. The next worker
 	// start calls this again, which is what recovers it.
@@ -940,7 +975,7 @@ async function connectHeld(): Promise<HeldLink | null> {
 	if (held) await dropHeld();
 	if (!linkWanted) return null; // nothing wants the pipe held open
 
-	const state = await loadState();
+	const state = await currentLink();
 	// Not paired. The ordinary case, and openDesktopLink already declined to arm anything, so this
 	// is only reachable if a pairing was removed while the keepalive was live. Not worth a line.
 	if (!state) return null;
@@ -958,6 +993,7 @@ async function connectHeld(): Promise<HeldLink | null> {
 	let transportReady!: () => void;
 	const link: HeldLink = {
 		session,
+		vaultId: inProgress ? null : getActiveVaultId(),
 		sessionId: start.sessionId,
 		inbound: new Promise<void>((resolve) => {
 			transportReady = resolve;
@@ -977,6 +1013,7 @@ async function connectHeld(): Promise<HeldLink | null> {
 	try {
 		session.send({ kind: "hello", v: PROTOCOL_VERSION, publicKey: state.publicKey });
 		const reply = await session.request({ message: start.message });
+		if (reply?.error === UNLINKED) await forgetRefused(link.vaultId);
 		if (reply?.ok !== true || reply?.done !== true) throw new Error("refused");
 		// KK is two messages; feeding the reply back is what puts this side in transport mode.
 		if (reply.message) {
@@ -1060,12 +1097,62 @@ async function routeInbound(link: HeldLink, sealed: string): Promise<void> {
 	link.answer = null;
 }
 
-/** Store a new link and let go of any held one: it speaks as the previous key, and the app
- * binds its invite to the key that just linked. The keepalive reopens it as the new one. */
-async function storeLink(state: LinkState): Promise<LinkState> {
-	await api.storage.local.set({ [STORAGE_KEY]: state });
+/** Make a new link the one in progress, and let go of any held one: it speaks as another key,
+ * and the app binds its invite to the key that just linked. */
+async function holdInProgress(state: LinkState, listed = false): Promise<LinkState> {
+	inProgress = { state, listed };
 	await dropHeld();
 	return state;
+}
+
+/**
+ * Attach the link in progress to the vault that now holds the desktop's, once the app has listed
+ * it. False, with the link let go, when the app will not complete it (its window closed, or the
+ * link expired) or there is none in progress (a worker restarted mid-copy).
+ */
+export async function attachLink(vaultId: string): Promise<boolean> {
+	if (!inProgress) return false;
+	const { state, listed } = inProgress;
+	if (listed) {
+		inProgress = null;
+		await api.storage.local.set({ [linkKeyFor(vaultId)]: state });
+		return true;
+	}
+	const link = held?.vaultId === null ? held : await ensureHeld();
+	const answer = link
+		? ((await askOverHeld(link, { op: "linkComplete" }).catch(() => null)) as {
+				ok?: boolean;
+				error?: unknown;
+			} | null)
+		: null;
+	// An app from before this lists a browser when it links, and does not know the request.
+	const older = typeof answer?.error === "string" && answer.error.startsWith("bad request");
+	if (answer?.ok !== true && !older) {
+		await abandonLink();
+		return false;
+	}
+	inProgress = null;
+	if (link && held === link) link.vaultId = vaultId;
+	await api.storage.local.set({ [linkKeyFor(vaultId)]: state });
+	return true;
+}
+
+/** Let go of the link in progress: its flow ended without a vault. Nothing is stored. */
+export async function abandonLink(): Promise<void> {
+	if (!inProgress) return;
+	inProgress = null;
+	if (held?.vaultId === null) await dropHeld();
+}
+
+/** The open vault changed: hold its link, not another's. A link in progress stays, because its
+ * vault copy changes the open vault itself. Run after the transition rather than inside it, so
+ * the transition's own reads come first. */
+export function retargetLink(vaultId: string | null): void {
+	queueMicrotask(() => {
+		if (inProgress) return;
+		if (held && held.vaultId !== vaultId) void dropHeld();
+		void openDesktopLink().catch(() => {});
+	});
 }
 
 async function dropHeld(): Promise<void> {
@@ -1093,8 +1180,14 @@ async function pskFor(code: string): Promise<string> {
 }
 
 /** Forget the desktop app. The next KK handshake has nothing to authenticate with. */
-export async function unlinkDesktop(): Promise<void> {
-	await api.storage.local.remove(STORAGE_KEY);
+/** Disconnect one vault's link, and say how many vaults still have one: the browser permission
+ * goes back only with the last. */
+export async function unlinkDesktop(vaultId: string): Promise<{ remaining: number }> {
+	await api.storage.local.remove(linkKeyFor(vaultId));
+	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY).catch(() => null));
+	const keys = [...reg.vaults.map((v) => linkKeyFor(v.id)), STORAGE_KEY];
+	const left = await Promise.all(keys.map((k) => loadLink(k)));
+	return { remaining: left.filter(Boolean).length };
 }
 
 export async function desktopLinkStatus(): Promise<{
@@ -1102,7 +1195,7 @@ export async function desktopLinkStatus(): Promise<{
 	pairedAt?: number;
 	permitted: boolean;
 }> {
-	const state = await loadState();
+	const state = await currentLink();
 	// The permission, not this worker's ability to use it. The UI is asking "did the user take
 	// this away", which stays true across a worker that simply started too early.
 	const allowed = await permitted();
@@ -1292,10 +1385,31 @@ on(
 
 on(
 	"DESKTOP_LINK_UNLINK",
+	// The open vault's link, and no other vault's.
 	extensionOnly(async () => {
-		await unlinkDesktop();
+		const vaultId = getActiveVaultId();
+		if (!vaultId) return { ok: false, error: "no vault is open" };
+		const left = await unlinkDesktop(vaultId);
 		// Nothing left to authenticate with, so stop holding a pipe the app would refuse anyway.
 		await closeDesktopLink();
+		return { ok: true, data: left };
+	}),
+);
+
+on(
+	"DESKTOP_LINK_ATTACH",
+	// The flow ended with this vault holding the desktop's: the pairing is complete.
+	extensionOnly(async (message) => {
+		const { vaultId } = message as { vaultId?: unknown };
+		if (typeof vaultId !== "string") return { ok: false, error: "no vault id" };
+		return { ok: true, data: await attachLink(vaultId) };
+	}),
+);
+
+on(
+	"DESKTOP_LINK_ABANDON",
+	extensionOnly(async () => {
+		await abandonLink();
 		return { ok: true };
 	}),
 );

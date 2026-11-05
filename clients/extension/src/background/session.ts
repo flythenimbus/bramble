@@ -9,6 +9,7 @@ import { SyncVaultMsgSchema } from "../sync/messages";
 import { clearIndex } from "./autofill-index";
 import { runDueBackups } from "./backup";
 import { CAPTURE_KEY_PREFIX } from "./corner-prompt";
+import { retargetLink } from "./desktop-link";
 import { sendToOffscreen } from "./offscreen-client";
 import { closeUnlockPopout, LAST_OPENED_VAULT_KEY, POPOUT_HANDOFF_KEY } from "./popout";
 import { getAutoLockMinutes } from "./prefs";
@@ -117,6 +118,7 @@ function applyActiveVaultTransition(value: unknown): boolean {
 	if (!vekStore.applyActiveVaultId(value)) return false;
 	advanceAutofillSession();
 	retargetSync(vekStore.getActiveVaultId());
+	retargetLink(vekStore.getActiveVaultId());
 	return true;
 }
 

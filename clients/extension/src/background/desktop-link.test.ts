@@ -42,7 +42,15 @@ const h = vi.hoisted(() => ({
 	slowSeal: null as string | null,
 	/** What was written to storage.local, in order. */
 	setCalls: [] as Record<string, unknown>[],
+	/** Keys removed from storage.local, in order. */
+	removed: [] as string[],
 	linkCloses: 0,
+	/** The vault open in the browser. */
+	activeVault: "v1" as string | null,
+	/** What the app answers `linkComplete` with over a lent pipe. */
+	linkCompleteAnswer: { ok: true } as Record<string, unknown>,
+	/** Vault metadata the background reads, by key (the vault registry). */
+	meta: {} as Record<string, unknown>,
 }));
 
 /** The native port chrome.runtime.connectNative hands back. */
@@ -105,8 +113,12 @@ vi.mock("../platform-api", () => ({
 				get: async (key: string) => ({ [key]: h.stored[key] }),
 				set: async (v: Record<string, unknown>) => {
 					h.setCalls.push(v);
+					Object.assign(h.stored, v);
 				},
-				remove: async () => {},
+				remove: async (key: string) => {
+					h.removed.push(key);
+					delete h.stored[key];
+				},
 			},
 		},
 	},
@@ -157,6 +169,12 @@ vi.mock("./offscreen-client", () => ({
 	},
 }));
 
+vi.mock("./vek-store", () => ({ getActiveVaultId: () => h.activeVault }));
+
+vi.mock("../storage", () => ({
+	extensionStorage: { getMeta: async (key: string) => h.meta[key] ?? null },
+}));
+
 vi.mock("./router", () => ({
 	on: () => {},
 	extensionOnly: (fn: unknown) => fn,
@@ -195,8 +213,19 @@ async function load() {
 	h.appCaps = ["files"];
 	h.appRestarts = false;
 	h.slowSeal = null;
+	h.activeVault = "v1";
+	h.linkCompleteAnswer = { ok: true };
+	h.removed.length = 0;
+	h.meta = {
+		"vault.registry": {
+			vaults: [
+				{ id: "v1", label: "", createdAt: 1 },
+				{ id: "v2", label: "", createdAt: 2 },
+			],
+		},
+	};
 	h.stored = {
-		desktopLink: {
+		"desktopLink:v1": {
 			privateKey: "priv",
 			publicKey: "pub",
 			appPublicKey: "app-pub",
@@ -602,6 +631,63 @@ describe("a browser with no desktop app", () => {
 	});
 });
 
+// Each vault in the browser has its own link, and the worker holds only the open vault's. See
+// docs/desktop-link-onboarding.md, piece 3.
+describe("a link per vault, over this worker's own pipe", () => {
+	const hellos = () => h.posted.filter((m) => m.kind === "hello").map((m) => m.publicKey);
+	const second = { privateKey: "priv-2", publicKey: "pub-2", appPublicKey: "app-pub", pairedAt: 2 };
+
+	it("holds the open vault's link, and the next vault's once that one opens", async () => {
+		const mod = await load();
+		h.stored["desktopLink:v2"] = second;
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
+		completeHandshake();
+		expect(await opening).toBe(true);
+
+		h.activeVault = "v2";
+		mod.retargetLink("v2");
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub", "pub-2"]));
+		completeHandshake();
+		await vi.waitFor(() => expect(mod.linkIsHeld()).toBe(true));
+
+		// A vault with no link of its own holds nothing.
+		h.activeVault = "v3";
+		mod.retargetLink("v3");
+		await vi.waitFor(() => expect(mod.linkIsHeld()).toBe(false));
+		expect(hellos()).toEqual(["pub", "pub-2"]);
+	});
+
+	it("drops the open vault's link when the app says nothing there is linked to it", async () => {
+		const mod = await load();
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
+		deliver({ ok: false, error: "not linked to this app" });
+
+		expect(await opening).toBe(false);
+		await vi.waitFor(() => expect(h.stored["desktopLink:v1"]).toBeUndefined());
+	});
+
+	it("keeps it when the app only has another vault open", async () => {
+		const mod = await load();
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(hellos()).toEqual(["pub"]));
+		deliver({ ok: false, error: "not linked to the open vault" });
+
+		expect(await opening).toBe(false);
+		expect(h.stored["desktopLink:v1"]).toBeDefined();
+	});
+
+	it("disconnects one vault's link and says how many remain", async () => {
+		const mod = await load();
+		h.stored["desktopLink:v2"] = second;
+
+		await expect(mod.unlinkDesktop("v1")).resolves.toEqual({ remaining: 1 });
+		expect(h.stored["desktopLink:v2"]).toBe(second);
+		await expect(mod.unlinkDesktop("v2")).resolves.toEqual({ remaining: 0 });
+	});
+});
+
 // Pairing runs on a transport the PAGE opens, because the worker cannot open one. A worker that
 // was already running when the user granted nativeMessaging never gains connectNative, and the
 // open pairing window is itself what stops it restarting to pick the binding up. So the page
@@ -622,8 +708,13 @@ describe("pairing borrows the page's native transport", () => {
 				const sealed = (m.frame as { sealed?: string } | undefined)?.sealed;
 				const plain = sealed ? h.sealed.get(sealed) : undefined;
 				const op = plain ? JSON.parse(plain).op : undefined;
-				if (op === "caps" || op === "syncRestart") {
-					const answer = op === "caps" ? { ok: true, caps: ["files"] } : { ok: true };
+				if (op === "caps" || op === "syncRestart" || op === "linkComplete") {
+					const answer =
+						op === "caps"
+							? { ok: true, caps: ["files"] }
+							: op === "linkComplete"
+								? h.linkCompleteAnswer
+								: { ok: true };
 					queueMicrotask(() =>
 						onMessage?.({ frame: { sealed: `sealed:${JSON.stringify(answer)}` } }),
 					);
@@ -800,7 +891,12 @@ describe("pairing borrows the page's native transport", () => {
 		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, paired: true })}` });
 
 		await expect(confirmed).resolves.toMatchObject({ appPublicKey: "app-pub" });
-		expect(h.setCalls).toHaveLength(1);
+		// Stored once the flow ends with a vault holding the desktop's: see "links per vault".
+		expect(h.setCalls).toEqual([]);
+		await mod.attachLink("v2");
+		expect(h.setCalls).toEqual([
+			{ "desktopLink:v2": expect.objectContaining({ appPublicKey: "app-pub" }) },
+		]);
 	});
 
 	it("drops a held link once a new link is stored, so later requests speak as the new key", async () => {
@@ -992,6 +1088,122 @@ describe("pairing borrows the page's native transport", () => {
 		page.deliver({ ok: false, error: "refused" });
 
 		await expect(started).rejects.toThrow(/Connect a browser/);
+	});
+
+	/** Link over `page` and have both screens agree, leaving the link in progress. */
+	async function confirmOver(mod: Awaited<ReturnType<typeof load>>, page: ReturnType<typeof lend>) {
+		const started = await linkOver(mod, page);
+		if (!("id" in started)) throw new Error("expected a link in progress");
+		const confirmed = mod.confirmDesktopLink(started.id, true);
+		await vi.waitFor(() => expect(page.sent.length).toBe(7));
+		page.deliver({ sealed: `sealed:${JSON.stringify({ ok: true, paired: true })}` });
+		return confirmed;
+	}
+
+	/** The plaintext of every sealed frame posted to `page`, as ops. */
+	const opsOn = (page: ReturnType<typeof lend>) =>
+		page.sent
+			.map((m) => (m.frame as { sealed?: string } | undefined)?.sealed)
+			.filter((x): x is string => typeof x === "string")
+			.map((x) => JSON.parse(h.sealed.get(x) ?? "{}").op as string | undefined);
+
+	describe("links per vault", () => {
+		it("keeps a confirmed link in progress, stored nowhere, until it attaches", async () => {
+			const mod = await load();
+			h.setCalls.length = 0;
+			await confirmOver(mod, lend(EXT_SENDER));
+
+			expect(h.setCalls).toEqual([]);
+			expect(mod.linkIsHeld()).toBe(true);
+		});
+
+		it("stores an attached link under that vault, and tells the app", async () => {
+			const mod = await load();
+			const page = lend(EXT_SENDER);
+			await confirmOver(mod, page);
+
+			await expect(mod.attachLink("v2")).resolves.toBe(true);
+
+			expect(h.stored["desktopLink:v2"]).toMatchObject({
+				publicKey: "pub",
+				appPublicKey: "app-pub",
+			});
+			expect(opsOn(page)).toContain("linkComplete");
+		});
+
+		it("keeps a link in progress held while the open vault changes", async () => {
+			// The vault copy changes the open vault itself, to the vault it creates.
+			const mod = await load();
+			await confirmOver(mod, lend(EXT_SENDER));
+
+			h.activeVault = "v9";
+			mod.retargetLink("v9");
+
+			expect(mod.linkIsHeld()).toBe(true);
+		});
+
+		it("stores nothing for a link abandoned before it attaches", async () => {
+			const mod = await load();
+			h.setCalls.length = 0;
+			await confirmOver(mod, lend(EXT_SENDER));
+
+			await mod.abandonLink();
+
+			expect(h.setCalls).toEqual([]);
+			expect(mod.linkIsHeld()).toBe(false);
+			await expect(mod.attachLink("v2")).resolves.toBe(false);
+		});
+
+		it("stores nothing when there is no link in progress to attach", async () => {
+			// What a worker restarted mid-copy sees: the link in progress went with it.
+			const mod = await load();
+			h.setCalls.length = 0;
+
+			await expect(mod.attachLink("v2")).resolves.toBe(false);
+			expect(h.setCalls).toEqual([]);
+		});
+
+		it("leaves another vault's link alone when linking, attaching or abandoning", async () => {
+			const mod = await load();
+			const before = h.stored["desktopLink:v1"];
+			await confirmOver(mod, lend(EXT_SENDER, "first"));
+			await mod.abandonLink();
+			await confirmOver(mod, lend(EXT_SENDER, "second"));
+			await mod.attachLink("v2");
+
+			expect(h.stored["desktopLink:v1"]).toBe(before);
+			expect(h.removed).toEqual([]);
+		});
+
+		it("does not attach a link the app will not complete, and lets it go", async () => {
+			// The app forgot it: its Connect window closed, or the pending link expired.
+			const mod = await load();
+			h.linkCompleteAnswer = { ok: false, error: "no link to complete" };
+			await confirmOver(mod, lend(EXT_SENDER));
+
+			await expect(mod.attachLink("v2")).resolves.toBe(false);
+			expect(h.stored["desktopLink:v2"]).toBeUndefined();
+			expect(mod.linkIsHeld()).toBe(false);
+		});
+
+		it("keeps a code pairing in progress too, until it attaches", async () => {
+			const mod = await load();
+			h.setCalls.length = 0;
+			await pairOver(mod, lend(EXT_SENDER));
+
+			expect(h.setCalls).toEqual([]);
+			await expect(mod.attachLink("v2")).resolves.toBe(true);
+			expect(h.stored["desktopLink:v2"]).toBeDefined();
+		});
+
+		it("attaches a link to an app from before linkComplete, which listed it already", async () => {
+			const mod = await load();
+			h.linkCompleteAnswer = { ok: false, error: "bad request: unknown variant `linkComplete`" };
+			await confirmOver(mod, lend(EXT_SENDER));
+
+			await expect(mod.attachLink("v2")).resolves.toBe(true);
+			expect(h.stored["desktopLink:v2"]).toBeDefined();
+		});
 	});
 });
 
