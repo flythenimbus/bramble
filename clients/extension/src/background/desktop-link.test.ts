@@ -57,6 +57,11 @@ const h = vi.hoisted(() => ({
 	meta: {} as Record<string, unknown>,
 	/** Metadata keys whose read fails. */
 	metaFails: new Set<string>(),
+	/** How often the permission was checked: an API call, which resets the worker's idle timer. */
+	permissionChecks: 0,
+	/** Alarms armed, by name. */
+	alarms: new Map<string, unknown>(),
+	alarmsCreated: 0,
 }));
 
 /** The native port chrome.runtime.connectNative hands back. */
@@ -116,8 +121,18 @@ vi.mock("../platform-api", () => ({
 				addListener: (cb: (port: unknown) => void) => h.onConnect.push(cb),
 			},
 		},
+		alarms: {
+			create: async (name: string, info: unknown) => {
+				h.alarmsCreated++;
+				h.alarms.set(name, info);
+			},
+			clear: async (name: string) => h.alarms.delete(name),
+		},
 		permissions: {
-			contains: async () => h.permitted,
+			contains: async () => {
+				h.permissionChecks++;
+				return h.permitted;
+			},
 			onRemoved: {
 				addListener: (cb: (p: { permissions?: string[] }) => void) =>
 					h.onPermissionRemoved.push(cb),
@@ -239,6 +254,9 @@ async function load() {
 	h.linkCompleteAnswer = { ok: true };
 	h.removed.length = 0;
 	h.metaFails.clear();
+	h.permissionChecks = 0;
+	h.alarms.clear();
+	h.alarmsCreated = 0;
 	h.meta = {
 		"vault.registry": {
 			vaults: [
@@ -795,6 +813,78 @@ describe("a link per vault, over this worker's own pipe", () => {
 		await expect(mod.unlinkDesktop("v1")).resolves.toEqual({ remaining: 1 });
 		expect(h.stored["desktopLink:v2"]).toBe(second);
 		await expect(mod.unlinkDesktop("v2")).resolves.toEqual({ remaining: 0 });
+	});
+});
+
+// The relay needs the app's sync key to tell it apart: a browser and the app on one machine sync
+// over the link only, and without the key each announce starts a handshake the app refuses.
+describe("the app's sync key", () => {
+	async function connected(mod: Awaited<ReturnType<typeof load>>) {
+		h.appIdentity = "desk-identity";
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		await opening;
+	}
+	/** The pipe goes, and this worker cannot open another. */
+	const pipeGone = () => {
+		h.hasBinding = false;
+		for (const cb of h.onDisconnect) cb();
+	};
+
+	it("is still known with the pipe down, once the app has said it", async () => {
+		const mod = await load();
+		await connected(mod);
+		await expect(mod.desktopSyncKey()).resolves.toBe("desk-identity");
+
+		pipeGone();
+
+		await expect(mod.desktopSyncKey()).resolves.toBe("desk-identity");
+	});
+
+	it("is not known before the app has said it", async () => {
+		const mod = await load();
+		h.hasBinding = false;
+
+		await expect(mod.desktopSyncKey()).resolves.toBeNull();
+	});
+
+	it("goes with the link: after Disconnect there is no app on a link to tell apart", async () => {
+		const mod = await load();
+		await connected(mod);
+		await mod.desktopSyncKey();
+		pipeGone();
+
+		await mod.unlinkDesktop("v1");
+
+		await expect(mod.desktopSyncKey()).resolves.toBeNull();
+	});
+
+	it("leaves nothing behind when a deleted vault's link is forgotten", async () => {
+		const mod = await load();
+		await connected(mod);
+		await mod.desktopSyncKey();
+		expect(Object.keys(h.stored).filter((k) => k.startsWith("linkAppSyncKey:"))).toHaveLength(1);
+
+		await mod.forgetVaultLink("v1");
+
+		expect(Object.keys(h.stored).filter((k) => k.startsWith("linkAppSyncKey:"))).toEqual([]);
+	});
+
+	it("belongs to one link: another vault's is not taken for it", async () => {
+		const mod = await load();
+		await connected(mod);
+		await mod.desktopSyncKey();
+		pipeGone();
+		h.stored["desktopLink:v2"] = {
+			privateKey: "priv-2",
+			publicKey: "pub-2",
+			appPublicKey: "app-pub",
+			pairedAt: 2,
+		};
+		h.activeVault = "v2";
+
+		await expect(mod.desktopSyncKey()).resolves.toBeNull();
 	});
 });
 
@@ -1424,6 +1514,52 @@ describe("pairing borrows the page's native transport", () => {
 			await vi.waitFor(() => expect(h.posted.some((m) => m.kind === "hello")).toBe(true));
 		});
 
+		// A worker that was running when the permission was granted can never open a pipe, and only
+		// a later one can. It restarts only after going idle, and any API call resets that timer.
+		describe("on a worker that predates the grant, once the page that lent its pipe has gone", () => {
+			async function linkedThenPageGone(mod: Awaited<ReturnType<typeof load>>) {
+				h.hasBinding = false;
+				h.stored = {};
+				const page = lend(EXT_SENDER);
+				await confirmOver(mod, page);
+				await expect(mod.attachLink("v1")).resolves.toBe(true);
+				page.drop();
+				await vi.waitFor(() => expect(mod.linkIsHeld()).toBe(false));
+				await vi.waitFor(() => expect(h.alarms.size).toBeGreaterThan(0));
+			}
+
+			it("stops polling, which would keep this worker from ever being replaced", async () => {
+				vi.useFakeTimers({ shouldAdvanceTime: true });
+				const mod = await load();
+				await linkedThenPageGone(mod);
+				await vi.advanceTimersByTimeAsync(1000);
+				const before = h.permissionChecks;
+
+				await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+				expect(h.permissionChecks).toBe(before);
+				vi.useRealTimers();
+			});
+
+			it("sets an alarm, since nothing else may wake the worker that can open one", async () => {
+				const mod = await load();
+				await linkedThenPageGone(mod);
+				expect([...h.alarms.values()]).toEqual([{ periodInMinutes: 1 }]);
+			});
+
+			it("sets it once: creating it again would keep putting off its next fire", async () => {
+				const mod = await load();
+				await linkedThenPageGone(mod);
+				const armed = h.alarmsCreated;
+
+				// Sync keeps trying the dead link until it gives up on the peer.
+				await expect(mod.sendSyncFrame("frame")).resolves.toBe(false);
+				await expect(mod.sendSyncFrame("frame")).resolves.toBe(false);
+
+				expect(h.alarmsCreated).toBe(armed);
+			});
+		});
+
 		it("stores nothing for a link abandoned before it attaches", async () => {
 			const mod = await load();
 			h.setCalls.length = 0;
@@ -1522,6 +1658,37 @@ describe("pairing borrows the page's native transport", () => {
 // grant and repairs itself on the next start. Neither may reach connectNative, which is undefined
 // in the second case and would throw a TypeError into whatever was awaiting.
 describe("a paired browser that cannot use native messaging", () => {
+	it("sets no alarm for a permission that was taken away: a later worker would fare no better", async () => {
+		const mod = await load();
+		h.permitted = false;
+		h.hasBinding = false;
+
+		expect(await mod.openDesktopLink()).toBe(false);
+
+		expect(h.alarms.size).toBe(0);
+	});
+
+	it("sets no alarm with nothing linked", async () => {
+		const mod = await load();
+		h.hasBinding = false;
+		h.stored = {};
+
+		expect(await mod.openDesktopLink()).toBe(false);
+
+		expect(h.alarms.size).toBe(0);
+	});
+
+	it("clears the alarm once a worker can open a pipe of its own", async () => {
+		const mod = await load();
+		h.alarms.set("desktop-link-wake", { periodInMinutes: 1 });
+		const opening = mod.openDesktopLink();
+		await vi.waitFor(() => expect(h.onMessage.length).toBeGreaterThan(0));
+		completeHandshake();
+		await opening;
+
+		expect(h.alarms.size).toBe(0);
+	});
+
 	it("arms nothing when the permission was revoked", async () => {
 		const mod = await load();
 		h.permitted = false;

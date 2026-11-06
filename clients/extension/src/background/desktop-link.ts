@@ -45,6 +45,10 @@ const STORAGE_KEY = "desktopLink";
 
 const linkKeyFor = (vaultId: string) => `${STORAGE_KEY}:${vaultId}`;
 
+/** What the app last said its sync key is, kept per link, so it cannot outlive or cross one. A
+ * public key. */
+const appSyncKeyFor = (link: { publicKey: string }) => `linkAppSyncKey:${link.publicKey}`;
+
 /** What the app tells a browser no vault there is linked to. Must match `UNLINKED` in
  * pairing.rs. */
 const UNLINKED = "not linked to this app";
@@ -95,7 +99,8 @@ async function permitted(): Promise<boolean> {
  * test and must not be used as one; it is this worker asking what it is able to do.
  *
  * Nothing can repair it in place. The worker gains the binding when it next starts, and
- * background.ts calls openDesktopLink() on every start, so the link comes up on its own.
+ * background.ts calls openDesktopLink() on every start, so the link comes up on its own, as long
+ * as this worker is let go and something wakes the next one: see awaitNextWorker.
  */
 async function canOpenNativePipe(): Promise<boolean> {
 	return typeof api.runtime.connectNative === "function" && (await permitted());
@@ -104,6 +109,13 @@ async function canOpenNativePipe(): Promise<boolean> {
 async function loadLink(key: string): Promise<LinkState | null> {
 	const stored = (await api.storage.local.get(key))[key] as LinkState | undefined;
 	return stored?.privateKey && stored?.appPublicKey ? stored : null;
+}
+
+/** Forget a stored link, and what was learned through it. */
+async function removeLink(key: string): Promise<void> {
+	const link = await loadLink(key);
+	await api.storage.local.remove(key);
+	if (link) await api.storage.local.remove(appSyncKeyFor(link));
 }
 
 /**
@@ -181,7 +193,7 @@ async function adoptLegacyLink(link: HeldLink): Promise<void> {
 	if (homes.length > 1) return;
 	const [home] = homes;
 	if (home) await placeLegacyLink(home, legacy);
-	else await api.storage.local.remove(STORAGE_KEY);
+	else await removeLink(STORAGE_KEY);
 	if (home && home === link.vaultId) link.legacy = false;
 	else if (held === link) await dropHeld();
 }
@@ -209,8 +221,8 @@ export async function desktopLinkProven(vaultId: string): Promise<void> {
 
 /** The app, under the session, knows nothing of the link this browser spoke with: let it go. */
 async function forgetRefused(source: { vaultId: string | null; legacy: boolean }): Promise<void> {
-	if (source.legacy) await api.storage.local.remove(STORAGE_KEY);
-	else if (source.vaultId) await api.storage.local.remove(linkKeyFor(source.vaultId));
+	if (source.legacy) await removeLink(STORAGE_KEY);
+	else if (source.vaultId) await removeLink(linkKeyFor(source.vaultId));
 	else await abandonLink();
 }
 
@@ -967,7 +979,11 @@ export async function openDesktopLink(): Promise<boolean> {
 	// Paired but unreachable from here: the permission was revoked, or this worker predates the
 	// grant. Arming the keepalive would poll a pipe this context can never open. The next worker
 	// start calls this again, which is what recovers it.
-	if (!(await canOpenNativePipe())) return false;
+	if (!(await canOpenNativePipe())) {
+		await awaitNextWorker();
+		return false;
+	}
+	await api.alarms.clear(LINK_WAKE_ALARM);
 	linkWanted = true;
 	startKeepalive();
 	const up = (await ensureHeld()) !== null;
@@ -987,6 +1003,33 @@ function startKeepalive(): void {
 			void ensureHeld().catch(() => {});
 		}, LINK_KEEPALIVE_MS);
 	}
+}
+
+function stopKeepalive(): void {
+	if (keepalive) {
+		clearInterval(keepalive);
+		keepalive = undefined;
+	}
+}
+
+/** Fires only to wake a worker: its start is what opens the link. */
+const LINK_WAKE_ALARM = "desktop-link-wake";
+/** Once per worker: creating it again would keep putting off its next fire. */
+let wakeArmed = false;
+
+/**
+ * This worker cannot open a pipe, and if it predates the grant, its successor can. Chromium replaces
+ * a worker only once it has gone idle, and any API call resets that timer, so polling from here is
+ * what would keep the link down for good. Stop, and leave an alarm to wake the next one: an app
+ * cannot reach a browser that holds no pipe, so nothing else is sure to. A permission the user took
+ * away needs no alarm, since no later worker can do better until it is back.
+ */
+async function awaitNextWorker(): Promise<void> {
+	stopKeepalive();
+	if (wakeArmed) return;
+	if (typeof api.runtime.connectNative === "function" || !(await permitted())) return;
+	wakeArmed = true;
+	await api.alarms.create(LINK_WAKE_ALARM, { periodInMinutes: 1 });
 }
 
 /** Route the app's sync frames to `onFrame`, and make sure the pipe is up to carry them. */
@@ -1014,10 +1057,7 @@ export async function openSyncLink(
 export async function closeSyncLink(): Promise<void> {
 	onSyncFrame = null;
 	if (linkWanted) return; // delegation and panel fills still need it
-	if (keepalive) {
-		clearInterval(keepalive);
-		keepalive = undefined;
-	}
+	stopKeepalive();
 	const link = held;
 	held = null;
 	if (!link) return;
@@ -1098,9 +1138,13 @@ async function connectHeld(): Promise<HeldLink | null> {
 	// is only reachable if a pairing was removed while the keepalive was live. Not worth a line.
 	if (!source) return null;
 	const state = source.state;
-	// Revoked while the keepalive was live. Without this the constructor below calls an undefined
-	// connectNative and throws a TypeError into whatever happened to be awaiting.
-	if (!(await canOpenNativePipe())) return null;
+	// Revoked while the keepalive was live, or the page lending this worker a pipe has gone. Without
+	// this the constructor below calls an undefined connectNative and throws a TypeError into
+	// whatever happened to be awaiting.
+	if (!(await canOpenNativePipe())) {
+		await awaitNextWorker();
+		return null;
+	}
 	const start = (await offscreen("LINK_START_INITIATOR", {
 		privateKey: state.privateKey,
 		remotePublicKey: state.appPublicKey,
@@ -1327,7 +1371,7 @@ async function pskFor(code: string): Promise<string> {
  * goes back only with the last. */
 export async function unlinkDesktop(vaultId: string): Promise<{ remaining: number }> {
 	const source = await vaultLink(vaultId);
-	if (source) await api.storage.local.remove(source.legacy ? STORAGE_KEY : linkKeyFor(vaultId));
+	if (source) await removeLink(source.legacy ? STORAGE_KEY : linkKeyFor(vaultId));
 	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY).catch(() => null));
 	const keys = [...reg.vaults.map((v) => linkKeyFor(v.id)), STORAGE_KEY];
 	const left = await Promise.all(keys.map((k) => loadLink(k)));
@@ -1403,21 +1447,29 @@ on(
 
 /** The app's sync device key, or null when it is not linked or not running. */
 export async function desktopSyncKey(via?: string): Promise<string | null> {
+	const link = await currentLink();
+	if (!link) return null;
+	const key = appSyncKeyFor(link);
 	try {
 		const answer = (await askDesktop({ op: "syncIdentity" }, via)) as {
 			ok?: boolean;
 			identity?: string;
 		};
-		return answer?.ok === true ? (answer.identity ?? null) : null;
+		if (answer?.ok === true && answer.identity) {
+			await api.storage.local.set({ [key]: answer.identity });
+			return answer.identity;
+		}
 	} catch {
-		return null;
+		// The pipe is down, which is when the relay most needs to tell the app apart.
 	}
+	const known = (await api.storage.local.get(key))[key];
+	return typeof known === "string" ? known : null;
 }
 
 on(
 	"DESKTOP_LINK_SYNC_KEY",
-	// The app's own sync key. Null rather than an error when it is not running: the UI says less
-	// in that case rather than claiming something it cannot check.
+	// The app's own sync key, as last heard when it is not running. Null rather than an error when
+	// it never said: the UI says less in that case rather than claiming something it cannot check.
 	extensionOnly(async (message) => ({ ok: true, data: await desktopSyncKey(viaOf(message)) })),
 );
 
@@ -1553,7 +1605,7 @@ on(
 
 /** A deleted vault's link goes with it: the desktop app would still accept the key. */
 export async function forgetVaultLink(vaultId: string): Promise<void> {
-	await api.storage.local.remove(linkKeyFor(vaultId));
+	await removeLink(linkKeyFor(vaultId));
 	if (held?.vaultId === vaultId) await dropHeld();
 }
 

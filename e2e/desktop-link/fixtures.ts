@@ -317,43 +317,7 @@ async function launchBrowser(
 	home: string,
 	{ borrowsPipe }: { borrowsPipe: boolean },
 ): Promise<{ browser: Browser; close(): Promise<void> }> {
-	const scratch = mkdtempSync(path.join(tmpdir(), "bramble-desktop-link-browser-"));
-	const profile = path.join(scratch, "profile");
-	const hosts = path.join(profile, "NativeMessagingHosts");
-	mkdirSync(hosts, { recursive: true });
-	const manifest = path.join(
-		home,
-		"Library/Application Support/Chromium/NativeMessagingHosts/app.bramble.desktop.json",
-	);
-	cpSync(manifest, path.join(hosts, "app.bramble.desktop.json"));
-
-	const extension = path.join(scratch, "extension");
-	cpSync(EXTENSION_BUILD, extension, { recursive: true });
-	const manifestPath = path.join(extension, "manifest.json");
-	const m = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-		permissions?: string[];
-		optional_permissions?: string[];
-		background: { service_worker: string };
-	};
-	m.permissions = [...new Set([...(m.permissions ?? []), "nativeMessaging"])];
-	m.optional_permissions = (m.optional_permissions ?? []).filter((p) => p !== "nativeMessaging");
-	if (borrowsPipe) {
-		// Imported first, so the binding is gone before the worker's own modules evaluate.
-		writeFileSync(
-			path.join(extension, "e2e-no-binding.js"),
-			`for (const ns of [globalThis.chrome, globalThis.browser]) {
-	if (ns?.runtime) Object.defineProperty(ns.runtime, "connectNative", { value: undefined, configurable: true });
-}
-`,
-		);
-		writeFileSync(
-			path.join(extension, "e2e-background.js"),
-			`import "./e2e-no-binding.js";\nimport "./${m.background.service_worker}";\n`,
-		);
-		m.background.service_worker = "e2e-background.js";
-	}
-	writeFileSync(manifestPath, JSON.stringify(m));
-
+	const { scratch, profile, extension } = browserFiles(home, { borrowsPipe });
 	const port = await freePort();
 	const context = await chromium.launchPersistentContext(profile, {
 		channel: "chromium",
@@ -415,6 +379,56 @@ async function launchBrowser(
 			rmSync(scratch, { recursive: true, force: true });
 		},
 	};
+}
+
+/**
+ * The profile and extension copy launchBrowser starts from. With `bindingFrom`, only a worker started
+ * before that time has its binding taken away: the worker running at the grant, and not its
+ * successor.
+ */
+export function browserFiles(
+	home: string,
+	{ borrowsPipe, bindingFrom }: { borrowsPipe: boolean; bindingFrom?: number },
+): { scratch: string; profile: string; extension: string } {
+	const scratch = mkdtempSync(path.join(tmpdir(), "bramble-desktop-link-browser-"));
+	const profile = path.join(scratch, "profile");
+	const hosts = path.join(profile, "NativeMessagingHosts");
+	mkdirSync(hosts, { recursive: true });
+	const manifest = path.join(
+		home,
+		"Library/Application Support/Chromium/NativeMessagingHosts/app.bramble.desktop.json",
+	);
+	cpSync(manifest, path.join(hosts, "app.bramble.desktop.json"));
+
+	const extension = path.join(scratch, "extension");
+	cpSync(EXTENSION_BUILD, extension, { recursive: true });
+	const manifestPath = path.join(extension, "manifest.json");
+	const m = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+		permissions?: string[];
+		optional_permissions?: string[];
+		background: { service_worker: string };
+	};
+	m.permissions = [...new Set([...(m.permissions ?? []), "nativeMessaging"])];
+	m.optional_permissions = (m.optional_permissions ?? []).filter((p) => p !== "nativeMessaging");
+	if (borrowsPipe) {
+		// Imported first, so the binding is gone before the worker's own modules evaluate.
+		writeFileSync(
+			path.join(extension, "e2e-no-binding.js"),
+			`if (Date.now() < ${bindingFrom ?? "Infinity"}) {
+	for (const ns of [globalThis.chrome, globalThis.browser]) {
+		if (ns?.runtime) Object.defineProperty(ns.runtime, "connectNative", { value: undefined, configurable: true });
+	}
+}
+`,
+		);
+		writeFileSync(
+			path.join(extension, "e2e-background.js"),
+			`import "./e2e-no-binding.js";\nimport "./${m.background.service_worker}";\n`,
+		);
+		m.background.service_worker = "e2e-background.js";
+	}
+	writeFileSync(manifestPath, JSON.stringify(m));
+	return { scratch, profile, extension };
 }
 
 export const test = base.extend<

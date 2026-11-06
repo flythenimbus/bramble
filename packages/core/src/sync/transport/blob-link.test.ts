@@ -138,6 +138,50 @@ describe("files over the desktop link", () => {
 		b.stop();
 	});
 
+	it("goes quiet when the link cannot carry a frame, until the app pokes it again", async () => {
+		// Each send wakes the extension's worker. Heartbeating at a dead link kept it awake, and only
+		// a new worker can open the pipe again.
+		const sends: { stream: number; frame: string }[] = [];
+		let handlers: Parameters<BlobLinkDialerTransport["subscribe"]>[0] | null = null;
+		let linkUp = true;
+		const offered: { channel: { send(d: string): void } }[] = [];
+		const source = blobLinkDialer({
+			up: async () => true,
+			send: async (stream, frame) => {
+				sends.push({ stream, frame });
+				return linkUp;
+			},
+			subscribe: (h) => {
+				handlers = h;
+				return () => {};
+			},
+		});
+		const session = await source({
+			onPeer: (peer: unknown) => offered.push(peer as (typeof offered)[number]),
+			report: () => {},
+		} as unknown as Parameters<typeof source>[0]);
+		const first = offered[0]?.channel;
+		first?.send("before");
+		await vi.waitFor(() => expect(sends).toHaveLength(1));
+
+		linkUp = false;
+		first?.send("lost");
+		await vi.waitFor(() => expect(sends).toHaveLength(2));
+		await new Promise((r) => setTimeout(r, 0));
+		first?.send("heartbeat");
+		await new Promise((r) => setTimeout(r, 0));
+		expect(sends).toHaveLength(2);
+
+		// The app is back: it pokes, and a fresh stream carries on.
+		linkUp = true;
+		(handlers as unknown as { poke(): void }).poke();
+		expect(offered).toHaveLength(2);
+		offered[1]?.channel.send("after");
+		await vi.waitFor(() => expect(sends).toHaveLength(3));
+		expect(sends[2]?.stream).not.toBe(sends[0]?.stream);
+		session.stop();
+	});
+
 	it("never read a late frame from a superseded stream as a new peer", async () => {
 		const offered: string[] = [];
 		const link = simulatedLink();

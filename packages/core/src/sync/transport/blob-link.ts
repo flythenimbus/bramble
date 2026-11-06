@@ -71,7 +71,16 @@ export function blobLinkDialer(transport: BlobLinkDialerTransport): PeerSource {
 			const stream = newStreamId();
 			const { channel, push } = makeChannel((frame) => {
 				// A superseded stream goes quiet rather than talking over its replacement.
-				if (live?.stream === stream) void transport.send(stream, frame).catch(() => {});
+				if (live?.stream !== stream) return;
+				void transport
+					.send(stream, frame)
+					.then((sent) => {
+						// So does one on a link that is down: the app pokes when it is back. Each send wakes
+						// the extension's worker, and a worker that predates the permission grant has to
+						// go idle before one that can open the pipe takes over.
+						if (!sent && live?.stream === stream) live = null;
+					})
+					.catch(() => {});
 			});
 			live = { stream, push };
 			report("desktop app offered as a file peer");

@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { DESKTOP_PW, desk, expect } from "./fixtures";
+import { DESKTOP_PW, desk, expect, RELAY_URL } from "./fixtures";
 
 // The moves a person makes on each screen. Desktop steps run in its window through the bridge;
 // browser steps are ordinary Playwright on the extension's pages.
@@ -64,17 +64,35 @@ export async function desktopListedBrowsers(): Promise<number> {
 	return desk<number>(`return (await window.__TAURI_INTERNALS__.invoke("pairing_list")).length;`);
 }
 
-/** Lock, then make another vault from the unlock screen; it opens empty. */
+/** Lock, then make another vault from the unlock screen, or the picker with several; it opens
+ * empty. */
 export async function desktopCreateAnotherVault(name: string): Promise<void> {
 	await desk(`
 		await front();
 		await click(/^Lock vault$/);
-		await click(/^Create another vault$/);
+		// One vault: the unlock screen offers it. Several: the picker does, in its own words.
+		const create = /^Create (another|new) vault$/;
+		await waitFor(() => find(create) || find(/^Choose a different vault$/));
+		if (!find(create)) await click(/^Choose a different vault$/);
+		await click(create);
 		await fill("#vault-name", ${JSON.stringify(name)});
 		await fillPasswords(${JSON.stringify(DESKTOP_PW)});
 		await click(/^Create vault$/);
 		await click(/I've saved it/);
 		await waitFor(() => find(/^Add New$/));
+	`);
+}
+
+/** Point the open vault at the local relay: a new vault starts on the hosted one. */
+export async function desktopUseLocalRelay(): Promise<void> {
+	await desk(`
+		await front();
+		await click(/^Settings$/);
+		await click(/^Sync$/);
+		await click(/^Advanced$/);
+		await fillLabel(/Nostr relay URL/, ${JSON.stringify(RELAY_URL)});
+		await fillLabel(/TURN \\/ ICE servers URL/, "");
+		await click(/^Go to vault$/);
 	`);
 }
 

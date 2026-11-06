@@ -199,6 +199,27 @@ link's own connection stays open as the held link instead of being closed and re
 That connection is the pipe the page lent, kept until the page closes. Then a worker with the
 binding opens one of its own at once, and one without opens it at its next start.
 
+**That next start has to actually happen.** Chromium replaces a worker only after 30 idle seconds,
+and any event or API call resets the timer. So once the lent pipe has gone, a worker without the
+binding gets out of the way:
+
+- It stops its keepalive. Each tick reads storage and checks the permission, both API calls, so
+  this alone once kept the worker, and so the link, down until the browser restarted.
+- It sets one alarm, `desktop-link-wake`, every minute until a worker can open a pipe. An app cannot
+  reach a browser that holds no pipe, so nothing else is sure to wake the next worker. Set once per
+  worker, because creating it again puts off its next fire. The fire does nothing itself: a worker's
+  start is what opens the link.
+- Sync goes quiet around it. The file session stops sending on the link once a send fails, until the
+  app pokes, instead of heartbeating every 30 seconds, the same length as the idle limit. The browser
+  remembers the app's sync key per link (`linkAppSyncKey:<link's public key>`), so with the pipe down
+  the relay still knows the app and skips it, instead of a handshake the app refuses on every
+  announce.
+
+Measured in real Chromium, the link is back about two minutes after the page closes, with nothing
+for the user to do (`e2e/desktop-link/worker-restart.spec.ts`). Two things can hold it up. Sync with
+another device carrying on over the relay keeps waking the worker. And **DevTools open on the worker
+stops it going idle at all**, so a person watching its console will not see this recover.
+
 ## Execution plan
 
 **Phase 1: manifest and gate (done).** Moved `"nativeMessaging"` from `permissions` to

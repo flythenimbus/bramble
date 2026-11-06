@@ -199,8 +199,10 @@ granted the permission at link time (Settings taking the desktop's vault, and th
 forward and approving first), a browser listed only by the vault it linked to, and a link per
 vault: two pairs in one browser profile with nothing crossing between them, a link abandoned at the
 copy step leaving nothing on either side, a browser removed on the desktop dropping its link, and
-two profiles pairing with one desktop vault. Each test is a flow that once failed when run this
-way.
+two profiles pairing with one desktop vault; an empty desktop vault taking a named browser vault's
+entries and file, all still there when the popup reopens; and a worker from before the permission
+grant bringing the link back by itself once the page that lent its pipe has closed. Each test is a
+flow that once failed when run this way.
 
 ```sh
 pnpm test:e2e:desktop-link
@@ -239,6 +241,10 @@ release build (`clients/desktop/src/e2e-bridge.test.ts`).
   lends it. `test.use({ borrowsPipe: true })` takes `connectNative` away from the worker before its
   code runs, which is that state. Two bugs only showed there: two requests on one lent pipe, and a
   vault copy with no pipe to ride.
+- An attached debugger stops a worker going idle, and Playwright attaches to every worker it can
+  see, so a worker being replaced cannot be seen under a fixture browser. `worker-restart.spec.ts`
+  starts its own browser, drives the flow, disconnects, and then watches only the app's connected
+  browsers. It takes about two minutes.
 - The app's own log (`desktop-app.log`) lives in the scratch HOME and is attached to a failing test,
   since its stdout is cut off when the app is stopped.
 - Playwright cannot see the offscreen document, where sync runs. A raw CDP connection watches the

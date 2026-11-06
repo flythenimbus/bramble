@@ -15,6 +15,7 @@ import {
 	desktopListedBrowsers,
 	desktopOpenVault,
 	desktopSymbols,
+	desktopUseLocalRelay,
 	desktopVisible,
 	isLocal,
 	joinFromSetup,
@@ -216,6 +217,76 @@ test.describe("granting the permission at link time", () => {
 	});
 });
 
+test.describe("an empty desktop vault, linked from a browser vault that holds something", () => {
+	test.use({ borrowsPipe: true });
+
+	test("copies into it with no choice to make, and all of it stays when the popup reopens", async ({
+		ext,
+	}) => {
+		await desktopCreateAnotherVault("Test 1");
+		await desktopUseLocalRelay();
+		await createVault(ext.page, ext.extensionId, BROWSER_PW);
+		const popup = await ext.popup();
+		await addLogin(popup, "Browser only");
+		await popup.getByText("Browser only").first().click();
+		await popup.locator('input[type="file"]').setInputFiles({
+			name: "note.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("carried across\n"),
+		});
+		await expect(popup.getByText("note.txt")).toBeVisible();
+		// Named, so nothing of this vault's may land on the one the link opens.
+		await popup.getByRole("button", { name: "Settings" }).click();
+		await popup.getByRole("button", { name: "General", exact: true }).click();
+		await popup.getByLabel("Vault name").fill("Personal");
+		await popup.getByLabel("Vault name").blur();
+		await expect(popup.getByTestId("active-vault-label")).toHaveText("Personal");
+
+		await desktopConnect();
+		const shown = await linkFromSettings(popup);
+		expect(await desktopSymbols()).toBe(shown);
+		await popup.getByRole("button", { name: "They match" }).click();
+		await desktopApprove();
+
+		const offer = popup.locator("form").filter({ hasText: "Sync with the desktop app" });
+		await expect(offer).toContainText('"Personal (before linking)"');
+		await expect(offer.getByRole("radio")).toHaveCount(0);
+		await offer.getByLabel("Master password").fill(DESKTOP_PW);
+		await offer.getByRole("button", { name: "Sync", exact: true }).click();
+		await expect(popup.getByText("This vault syncs with the desktop app.")).toBeVisible({
+			timeout: 30_000,
+		});
+
+		const inVault = async (page: Page) => {
+			await page.getByRole("button", { name: "Go to vault" }).click();
+			await expect(page.getByText("Browser only").first()).toBeVisible();
+			await expect(page.getByTestId("active-vault-label")).toHaveText("Test 1");
+		};
+		await inVault(popup);
+		await expect
+			.poll(() => desktopEntryText("Browser only"), { timeout: 30_000 })
+			.toContain("note.txt");
+
+		// A named vault used to lose everything here: the reopened popup published its name over an
+		// empty snapshot, and with the link down on a worker like this one, nothing brought it back.
+		await popup.close();
+		const again = await ext.popup();
+		await inVault(again);
+		await again.getByText("Browser only").first().click();
+		await expect(again.getByText("note.txt")).toBeVisible();
+
+		const registry = (await ext.stored("vault.registry")) as {
+			vaults: { label: string; setAsideAt?: number }[];
+		};
+		expect(registry.vaults.map((v) => [v.label, v.setAsideAt !== undefined])).toEqual([
+			["Personal", true],
+			["Test 1", false],
+		]);
+		// Back to the vault the rest of the suite expects open.
+		await desktopOpenVault("Vault 1");
+	});
+});
+
 // Last: it leaves the desktop with a second vault.
 test("a browser is linked to the vault that was open, not to every vault", async ({ ext }) => {
 	await desktopConnect();
@@ -236,8 +307,8 @@ test("a browser is linked to the vault that was open, not to every vault", async
 	expect(await desktopListedBrowsers()).toBe(linked);
 });
 
-// Piece 3: one browser vault, one desktop vault. After the test above, the desktop holds Vault 1
-// (open) and Second. docs/desktop-link-onboarding.md has the rule.
+// Piece 3: one browser vault, one desktop vault. After the tests above, the desktop holds Vault 1
+// (open), Test 1 and Second. docs/desktop-link-onboarding.md has the rule.
 test.describe("a link per vault", () => {
 	/** Link from the open setup screen and take the desktop's vault into a new browser vault. */
 	async function linkAndJoin(ext: { page: Page }) {
