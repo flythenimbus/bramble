@@ -403,6 +403,12 @@ test.describe("an empty desktop vault, linked from a browser vault that holds so
 		await expect
 			.poll(() => desktopEntryText("Browser only"), { timeout: 30_000 })
 			.toContain("note.txt");
+		// The removal waits a second for a merge in flight. Closing inside it is the next test.
+		await expect
+			.poll(
+				async () => ((await ext.stored("vault.registry")) as { vaults: unknown[] }).vaults.length,
+			)
+			.toBe(1);
 
 		// A named vault used to lose everything here: the reopened popup published its name over an
 		// empty snapshot, and with the link down on a worker like this one, nothing brought it back.
@@ -417,6 +423,45 @@ test.describe("an empty desktop vault, linked from a browser vault that holds so
 		expect(registry.vaults.map((v) => v.label)).toEqual(["Test 1"]);
 		expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(1);
 		// Back to the vault the rest of the suite expects open.
+		await desktopOpenVault("Vault 1");
+	});
+});
+
+test.describe("a window closed while the old vault is on its way out", () => {
+	test.use({ borrowsPipe: true });
+
+	test("leaves it whole and labelled, not a second vault under its old name", async ({ ext }) => {
+		await desktopCreateAnotherVault("Closed early");
+		await desktopUseLocalRelay();
+		await createVault(ext.page, ext.extensionId, BROWSER_PW);
+		const popup = await ext.popup();
+		await addLogin(popup, "Browser only");
+
+		await desktopConnect();
+		const shown = await linkFromSettings(popup);
+		expect(await desktopSymbols()).toBe(shown);
+		await popup.getByRole("button", { name: "They match" }).click();
+		await desktopApprove();
+		const offer = popup.locator("form").filter({ hasText: "Sync with the desktop app" });
+		await offer.getByLabel("Master password").fill(DESKTOP_PW);
+		await offer.getByRole("button", { name: "Sync", exact: true }).click();
+
+		// Marked, and inside the second the removal waits: close it now.
+		const vaults = async () =>
+			((await ext.stored("vault.registry")) as { vaults: { setAsideAt?: number }[] }).vaults;
+		await expect
+			.poll(async () => (await vaults()).some((v) => v.setAsideAt), { intervals: [20] })
+			.toBe(true);
+		await popup.close();
+
+		expect(await vaults()).toHaveLength(2);
+		expect((await vaults()).filter((v) => v.setAsideAt)).toHaveLength(1);
+		expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(2);
+
+		const again = await ext.popup();
+		await again.getByRole("button", { name: "Go to vault" }).click();
+		await expect(again.getByText("Browser only").first()).toBeVisible({ timeout: 15_000 });
+		await expect(again.getByTestId("active-vault-label")).toHaveText("Closed early");
 		await desktopOpenVault("Vault 1");
 	});
 });

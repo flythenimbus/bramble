@@ -465,11 +465,13 @@ export function useDesktopLink({
 						(placed.heldBack.items.length > 0 ||
 							brought.leftBehind.alias ||
 							brought.leftBehind.backupTargets);
+					// Marked first: the removal waits a second, and a window closed in it must not leave a
+					// second vault under the old name.
+					await now.registry.setAside(oldId);
 					const removed =
 						removal !== null &&
 						!asking &&
 						(await now.actions.deleteCarriedVault(oldId, removal.copied).catch(() => false));
-					if (!removed) await now.registry.setAside(oldId);
 					setCombined({
 						heldBack: placed.heldBack,
 						uncarried: carry.uncarried,

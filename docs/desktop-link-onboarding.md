@@ -189,6 +189,8 @@ mine unless marked otherwise.
 - **Look-alikes the dedup holds back are asked about first.** They hold something the desktop's entry
   lacks, so the old vault stays set aside until the answer: "Copy them anyway" or "Leave them out", and
   then it goes. Closing the screen unanswered leaves it set aside, so nothing goes without a choice.
+- **It is marked as the old vault before the removal's wait,** so a window closed in that second
+  leaves it whole and labelled, for the user to delete, rather than a second vault under its old name.
 - **A kept vault stays in the vault list,** locked, under its own master password and in its own sync
   group, until the user deletes it. It is labelled so it is obviously the old one, for example
   "Personal (before linking)". Names sync across the group, so this label must be local to this

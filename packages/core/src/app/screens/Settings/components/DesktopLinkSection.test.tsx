@@ -338,7 +338,9 @@ describe("when both sides have entries", () => {
 	it("removes the old vault unless the box is ticked", async () => {
 		twoVaults();
 		await choose(/combine into one/i);
-		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined", "import", "removeOld"]));
+		await waitFor(() =>
+			expect(h.steps).toEqual(["join", "attach:joined", "import", "setAside", "removeOld"]),
+		);
 	});
 
 	it("keeps the old vault when the box is ticked", async () => {
