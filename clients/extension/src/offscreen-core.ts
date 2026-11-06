@@ -259,6 +259,10 @@ async function startSyncSessions(opts: RosterSyncMsg, bridge: SyncBridge): Promi
 		peerSource: makeLinkPeerSource({
 			send: (frame) => bridge.linkSend?.(frame) ?? Promise.resolve(false),
 			subscribe: (onFrame) => subscribeLinkFrames("sync", onFrame),
+			subscribeDown: (onDown) => {
+				linkDownSinks.add(onDown);
+				return () => linkDownSinks.delete(onDown);
+			},
 		}),
 	});
 	blobSession = await startBlobSync({
@@ -298,7 +302,13 @@ function subscribeLinkFrames(room: string, onFrame: (frame: string) => void): ()
 	return () => sinks.delete(onFrame);
 }
 /** The same for its file frames and pokes. */
-const linkBlobSinks = new Set<{ frame(stream: number, frame: string): void; poke(): void }>();
+const linkBlobSinks = new Set<{
+	frame(stream: number, frame: string): void;
+	poke(): void;
+	down(): void;
+}>();
+/** Who to tell when the background says the link has gone. */
+const linkDownSinks = new Set<() => void>();
 
 /**
  * The pairing approval the host is waiting on, if any. It lives here rather than in the popup
@@ -891,6 +901,10 @@ export async function handleHostMessage(type: string, payload: unknown): Promise
 			}
 			case "LINK_BLOB_POKE":
 				for (const sink of linkBlobSinks) sink.poke();
+				return { ok: true };
+			case "LINK_DOWN":
+				for (const sink of linkDownSinks) sink();
+				for (const sink of linkBlobSinks) sink.down();
 				return { ok: true };
 			case "SYNC_ROSTER_SYNC": {
 				const opts = RosterSyncMsgSchema.parse(payload);

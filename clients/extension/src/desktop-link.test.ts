@@ -25,6 +25,10 @@ const h = vi.hoisted(() => ({
 	relaysClosed: 0,
 	/** Whether the background says it cannot open a pipe of its own. */
 	needed: true,
+	/** Whether the background wants a pipe for its held link. */
+	wanted: false,
+	/** What this page listens to from the rest of the extension. */
+	listeners: [] as ((message: { type?: string }) => void)[],
 }));
 
 // No `connectNative` on this mock unless a case turns the binding on: the gate must not test for
@@ -33,10 +37,14 @@ vi.mock("./platform-api", () => ({
 	api: {
 		runtime: {
 			getManifest: () => ({ permissions: h.permissions, optional_permissions: h.optional }),
+			onMessage: {
+				addListener: (cb: (message: { type?: string }) => void) => h.listeners.push(cb),
+			},
 			sendMessage: async (msg: Record<string, unknown>) => {
 				h.sent.push(msg);
 				// Asked before lending; the background cannot open its own pipe here.
 				if (msg.type === "DESKTOP_LINK_TRANSPORT_NEEDED") return { ok: true, data: h.needed };
+				if (msg.type === "DESKTOP_LINK_PIPE_WANTED") return { ok: true, data: h.wanted };
 				return h.reply;
 			},
 			get connectNative() {
@@ -98,6 +106,8 @@ beforeEach(() => {
 	h.relays = [];
 	h.relaysClosed = 0;
 	h.needed = true;
+	h.wanted = false;
+	h.listeners = [];
 });
 
 /** The shipping Chromium manifest: declared optional, so it is asked for at connect time. */
@@ -250,6 +260,61 @@ describe("a pipe lent to the background", () => {
 
 		expect(h.relays).toHaveLength(1);
 		expect(named("DESKTOP_LINK_START")).toEqual(h.relays);
+	});
+});
+
+// A worker from before the permission grant takes a minute to be replaced. A page that is open can
+// carry the link until then, so sync comes back the moment someone looks.
+describe("lending the worker a pipe for its link", () => {
+	const lentFor = () => h.sent.filter((m) => m.type === "DESKTOP_LINK_LEND_PIPE");
+
+	it("lends one when this page opens, if the worker wants it", async () => {
+		h.binding = true;
+		h.wanted = true;
+		const { lendPipeToWorker } = await import("./desktop-link");
+
+		lendPipeToWorker();
+
+		await vi.waitFor(() => expect(lentFor()).toHaveLength(1));
+		expect(h.relays).toEqual([`link-native-proxy:${String(lentFor()[0]?.via)}`]);
+	});
+
+	it("opens nothing when it does not, which is every worker that can open its own", async () => {
+		h.binding = true;
+		const { lendPipeToWorker } = await import("./desktop-link");
+
+		lendPipeToWorker();
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(h.relays).toEqual([]);
+		expect(lentFor()).toEqual([]);
+	});
+
+	it("lends another when the worker loses the one it had, and closes that one", async () => {
+		h.binding = true;
+		h.wanted = true;
+		vi.resetModules();
+		const { lendPipeToWorker } = await import("./desktop-link");
+		lendPipeToWorker();
+		await vi.waitFor(() => expect(lentFor()).toHaveLength(1));
+
+		for (const listener of h.listeners) listener({ type: "DESKTOP_LINK_PIPE_LOST" });
+
+		await vi.waitFor(() => expect(lentFor()).toHaveLength(2));
+		expect(h.relaysClosed).toBe(1);
+	});
+
+	it("ignores everything else the extension says", async () => {
+		h.binding = true;
+		const { lendPipeToWorker } = await import("./desktop-link");
+		lendPipeToWorker();
+		await new Promise((r) => setTimeout(r, 0));
+		const asked = h.sent.length;
+
+		for (const listener of h.listeners) listener({ type: "SYNC_EVENT" });
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(h.sent.length).toBe(asked);
 	});
 });
 

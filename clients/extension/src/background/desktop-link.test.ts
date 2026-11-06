@@ -62,6 +62,10 @@ const h = vi.hoisted(() => ({
 	/** Alarms armed, by name. */
 	alarms: new Map<string, unknown>(),
 	alarmsCreated: 0,
+	/** What this worker told the extension's other contexts, in order. */
+	broadcast: [] as { type?: string }[],
+	/** How many times sync was told the link has gone. */
+	linkDowns: 0,
 }));
 
 /** The native port chrome.runtime.connectNative hands back. */
@@ -111,6 +115,9 @@ vi.mock("../platform-api", () => ({
 				return h.hasBinding ? nativePort : undefined;
 			},
 			lastError: undefined,
+			sendMessage: async (message: { type?: string }) => {
+				h.broadcast.push(message);
+			},
 			// The module now guards its proxy port with isExtensionSender, which resolves the
 			// extension origin at import time. An https stand-in, not a real chrome-extension://
 			// URL: Node gives non-special schemes an opaque "null" origin, which would reject
@@ -193,6 +200,9 @@ vi.mock("./offscreen-client", () => ({
 			case "LINK_CLOSE":
 				h.linkCloses++;
 				return { ok: true, data: undefined };
+			case "LINK_DOWN":
+				h.linkDowns++;
+				return { ok: true, data: undefined };
 			default:
 				return { ok: false, error: `unexpected ${msg.type}` };
 		}
@@ -257,6 +267,8 @@ async function load() {
 	h.permissionChecks = 0;
 	h.alarms.clear();
 	h.alarmsCreated = 0;
+	h.broadcast.length = 0;
+	h.linkDowns = 0;
 	h.meta = {
 		"vault.registry": {
 			vaults: [
@@ -1542,9 +1554,26 @@ describe("pairing borrows the page's native transport", () => {
 			});
 
 			it("sets an alarm, since nothing else may wake the worker that can open one", async () => {
+				// Past the 30 to 60 s Chromium takes to stop an idle worker. Any sooner and it could only
+				// wake this worker again and put that off.
 				const mod = await load();
 				await linkedThenPageGone(mod);
-				expect([...h.alarms.values()]).toEqual([{ periodInMinutes: 1 }]);
+				expect([...h.alarms.values()]).toEqual([{ delayInMinutes: 1.05, periodInMinutes: 1.05 }]);
+			});
+
+			it("asks any page that is open for a pipe", async () => {
+				const mod = await load();
+				await linkedThenPageGone(mod);
+				expect(h.broadcast).toContainEqual({ type: "DESKTOP_LINK_PIPE_LOST" });
+			});
+
+			it("tells sync the link has gone, so it stops asking this worker for the vault", async () => {
+				const mod = await load();
+				h.hasBinding = false;
+				await mod.openSyncLink(() => {});
+				h.linkDowns = 0;
+				await linkedThenPageGone(mod);
+				expect(h.linkDowns).toBeGreaterThan(0);
 			});
 
 			it("sets it once: creating it again would keep putting off its next fire", async () => {
@@ -1557,6 +1586,115 @@ describe("pairing borrows the page's native transport", () => {
 				await expect(mod.sendSyncFrame("frame")).resolves.toBe(false);
 
 				expect(h.alarmsCreated).toBe(armed);
+			});
+		});
+
+		// Replacing the worker takes a minute, and someone with a window open is looking at it now.
+		describe("a page lending a pipe for the open vault's link", () => {
+			const linked = () => {
+				h.hasBinding = false;
+			};
+
+			it("is wanted when this worker cannot open one and holds none", async () => {
+				const mod = await load();
+				linked();
+				await expect(mod.pipeWanted()).resolves.toBe(true);
+			});
+
+			it("is not wanted by a worker that can open its own", async () => {
+				const mod = await load();
+				await expect(mod.pipeWanted()).resolves.toBe(false);
+			});
+
+			it("is not wanted with nothing linked, or the permission taken away", async () => {
+				const mod = await load();
+				linked();
+				h.permitted = false;
+				await expect(mod.pipeWanted()).resolves.toBe(false);
+				h.permitted = true;
+				h.stored = {};
+				await expect(mod.pipeWanted()).resolves.toBe(false);
+			});
+
+			it("holds the vault's link over it, on a worker with no pipe of its own", async () => {
+				const mod = await load();
+				linked();
+				const page = lend(EXT_SENDER);
+
+				const holding = mod.holdOverLentPipe(page.id);
+				await vi.waitFor(() =>
+					expect(page.sent.some((m) => (m.frame as { kind?: string })?.kind === "hello")).toBe(
+						true,
+					),
+				);
+				page.deliver({ ok: true, done: true, message: "kk2" });
+
+				await expect(holding).resolves.toBe(true);
+				expect(mod.heldVault()).toBe("v1");
+				await expect(mod.pipeWanted()).resolves.toBe(false);
+				expect(h.connects).toBe(0);
+			});
+
+			it("is wanted again when the page that lent it closes", async () => {
+				const mod = await load();
+				linked();
+				const page = lend(EXT_SENDER);
+				const holding = mod.holdOverLentPipe(page.id);
+				await vi.waitFor(() => expect(page.sent.length).toBeGreaterThan(2));
+				page.deliver({ ok: true, done: true, message: "kk2" });
+				await holding;
+
+				page.drop();
+
+				await vi.waitFor(() =>
+					expect(h.broadcast).toContainEqual({ type: "DESKTOP_LINK_PIPE_LOST" }),
+				);
+				await expect(mod.pipeWanted()).resolves.toBe(true);
+			});
+
+			it("drops a link the app refuses in a request on a pipe of its own", async () => {
+				const mod = await load();
+				linked();
+				const asked = lend(EXT_SENDER, "asked");
+				const asking = mod.askDesktop({ op: "vaultSummary" }, asked.id);
+				await vi.waitFor(() => expect(asked.sent.length).toBeGreaterThan(2));
+				asked.deliver({ ok: true, done: true, message: "kk2" });
+				await vi.waitFor(() =>
+					expect(
+						asked.sent.some((m) => typeof (m.frame as { sealed?: unknown })?.sealed === "string"),
+					).toBe(true),
+				);
+				asked.deliver({
+					sealed: `sealed:${JSON.stringify({ ok: false, error: "not linked to this app" })}`,
+				});
+
+				await asking.catch(() => {});
+				await vi.waitFor(() => expect(h.stored["desktopLink:v1"]).toBeUndefined());
+			});
+
+			it("waits for a request on a pipe of its own, or that connection would displace this one", async () => {
+				// The app keys a browser's pushes by its static key. If a one-off request connects after
+				// the held link and then closes, the held link is left receiving nothing.
+				const mod = await load();
+				linked();
+				const asked = lend(EXT_SENDER, "asked");
+				const asking = mod.askDesktop({ op: "vaultSummary" }, asked.id);
+				await vi.waitFor(() => expect(asked.sent.length).toBeGreaterThan(2));
+
+				const page = lend(EXT_SENDER, "held");
+				const holding = mod.holdOverLentPipe(page.id);
+				await new Promise((r) => setTimeout(r, 30));
+				expect(page.sent.some((m) => (m.frame as { kind?: string })?.kind === "hello")).toBe(false);
+
+				asked.deliver({ ok: false, error: "refused" });
+				await asking.catch(() => {});
+				await vi.waitFor(() =>
+					expect(page.sent.some((m) => (m.frame as { kind?: string })?.kind === "hello")).toBe(
+						true,
+					),
+				);
+				page.deliver({ ok: true, done: true, message: "kk2" });
+				await holding;
 			});
 		});
 

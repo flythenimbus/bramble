@@ -313,6 +313,10 @@ async function syncPeer(
 		lastFullAt: 0,
 	};
 	peers.set(peerPub, entry);
+	peer.onGone?.(() => {
+		if (peers.get(peerPub) === entry) peers.delete(peerPub);
+		entry.close();
+	});
 	opts.report(`synced with ${peerPub.slice(0, 8)} ✅`);
 
 	const first = await localEnvelope(opts);

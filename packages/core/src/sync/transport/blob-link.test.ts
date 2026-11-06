@@ -182,6 +182,41 @@ describe("files over the desktop link", () => {
 		session.stop();
 	});
 
+	it("ends its stream at once when told the link has gone, and opens a fresh one when poked", async () => {
+		// Its heartbeat could be 30 s away, and that one send would keep the extension's worker awake.
+		const sends: number[] = [];
+		let handlers: Parameters<BlobLinkDialerTransport["subscribe"]>[0] | null = null;
+		const offered: { channel: { send(d: string): void }; onGone?: (cb: () => void) => void }[] = [];
+		const source = blobLinkDialer({
+			up: async () => true,
+			send: async (stream) => {
+				sends.push(stream);
+				return true;
+			},
+			subscribe: (h) => {
+				handlers = h;
+				return () => {};
+			},
+		});
+		const session = await source({
+			onPeer: (peer: unknown) => offered.push(peer as (typeof offered)[number]),
+			report: () => {},
+		} as unknown as Parameters<typeof source>[0]);
+		let gone = 0;
+		offered[0]?.onGone?.(() => gone++);
+
+		(handlers as unknown as { down(): void }).down();
+
+		expect(gone).toBe(1);
+		offered[0]?.channel.send("heartbeat");
+		await new Promise((r) => setTimeout(r, 0));
+		expect(sends).toEqual([]);
+
+		(handlers as unknown as { poke(): void }).poke();
+		expect(offered).toHaveLength(2);
+		session.stop();
+	});
+
 	it("never read a late frame from a superseded stream as a new peer", async () => {
 		const offered: string[] = [];
 		const link = simulatedLink();

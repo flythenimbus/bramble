@@ -407,6 +407,7 @@ export async function startBlobSync(opts: BlobSyncOptions): Promise<BlobSyncSess
 		// A reconnect over the same path supersedes; the other path, if any, is left alone.
 		peers.get(key)?.close();
 		peers.set(key, peer);
+		peerSession.onGone?.(() => peer.close());
 		opts.report(`file peer ${peerPub.slice(0, 8)} connected`);
 		await peer.send(haveMessage());
 

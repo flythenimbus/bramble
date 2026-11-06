@@ -385,6 +385,52 @@ describe("what each tick sends", () => {
 		expect(authed).toEqual(["aaaa"]);
 	});
 
+	it("drops a peer whose source says it has gone, and stops reading the vault for it", async () => {
+		// Each read reaches the extension's worker, and that worker must go idle to be replaced.
+		const ab = pipe("aaaa", "bbbb");
+		await device("aaaa", [ab.aaaa!], { payload: "a" });
+		let gone: () => void = () => {};
+		let reads = 0;
+		let closes = 0;
+		sessions.push(
+			await startRosterSync({
+				relayUrl: "wss://relay.invalid",
+				groupKeyB64: "unused",
+				devicePrivB64: "priv-bbbb",
+				devicePubB64: "bbbb",
+				roster: rosterOf(["aaaa", "bbbb", "cccc"]),
+				wasm: identityWasm(),
+				report: () => {},
+				fetchLocalPayload: async () => {
+					reads++;
+					return "b";
+				},
+				pushRemotePayload: async () => {},
+				peerSource: async ({ onPeer }) => {
+					onPeer({
+						...ab.bbbb!,
+						close: () => {
+							closes++;
+						},
+						onGone: (cb) => {
+							gone = cb;
+						},
+					});
+					return { stop() {} };
+				},
+			}),
+		);
+		await vi.advanceTimersByTimeAsync(TICK);
+		expect(reads).toBeGreaterThan(0);
+
+		gone();
+		const before = reads;
+		await vi.advanceTimersByTimeAsync(TICK * 3);
+
+		expect(reads).toBe(before);
+		expect(closes).toBe(1);
+	});
+
 	it("says which session each peer authenticated on", async () => {
 		// Over the desktop link the session is named by the browser's link key, not its roster key:
 		// the desktop pins an old link to the vault the browser just proved it is in.

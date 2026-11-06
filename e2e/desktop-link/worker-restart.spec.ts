@@ -23,8 +23,8 @@ import {
 // detaches, and watches from outside: the browser's list of targets, and the app's connected browsers.
 
 const PORT = 9377;
-/** Past the worker going idle (sync gives up on the link in about 25 s) and the alarm after it. */
-const RECOVERS_WITHIN_S = 200;
+/** Past the worker going idle and the alarm after it: about 60 s, with room to spare. */
+const RECOVERS_WITHIN_S = 120;
 
 test("the link comes back by itself once the page that lent the pipe has closed", async ({
 	desktop,

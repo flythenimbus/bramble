@@ -26,8 +26,12 @@ export interface BlobLinkDialerTransport {
 	/** Whether a link is up to an app that speaks files. */
 	up(): Promise<boolean>;
 	send(stream: number, frame: string): Promise<boolean>;
-	/** Frames and pokes from the app. Returns an unsubscribe. */
-	subscribe(handlers: { frame(stream: number, frame: string): void; poke(): void }): () => void;
+	/** Frames and pokes from the app, and word that the link has gone. Returns an unsubscribe. */
+	subscribe(handlers: {
+		frame(stream: number, frame: string): void;
+		poke(): void;
+		down(): void;
+	}): () => void;
 }
 
 /** One connection from a browser, as the app's link reports it. */
@@ -64,6 +68,7 @@ const newStreamId = (): number => crypto.getRandomValues(new Uint32Array(1))[0] 
 export function blobLinkDialer(transport: BlobLinkDialerTransport): PeerSource {
 	return async ({ onPeer, report }) => {
 		let live: { stream: number; push: (frame: string) => void } | null = null;
+		let tellGone: (() => void) | null = null;
 		let stopped = false;
 
 		const open = () => {
@@ -92,6 +97,9 @@ export function blobLinkDialer(transport: BlobLinkDialerTransport): PeerSource {
 				close: () => {
 					if (live?.stream === stream) live = null;
 				},
+				onGone: (cb) => {
+					tellGone = cb;
+				},
 			} satisfies PeerSession);
 		};
 
@@ -101,6 +109,12 @@ export function blobLinkDialer(transport: BlobLinkDialerTransport): PeerSource {
 				if (live?.stream === stream) live.push(frame);
 			},
 			poke: open,
+			down: () => {
+				live = null;
+				const gone = tellGone;
+				tellGone = null;
+				gone?.();
+			},
 		});
 		if (await transport.up()) open();
 

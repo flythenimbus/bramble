@@ -164,6 +164,29 @@ async function withNativeProxy<T>(run: (via?: string) => Promise<T>): Promise<T>
  * the app forgets its half when this pipe closes. */
 let linkProxy: ReturnType<typeof openNativeProxy> = null;
 
+/**
+ * Carry the worker's link while this page is open, if it cannot open a pipe itself.
+ *
+ * A worker from before the permission grant has to go idle and be replaced, which takes a minute.
+ * Someone who opens a window is looking now, so it lends a pipe at once, and again whenever the
+ * worker loses the one it had. See docs/desktop-link-optional-permission.md.
+ */
+export function lendPipeToWorker(): void {
+	const lend = async () => {
+		if (!(await dispatch<boolean>("DESKTOP_LINK_PIPE_WANTED").catch(() => false))) return;
+		releaseLinkProxy();
+		linkProxy = openNativeProxy();
+		await linkProxy?.ready;
+		if (linkProxy) {
+			await dispatch("DESKTOP_LINK_LEND_PIPE", { via: linkProxy.via }).catch(() => {});
+		}
+	};
+	void lend();
+	api.runtime.onMessage.addListener((message: { type?: string }) => {
+		if (message?.type === "DESKTOP_LINK_PIPE_LOST") void lend();
+	});
+}
+
 function releaseLinkProxy(): void {
 	linkProxy?.close();
 	linkProxy = null;

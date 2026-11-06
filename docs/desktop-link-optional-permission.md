@@ -205,20 +205,34 @@ binding gets out of the way:
 
 - It stops its keepalive. Each tick reads storage and checks the permission, both API calls, so
   this alone once kept the worker, and so the link, down until the browser restarted.
-- It sets one alarm, `desktop-link-wake`, every minute until a worker can open a pipe. An app cannot
-  reach a browser that holds no pipe, so nothing else is sure to wake the next worker. Set once per
-  worker, because creating it again puts off its next fire. The fire does nothing itself: a worker's
-  start is what opens the link.
-- Sync goes quiet around it. The file session stops sending on the link once a send fails, until the
-  app pokes, instead of heartbeating every 30 seconds, the same length as the idle limit. The browser
-  remembers the app's sync key per link (`linkAppSyncKey:<link's public key>`), so with the pipe down
-  the relay still knows the app and skips it, instead of a handshake the app refuses on every
-  announce.
+- It tells sync the link has gone (`LINK_DOWN`), and sync drops the app at once, rather than reading
+  the vault from this worker every 4 seconds until the peer times out. The file session stops
+  sending too, instead of heartbeating every 30 seconds, the same length as the idle limit, and a
+  send that fails ends its stream anyway. The app pokes when it is back. The browser remembers the
+  app's sync key per link (`linkAppSyncKey:<link's public key>`), so with the pipe down the relay
+  still knows the app and skips it, instead of a handshake the app refuses on every announce.
+- It sets one alarm, `desktop-link-wake`, every 63 seconds until a worker can open a pipe. An app
+  cannot reach a browser that holds no pipe, so nothing else is sure to wake the next worker. Chromium
+  stops an idle worker 30 to 60 seconds after its last event, so a fire any sooner could only wake
+  this one again. Set once per worker, because creating it again puts off its next fire. The fire
+  does nothing itself: a worker's start is what opens the link.
 
-Measured in real Chromium, the link is back about two minutes after the page closes, with nothing
-for the user to do (`e2e/desktop-link/worker-restart.spec.ts`). Two things can hold it up. Sync with
-another device carrying on over the relay keeps waking the worker. And **DevTools open on the worker
-stops it going idle at all**, so a person watching its console will not see this recover.
+Measured in real Chromium, the link is back about 60 seconds after the page closes, with nothing for
+the user to do (`e2e/desktop-link/worker-restart.spec.ts`). That is close to the floor. The offscreen
+document cannot help: it has no `connectNative`, and neither does an extension iframe inside it
+(checked in Chromium 151), so only a full page or the worker can hold a pipe.
+
+**A window that is open carries the link in the meantime.** Someone who opens one is looking now, so
+each extension page asks on load whether the worker wants a pipe (`DESKTOP_LINK_PIPE_WANTED`), and
+lends one if so. The worker also says when it loses the one it had (`DESKTOP_LINK_PIPE_LOST`), so
+another open page can take over. Only a worker that cannot open a pipe ever wants one, so this can
+never displace a connection a worker holds itself. A request on a pipe of its own finishes before
+the held link connects, since the app keys a browser's pushes by its static key and that request
+would otherwise take them and close.
+
+Two things can hold the worker up: sync with another device carrying on over the relay keeps waking
+it, and **DevTools open on the worker stops it going idle at all**, so a person watching its console
+will not see it replaced. A window opened then still brings the link back.
 
 ## Execution plan
 

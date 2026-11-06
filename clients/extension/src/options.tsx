@@ -4,7 +4,7 @@ import "@core/styles/index.css";
 import { extensionAutofill } from "./autofill";
 import { extensionClipboard } from "./clipboard";
 import { extensionCrypto } from "./crypto";
-import { extensionDesktopLink } from "./desktop-link";
+import { extensionDesktopLink, lendPipeToWorker } from "./desktop-link";
 import { extensionFiles } from "./files";
 import { extensionShell, extensionTarget } from "./shell";
 import { extensionStorage } from "./storage";
@@ -13,6 +13,7 @@ import { connectViewPort } from "./view-port";
 // Hold a port for this view's lifetime so "Immediate" auto-lock can lock the vault when
 // the last extension view closes (background/view-lock.ts). No-op in other auto-lock modes.
 connectViewPort();
+lendPipeToWorker();
 
 const platform: Platform = {
 	target: extensionTarget,

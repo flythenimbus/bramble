@@ -36,6 +36,9 @@ export interface PeerSession {
 	 * A plain close lets its next hello reconnect, which for a skipped peer is a relay round trip
 	 * every few seconds. */
 	skip?(): void;
+	/** Hear that the peer has gone, from a source that can tell. A relay peer has no such signal
+	 * and is dropped for going silent; a local one's host knows the moment its pipe dies. */
+	onGone?(cb: () => void): void;
 }
 
 export interface MeshOptions {

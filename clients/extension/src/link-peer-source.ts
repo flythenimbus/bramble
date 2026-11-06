@@ -31,6 +31,8 @@ export interface LinkTransport {
 	send: (frame: string) => Promise<boolean>;
 	/** Register the sink for frames the app sends. Returns an unsubscribe. */
 	subscribe: (onFrame: (frame: string) => void) => () => void;
+	/** Hear that the link has gone, so sync stops talking to it. Returns an unsubscribe. */
+	subscribeDown?: (onDown: () => void) => () => void;
 }
 
 export function makeLinkPeerSource(
@@ -41,6 +43,7 @@ export function makeLinkPeerSource(
 ): PeerSource {
 	return async ({ onPeer, report }) => {
 		let deliver: ((frame: string) => void) | null = null;
+		let tellGone: (() => void) | null = null;
 		let declinedUntil = 0;
 		let stopped = false;
 
@@ -63,10 +66,15 @@ export function makeLinkPeerSource(
 				initiator: true,
 				channel,
 				// Forgets the app as a SYNC peer without closing the link, which also carries
-				// autofill delegation. Losing sync must not cost the user fill.
+				// autofill delegation. Losing sync must not cost the user fill. Only this peer's own:
+				// one that has gone is no refusal, and may close after the next has been offered.
 				close: () => {
+					if (deliver !== push) return;
 					deliver = null;
 					declinedUntil = Date.now() + REOFFER_AFTER_MS;
+				},
+				onGone: (cb) => {
+					tellGone = cb;
 				},
 			} satisfies PeerSession);
 		};
@@ -93,11 +101,19 @@ export function makeLinkPeerSource(
 
 		if (eager) offer();
 
+		const unsubscribeDown = transport.subscribeDown?.(() => {
+			deliver = null;
+			const gone = tellGone;
+			tellGone = null;
+			gone?.();
+		});
+
 		return {
 			stop() {
 				stopped = true;
 				deliver = null;
 				unsubscribe();
+				unsubscribeDown?.();
 			},
 		};
 	};

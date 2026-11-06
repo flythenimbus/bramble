@@ -705,7 +705,6 @@ export async function confirmDesktopLink(id: string, matches: boolean): Promise<
 export async function askDesktop(request: Record<string, unknown>, via?: string): Promise<any> {
 	const source = await linkSource();
 	if (!source) throw new Error("Not linked to the desktop app.");
-	const state = source.state;
 
 	// Ride the held link when sync has one open. A second connection would displace it as the
 	// target for the app's pushes, and closing this short-lived one would take that queue with
@@ -713,6 +712,20 @@ export async function askDesktop(request: Record<string, unknown>, via?: string)
 	const link = await ensureHeld();
 	if (link) return askOverHeld(link, request);
 
+	const asked = askOverOwnPipe(source, request, via);
+	oneOffRequests = Promise.allSettled([oneOffRequests, asked]);
+	return asked;
+}
+
+/** One-off requests on pipes of their own, in flight: see connectHeld. */
+let oneOffRequests: Promise<unknown> = Promise.resolve();
+
+async function askOverOwnPipe(
+	source: LinkSource,
+	request: Record<string, unknown>,
+	via?: string,
+): Promise<any> {
+	const state = source.state;
 	// A pipe this worker can open, or one a page has lent it. The second case is not an edge:
 	// everything the UI does immediately AFTER pairing runs on the worker that just paired, which
 	// still has no binding of its own and will not until it restarts. Claiming the desktop's sync
@@ -1014,6 +1027,9 @@ function stopKeepalive(): void {
 
 /** Fires only to wake a worker: its start is what opens the link. */
 const LINK_WAKE_ALARM = "desktop-link-wake";
+/** Past the 30 to 60 s Chromium takes to stop an idle worker. Any sooner and the fire could only
+ * wake this worker again and put that off. */
+const LINK_WAKE_MINUTES = 1.05;
 /** Once per worker: creating it again would keep putting off its next fire. */
 let wakeArmed = false;
 
@@ -1026,10 +1042,32 @@ let wakeArmed = false;
  */
 async function awaitNextWorker(): Promise<void> {
 	stopKeepalive();
-	if (wakeArmed) return;
 	if (typeof api.runtime.connectNative === "function" || !(await permitted())) return;
+	// Sync drops the app now, rather than asking this worker for the vault until it times out.
+	if (onSyncFrame) void offscreen("LINK_DOWN").catch(() => {});
+	// A page that is open can carry the link until then.
+	void api.runtime.sendMessage({ type: "DESKTOP_LINK_PIPE_LOST" }).catch(() => {});
+	if (wakeArmed) return;
 	wakeArmed = true;
-	await api.alarms.create(LINK_WAKE_ALARM, { periodInMinutes: 1 });
+	await api.alarms.create(LINK_WAKE_ALARM, {
+		delayInMinutes: LINK_WAKE_MINUTES,
+		periodInMinutes: LINK_WAKE_MINUTES,
+	});
+}
+
+/** Whether a page lending a pipe would bring the link up: this worker cannot open one, and holds
+ * none. Never true for a worker that can, so a page lends nothing to displace its connection. */
+export async function pipeWanted(): Promise<boolean> {
+	if (typeof api.runtime.connectNative === "function") return false;
+	if (inProgress || (held && !held.session.dead)) return false;
+	if (!(await currentLink())) return false;
+	return permitted();
+}
+
+/** Hold the link over the pipe a page lent, for as long as that page is open. */
+export async function holdOverLentPipe(via: string): Promise<boolean> {
+	linkWanted = true;
+	return (await ensureHeld(via)) !== null;
 }
 
 /** Route the app's sync frames to `onFrame`, and make sure the pipe is up to carry them. */
@@ -1112,13 +1150,13 @@ export async function sendBlobFrame(stream: number, frame: string): Promise<bool
 	return pushFrame(blobLinkUp() ? held : null, { op: "blob", stream, frame });
 }
 
-/** The held link, opening one if sync is running and there is none. */
-async function ensureHeld(): Promise<HeldLink | null> {
+/** The held link, opening one if sync is running and there is none, over `via` if a page lent it. */
+async function ensureHeld(via?: string): Promise<HeldLink | null> {
 	if (held && !held.session.dead) return held;
 	// A connect begun for another link drops itself; this one is for the link wanted now.
 	if (!connecting || connectingGen !== linkGen) {
 		connectingGen = linkGen;
-		const attempt = connectHeld().finally(() => {
+		const attempt = connectHeld(via).finally(() => {
 			if (connecting === attempt) connecting = null;
 		});
 		connecting = attempt;
@@ -1128,9 +1166,15 @@ async function ensureHeld(): Promise<HeldLink | null> {
 
 let connectingGen = -1;
 
-async function connectHeld(): Promise<HeldLink | null> {
+async function connectHeld(via?: string): Promise<HeldLink | null> {
 	if (held) await dropHeld();
 	if (!linkWanted) return null; // nothing wants the pipe held open
+	// The app keys a browser's pushes by its static key: a request on a pipe of its own connecting
+	// after this link would take them, and closing would leave this link receiving nothing.
+	await Promise.race([
+		oneOffRequests,
+		new Promise((resolve) => setTimeout(resolve, ASK_TIMEOUT_MS)),
+	]);
 
 	const gen = linkGen;
 	const source = await linkSource();
@@ -1139,9 +1183,10 @@ async function connectHeld(): Promise<HeldLink | null> {
 	if (!source) return null;
 	const state = source.state;
 	// Revoked while the keepalive was live, or the page lending this worker a pipe has gone. Without
-	// this the constructor below calls an undefined connectNative and throws a TypeError into
-	// whatever happened to be awaiting.
-	if (!(await canOpenNativePipe())) {
+	// this a new NativeSession calls an undefined connectNative and throws a TypeError into whatever
+	// happened to be awaiting.
+	const session = await pipeFor(via);
+	if (!session) {
 		await awaitNextWorker();
 		return null;
 	}
@@ -1150,7 +1195,6 @@ async function connectHeld(): Promise<HeldLink | null> {
 		remotePublicKey: state.appPublicKey,
 	})) as { sessionId: number; message: string };
 
-	const session = new NativeSession();
 	// Inbound frames wait on this: the app may push before this side has read the handshake's last
 	// message, and a frame dropped then leaves Noise out of step for the life of the link.
 	let transportReady!: () => void;
@@ -1191,7 +1235,10 @@ async function connectHeld(): Promise<HeldLink | null> {
 	transportReady();
 	session.onDead(() => {
 		// Only if it is still the current link: a rebuild may already have replaced it.
-		if (held === link) held = null;
+		const wasHeld = held === link;
+		if (wasHeld) held = null;
+		// Closed with the page that lent it: ask another, or wait for the next worker.
+		if (wasHeld && session instanceof ProxiedSession) void ensureHeld().catch(() => {});
 	});
 	// What the app speaks, asked before the link is published so no other request can race the
 	// answer. An app from before caps answers with an error, and gets no file frames.
@@ -1564,6 +1611,19 @@ export async function transportNeeded(): Promise<boolean> {
 on(
 	"DESKTOP_LINK_TRANSPORT_NEEDED",
 	extensionOnly(async () => ({ ok: true, data: await transportNeeded() })),
+);
+
+on(
+	"DESKTOP_LINK_PIPE_WANTED",
+	extensionOnly(async () => ({ ok: true, data: await pipeWanted() })),
+);
+
+on(
+	"DESKTOP_LINK_LEND_PIPE",
+	extensionOnly(async (message) => {
+		const via = viaOf(message);
+		return { ok: true, data: via === undefined ? false : await holdOverLentPipe(via) };
+	}),
 );
 
 on(
