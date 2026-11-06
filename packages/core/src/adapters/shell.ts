@@ -270,6 +270,9 @@ export interface ShellAdapter {
 	/** Admission-sign an admitted device's canonical roster entry with THIS device's password-derived
 	 * admission key (see syncAdmissionPublicKey). Requires a fresh password entry. Paired with it. */
 	syncAdmissionSign?(password: string, saltB64: string, canonical: string): Promise<string>;
+	/** A device was just removed from the open vault's roster on this device. For a host with
+	 * something tied to that device, such as the desktop app's link to a browser. */
+	syncRosterChanged?(): Promise<void>;
 	/** Clear all of this device's local sync state (group, device keys, relay) so a freshly created
 	 * vault starts as an un-enrolled device — sync identity belongs to the vault, not the browser.
 	 * Optional: platforms with no local sync state may omit it. */

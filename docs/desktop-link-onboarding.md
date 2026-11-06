@@ -448,6 +448,13 @@ stays in it and says so.
   (locking the app closes it too, and the copy needs the vault unlocked anyway), when the
   connection it was confirmed on closes, after five minutes, or when the app quits. A pending
   browser's page reports do not make it the panel's fill target.
+- **Removed from the sync group.** A browser removed from a vault's roster, here or on another
+  device, loses its link to that vault too, so it can't keep filling from a vault it no longer syncs
+  with. The desktop learns which link is which device when a browser passes sync's check over the
+  link, keeps that per vault, and acts on a tombstone for that device id: when gossip merges, when
+  Settings removes a device, and when sync starts, so it also catches a browser that's offline. A
+  device merely missing from the roster keeps its link, since it may be from a group this vault has
+  left. A browser removed before it ever synced over the link keeps its link until it's removed here.
 - **Removed on the desktop.** A browser removed from a vault's list there is refused from then on.
   The desktop says so in a way the browser can tell apart from "another vault is open", and that
   browser vault drops its link and offers Link. The refusal is sealed after the handshake, so only
@@ -512,6 +519,7 @@ Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode
 - A desktop invite that fails opens no window, and Continue tries again; a failed claim offers Try
   again.
 - A browser removed on the desktop drops its link.
+- A browser removed from the sync group, here or on another device, drops its link.
 - Two browser profiles both pair with desk-a.
 - The permission is handed back only when the last link goes.
 - Upgrade: a single link reaches the vault that syncs with the desktop; with none, it is dropped.

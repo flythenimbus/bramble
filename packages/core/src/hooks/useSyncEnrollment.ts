@@ -456,8 +456,10 @@ export function useSyncEnrollment(deps: SyncEnrollmentDeps): SyncEnrollment {
 				groupKey: group.groupKey,
 				roster: revokeDevice(group.roster, deviceId, hlc),
 			});
+			// The removal stands either way, and the host looks again when sync next starts.
+			await shell.syncRosterChanged?.().catch(() => {});
 		},
-		[storage, syncKey, ensureClock],
+		[shell, storage, syncKey, ensureClock],
 	);
 
 	return { inviteDevice, joinGroup, removeDevice, ensureOwnEntrySigned };

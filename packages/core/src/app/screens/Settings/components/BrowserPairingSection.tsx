@@ -31,7 +31,7 @@ const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 /** Pair this app with a browser extension. Rendered only where the platform provides a
  * pairing adapter, which today is desktop. See docs/desktop-port.md. */
 export function BrowserPairingSection() {
-	const { pairing, storage } = usePlatform();
+	const { pairing, storage, shell } = usePlatform();
 	const { t } = useLingui();
 	const { inviteDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot, entries, files } = useVault();
@@ -81,6 +81,15 @@ export function BrowserPairingSection() {
 	useEffect(() => {
 		void refresh();
 	}, [refresh]);
+
+	// A browser removed from the sync group loses its link, so the list can change under this screen.
+	useEffect(
+		() =>
+			shell.onSyncEvent((e) => {
+				if (e.kind === "roster") void refresh();
+			}),
+		[shell, refresh],
+	);
 
 	// Close the dialog when the app's link window closes. Without this the screen would keep
 	// inviting the user to press Link in a browser the app will now refuse.

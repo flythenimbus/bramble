@@ -16,7 +16,7 @@ import {
 	syncDevicePublicKey,
 	syncSigningPublicKey,
 } from "../sync/keys";
-import { ACTIVE_VAULT_KEY, retargetActiveVault } from "../sync/roster";
+import { ACTIVE_VAULT_KEY, retargetActiveVault, rosterChangedHere } from "../sync/roster";
 import {
 	approveEnrollment,
 	getPendingEnrollApproval,
@@ -167,6 +167,7 @@ export const desktopShell: ShellAdapter = {
 	signRoster,
 	syncAdmissionPublicKey,
 	syncAdmissionSign,
+	syncRosterChanged: rosterChangedHere,
 	resetSyncState,
 
 	// Enrollment, running in this webview: WKWebView has WebRTC, so @core's transport and

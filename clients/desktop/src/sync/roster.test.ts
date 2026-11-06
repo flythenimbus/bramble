@@ -26,6 +26,21 @@ const h = vi.hoisted(() => ({
 	stateListener: null as ((locked: boolean) => void) | null,
 	// Swapped per test to drive what a "merge" does.
 	applyRemote: async (_port: unknown, _payload: unknown, _opts?: unknown): Promise<void> => {},
+	/** Links the app was asked to end, and whether it should refuse the next one. */
+	ended: [] as { linkKey: string; vaultId: string }[],
+	endFails: false,
+}));
+
+vi.mock("./link-peers", async (importOriginal) => ({
+	...(await importOriginal<typeof import("./link-peers")>()),
+	pinLink: () => {},
+	endLink: async (linkKey: string, vaultId: string) => {
+		if (h.endFails) {
+			h.endFails = false;
+			throw new Error("the app didn't answer");
+		}
+		h.ended.push({ linkKey, vaultId });
+	},
 }));
 
 vi.mock("@core/index", async (importOriginal) => {
@@ -178,6 +193,8 @@ beforeEach(() => {
 	h.blobPokes = 0;
 	h.stateListener = null;
 	h.applyRemote = async () => {};
+	h.ended.length = 0;
+	h.endFails = false;
 	vi.stubGlobal("crypto", { randomUUID: () => "id", getRandomValues: (a: Uint8Array) => a });
 });
 
@@ -374,6 +391,121 @@ describe("lock state", () => {
 		h.rosterOpts = null;
 		h.stateListener?.(false);
 		await vi.waitFor(() => expect(h.rosterOpts).not.toBeNull());
+	});
+});
+
+describe("a browser removed from the roster", () => {
+	const wall = Date.now() - 1000;
+	const member = (id: string, publicKey: string) => ({
+		id,
+		publicKey,
+		label: id,
+		addedAt: 1,
+		hlc: { wall, counter: 0, node: id },
+	});
+	const laptop = member("laptop", "P");
+	const browser = member("browser", "browserpub");
+	const tombstone = (id: string) => ({ id, hlc: { wall: wall + 1, counter: 0, node: "laptop" } });
+	const setRoster = (vaultId: string, roster: unknown) =>
+		h.meta.set(`sync.group:${vaultId}`, { groupKey: "k", roster });
+
+	/** A session for `vaultId`, with its browser having passed sync's check over the link. */
+	async function linked(vaultId = VAULT_A) {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A, VAULT_B));
+		h.meta.set("active-vault", vaultId);
+		setRoster(vaultId, { devices: [laptop, browser], revoked: [] });
+		const mod = await loadRoster();
+		await startSession(mod);
+		const linkSession = h.starts[1] as unknown as {
+			onAuthenticated: (pub: string, linkKey: string) => void;
+		};
+		linkSession.onAuthenticated("browserpub", "linkkey");
+		await vi.waitFor(() => expect(h.meta.get(`link.keys:${vaultId}`)).toBeDefined());
+		return mod;
+	}
+
+	it("loses its link when another device's removal arrives", async () => {
+		await linked();
+		const session = h.starts[0] as unknown as { pushRemoteRoster: (json: string) => Promise<void> };
+		await session.pushRemoteRoster(
+			JSON.stringify({ devices: [], revoked: [tombstone("browser")] }),
+		);
+		expect(h.ended).toEqual([{ linkKey: "linkkey", vaultId: VAULT_A }]);
+	});
+
+	it("loses its link when it is removed here", async () => {
+		const mod = await linked();
+		setRoster(VAULT_A, { devices: [laptop, browser], revoked: [tombstone("browser")] });
+		await mod.endRemovedLinks(VAULT_A);
+		expect(h.ended).toEqual([{ linkKey: "linkkey", vaultId: VAULT_A }]);
+	});
+
+	it("ends it once, even when asked again", async () => {
+		const mod = await linked();
+		setRoster(VAULT_A, { devices: [laptop], revoked: [tombstone("browser")] });
+		await mod.endRemovedLinks(VAULT_A);
+		await mod.endRemovedLinks(VAULT_A);
+		expect(h.ended).toHaveLength(1);
+	});
+
+	it("loses it at the next start, if the app was closed when the removal landed", async () => {
+		await linked();
+		setRoster(VAULT_A, { devices: [laptop], revoked: [tombstone("browser")] });
+		h.rosterOpts = null;
+		h.starts.length = 0;
+		await startSession(await loadRoster());
+		await vi.waitFor(() => expect(h.ended).toHaveLength(1));
+	});
+
+	it("is tried again next time if the app couldn't end it", async () => {
+		const mod = await linked();
+		setRoster(VAULT_A, { devices: [laptop], revoked: [tombstone("browser")] });
+		h.endFails = true;
+		await mod.endRemovedLinks(VAULT_A);
+		expect(h.ended).toEqual([]);
+		await mod.endRemovedLinks(VAULT_A);
+		expect(h.ended).toEqual([{ linkKey: "linkkey", vaultId: VAULT_A }]);
+	});
+
+	it("keeps its link while it is still in the roster", async () => {
+		const mod = await linked();
+		await mod.endRemovedLinks(VAULT_A);
+		expect(h.ended).toEqual([]);
+	});
+
+	it("keeps it when re-added under a new id with the same key", async () => {
+		const mod = await linked();
+		setRoster(VAULT_A, {
+			devices: [laptop, member("browser-2", "browserpub")],
+			revoked: [tombstone("browser")],
+		});
+		await mod.endRemovedLinks(VAULT_A);
+		expect(h.ended).toEqual([]);
+	});
+
+	it("keeps it when this device left the group and started a new one", async () => {
+		// Missing from the roster isn't removal: only a tombstone says someone removed it.
+		const mod = await linked();
+		setRoster(VAULT_A, { devices: [laptop], revoked: [] });
+		await mod.endRemovedLinks(VAULT_A);
+		expect(h.ended).toEqual([]);
+	});
+
+	it("leaves another vault's list alone", async () => {
+		const mod = await linked(VAULT_A);
+		setRoster(VAULT_B, { devices: [laptop], revoked: [tombstone("browser")] });
+		await mod.endRemovedLinks(VAULT_B);
+		expect(h.ended).toEqual([]);
+	});
+
+	it("does nothing for a removed device that never synced over the link", async () => {
+		const mod = await linked();
+		setRoster(VAULT_A, {
+			devices: [laptop, browser, member("phone", "phonepub")],
+			revoked: [tombstone("phone")],
+		});
+		await mod.endRemovedLinks(VAULT_A);
+		expect(h.ended).toEqual([]);
 	});
 });
 

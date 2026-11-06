@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
 	sendFails: false,
 	/** Link keys the Rust side was asked to pin, with the vault each was pinned to. */
 	pinned: [] as { publicKey: string; vaultId: string }[],
+	/** Link keys the Rust side was asked to forget from a vault's list. */
+	forgotten: [] as { publicKey: string; vaultId: string }[],
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -23,6 +25,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 		if (cmd === "link_sync_peers") return h.connected;
 		if (cmd === "pairing_pin_link") {
 			h.pinned.push(args as { publicKey: string; vaultId: string });
+			return true;
+		}
+		if (cmd === "pairing_forget_in_vault") {
+			h.forgotten.push(args as { publicKey: string; vaultId: string });
 			return true;
 		}
 		if (cmd === "link_sync_send") {
@@ -246,6 +252,14 @@ describe("a browser that passed sync's check over the link", () => {
 		await vi.waitFor(() =>
 			expect(h.pinned).toEqual([{ publicKey: "browser-a", vaultId: "vault-a" }]),
 		);
+	});
+});
+
+describe("ending a link", () => {
+	it("forgets the browser from the vault named, whichever is open", async () => {
+		const { endLink } = await import("./link-peers");
+		await endLink("browser-a", "vault-a");
+		expect(h.forgotten).toEqual([{ publicKey: "browser-a", vaultId: "vault-a" }]);
 	});
 });
 

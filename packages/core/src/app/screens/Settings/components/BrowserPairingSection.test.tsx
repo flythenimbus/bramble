@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
 	onPending: null as ((p: { sasHashB64: string; label: string }) => void) | null,
 	onDone: null as ((paired: boolean) => void) | null,
 	summaries: [] as unknown[],
+	onSyncEvent: null as ((e: { kind: string }) => void) | null,
+	listed: [] as unknown[],
 	/** Arming the invite waits on this, as deriving the admission key does in the app. */
 	armed: Promise.resolve() as Promise<void>,
 	/** How many times preparing the invite fails before it works. */
@@ -40,7 +42,7 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 }));
 
 const pairing = {
-	list: async () => [],
+	list: async () => h.listed,
 	identity: async () => "id",
 	forget: async () => true,
 	armSyncInvite: async () => {
@@ -75,6 +77,12 @@ const pairing = {
 const platform = {
 	target: "desktop",
 	storage: { getMeta: async () => undefined },
+	shell: {
+		onSyncEvent: (cb: (e: { kind: string }) => void) => {
+			h.onSyncEvent = cb;
+			return () => {};
+		},
+	},
 	pairing,
 } as unknown as Platform;
 
@@ -109,8 +117,21 @@ afterEach(() => {
 	h.onPending = null;
 	h.onDone = null;
 	h.summaries.length = 0;
+	h.listed = [];
+	h.onSyncEvent = null;
 	h.armed = Promise.resolve();
 	h.inviteFailures = 0;
+});
+
+describe("the list of linked browsers", () => {
+	it("drops a browser as soon as the sync group removes it", async () => {
+		h.listed = [{ publicKey: "pk", label: "Chrome on Mac", pairedAt: 1 }];
+		mount();
+		expect(await screen.findByText("Chrome on Mac")).toBeTruthy();
+		h.listed = [];
+		act(() => h.onSyncEvent?.({ kind: "roster" }));
+		await waitFor(() => expect(screen.queryByText("Chrome on Mac")).toBeNull());
+	});
 });
 
 describe("connecting a browser by emoji", () => {

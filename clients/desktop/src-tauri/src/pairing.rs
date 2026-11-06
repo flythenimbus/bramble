@@ -564,13 +564,18 @@ pub fn forget_peer(root: &Path, public_key: &str) -> Res<bool> {
     let Some(vault_id) = open_vault_id(root)? else {
         return Ok(false);
     };
+    forget_peer_in(root, public_key, &vault_id)
+}
+
+/// Revoke a browser from one vault, open or not. Other vaults it is linked to keep it.
+pub fn forget_peer_in(root: &Path, public_key: &str, vault_id: &str) -> Res<bool> {
     let mut file = read_trusted(root)?;
-    let mut peers = vault_peers(root, &file, &vault_id)?;
+    let mut peers = vault_peers(root, &file, vault_id)?;
     let before = peers.len();
     peers.retain(|p| p.public_key != public_key);
     let removed = peers.len() != before;
     if removed {
-        file.vaults.insert(vault_id, peers);
+        file.vaults.insert(vault_id.to_string(), peers);
         save(root, &mut file)?;
     }
     Ok(removed)
@@ -1093,6 +1098,24 @@ mod tests {
     }
 
     #[test]
+    fn forgetting_from_a_named_vault_leaves_the_open_one_and_the_others() {
+        let _g = setup();
+        let d = root();
+        let browser = handshake::handshake_generate_keypair().unwrap();
+        legacy_link(d.path(), &browser.public_key, 100);
+        register(d.path(), &[("vault-a", 10), ("vault-b", 20)]);
+        open_vault(d.path(), "vault-a");
+
+        // A removal gossiped to vault-b's session, while vault-a has since opened.
+        assert!(forget_peer_in(d.path(), &browser.public_key, "vault-b").unwrap());
+        close(&accept_known(d.path(), &browser.public_key).unwrap());
+
+        open_vault(d.path(), "vault-b");
+        assert!(accept_known(d.path(), &browser.public_key).is_err());
+        assert!(!forget_peer_in(d.path(), &browser.public_key, "vault-b").unwrap());
+    }
+
+    #[test]
     fn disconnecting_in_one_vault_keeps_the_link_in_another() {
         let _g = setup();
         let d = root();
@@ -1306,6 +1329,19 @@ pub fn pairing_forget(app: AppHandle, public_key: String) -> Result<bool, String
     let root = data_dir(&app)?;
     let removed = forget_peer(&root, &public_key)?;
     // Its open connection goes now, so it learns at once rather than on its next frame.
+    crate::socket::vault_opened(&root);
+    Ok(removed)
+}
+
+/// End a browser's link to `vault_id` because it was removed from that vault's sync group.
+#[tauri::command]
+pub fn pairing_forget_in_vault(
+    app: AppHandle,
+    public_key: String,
+    vault_id: String,
+) -> Result<bool, String> {
+    let root = data_dir(&app)?;
+    let removed = forget_peer_in(&root, &public_key, &vault_id)?;
     crate::socket::vault_opened(&root);
     Ok(removed)
 }

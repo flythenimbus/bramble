@@ -66,6 +66,11 @@ export function pinLink(linkKey: string, vaultId: string): void {
 	void invoke("pairing_pin_link", { publicKey: linkKey, vaultId }).catch(() => {});
 }
 
+/** End a browser's link to `vaultId`, whichever vault is open by now. */
+export async function endLink(linkKey: string, vaultId: string): Promise<void> {
+	await invoke("pairing_forget_in_vault", { publicKey: linkKey, vaultId });
+}
+
 export function recordLinkDevice(pub: string): void {
 	if (linkDevices.has(pub)) return;
 	linkDevices.add(pub);

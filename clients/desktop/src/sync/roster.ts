@@ -32,7 +32,7 @@ import {
 } from "@core/index";
 import { blobArrived } from "@core/sync/blob-arrivals";
 import { answerBlobStatus } from "@core/sync/blob-status";
-import { addDevice, mayEnroll } from "@core/sync/roster";
+import { activeDevices, addDevice, mayEnroll } from "@core/sync/roster";
 import { syncKeyFor } from "@core/sync/sync-keys";
 import {
 	type BlobSyncSession,
@@ -51,6 +51,7 @@ import { emit, report } from "./bus";
 import { deviceKeypair, publishSyncIdentity } from "./keys";
 import { linkBlobSource } from "./link-blob";
 import {
+	endLink,
 	linkDevicePubs,
 	linkPeerSource,
 	loadLinkDevices,
@@ -102,6 +103,57 @@ export async function addToLocalRoster(vaultId: string, device: RosterEntry): Pr
 	if (!mayEnroll(group.roster, device)) return;
 	await desktopStorage.setMeta(key, { ...group, roster: addDevice(group.roster, device) });
 	emit({ kind: "roster" });
+}
+
+/** Each browser's link, by the device key it syncs as, learned when it passes sync's check over the
+ * link. A browser can be removed while it's offline, so this has to outlast the connection. */
+const LINK_KEYS = "link.keys";
+type LinkKeys = Record<string, { linkKey: string; deviceId: string }>;
+
+async function recordLinkKey(vaultId: string, devicePub: string, linkKey: string): Promise<void> {
+	const group = await desktopStorage.getMeta<GroupConfig>(syncKeyFor(GROUP_KEY, vaultId));
+	const device = group?.roster.devices.find((d) => d.publicKey === devicePub);
+	if (!device) return;
+	const key = syncKeyFor(LINK_KEYS, vaultId);
+	const held = (await desktopStorage.getMeta<LinkKeys>(key)) ?? {};
+	const known = held[devicePub];
+	if (known?.linkKey === linkKey && known.deviceId === device.id) return;
+	await desktopStorage.setMeta(key, { ...held, [devicePub]: { linkKey, deviceId: device.id } });
+}
+
+/**
+ * End the link of every browser this vault's group has removed, so it can't keep filling from a
+ * vault it no longer syncs with. Only a tombstone counts: a device merely missing from the roster
+ * may be from a group this vault has left. A link that couldn't be ended stays recorded for next
+ * time. See docs/desktop-link-onboarding.md.
+ */
+export async function endRemovedLinks(vaultId: string): Promise<void> {
+	const key = syncKeyFor(LINK_KEYS, vaultId);
+	const held = await desktopStorage.getMeta<LinkKeys>(key);
+	if (!held) return;
+	const group = await desktopStorage.getMeta<GroupConfig>(syncKeyFor(GROUP_KEY, vaultId));
+	if (!group) return;
+	const removed = new Set(group.roster.revoked.map((t) => t.id));
+	const active = new Set(activeDevices(group.roster).map((d) => d.publicKey));
+	const left = { ...held };
+	for (const [devicePub, { linkKey, deviceId }] of Object.entries(held)) {
+		if (!removed.has(deviceId) || active.has(devicePub)) continue;
+		try {
+			await endLink(linkKey, vaultId);
+			delete left[devicePub];
+		} catch (e) {
+			report(`sync: could not end a removed browser's link (${(e as Error).message})`);
+		}
+	}
+	if (Object.keys(left).length === Object.keys(held).length) return;
+	await desktopStorage.setMeta(key, left);
+	emit({ kind: "roster" });
+}
+
+/** The open vault's roster changed here, in Settings rather than through a peer. */
+export async function rosterChangedHere(): Promise<void> {
+	const vaultId = await syncTargetVaultId();
+	if (vaultId) await endRemovedLinks(vaultId);
 }
 
 let clockCache: { vaultId: string; clock: Promise<HybridClock> } | null = null;
@@ -221,6 +273,7 @@ async function startRoster(): Promise<void> {
 				roster: mergeRemoteRoster(g.roster, decodeRoster(rosterJson)),
 			});
 			emit({ kind: "roster" });
+			await endRemovedLinks(vaultId).catch(() => {});
 		},
 		fetchLocalPayload: async () => encodeEntriesPayload(await blobStore.readEntriesPayload()),
 		pushRemotePayload: async (json) => {
@@ -265,6 +318,7 @@ async function startRoster(): Promise<void> {
 	} satisfies Parameters<typeof startRosterSync>[0];
 
 	await loadLinkDevices();
+	void endRemovedLinks(vaultId).catch(() => {});
 	rosterSessions = [
 		// A browser on this machine syncs over the link only, never the relay.
 		await startRosterSync({ ...common, skipPeer: onTheLink }),
@@ -276,6 +330,7 @@ async function startRoster(): Promise<void> {
 			onAuthenticated: (pub, linkKey) => {
 				recordLinkDevice(pub);
 				pinLink(linkKey, vaultId);
+				void recordLinkKey(vaultId, pub, linkKey).catch(() => {});
 			},
 		}),
 	];
