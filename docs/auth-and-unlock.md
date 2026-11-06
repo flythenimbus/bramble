@@ -278,8 +278,9 @@ its name over the empty state it found, and every named vault lost its entries o
 a popup opened on it, until a peer brought them back. Two more lines stand behind that one:
 `synced.ready` also needs the provider to hold the active vault, since linking from Settings opens
 another vault under an unlocked screen, and `snapshotEntries` refuses a write when it does not, so a
-mistake here fails loudly instead of writing the wrong vault. While a view is finding out, the unlock
-route shows nothing rather than a form to start typing in.
+mistake here fails loudly instead of writing the wrong vault. While a view is finding out, or on an
+unlocked vault whose redirect has yet to run, the unlock route shows nothing rather than a form to
+start typing in.
 
 Lock state is shared between the background service worker and the open UI:
 
