@@ -150,6 +150,10 @@ msgid "{from} has it. Trying again shortly."
 msgstr "{from} l’a. Nouvelle tentative bientôt."
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{held} entries look like ones the desktop's vault already has. Copy them before the old vault goes?"
+msgstr "{held} entrées ressemblent à celles que le coffre de l’application de bureau contient déjà. Les copier avant que l’ancien coffre ne soit supprimé ?"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "{held} entries looked like ones the desktop's vault already has, so they stayed in the old vault."
 msgstr "{held} entrées ressemblaient à celles que le coffre de l'application de bureau contient déjà ; elles sont donc restées dans l'ancien coffre."
 
@@ -2178,6 +2182,10 @@ msgstr "Laisser un avis"
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Leave the credential fields blank to keep the ones you saved."
 msgstr "Laissez les champs d'identification vides pour conserver ceux que vous avez enregistrés."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Leave them out"
+msgstr "Les exclure"
 
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Leave unset for your account's default domain, or pick one of your own."

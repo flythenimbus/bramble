@@ -3,7 +3,6 @@
 
 import { useLingui } from "@lingui/react/macro";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { backupTargetsKeyFor } from "../../backup/config";
 import { usePlatform } from "../../context/PlatformContext";
 import { type EntryData, useVault, useVaultActions } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
@@ -17,8 +16,13 @@ import {
 } from "../../sync/link-outcome";
 import type { PairingSas } from "../../sync/pairing-sas";
 import { syncKeyFor } from "../../sync/sync-keys";
-import { collectCarry, placeCarry } from "../../vault/combine-into";
-import { holdsWhatCombiningLeaves, isVaultEmpty, readVaultContents } from "../../vault/vault-empty";
+import {
+	type CopiedOut,
+	collectCarry,
+	placeCarry,
+	withoutHeldBack,
+} from "../../vault/combine-into";
+import { holdsQuarantine, isVaultEmpty, readVaultContents } from "../../vault/vault-empty";
 
 /** How many quarantine records a vault holds (see vault/quarantine.ts). */
 async function countQuarantined(
@@ -53,7 +57,7 @@ export function useDesktopLink({
 	const { t } = useLingui();
 	const vaultActions = useVaultActions();
 	const { startJoin } = vaultActions;
-	const { entries, files, conflicts } = useVault();
+	const { entries, files } = useVault();
 	const registry = useVaultRegistry();
 	const { vaults, activeId } = registry;
 	/** The provider's actions are bound to the vault open when they were made. After a join the
@@ -95,7 +99,10 @@ export function useDesktopLink({
 		quarantined: number;
 		/** The old vault stayed without being asked to: some of it did not come across. */
 		keptUnasked: boolean;
+		/** The old vault goes once the look-alikes are answered for, and what its removal checks. */
+		pendingRemoval: { id: string; copied: CopiedOut } | null;
 	} | null>(null);
+	const [answeringHeldBack, setAnsweringHeldBack] = useState(false);
 
 	/** What linking does here, from what each side holds. */
 	const outcomeFor = useCallback(
@@ -276,8 +283,9 @@ export function useDesktopLink({
 	 *
 	 * Combining reads this vault's entries and files BEFORE the switch, because only one vault's
 	 * key is loaded at a time, then copies them in after it. The old vault then goes, unless the user
-	 * asked to keep a copy or some of it did not come across, when it stays, set aside. Keeping them
-	 * separate copies nothing.
+	 * asked to keep a copy or losing it would lose something by accident, when it stays, set aside.
+	 * With look-alikes held back it waits for the user's answer about them. Keeping them separate
+	 * copies nothing.
 	 */
 	const accept = useCallback(
 		async (
@@ -292,7 +300,6 @@ export function useDesktopLink({
 			// Counted now, while the old vault is the one open; the re-check before removal uses it.
 			const oldCount = entries.length;
 			const oldFiles = files.length;
-			const oldConflicts = conflicts.size;
 			// Past the join the invite form is gone, so a failure has to show in `error` instead.
 			let joined = false;
 			let copying = false;
@@ -329,31 +336,32 @@ export function useDesktopLink({
 								})
 							: [];
 					copying = false;
-					// Removed only with nothing left behind that it alone holds, and a pairing that
-					// finished: a vault that goes cannot be asked for anything later.
-					const contents = await readVaultContents(storage, oldId, 0, 0);
-					const targets = await storage.getMeta<unknown[]>(backupTargetsKeyFor(oldId));
-					const whole =
-						placed.heldBack.items.length === 0 &&
-						placed.tagsLeftOver === 0 &&
-						carry.uncarried === 0 &&
-						oldConflicts === 0 &&
-						!targets?.length &&
-						!holdsWhatCombiningLeaves(contents);
+					// Stays only over what would otherwise be lost by accident: what failed to copy,
+					// what can't be read, and a pairing that did not finish.
+					const atRisk =
+						!attached ||
+						oldBlob === null ||
+						placed.tagsLeftOver > 0 ||
+						carry.uncarried > 0 ||
+						holdsQuarantine((await storage.readQuarantine?.(oldId)) ?? null);
+					const removal =
+						opts?.keepCopy || atRisk
+							? null
+							: { id: oldId, copied: { blob: oldBlob, items: carry.items, fileHashes } };
+					// Look-alikes hold what the desktop's entries lack, so the user answers for them first.
+					// Set aside until then: closing the screen unanswered loses nothing.
+					const asking = removal !== null && placed.heldBack.items.length > 0;
 					const removed =
-						whole &&
-						attached &&
-						!opts?.keepCopy &&
-						oldBlob !== null &&
-						(await now.actions
-							.deleteCarriedVault(oldId, { blob: oldBlob, items: carry.items, fileHashes })
-							.catch(() => false));
+						removal !== null &&
+						!asking &&
+						(await now.actions.deleteCarriedVault(oldId, removal.copied).catch(() => false));
 					if (!removed) await now.registry.setAside(oldId);
 					setCombined({
 						heldBack: placed.heldBack,
 						uncarried: carry.uncarried,
 						quarantined: await countQuarantined(storage, oldId),
-						keptUnasked: attached && !opts?.keepCopy && !removed,
+						keptUnasked: attached && !opts?.keepCopy && !removed && !asking,
+						pendingRemoval: asking ? removal : null,
 					});
 				}
 				// After the join, so the copies land in the vault that is now open.
@@ -390,7 +398,6 @@ export function useDesktopLink({
 			activeId,
 			entries,
 			files,
-			conflicts,
 			platformFiles,
 			startJoin,
 			vaultSwitchedFrom,
@@ -400,16 +407,48 @@ export function useDesktopLink({
 		],
 	);
 
-	/** Copy the look-alikes the dedup held back, as import's "Import them anyway" does. */
-	const copyHeldBack = useCallback(async () => {
-		if (!combined?.heldBack.items.length) return;
-		await latest.current.actions.importEntries(
-			combined.heldBack.items,
-			combined.heldBack.attachments,
-			{ ownVault: true },
-		);
-		setCombined({ ...combined, heldBack: { items: [], attachments: [] } });
-	}, [combined]);
+	/** The answer about the look-alikes the dedup held back, after which a vault waiting on it goes. */
+	const answerHeldBack = useCallback(
+		async (copy: boolean) => {
+			if (!combined?.heldBack.items.length) return;
+			const { heldBack, pendingRemoval } = combined;
+			const { actions } = latest.current;
+			setAnsweringHeldBack(true);
+			setError(null);
+			try {
+				// As import's "Import them anyway" does.
+				const hashes = copy
+					? await actions.importEntries(heldBack.items, heldBack.attachments, { ownVault: true })
+					: [];
+				const removed =
+					pendingRemoval &&
+					(await actions
+						.deleteCarriedVault(pendingRemoval.id, {
+							...pendingRemoval.copied,
+							items: copy
+								? pendingRemoval.copied.items
+								: withoutHeldBack(pendingRemoval.copied.items, heldBack.items),
+							fileHashes: [...pendingRemoval.copied.fileHashes, ...hashes],
+						})
+						.catch(() => false));
+				setCombined({
+					...combined,
+					heldBack: { items: [], attachments: [] },
+					pendingRemoval: null,
+					keptUnasked: combined.keptUnasked || removed === false,
+				});
+			} catch {
+				setError(
+					t`This vault's entries didn't copy into the desktop's vault. They are still in the old vault.`,
+				);
+			} finally {
+				setAnsweringHeldBack(false);
+			}
+		},
+		[combined, t],
+	);
+	const copyHeldBack = useCallback(() => answerHeldBack(true), [answerHeldBack]);
+	const leaveOutHeldBack = useCallback(() => answerHeldBack(false), [answerHeldBack]);
 
 	return {
 		busy,
@@ -434,7 +473,9 @@ export function useDesktopLink({
 		claimFailed,
 		retryClaim,
 		combined,
+		answeringHeldBack,
 		copyHeldBack,
+		leaveOutHeldBack,
 		otherDevices,
 		joinSas,
 		/** For the Settings poller-free path: an invite claimed elsewhere. */

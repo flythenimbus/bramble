@@ -169,16 +169,20 @@ mine unless marked otherwise.
   across. First a second's wait for a background merge in flight, then the disk has to agree: every
   entry and file of the copy there, with all it held, and the old vault's bytes unchanged since the
   copy began, so a login saved into it meanwhile is not lost.
-- **It stays anyway when some of it did not come across,** and the result screen says so: look-alikes
-  held back for review, files that did not copy, entries it could not decrypt, versions in a sync
-  conflict, tags past the 32 an entry can carry, an email alias provider and its key, or backup
-  targets. So does a pairing that did not finish.
+- **It stays anyway only where removing it would lose something by accident** (the user's decision,
+  2026-11-06), and the result screen says so: files that did not copy, entries it could not decrypt,
+  tags past the 32 an entry can carry, or a copy the disk does not bear out. So does a pairing that
+  did not finish. Versions in a sync conflict, an email alias provider and its key, and backup targets
+  are not worth keeping it over, and go with it.
+- **Look-alikes the dedup holds back are asked about first.** They hold something the desktop's entry
+  lacks, so the old vault stays set aside until the answer: "Copy them anyway" or "Leave them out", and
+  then it goes. Closing the screen unanswered leaves it set aside, so nothing goes without a choice.
 - **A kept vault stays in the vault list,** locked, under its own master password and in its own sync
   group, until the user deletes it. It is labelled so it is obviously the old one, for example
   "Personal (before linking)". Names sync across the group, so this label must be local to this
   browser: a phone still using that vault must not see it change.
-- **Likely duplicates the dedup holds back stay in the old vault.** The result screen says how
-  many and offers "Copy them anyway", matching what import does.
+- **With the old vault staying, likely duplicates stay in it.** The result screen says how many and
+  offers "Copy them anyway", matching what import does.
 - **The screen says up front that this browser will now unlock with the desktop's master
   password.**
 - **If the old vault also syncs with other devices,** one warning line names them and says only
@@ -588,9 +592,10 @@ Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode
 - Distinct wording for the link screens.
 - Case 2 combines into the desktop's empty vault without asking.
 - Keeping the old vault after a combine is an unticked checkbox, not the default. It stays regardless
-  when any of it did not come across.
+  only for a failed copy, damaged entries or an unfinished link.
 - A copy of an entry the desktop's vault holds folds into it: tags, old passwords, and active wins.
-- Held-back duplicates stay in the old vault, with "Copy them anyway".
+- Held-back duplicates are asked about before the old vault goes: "Copy them anyway" or "Leave them
+  out". With the old vault staying, they stay in it.
 - Failure is loud on a partial copy.
 - Piece 3: the extension holds its open vault's link, and a link in progress stays held until it
   attaches or is abandoned.

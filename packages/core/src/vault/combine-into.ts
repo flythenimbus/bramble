@@ -160,6 +160,15 @@ export function placeCarry(existing: readonly Entry[], carry: Carry): Placed {
 	};
 }
 
+/** The carried items, less the look-alikes left out and any copy of them, which share their content. */
+export function withoutHeldBack(
+	items: readonly EntryData[],
+	heldBack: readonly EntryData[],
+): EntryData[] {
+	const held = new Set(heldBack.map(entryContentKey));
+	return items.filter((item) => !held.has(entryContentKey(item)));
+}
+
 /** What removing a vault needs to know about the copy made of it. */
 export interface CopiedOut {
 	/** The vault's bytes when the copy began. */

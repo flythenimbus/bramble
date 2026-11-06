@@ -28,14 +28,8 @@ export function isVaultEmpty(v: VaultContents): boolean {
 	);
 }
 
-/** What combining a vault into another does not bring across, besides what the combine counts
- * itself. A vault holding any of this stays, whatever the user chose. */
-export function holdsWhatCombiningLeaves(v: VaultContents): boolean {
-	return holdsQuarantine(v.quarantineRaw) || v.hasAliasConfig;
-}
-
 /** Matches quarantine.ts's parseStore: anything but a missing or empty array counts. */
-function holdsQuarantine(raw: string | null): boolean {
+export function holdsQuarantine(raw: string | null): boolean {
 	if (raw === null || raw === "") return false;
 	try {
 		const parsed: unknown = JSON.parse(raw);

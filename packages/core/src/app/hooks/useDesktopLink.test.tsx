@@ -325,7 +325,7 @@ describe("combining into the desktop's vault", () => {
 			h.meta.clear();
 			h.attaches = true;
 		}
-		const combineAs = async (opts: { keepCopy?: boolean } = {}) => {
+		const combineAs = async (opts: { keepCopy?: boolean; choice?: "combine" } = {}) => {
 			const result = await linkedFrom("settings");
 			h.steps = [];
 			await act(async () => {
@@ -351,12 +351,6 @@ describe("combining into the desktop's vault", () => {
 
 		it.each([
 			[
-				"look-alikes held back for review",
-				() => {
-					h.desktopEntries = [{ ...login("x", "new.com"), username: "U" }];
-				},
-			],
-			[
 				"a file that did not copy",
 				() => {
 					h.failStage = true;
@@ -368,6 +362,20 @@ describe("combining into the desktop's vault", () => {
 					h.meta.set("quarantine:v1", JSON.stringify([{ id: "q" }]));
 				},
 			],
+		])(
+			"stays, and says so, when it holds %s, which would be lost with it",
+			async (_what, arrange) => {
+				oneFullVault();
+				arrange();
+				const result = await combineAs();
+				expect(h.steps.at(-1)).toBe("setAside:v1@new");
+				expect(h.steps).not.toContain("deleteCarried:v1@new");
+				expect(result.current.combined?.keptUnasked).toBe(true);
+				h.meta.clear();
+			},
+		);
+
+		it.each([
 			[
 				"versions in a sync conflict",
 				() => {
@@ -386,15 +394,126 @@ describe("combining into the desktop's vault", () => {
 					h.meta.set(backupTargetsKeyFor("v1"), [{ id: "t" }]);
 				},
 			],
-		])("stays, and says so, when it holds %s, which do not come across", async (_what, arrange) => {
+		])("goes even when it holds %s", async (_what, arrange) => {
 			oneFullVault();
 			arrange();
 			const result = await combineAs();
-			expect(h.steps.at(-1)).toBe("setAside:v1@new");
-			expect(h.steps).not.toContain("deleteCarried:v1@new");
-			expect(result.current.combined?.keptUnasked).toBe(true);
+			expect(h.steps.at(-1)).toBe("deleteCarried:v1@new");
+			expect(result.current.combined?.keptUnasked).toBe(false);
 			h.meta.clear();
 			h.conflicts = new Map();
+		});
+
+		describe("when it holds look-alikes of the desktop's entries", () => {
+			function withLookAlike() {
+				oneFullVault();
+				h.entries = [login("a", "new.com"), login("b", "alike.com")];
+				h.files = [
+					{ id: "f1", entryId: "a", hash: "0".repeat(64) },
+					{ id: "f2", entryId: "b", hash: "1".repeat(64) },
+				];
+				h.desktopEntries = [{ ...login("x", "alike.com"), username: "U" }];
+				h.summary = { name: "Home", empty: false, entries: 1 };
+				h.imported = [];
+				h.copied = [];
+			}
+			const combine = (opts: { keepCopy?: boolean } = {}) =>
+				combineAs({ choice: "combine", ...opts });
+			const namesToCheck = () =>
+				(h.copied[0] as { items: { name: string }[] }).items.map((e) => e.name);
+
+			it("asks first, and until answered the vault stays, set aside, with nothing said kept", async () => {
+				withLookAlike();
+				const result = await combine();
+				expect(h.steps.at(-1)).toBe("setAside:v1@new");
+				expect(h.steps).not.toContain("deleteCarried:v1@new");
+				expect(result.current.combined?.heldBack.items).toHaveLength(1);
+				expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
+				expect(result.current.combined?.keptUnasked).toBe(false);
+			});
+
+			it("goes once they are copied, the removal checking for them and their files too", async () => {
+				withLookAlike();
+				const result = await combine();
+				h.steps = [];
+				await act(async () => {
+					await result.current.copyHeldBack();
+				});
+				expect(h.steps).toEqual(["import@new", "deleteCarried:v1@new"]);
+				expect(namesToCheck()).toEqual(["new.com", "alike.com"]);
+				expect((h.copied[0] as { fileHashes: string[] }).fileHashes).toEqual(["hash0", "hash0"]);
+				expect(result.current.combined?.heldBack.items).toHaveLength(0);
+				expect(result.current.combined?.pendingRemoval).toBeNull();
+				expect(result.current.combined?.keptUnasked).toBe(false);
+			});
+
+			it("goes once they are left out, the removal not looking for them", async () => {
+				withLookAlike();
+				const result = await combine();
+				h.steps = [];
+				await act(async () => {
+					await result.current.leaveOutHeldBack();
+				});
+				expect(h.steps).toEqual(["deleteCarried:v1@new"]);
+				expect(namesToCheck()).toEqual(["new.com"]);
+				expect(result.current.combined?.heldBack.items).toHaveLength(0);
+				expect(result.current.combined?.keptUnasked).toBe(false);
+			});
+
+			it("stays, and says so, when the disk disagrees once answered", async () => {
+				withLookAlike();
+				const result = await combine();
+				h.carriedRemoved = false;
+				await act(async () => {
+					await result.current.leaveOutHeldBack();
+				});
+				h.carriedRemoved = true;
+				expect(result.current.combined?.pendingRemoval).toBeNull();
+				expect(result.current.combined?.keptUnasked).toBe(true);
+			});
+
+			it("removes nothing when copying them fails, and asks again", async () => {
+				withLookAlike();
+				const result = await combine();
+				h.steps = [];
+				h.importFails = true;
+				await act(async () => {
+					await result.current.copyHeldBack();
+				});
+				h.importFails = false;
+				expect(h.steps).toEqual(["import@new"]);
+				expect(result.current.error).toMatch(/didn't copy/i);
+				expect(result.current.combined?.heldBack.items).toHaveLength(1);
+				expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
+				expect(result.current.answeringHeldBack).toBe(false);
+			});
+
+			it("asks nothing when a copy was asked for, and copying them removes nothing", async () => {
+				withLookAlike();
+				const result = await combine({ keepCopy: true });
+				expect(result.current.combined?.pendingRemoval).toBeNull();
+				h.steps = [];
+				await act(async () => {
+					await result.current.copyHeldBack();
+				});
+				expect(h.steps).toEqual(["import@new"]);
+				expect(result.current.combined?.keptUnasked).toBe(false);
+			});
+
+			it("asks nothing when something else keeps the vault", async () => {
+				withLookAlike();
+				h.failStage = true;
+				const result = await combine();
+				expect(result.current.combined?.pendingRemoval).toBeNull();
+				expect(result.current.combined?.keptUnasked).toBe(true);
+				h.failStage = false;
+				h.steps = [];
+				await act(async () => {
+					await result.current.copyHeldBack();
+				});
+				expect(h.steps).not.toContain("deleteCarried:v1@new");
+				expect(result.current.combined?.keptUnasked).toBe(true);
+			});
 		});
 
 		it("stays when the pairing did not finish", async () => {
@@ -476,7 +595,7 @@ describe("combining into the desktop's vault", () => {
 				h.importOptions = [];
 				h.summary = { name: "Home", empty: false, entries: 1 };
 			}
-			const combineThem = () => combineAs({ choice: "combine" } as { keepCopy?: boolean });
+			const combineThem = () => combineAs({ choice: "combine" });
 
 			it("brings what each copy holds besides, and the old vault goes as asked", async () => {
 				sameOnBoth({ tags: ["work"], archivedAt: undefined }, { archivedAt: 5 });

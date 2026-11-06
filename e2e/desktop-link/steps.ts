@@ -230,13 +230,14 @@ export async function joinFromSetup(page: Page): Promise<void> {
 export async function addLogin(
 	popup: Page,
 	name: string,
-	{ username = "browser@example.com", password = "Browser-only-pw-456", tag = "" } = {},
+	{ username = "browser@example.com", password = "Browser-only-pw-456", tag = "", notes = "" } = {},
 ): Promise<void> {
 	await popup.getByRole("button", { name: /Add New/i }).click();
 	await popup.getByRole("button", { name: /^Login Add a new login/ }).click();
 	await popup.getByLabel(/^Name$/).fill(name);
 	await popup.getByLabel(/Username or email/i).fill(username);
 	await popup.locator('input[type="password"]').first().fill(password);
+	if (notes) await popup.getByLabel("Notes (optional)").fill(notes);
 	if (tag) {
 		await popup.getByLabel("Add a tag").fill(tag);
 		await popup.getByLabel("Add a tag").press("Enter");

@@ -162,6 +162,48 @@ test("settings: an entry on both sides keeps what the browser's copy held, and t
 		.toContain("from-browser");
 });
 
+for (const [answer, copies] of [
+	["Copy them anyway", 2],
+	["Leave them out", 1],
+] as const) {
+	test(`settings: a look-alike is asked about, and "${answer}" lets the old vault go`, async ({
+		ext,
+	}) => {
+		const both = { username: "alike@example.com", password: "Alike-pw-321" };
+		await desktopAddLogin("Looks alike", both);
+		await createVault(ext.page, ext.extensionId, BROWSER_PW);
+		const popup = await ext.popup();
+		await addLogin(popup, "Looks alike", { ...both, notes: "only in the browser" });
+
+		await desktopConnect();
+		const shown = await linkFromSettings(popup);
+		expect(await desktopSymbols()).toBe(shown);
+		await popup.getByRole("button", { name: "They match" }).click();
+		await desktopApprove();
+
+		await expect(popup.getByText("You have two vaults")).toBeVisible();
+		await popup.getByText("Combine into one").click();
+		await popup.getByLabel("Master password").last().fill(DESKTOP_PW);
+		await popup.getByRole("button", { name: "Continue", exact: true }).click();
+		await expect(popup.getByText(/Copy them before the old vault goes/)).toBeVisible({
+			timeout: 30_000,
+		});
+
+		// Nothing goes on its own: the old vault waits for the answer, set aside.
+		const vaults = async () =>
+			((await ext.stored("vault.registry")) as { vaults: { setAsideAt?: number }[] }).vaults;
+		expect((await vaults()).filter((v) => v.setAsideAt)).toHaveLength(1);
+
+		await popup.getByRole("button", { name: answer }).click();
+		await expect.poll(async () => (await vaults()).length).toBe(1);
+		expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(1);
+		await expect(popup.getByText(/Copy them before the old vault goes/)).toHaveCount(0);
+
+		await popup.getByRole("button", { name: "Go to vault" }).click();
+		await expect(popup.getByText("Looks alike")).toHaveCount(copies);
+	});
+}
+
 test("approving and then leaving the screen links nothing", async ({ ext, desktop }) => {
 	const before = desktop.linkedBrowsers();
 	await desktopConnect();

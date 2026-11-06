@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Entry, EntryData } from "../hooks/useVault";
 import type { FileRecord } from "../sync/entries-payload";
-import { collectCarry, foldCarriedCopy, holdsCarried, placeCarry } from "./combine-into";
+import {
+	collectCarry,
+	foldCarriedCopy,
+	holdsCarried,
+	placeCarry,
+	withoutHeldBack,
+} from "./combine-into";
 
 const login = (id: string, site: string, username = "u", password = "p"): Entry =>
 	({
@@ -237,5 +243,19 @@ describe("holdsCarried", () => {
 		const bare = onDisk();
 		const tagged = onDisk({ id: "y", tags: ["work"] });
 		expect(holdsCarried([bare, tagged], [item({ tags: ["work"] })])).toBe(true);
+	});
+});
+
+describe("withoutHeldBack", () => {
+	it("drops a look-alike and any copy of it, whatever tags they carry, and keeps the rest", () => {
+		const alike = { type: "login", name: "A", username: "u", password: "p", notes: "mine" };
+		const fresh = { type: "login", name: "B", username: "u", password: "p" };
+		const items = [alike, { ...alike, tags: ["t"] }, fresh] as EntryData[];
+		const existing = [
+			{ id: "x", type: "login", name: "A", username: "U", password: "p" },
+		] as unknown as Entry[];
+		const { heldBack } = placeCarry(existing, { items, files: [], uncarried: 0 });
+		expect(heldBack.items).toHaveLength(1);
+		expect(withoutHeldBack(items, heldBack.items)).toEqual([fresh]);
 	});
 });

@@ -2,25 +2,50 @@ import { Trans } from "@lingui/react/macro";
 import { Button } from "../../../components/ui/button";
 import type { useDesktopLink } from "../../../hooks/useDesktopLink";
 
-/** What a combine left behind, said plainly: look-alikes held back, and files it could not carry. */
+/** What a combine left behind, said plainly: look-alikes to answer for, and files it could not carry. */
 export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink> }) {
 	const combined = link.combined;
 	if (!combined) return null;
 	const held = combined.heldBack.items.length;
 	const uncarried = combined.uncarried;
+	const asking = combined.pendingRemoval !== null;
 	return (
 		<div className="space-y-2">
 			{held > 0 && (
-				<div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+				<div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
 					<span>
-						<Trans>
-							{held} entries looked like ones the desktop's vault already has, so they stayed in the
-							old vault.
-						</Trans>
+						{asking ? (
+							<Trans>
+								{held} entries look like ones the desktop's vault already has. Copy them before the
+								old vault goes?
+							</Trans>
+						) : (
+							<Trans>
+								{held} entries looked like ones the desktop's vault already has, so they stayed in
+								the old vault.
+							</Trans>
+						)}
 					</span>
-					<Button variant="secondary" size="sm" onClick={() => void link.copyHeldBack()}>
-						<Trans>Copy them anyway</Trans>
-					</Button>
+					<div className="flex gap-2">
+						<Button
+							variant="secondary"
+							size="sm"
+							disabled={link.answeringHeldBack}
+							onClick={() => void link.copyHeldBack()}
+						>
+							<Trans>Copy them anyway</Trans>
+						</Button>
+						{asking && (
+							<Button
+								variant="ghost"
+								size="sm"
+								disabled={link.answeringHeldBack}
+								onClick={() => void link.leaveOutHeldBack()}
+							>
+								<Trans>Leave them out</Trans>
+							</Button>
+						)}
+					</div>
 				</div>
 			)}
 			{combined.quarantined > 0 && (
