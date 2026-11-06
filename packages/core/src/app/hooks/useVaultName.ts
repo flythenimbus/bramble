@@ -14,9 +14,9 @@ export const VAULT_NAME_KEY = "vault.name";
  * settings cannot be read; this keeps that copy in step whenever the vault is open. A vault named
  * before names synced has none in its settings, so its local name is published once from here.
  *
- * Mounted under an unlocked vault only. The active vault cannot change there (choosing another
- * goes through the unlock screen), so the settings in hand are always the active vault's.
- * See docs/synced-settings.md.
+ * Mounted under an unlocked vault, but the active vault can change there: linking from Settings
+ * opens another one under this screen. `ready` is what says the settings in hand are the active
+ * vault's. See docs/synced-settings.md.
  */
 export function useVaultNameSync(): void {
 	const synced = useSyncedSettings();

@@ -25,6 +25,40 @@ test("create a vault, then lock and unlock it", async ({ context, extensionId })
 	await expect(popup.getByTestId("active-vault-label")).toHaveText("Vault 1");
 });
 
+// The whole vault is rewritten from memory on every change, and a reopened popup has nothing in
+// memory yet. A named vault's name used to be published right then, and its entries were gone.
+test("a named vault keeps its entries when the popup reopens on it", async ({
+	context,
+	extensionId,
+}) => {
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+	const popup = await context.newPage();
+	await openPopup(popup, extensionId);
+	await popup.getByRole("button", { name: /Add New/i }).click();
+	await popup.getByRole("button", { name: /^Login Add a new login/ }).click();
+	await popup.getByLabel(/^Name$/).fill("Keep me");
+	await popup.getByLabel(/Username or email/i).fill("me@example.com");
+	await popup.locator('input[type="password"]').first().fill("Keep-me-pw-123");
+	await popup.getByRole("button", { name: /Save Login/i }).click();
+	await expect(popup.getByText("Keep me")).toBeVisible();
+	await popup.getByRole("button", { name: "Settings" }).click();
+	await popup.getByRole("button", { name: "General", exact: true }).click();
+	await popup.getByLabel("Vault name").fill("Personal");
+	await popup.getByLabel("Vault name").blur();
+	await expect(popup.getByTestId("active-vault-label")).toHaveText("Personal");
+	await popup.close();
+
+	for (let i = 0; i < 3; i++) {
+		const again = await context.newPage();
+		await openPopup(again, extensionId);
+		await expectUnlocked(again);
+		await again.getByRole("button", { name: "Go to vault" }).click();
+		await expect(again.getByText("Keep me")).toBeVisible();
+		await again.close();
+	}
+});
+
 // Regression: an unlocked vault must land on its home screen, not the vault picker. Creating a
 // second vault leaves it active + unlocked, so a freshly opened popup opens straight on it.
 test("a newly created second vault opens directly, not the picker", async ({

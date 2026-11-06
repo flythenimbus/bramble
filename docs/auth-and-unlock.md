@@ -270,6 +270,17 @@ error to the console.
 
 ## Lock-state propagation
 
+**`isLocked` false means the vault is in memory.** Every unlock path, and a view reopened on an
+already unlocked vault, loads the entries first and flips `isLocked` after. A mutation rewrites the
+whole vault from what the provider holds, so anything that mounts under an unlocked vault has to be
+able to take that for granted. A reopened view once flipped it first, the vault's name sync published
+its name over the empty state it found, and every named vault lost its entries on disk the first time
+a popup opened on it, until a peer brought them back. Two more lines stand behind that one:
+`synced.ready` also needs the provider to hold the active vault, since linking from Settings opens
+another vault under an unlocked screen, and `snapshotEntries` refuses a write when it does not, so a
+mistake here fails loudly instead of writing the wrong vault. While a view is finding out, the unlock
+route shows nothing rather than a form to start typing in.
+
 Lock state is shared between the background service worker and the open UI:
 
 - **Background-initiated lock** (the auto-lock alarm fires while the popup is

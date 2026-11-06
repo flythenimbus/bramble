@@ -168,7 +168,12 @@ without being obvious in review.
 
 5. **One writer.** `EntryMutations` owns every local change to the payload, which
    is what keeps the autofill index from drifting from disk. A settings write is
-   another mutation there, not a second writer racing it.
+   another mutation there, not a second writer racing it. That makes it a write of
+   the whole payload from what the provider holds, so `ready` means more than
+   unlocked: the provider holds the active vault's payload. Linking from Settings
+   opens another vault under an unlocked screen, and a vault's first paint comes
+   before its load. Publishing the vault's name before that once wiped named vaults
+   (see [auth-and-unlock.md](auth-and-unlock.md#lock-state-propagation)).
 
 6. **`usePrefs` routing.** Reads: device and vault as today; synced from the
    decrypted payload. Synced prefs read as their defaults until the vault is

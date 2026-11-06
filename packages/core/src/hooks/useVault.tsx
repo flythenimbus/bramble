@@ -522,6 +522,9 @@ function emptyVaultSyncState(): VaultSyncState {
 
 const NO_CONFLICTS: ReadonlyMap<string, EntryConflict> = new Map();
 
+/** What the provider's loaded marker compares: a vault's id, or "" before the registry has one. */
+const vaultKey = (id: string | null | undefined): string => id ?? "";
+
 // State and actions ride separate contexts so a pure-action consumer (useVaultActions)
 // never re-renders on a state change, and the state value carries only state deps.
 const VaultStateContext = createContext<VaultState | null>(null);
@@ -593,8 +596,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// current entries / labels / lock state without listing them as deps. That keeps every
 	// action referentially stable (its own context, never re-firing pure-action subscribers).
 	// Assigned during render: idempotent, the blessed idiom for a latest-value ref.
-	const latestRef = useRef({ entries, webauthnKeyLabels, isLocked, biometricEnabled });
-	latestRef.current = { entries, webauthnKeyLabels, isLocked, biometricEnabled };
+	const latestRef = useRef({ entries, webauthnKeyLabels, isLocked, biometricEnabled, activeId });
+	latestRef.current = { entries, webauthnKeyLabels, isLocked, biometricEnabled, activeId };
 
 	// Sync metadata kept alongside (not on) the user-facing Entry: per-entry HLC
 	// stamps and the deletion graveyard. Held in refs because mutations thread
@@ -609,6 +612,15 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// edit. One ref, reset in one piece, so a closing vault can't leave a field behind.
 	// See docs/synced-settings.md and docs/sync-conflicts.md.
 	const vaultStateRef = useRef<VaultSyncState>(emptyVaultSyncState());
+	// Which vault those refs hold, or null when they hold none. A mutation rewrites the whole blob
+	// from them, so one made before they hold the open vault wipes it, or pours another vault into
+	// it. The ref is what writes check; the state is what `synced.ready` reads.
+	const loadedVaultRef = useRef<string | null>(null);
+	const [loadedVault, setLoadedVault] = useState<string | null>(null);
+	const markLoaded = useCallback((key: string | null) => {
+		loadedVaultRef.current = key;
+		setLoadedVault(key);
+	}, []);
 	// Mirrored in state so consumers re-render when a value changes, including when a remote
 	// merge lands one. The ref is what mutations thread; this is what the UI reads.
 	const [syncedSettings, setSyncedSettings] = useState<SyncedSettings | undefined>(undefined);
@@ -729,6 +741,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			if (blob.entriesCiphertext.length === 0) {
 				vaultStateRef.current = emptyVaultSyncState();
 				latestRef.current = { ...latestRef.current, entries: [] };
+				markLoaded(vaultKey(targetId));
 				setConflicts(NO_CONFLICTS);
 				setSyncedSettings(undefined);
 				setFiles([]);
@@ -844,11 +857,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// read before the render lands would otherwise pair new stamps with old content.
 			vaultStateRef.current = syncState;
 			latestRef.current = { ...latestRef.current, entries: decrypted };
+			markLoaded(vaultKey(targetId));
 			setConflicts(conflictsOf(loaded));
 			setEntries(decrypted);
 			await publishIndex(toAutofillIndex(decrypted), indexLease);
 		},
-		[readDecodedBlob, crypto, storage, autofill, ensureClock, publishIndex, activeId],
+		[readDecodedBlob, crypto, storage, autofill, ensureClock, publishIndex, activeId, markLoaded],
 	);
 
 	// After a successful unwrap: load, or lock again so nothing syncs a vault that didn't open.
@@ -865,6 +879,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		},
 		[loadEntries, crypto, shell],
 	);
+
+	/** Drop everything decrypted, in one piece, and show the vault locked. */
+	const closeOpenVault = useCallback(() => {
+		vaultStateRef.current = emptyVaultSyncState();
+		latestRef.current = { ...latestRef.current, entries: [] };
+		markLoaded(null);
+		setConflicts(NO_CONFLICTS);
+		setSyncedSettings(undefined);
+		setFiles([]);
+		setEntries([]);
+		setIsLocked(true);
+	}, [markLoaded]);
 
 	// On mount (and when the active vault resolves): detect an existing vault handle and
 	// whether crypto is already unlocked (popup reopened mid-session). Waits for the registry
@@ -893,8 +919,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 				const locked = await crypto.isLocked();
 				if (cancelled) return;
-				setIsLocked(locked);
-				if (locked) return;
+				if (locked) {
+					closeOpenVault();
+					return;
+				}
 
 				try {
 					await loadEntries();
@@ -908,6 +936,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					if (!cancelled) setIsLocked(true);
 					return;
 				}
+				// Unlocked only now, as in every other unlock path: whatever mounts under an unlocked
+				// vault takes that to mean the vault is in memory. A lock that landed during the load
+				// wins, and takes what the load just decrypted with it.
+				const lockedSince = await crypto.isLocked();
+				if (cancelled) return;
+				if (lockedSince) {
+					closeOpenVault();
+					return;
+				}
+				setIsLocked(false);
 				// Session-resume: unlock() won't fire, so commit any parked handoff here.
 				void shell.flushPendingCornerCapture().catch(() => {});
 			} catch (e) {
@@ -929,6 +967,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		vaults.length,
 		refreshRegistry,
 		activeId,
+		closeOpenVault,
 	]);
 
 	// Record which vault is unlocked so the background can target it for sync and a reopened popup
@@ -962,15 +1001,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// Reflect a background-initiated lock (auto-lock alarm): drop decrypted state
 	// so the guard redirects to the unlock screen.
 	useEffect(() => {
-		return crypto.onExternalLock(() => {
-			vaultStateRef.current = emptyVaultSyncState();
-			setConflicts(NO_CONFLICTS);
-			setSyncedSettings(undefined);
-			setFiles([]);
-			setEntries([]);
-			setIsLocked(true);
-		});
-	}, [crypto]);
+		return crypto.onExternalLock(closeOpenVault);
+	}, [crypto, closeOpenVault]);
 
 	// Re-decrypt when the background commits a vault write (corner-prompt path)
 	// outside this context, keeping in-memory entries in sync with disk.
@@ -1040,14 +1072,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			throw e;
 		}
 		await autofill.clearIndex();
-		vaultStateRef.current = emptyVaultSyncState();
-		setConflicts(NO_CONFLICTS);
-		setSyncedSettings(undefined);
-		setFiles([]);
-		setEntries([]);
-		setIsLocked(true);
+		closeOpenVault();
 		setLockedByUser(true);
-	}, [crypto, autofill]);
+	}, [crypto, autofill, closeOpenVault]);
 
 	/** Run a get() assertion over the given slots, returning the PRF secret. */
 	// Slot wrapping lives in vault/build-vault (shared with device enrollment); these
@@ -1246,6 +1273,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			);
 			await storage.writeVaultBlob(bytes, newId);
 			vaultStateRef.current = emptyVaultSyncState();
+			markLoaded(newId);
 			setConflicts(NO_CONFLICTS);
 			setSyncedSettings(undefined);
 			setFiles([]);
@@ -1256,7 +1284,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// newly selected active id, reading via storage rebound to the new vault.
 			return code;
 		},
-		[vaults, createRecord, shell, storage, platformCrypto],
+		[vaults, createRecord, shell, storage, platformCrypto, markLoaded],
 	);
 
 	/** Download an encrypted backup of the vault as a `.bramble` file (the encrypted VLT1
@@ -1367,10 +1395,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	// Snapshot the current entry state (latest entries + the stamp/tombstone refs).
 	// Reads entries from latestRef so the callback stays stable across entry changes.
-	const snapshotEntries = useCallback(
-		(): VaultEntries => ({ entries: latestRef.current.entries, ...vaultStateRef.current }),
-		[],
-	);
+	const snapshotEntries = useCallback((): VaultEntries => {
+		// Refused rather than written: see loadedVaultRef. Nothing should get here, and if something
+		// does, the vault on disk is still whole.
+		if (loadedVaultRef.current !== vaultKey(latestRef.current.activeId)) {
+			throw new Error("the open vault has not finished loading");
+		}
+		return { entries: latestRef.current.entries, ...vaultStateRef.current };
+	}, []);
 
 	// Commit a mutation's next state. Only ever runs after a successful persist,
 	// so a failed write leaves entries + refs untouched.
@@ -2354,11 +2386,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	const syncedAccess = useMemo<SyncedSettingsAccess>(
 		() => ({
 			settings: syncedSettings,
-			ready: !isLocked,
+			// Not just unlocked: linking from Settings opens another vault under an unlocked screen,
+			// and until it has loaded, the settings in hand are still the last vault's.
+			ready: !isLocked && loadedVault === vaultKey(activeId),
 			set: async (key, value) =>
 				commitEntries(await mutations.setSetting(snapshotEntries(), key, value)),
 		}),
-		[syncedSettings, isLocked, mutations, snapshotEntries, commitEntries],
+		[syncedSettings, isLocked, loadedVault, activeId, mutations, snapshotEntries, commitEntries],
 	);
 
 	return (
