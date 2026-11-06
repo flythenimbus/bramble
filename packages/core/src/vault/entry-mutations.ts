@@ -33,7 +33,11 @@ import { createEntriesBlobStore } from "./entries-blob";
 import { entryDataSchema } from "./entry-normalize";
 import { cascadeFilesForEntries, type SealedFile, withSealedFiles } from "./file-mutations";
 import { withPartStamps } from "./parts";
-import { withPasswordChangelog, withSupersededPasswords } from "./password-changelog";
+import {
+	withCarriedPasswordChangelog,
+	withPasswordChangelog,
+	withSupersededPasswords,
+} from "./password-changelog";
 import { normalizeTags, tagKey, tagsEqual } from "./tags";
 
 // Coalesce a burst of uses into one write.
@@ -108,6 +112,11 @@ export interface EntryMutationsDeps {
 	clock: () => Promise<HybridClock>;
 }
 
+export interface ImportOptions {
+	/** These come out of another vault the user holds, not a file, so their old passwords stay. */
+	ownVault?: boolean;
+}
+
 export interface EntryMutations {
 	add(current: VaultEntries, data: EntryData): Promise<VaultEntries>;
 	/**
@@ -118,6 +127,7 @@ export interface EntryMutations {
 		current: VaultEntries,
 		items: EntryData[],
 		files?: ImportedFile[],
+		opts?: ImportOptions,
 	): Promise<VaultEntries>;
 	/**
 	 * Save an edit. With `opened`, the save supersedes that version; if another one is displayed
@@ -556,7 +566,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 
 		// One encrypt-and-write for the whole batch (not N), so a large import is a
 		// single disk write.
-		importMany: async (current, items, files = []) => {
+		importMany: async (current, items, files = [], opts = {}) => {
 			const valid = items.map(validate);
 			const c = await clock();
 			const stamps = new Map(current.stamps);
@@ -567,17 +577,18 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 				stamps.set(id, hlc);
 				causal.set(id, nextCausal({ hlc, bases: [], held: [] }));
 				// Imported entries start with no changelog or part stamps; an import file cannot seed them.
+				const entry = withPasswordChangelog(
+					{
+						id,
+						...data,
+						createdAt: data.createdAt ?? hlc.wall,
+						updatedAt: data.updatedAt ?? hlc.wall,
+					},
+					undefined,
+					hlc.wall,
+				);
 				return withPartStamps(
-					withPasswordChangelog(
-						{
-							id,
-							...data,
-							createdAt: data.createdAt ?? hlc.wall,
-							updatedAt: data.updatedAt ?? hlc.wall,
-						},
-						undefined,
-						hlc.wall,
-					),
+					opts.ownVault ? withCarriedPasswordChangelog(entry, data) : entry,
 					undefined,
 					hlc,
 				);

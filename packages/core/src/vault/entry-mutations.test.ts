@@ -20,6 +20,7 @@ import {
 } from "./entry-mutations";
 import { harness } from "./entry-mutations.harness";
 import { effectivePartStamps, PART_STAMP_FIELDS } from "./parts";
+import { MAX_PASSWORD_CHANGELOG } from "./password-changelog";
 
 /** A written entry's stamps as combining reads them (own-stamp ones are left out on disk). */
 const eff = (e: Entry) => effectivePartStamps(e, { hlc: e.partStampsAt! });
@@ -357,6 +358,40 @@ describe("createEntryMutations", () => {
 		);
 		const e = afterUpd.entries[0]!;
 		expect(e.type === "login" && e.passwordChangelog).toBeUndefined();
+	});
+
+	describe("importing", () => {
+		const withHistory = (n: number) =>
+			loginWith("moved", {
+				passwordChangelog: Array.from({ length: n }, (_, i) => ({
+					value: `old-${i}`,
+					changedAt: i + 1,
+				})),
+			});
+		const historyOf = (e: VaultEntries["entries"][number] | undefined) =>
+			e?.type === "login" ? e.passwordChangelog?.map((c) => c.value) : undefined;
+
+		it("takes no changelog from a file, which could otherwise plant old passwords", async () => {
+			const { mutations } = harness();
+			const next = await mutations.importMany(empty(), [withHistory(2)]);
+			expect(historyOf(next.entries[0])).toBeUndefined();
+		});
+
+		it("keeps the changelog of an entry moving between the user's own vaults", async () => {
+			const { mutations } = harness();
+			const next = await mutations.importMany(empty(), [withHistory(2)], [], {
+				ownVault: true,
+			});
+			expect(historyOf(next.entries[0])).toEqual(["old-0", "old-1"]);
+		});
+
+		it("still holds it to the cap", async () => {
+			const { mutations } = harness();
+			const next = await mutations.importMany(empty(), [withHistory(9)], [], {
+				ownVault: true,
+			});
+			expect(historyOf(next.entries[0])).toHaveLength(MAX_PASSWORD_CHANGELOG);
+		});
 	});
 
 	it("ignores a caller-supplied changelog and derives it from the stored entry", async () => {

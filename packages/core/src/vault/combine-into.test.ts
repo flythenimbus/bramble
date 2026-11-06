@@ -60,6 +60,20 @@ describe("collectCarry", () => {
 });
 
 describe("placeCarry", () => {
+	it("holds back a login identical but for its old passwords, rather than drop them", async () => {
+		// An exact duplicate is dropped, so old passwords must make it something else: held back, it
+		// keeps the old vault, and the user can copy it anyway.
+		const history = [{ value: "older", changedAt: 1 }];
+		const carry = await collectCarry(
+			[{ ...login("a", "same.com"), passwordChangelog: history } as unknown as Entry],
+			[],
+			stager(),
+		);
+		const placed = placeCarry([login("x", "same.com")], carry);
+		expect(placed.items).toEqual([]);
+		expect(placed.heldBack.items).toHaveLength(1);
+	});
+
 	it("imports new entries with their files, puts a duplicate's files on the existing entry, and holds look-alikes back", async () => {
 		const existing = [login("x", "same.com"), login("y", "alike.com", "u", "p")];
 		const carry = await collectCarry(

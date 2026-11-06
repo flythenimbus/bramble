@@ -157,11 +157,18 @@ mine unless marked otherwise.
 - **The desktop's vault is the one that stays.**
 - **The browser's entries and files are copied into it** through `importEntries` with their
   attachments, using the normal two-tier dedup. Unlike today's checkbox, files must come along.
-- **The browser's old vault is kept, not deleted.** It stays in the vault list, locked, under its
-  own master password and in its own sync group, until the user deletes it. It is labelled so it
-  is obviously the old one, for example "Personal (before linking)". Names sync across the group,
-  so this label must be local to this browser: a phone still using that vault must not see it
-  change. Where the local label lives is for the builder to decide.
+- **Keeping the browser's old vault is opt-in.** A checkbox on the combine screen, "Keep a copy of
+  this vault", starts unticked (the user's decision, 2026-11-06: the copy is the point, and a second
+  vault nobody asked for is clutter). Unticked, the old vault is removed once all of it has come
+  across, with the copy read back from disk first.
+- **It stays anyway when some of it did not come across,** and the result screen says so: look-alikes
+  held back for review, files that did not copy, entries it could not decrypt, versions in a sync
+  conflict, an email alias provider and its key, or backup targets. So does a pairing that did not
+  finish. Nothing is lost by being left unticked: logins bring their old passwords with them.
+- **A kept vault stays in the vault list,** locked, under its own master password and in its own sync
+  group, until the user deletes it. It is labelled so it is obviously the old one, for example
+  "Personal (before linking)". Names sync across the group, so this label must be local to this
+  browser: a phone still using that vault must not see it change.
 - **Likely duplicates the dedup holds back stay in the old vault.** The result screen says how
   many and offers "Copy them anyway", matching what import does.
 - **The screen says up front that this browser will now unlock with the desktop's master
@@ -421,7 +428,7 @@ to a vault only once the flow ends with that vault holding the desktop's vault:
 | --- | --- |
 | take (X empty) | the vault the copy creates, which replaces X |
 | add (setup's "add a vault") | the vault the copy creates |
-| combine | the desktop's vault, now in the browser; X is set aside |
+| combine | the desktop's vault, now in the browser; X goes, or is set aside if kept |
 | ask, then combine or keep separate | the vault holding the desktop's vault |
 | switch (another browser vault already holds it) | that vault, replacing its previous link |
 
@@ -572,6 +579,8 @@ Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode
 - Confirming the emoji on both screens, and the desktop refusing link requests with no dialog open.
 - Distinct wording for the link screens.
 - Case 2 combines into the desktop's empty vault without asking.
+- Keeping the old vault after a combine is an unticked checkbox, not the default. It stays regardless
+  when any of it did not come across.
 - Held-back duplicates stay in the old vault, with "Copy them anyway".
 - Failure is loud on a partial copy.
 - Piece 3: the extension holds its open vault's link, and a link in progress stays held until it

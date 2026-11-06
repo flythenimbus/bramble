@@ -64,6 +64,7 @@ function makePlatform(
 	const meta = new Map<string, unknown>([[VAULT_REGISTRY_KEY, { vaults }]]);
 	/** Every payload written to disk, oldest first. */
 	const writes: EntriesPayload[] = [];
+	const erased: string[] = [];
 	let release: (() => void) | null = null;
 	let gate: Promise<void> | null = new Promise<void>((r) => {
 		release = r;
@@ -107,6 +108,7 @@ function makePlatform(
 			hasVaultHandle: async () => true,
 			readVaultBlob: async () => new Uint8Array([1]),
 			writeVaultBlob: async () => {},
+			deleteVaultBlob: async (id: string) => void erased.push(id),
 			restoreVaultFromBackup: async () => false,
 			readQuarantine: async () => null,
 			writeQuarantine: async () => {},
@@ -124,6 +126,7 @@ function makePlatform(
 	return {
 		platform,
 		writes,
+		erased,
 		/** Let the load that is holding at decrypt finish. */
 		finishLoad: () => {
 			gate = null;
@@ -250,6 +253,101 @@ describe("a view reopened on an unlocked vault", () => {
 		expect(seen.state?.isLocked).toBe(true);
 		// Nothing decrypted stays behind on a screen that says locked.
 		expect(seen.state?.entries).toEqual([]);
+	});
+});
+
+describe("removing a vault whose entries were copied out", () => {
+	function vaults() {
+		const p = makePlatform({ v1: { entries: [entry("a")], tombstones: [] } }, [
+			{ id: "v1", label: "", createdAt: 1 },
+			{ id: "old", label: "", createdAt: 2 },
+		]);
+		return p;
+	}
+
+	async function open(p: ReturnType<typeof vaults>) {
+		const seen = mount(p.platform);
+		await settle();
+		await act(async () => seen.registry?.selectVault("v1"));
+		p.finishLoad();
+		await waitFor(() => expect(seen.state?.entries).toHaveLength(1));
+		return seen;
+	}
+
+	it("erases it, and its record, when the open vault holds the copy on disk", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		let removed: boolean | undefined;
+
+		await act(async () => {
+			removed = await seen.actions?.deleteCarriedVault("old");
+		});
+
+		expect(removed).toBe(true);
+		expect(p.erased).toEqual(["old"]);
+		expect(seen.registry?.vaults.map((v) => v.id)).toEqual(["v1"]);
+	});
+
+	it("refuses when the disk holds less than memory does, whatever the screen says", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		p.setDisk({ entries: [], tombstones: [] });
+		let removed: boolean | undefined;
+
+		await act(async () => {
+			removed = await seen.actions?.deleteCarriedVault("old");
+		});
+
+		expect(removed).toBe(false);
+		expect(p.erased).toEqual([]);
+	});
+
+	it("refuses the vault that is open", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		let removed: boolean | undefined;
+
+		await act(async () => {
+			removed = await seen.actions?.deleteCarriedVault("v1");
+		});
+
+		expect(removed).toBe(false);
+		expect(p.erased).toEqual([]);
+	});
+});
+
+describe("importing into the open vault", () => {
+	const moved = {
+		type: "login",
+		name: "Moved",
+		urls: [],
+		username: "u",
+		password: "p",
+		passwordChangelog: [{ value: "older", changedAt: 1 }],
+	} as never;
+	const written = (p: ReturnType<typeof makePlatform>) =>
+		JSON.parse(p.writes.at(-1)?.entries.at(-1)?.ciphertext.slice(3) ?? "{}").passwordChangelog;
+
+	async function open() {
+		const p = makePlatform({ v1: { entries: [], tombstones: [] } }, [
+			{ id: "v1", label: "", createdAt: 1 },
+		]);
+		const seen = mount(p.platform);
+		p.finishLoad();
+		await waitFor(() => expect(seen.state?.isLocked).toBe(false));
+		return { p, seen };
+	}
+
+	it("writes the old passwords of an entry from the user's own vault", async () => {
+		const { p, seen } = await open();
+		await act(async () => seen.actions?.importEntries([moved], [], { ownVault: true }));
+		expect(written(p)).toEqual([{ value: "older", changedAt: 1 }]);
+	});
+
+	it("writes none from anywhere else", async () => {
+		const { p, seen } = await open();
+		await act(async () => seen.actions?.importEntries([moved]));
+		expect(written(p)).toBeUndefined();
 	});
 });
 

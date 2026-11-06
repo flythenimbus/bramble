@@ -9,6 +9,7 @@ import { formatDate } from "../../../../util/format-date";
 import { displayLabel } from "../../../../vault/vault-registry";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { Button } from "../../../components/ui/button";
+import { Checkbox } from "../../../components/ui/checkbox";
 import { InlineConfirm } from "../../../components/ui/inline-confirm";
 import { Modal } from "../../../components/ui/modal";
 import { PasswordField } from "../../../components/ui/password-field";
@@ -54,6 +55,8 @@ export function DesktopLinkSection() {
 	const [unlinking, setUnlinking] = useState(false);
 	/** Combine or keep separate, when both sides hold entries. Nothing until the user picks. */
 	const [choice, setChoice] = useState<TwoVaultsChoice | null>(null);
+	/** Keep the old vault after combining. Off unless asked: all of it is in the desktop's by then. */
+	const [keepCopy, setKeepCopy] = useState(false);
 
 	const refresh = useCallback(async () => {
 		if (!desktopLink) return;
@@ -143,9 +146,10 @@ export function DesktopLinkSection() {
 	 * keeps working when the app is closed.
 	 */
 	const acceptInvite = async () => {
-		await link.accept(invitePassword, { choice: choice ?? undefined });
+		await link.accept(invitePassword, { choice: choice ?? undefined, keepCopy });
 		setInvitePassword("");
 		setChoice(null);
+		setKeepCopy(false);
 	};
 
 	const outcome = link.outcome;
@@ -347,6 +351,7 @@ export function DesktopLinkSection() {
 				onClose={() => {
 					void link.abandon();
 					setInvitePassword("");
+					setKeepCopy(false);
 				}}
 				className="max-w-sm"
 			>
@@ -403,9 +408,8 @@ export function DesktopLinkSection() {
 										</Trans>
 									) : outcome === "combine" ? (
 										<Trans>
-											This browser's entries and files are copied into {desktopName}, and this
-											browser will unlock with its master password. {browserName} stays, as "
-											{browserName} (before linking)", until you delete it.
+											This browser's entries and files move into {desktopName}, and this browser
+											will unlock with its master password.
 										</Trans>
 									) : (
 										<Trans>
@@ -414,6 +418,11 @@ export function DesktopLinkSection() {
 										</Trans>
 									)}
 								</p>
+							)}
+							{(outcome === "combine" || (outcome === "ask" && choice === "combine")) && (
+								<Checkbox checked={keepCopy} onChange={setKeepCopy} className="text-xs">
+									<Trans>Keep a copy of this vault</Trans>
+								</Checkbox>
 							)}
 							<PasswordField
 								label={t`Master password`}

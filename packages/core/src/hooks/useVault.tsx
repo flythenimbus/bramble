@@ -238,6 +238,7 @@ import {
 	createEntryMutations,
 	emptyVaultEntries,
 	type ImportedFile,
+	type ImportOptions,
 	type OpenedVersion,
 	type VaultEntries,
 	vaultEntriesFromPayload,
@@ -353,6 +354,9 @@ export interface VaultActions {
 	deleteVault(auth: DeleteVaultAuth): Promise<boolean>;
 	/** Remove a vault linking left empty (never the open one; re-checks emptiness). */
 	deleteEmptyVault(id: string, entryCount: number, fileCount: number): Promise<boolean>;
+	/** Remove a vault whose entries were copied into the open one, once that copy is on disk. False
+	 * when it is not, and the vault stays. */
+	deleteCarriedVault(id: string): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	/** Save a backup file. Resolves with any attachments it had to leave out. */
 	/** Throws BackupIncompleteError rather than save a backup missing any of the vault. */
@@ -398,7 +402,11 @@ export interface VaultActions {
 	 * Add entries in one write, with any files the import brings. Every file is sealed first,
 	 * so one that cannot be stops the import before anything is written: whole or not at all.
 	 */
-	importEntries(items: EntryData[], attachments?: PlacedAttachment[]): Promise<void>;
+	importEntries(
+		items: EntryData[],
+		attachments?: PlacedAttachment[],
+		opts?: ImportOptions,
+	): Promise<void>;
 	/** The displayed version of an entry, for an edit form to save against (see `updateEntry`). */
 	openVersion(id: string): OpenedVersion | undefined;
 	/**
@@ -1474,7 +1482,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 
 	const importEntries = useCallback(
-		async (items: EntryData[], attachments: PlacedAttachment[] = []) => {
+		async (items: EntryData[], attachments: PlacedAttachment[] = [], opts?: ImportOptions) => {
 			const files: ImportedFile[] = [];
 			const sealer = vaultFiles?.sealer;
 			for (const a of attachments) {
@@ -1486,7 +1494,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 						: { sealed, entryId: a.onto.entryId },
 				);
 			}
-			commitEntries(await mutations.importMany(snapshotEntries(), items, files));
+			commitEntries(await mutations.importMany(snapshotEntries(), items, files, opts));
 		},
 		[mutations, snapshotEntries, commitEntries, vaultFiles],
 	);
@@ -2160,7 +2168,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * verification and deletion are inseparable here, so no caller can delete without re-authing. */
 	/**
 	 * Erase everything keyed to one vault: blob, files, keys and settings. Callers gate it:
-	 * deleteVault on a re-auth, deleteEmptyVault on the vault holding nothing.
+	 * deleteVault on a re-auth, deleteEmptyVault on the vault holding nothing, deleteCarriedVault on
+	 * one whose entries the open vault now holds.
 	 */
 	const eraseVaultData = useCallback(
 		async (id: string) => {
@@ -2255,6 +2264,20 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[activeId, storage, eraseVaultData, forgetEmptyRecord],
 	);
 
+	const deleteCarriedVault = useCallback(
+		async (id: string): Promise<boolean> => {
+			if (id === activeId) return false;
+			// From disk, not memory: what is on screen once had nothing behind it.
+			const store = createEntriesBlobStore({ crypto, storage, readDecodedBlob });
+			const onDisk = await store.readEntriesPayload();
+			if (onDisk.entries.length < latestRef.current.entries.length) return false;
+			await eraseVaultData(id);
+			await forgetEmptyRecord(id);
+			return true;
+		},
+		[activeId, crypto, storage, readDecodedBlob, eraseVaultData, forgetEmptyRecord],
+	);
+
 	// Every action is referentially stable (state reads route through latestRef), so this
 	// memo builds once: the actions value never changes and useVaultActions never re-renders.
 	const actions = useMemo<VaultActions>(
@@ -2264,6 +2287,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			createVault,
 			deleteVault,
 			deleteEmptyVault,
+			deleteCarriedVault,
 			exportVault,
 			exportKdbx,
 			exportToApp,
@@ -2316,6 +2340,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			createVault,
 			deleteVault,
 			deleteEmptyVault,
+			deleteCarriedVault,
 			exportVault,
 			exportKdbx,
 			exportToApp,

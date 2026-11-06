@@ -36,6 +36,11 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 					</Trans>
 				</p>
 			)}
+			{combined.keptUnasked && (
+				<p className="text-xs text-muted-foreground">
+					<Trans>Some of it didn't copy, so the old vault is kept.</Trans>
+				</p>
+			)}
 		</div>
 	);
 }

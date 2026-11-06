@@ -52,13 +52,8 @@ export function TwoVaultsPrompt({
 					</span>
 					<span className="block text-muted-foreground">
 						<Trans>
-							Copies {browserName}'s entries and files into {desktopName}. Exact duplicates are
+							Moves {browserName}'s entries and files into {desktopName}. Exact duplicates are
 							skipped; near-duplicates are held for you to review.
-						</Trans>
-					</span>
-					<span className="block text-muted-foreground">
-						<Trans>
-							{browserName} stays, as "{browserName} (before linking)", until you delete it.
 						</Trans>
 					</span>
 					<span className="block text-muted-foreground">

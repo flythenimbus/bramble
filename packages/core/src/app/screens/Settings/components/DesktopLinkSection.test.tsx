@@ -58,7 +58,7 @@ vi.mock("../../../hooks/usePopOut", () => ({
 
 vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../../../hooks/useVault")>()),
-	useVault: () => ({ entries: h.entries, files: [] }),
+	useVault: () => ({ entries: h.entries, files: [], conflicts: new Map() }),
 	useVaultActions: () => ({
 		startJoin: async (
 			_code: string,
@@ -79,6 +79,10 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 			h.imported = items;
 		},
 		readEntries: () => [],
+		deleteCarriedVault: async () => {
+			h.steps.push("removeOld");
+			return true;
+		},
 	}),
 }));
 
@@ -86,7 +90,9 @@ vi.mock("../../../../hooks/useVaultRegistry", () => ({
 	useVaultRegistry: () => ({
 		vaults: h.vaults,
 		activeId: h.vaults.length ? h.activeVault : undefined,
-		setAside: async () => {},
+		setAside: async () => {
+			h.steps.push("setAside");
+		},
 		syncKey: (k: string) => `${k}:${h.activeVault}`,
 	}),
 }));
@@ -101,6 +107,7 @@ const platform = {
 	target: "chromium",
 	storage: {
 		getMeta: async (key: string) => {
+			if (!key.startsWith("sync.group:")) return undefined;
 			const id = key.split(":")[1] ?? "";
 			const group = h.groupOf.get(id);
 			if (!group) return undefined;
@@ -251,6 +258,7 @@ describe("what a desktop connect will do to this browser", () => {
 	it("asks whether to combine when both sides have entries", async () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
+		h.entries = [entry("a")];
 		h.invite = "code";
 		await mountAndLink();
 
@@ -263,6 +271,7 @@ describe("what a desktop connect will do to this browser", () => {
 		// The name follows the vault to every device, so nothing is named here.
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
+		h.entries = [entry("a")];
 		h.invite = "code";
 		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
@@ -278,6 +287,7 @@ describe("what a desktop connect will do to this browser", () => {
 	it("joins over the link, never the relay", async () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
+		h.entries = [entry("a")];
 		h.invite = "code";
 		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
@@ -306,6 +316,44 @@ describe("when both sides have entries", () => {
 		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 	}
 
+	it("offers to keep a copy only when combining, and leaves it unticked", async () => {
+		twoVaults();
+		await mountAndLink();
+		await screen.findByText(/you have two vaults/i);
+		const keep = () => screen.queryByRole("checkbox", { name: /keep a copy of this vault/i });
+		expect(keep()).toBeNull();
+
+		fireEvent.click(screen.getByRole("radio", { name: /keep them separate/i }));
+		expect(keep()).toBeNull();
+
+		fireEvent.click(screen.getByRole("radio", { name: /combine into one/i }));
+		expect((keep() as HTMLInputElement).checked).toBe(false);
+	});
+
+	it("removes the old vault unless the box is ticked", async () => {
+		twoVaults();
+		await choose(/combine into one/i);
+		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined", "import", "removeOld"]));
+	});
+
+	it("keeps the old vault when the box is ticked", async () => {
+		twoVaults();
+		await mountAndLink();
+		await screen.findByText(/you have two vaults/i);
+		fireEvent.click(screen.getByRole("radio", { name: /combine into one/i }));
+		fireEvent.click(screen.getByRole("checkbox", { name: /keep a copy of this vault/i }));
+		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined", "import", "setAside"]));
+	});
+
+	it("no longer promises the old vault stays", async () => {
+		twoVaults();
+		await mountAndLink();
+		await screen.findByText(/you have two vaults/i);
+		expect(screen.queryByText(/before linking/i)).toBeNull();
+	});
+
 	it("asks combine or keep separate, with neither chosen for the user", async () => {
 		twoVaults();
 		await mountAndLink();
@@ -324,7 +372,7 @@ describe("when both sides have entries", () => {
 		await choose(/combine into one/i);
 
 		// The link attaches to the vault the join opened before anything is copied into it.
-		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined", "import"]));
+		await waitFor(() => expect(h.steps.slice(0, 3)).toEqual(["join", "attach:joined", "import"]));
 		expect(h.imported).toHaveLength(2);
 		expect(h.imported?.[0]).not.toHaveProperty("id");
 	});
@@ -590,6 +638,7 @@ describe("an older desktop app's copy", () => {
 	it("shows the symbols it asks to compare", async () => {
 		h.vaults = [{ id: "v1", label: "Personal", createdAt: 1 }];
 		h.groupOf.set("v1", "OTHER-GROUP");
+		h.entries = [entry("a")];
 		h.invite = "code";
 		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);

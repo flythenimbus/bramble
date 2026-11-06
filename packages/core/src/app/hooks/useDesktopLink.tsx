@@ -3,6 +3,7 @@
 
 import { useLingui } from "@lingui/react/macro";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { backupTargetsKeyFor } from "../../backup/config";
 import { usePlatform } from "../../context/PlatformContext";
 import { type EntryData, useVault, useVaultActions } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
@@ -17,7 +18,7 @@ import {
 import type { PairingSas } from "../../sync/pairing-sas";
 import { syncKeyFor } from "../../sync/sync-keys";
 import { collectCarry, placeCarry } from "../../vault/combine-into";
-import { isVaultEmpty, readVaultContents } from "../../vault/vault-empty";
+import { holdsWhatCombiningLeaves, isVaultEmpty, readVaultContents } from "../../vault/vault-empty";
 
 /** How many quarantine records a vault holds (see vault/quarantine.ts). */
 async function countQuarantined(
@@ -52,7 +53,7 @@ export function useDesktopLink({
 	const { t } = useLingui();
 	const vaultActions = useVaultActions();
 	const { startJoin } = vaultActions;
-	const { entries, files } = useVault();
+	const { entries, files, conflicts } = useVault();
 	const registry = useVaultRegistry();
 	const { vaults, activeId } = registry;
 	/** The provider's actions are bound to the vault open when they were made. After a join the
@@ -92,6 +93,8 @@ export function useDesktopLink({
 		uncarried: number;
 		/** Entries set aside as unreadable in the old vault: never carried, kept where they are. */
 		quarantined: number;
+		/** The old vault stayed without being asked to: some of it did not come across. */
+		keptUnasked: boolean;
 	} | null>(null);
 
 	/** What linking does here, from what each side holds. */
@@ -272,13 +275,14 @@ export function useDesktopLink({
 	 * arrives under its own synced name.
 	 *
 	 * Combining reads this vault's entries and files BEFORE the switch, because only one vault's
-	 * key is loaded at a time, then copies them in after it. The old vault is kept, set aside.
-	 * Keeping them separate copies nothing.
+	 * key is loaded at a time, then copies them in after it. The old vault then goes, unless the user
+	 * asked to keep a copy or some of it did not come across, when it stays, set aside. Keeping them
+	 * separate copies nothing.
 	 */
 	const accept = useCallback(
 		async (
 			password: string,
-			opts?: { choice?: "combine" | "separate"; carry?: EntryData[] },
+			opts?: { choice?: "combine" | "separate"; carry?: EntryData[]; keepCopy?: boolean },
 		): Promise<boolean> => {
 			if (!invite) return false;
 			setJoining(true);
@@ -288,6 +292,7 @@ export function useDesktopLink({
 			// Counted now, while the old vault is the one open; the re-check before removal uses it.
 			const oldCount = entries.length;
 			const oldFiles = files.length;
+			const oldConflicts = conflicts.size;
 			// Past the join the invite form is gone, so a failure has to show in `error` instead.
 			let joined = false;
 			let copying = false;
@@ -314,13 +319,29 @@ export function useDesktopLink({
 					copying = true;
 					const placed = placeCarry(now.actions.readEntries(), carry);
 					if (placed.items.length || placed.attachments.length) {
-						await now.actions.importEntries(placed.items, placed.attachments);
+						await now.actions.importEntries(placed.items, placed.attachments, { ownVault: true });
 					}
-					await now.registry.setAside(oldId);
+					// Removed only with nothing left behind that it alone holds, and a pairing that
+					// finished: a vault that goes cannot be asked for anything later.
+					const contents = await readVaultContents(storage, oldId, 0, 0);
+					const targets = await storage.getMeta<unknown[]>(backupTargetsKeyFor(oldId));
+					const whole =
+						placed.heldBack.items.length === 0 &&
+						carry.uncarried === 0 &&
+						oldConflicts === 0 &&
+						!targets?.length &&
+						!holdsWhatCombiningLeaves(contents);
+					const removed =
+						whole &&
+						attached &&
+						!opts?.keepCopy &&
+						(await now.actions.deleteCarriedVault(oldId).catch(() => false));
+					if (!removed) await now.registry.setAside(oldId);
 					setCombined({
 						heldBack: placed.heldBack,
 						uncarried: carry.uncarried,
 						quarantined: await countQuarantined(storage, oldId),
+						keptUnasked: attached && !opts?.keepCopy && !removed,
 					});
 				}
 				// After the join, so the copies land in the vault that is now open.
@@ -357,6 +378,7 @@ export function useDesktopLink({
 			activeId,
 			entries,
 			files,
+			conflicts,
 			platformFiles,
 			startJoin,
 			vaultSwitchedFrom,
@@ -372,6 +394,7 @@ export function useDesktopLink({
 		await latest.current.actions.importEntries(
 			combined.heldBack.items,
 			combined.heldBack.attachments,
+			{ ownVault: true },
 		);
 		setCombined({ ...combined, heldBack: { items: [], attachments: [] } });
 	}, [combined]);

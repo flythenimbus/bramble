@@ -92,6 +92,7 @@ test("settings: combines this browser's vault and its files into the desktop's",
 
 	await expect(popup.getByText("You have two vaults")).toBeVisible();
 	await popup.getByText("Combine into one").click();
+	await popup.getByText("Keep a copy of this vault").click();
 	await popup.getByLabel("Master password").last().fill(DESKTOP_PW);
 	await popup.getByRole("button", { name: "Continue", exact: true }).click();
 	await expect(popup.getByText("This vault syncs with the desktop app.")).toBeVisible({
@@ -100,8 +101,14 @@ test("settings: combines this browser's vault and its files into the desktop's",
 
 	// The browser now opens the desktop's vault with its own entry and file copied in, and keeps
 	// its old vault set aside.
-	const registry = (await ext.stored("vault.registry")) as { vaults: { setAsideAt?: number }[] };
-	expect(registry.vaults.filter((v) => v.setAsideAt)).toHaveLength(1);
+	await expect
+		.poll(async () => {
+			const registry = (await ext.stored("vault.registry")) as {
+				vaults: { setAsideAt?: number }[];
+			};
+			return registry.vaults.filter((v) => v.setAsideAt).length;
+		})
+		.toBe(1);
 	await popup.getByRole("button", { name: "Go to vault" }).click();
 	await expect(popup.getByText(DESKTOP_ENTRY)).toBeVisible();
 	await popup.getByText("Browser only").first().click();
@@ -215,6 +222,41 @@ test.describe("granting the permission at link time", () => {
 		const popup = await ext.popup();
 		await expect(popup.getByText(DESKTOP_ENTRY)).toBeVisible();
 	});
+
+	test("opening a window brings the link back at once, when the one that linked has closed", async ({
+		ext,
+	}) => {
+		// This worker can never open a pipe, and replacing it takes a minute. A window can lend it one.
+		await createVault(ext.page, ext.extensionId, BROWSER_PW);
+		const linking = await ext.popup();
+		await desktopConnect();
+		const shown = await linkFromSettings(linking);
+		expect(await desktopSymbols()).toBe(shown);
+		await linking.getByRole("button", { name: "They match" }).click();
+		await desktopApprove();
+		const offer = linking.locator("form").filter({ hasText: "Sync with the desktop app" });
+		await offer.getByLabel("Master password").fill(DESKTOP_PW);
+		await offer.getByRole("button", { name: "Sync", exact: true }).click();
+		await expect(linking.getByText("This vault syncs with the desktop app.")).toBeVisible({
+			timeout: 30_000,
+		});
+		await linking.close();
+		await ext.page.close();
+		await expect.poll(desktopConnectedBrowsers, { timeout: 15_000 }).toBe(0);
+
+		const again = await ext.popup();
+		await expect.poll(desktopConnectedBrowsers, { timeout: 5_000 }).toBeGreaterThan(0);
+
+		// Sync is back on it, both ways, in the time it takes to look.
+		const name = `While the window is open ${Date.now().toString(36)}`;
+		await desktopAddLogin(name);
+		await again.getByRole("button", { name: "Go to vault" }).click();
+		await expect(again.getByText(name)).toBeVisible({ timeout: 10_000 });
+		await addLogin(again, "Made in the window");
+		await expect
+			.poll(() => desktopEntryText("Made in the window"), { timeout: 10_000 })
+			.toContain("Made in the window");
+	});
 });
 
 test.describe("an empty desktop vault, linked from a browser vault that holds something", () => {
@@ -249,8 +291,10 @@ test.describe("an empty desktop vault, linked from a browser vault that holds so
 		await desktopApprove();
 
 		const offer = popup.locator("form").filter({ hasText: "Sync with the desktop app" });
-		await expect(offer).toContainText('"Personal (before linking)"');
 		await expect(offer.getByRole("radio")).toHaveCount(0);
+		await expect(
+			offer.getByRole("checkbox", { name: "Keep a copy of this vault" }),
+		).not.toBeChecked();
 		await offer.getByLabel("Master password").fill(DESKTOP_PW);
 		await offer.getByRole("button", { name: "Sync", exact: true }).click();
 		await expect(popup.getByText("This vault syncs with the desktop app.")).toBeVisible({
@@ -275,13 +319,10 @@ test.describe("an empty desktop vault, linked from a browser vault that holds so
 		await again.getByText("Browser only").first().click();
 		await expect(again.getByText("note.txt")).toBeVisible();
 
-		const registry = (await ext.stored("vault.registry")) as {
-			vaults: { label: string; setAsideAt?: number }[];
-		};
-		expect(registry.vaults.map((v) => [v.label, v.setAsideAt !== undefined])).toEqual([
-			["Personal", true],
-			["Test 1", false],
-		]);
+		// With nothing asked, the old vault goes: all of it is in this one now, and nothing of it stays.
+		const registry = (await ext.stored("vault.registry")) as { vaults: { label: string }[] };
+		expect(registry.vaults.map((v) => v.label)).toEqual(["Test 1"]);
+		expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(1);
 		// Back to the vault the rest of the suite expects open.
 		await desktopOpenVault("Vault 1");
 	});

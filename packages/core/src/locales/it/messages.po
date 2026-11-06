@@ -118,8 +118,8 @@ msgstr "{browserName} si sincronizza anche con {others}. La combinazione sposta 
 #~ msgstr "{browserName} viene mantenuto, bloccato, come \"{browserName} (prima del collegamento)\" finché non viene eliminato."
 
 #: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
-msgid "{browserName} stays, as \"{browserName} (before linking)\", until you delete it."
-msgstr "{browserName} rimane, come \"{browserName} (prima del collegamento)\", finché non viene eliminato."
+#~ msgid "{browserName} stays, as \"{browserName} (before linking)\", until you delete it."
+#~ msgstr "{browserName} rimane, come \"{browserName} (prima del collegamento)\", finché non viene eliminato."
 
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "{conflicted, plural, one {# entry has a sync conflict. Only the version you see is exported.} other {# entries have a sync conflict. Only the version you see is exported.}}"
@@ -1129,8 +1129,8 @@ msgid "Copied {copied}"
 msgstr "Copiato {copied}"
 
 #: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
-msgid "Copies {browserName}'s entries and files into {desktopName}. Exact duplicates are skipped; near-duplicates are held for you to review."
-msgstr "Copia le voci e i file di {browserName} in {desktopName}. I duplicati esatti vengono saltati; i quasi duplicati vengono trattenuti per la revisione."
+#~ msgid "Copies {browserName}'s entries and files into {desktopName}. Exact duplicates are skipped; near-duplicates are held for you to review."
+#~ msgstr "Copia le voci e i file di {browserName} in {desktopName}. I duplicati esatti vengono saltati; i quasi duplicati vengono trattenuti per la revisione."
 
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/components/PasswordGenerator.tsx
@@ -2063,6 +2063,10 @@ msgstr "Aggiungi vault"
 msgid "KDBX export isn't available here."
 msgstr "L'esportazione KDBX non è disponibile qui."
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Keep a copy of this vault"
+msgstr "Conservare una copia di questa cassaforte"
+
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 msgid "Keep both"
 msgstr "Mantenerle entrambe"
@@ -2330,6 +2334,10 @@ msgstr "Luna"
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "More options"
 msgstr "Altre opzioni"
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "Moves {browserName}'s entries and files into {desktopName}. Exact duplicates are skipped; near-duplicates are held for you to review."
+msgstr "Sposta le voci e i file di {browserName} in {desktopName}. I duplicati esatti vengono ignorati; i quasi duplicati vengono tenuti da parte per la revisione."
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Mushroom"
@@ -3449,6 +3457,10 @@ msgstr "Siti che hai silenziato"
 msgid "Smiley"
 msgstr "Faccina"
 
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Some of it didn't copy, so the old vault is kept."
+msgstr "Alcuni dati non sono stati copiati, quindi la cassaforte precedente viene conservata."
+
 #: packages/core/src/app/ErrorBoundary.tsx
 msgid "Something went wrong"
 msgstr "Si è verificato un errore"
@@ -3863,8 +3875,12 @@ msgstr "Questo browser si sbloccherà con la password principale dell'app deskto
 #~ msgstr "Le voci e i file di questo browser vengono copiati in {desktopName} e questo browser si sbloccherà con la relativa password principale. {browserName} viene mantenuto, bloccato, come \"{browserName} (prima del collegamento)\" finché non viene eliminato."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "This browser's entries and files are copied into {desktopName}, and this browser will unlock with its master password. {browserName} stays, as \"{browserName} (before linking)\", until you delete it."
-msgstr "Le voci e i file di questo browser vengono copiati in {desktopName} e questo browser si sbloccherà con la sua password principale. {browserName} rimane, come \"{browserName} (prima del collegamento)\", finché non viene eliminato."
+#~ msgid "This browser's entries and files are copied into {desktopName}, and this browser will unlock with its master password. {browserName} stays, as \"{browserName} (before linking)\", until you delete it."
+#~ msgstr "Le voci e i file di questo browser vengono copiati in {desktopName} e questo browser si sbloccherà con la sua password principale. {browserName} rimane, come \"{browserName} (prima del collegamento)\", finché non viene eliminato."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This browser's entries and files move into {desktopName}, and this browser will unlock with its master password."
+msgstr "Le voci e i file di questo browser vengono spostati in {desktopName} e questo browser si sbloccherà con la sua password principale."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "This can't be undone, and the deletion syncs to your other devices."

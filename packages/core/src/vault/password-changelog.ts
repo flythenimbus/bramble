@@ -34,6 +34,17 @@ export function nextPasswordChangelog(
 }
 
 /**
+ * Keep the log of a login moving between the user's own vaults, the one time a supplied value is
+ * trusted: it came out of a vault they just unlocked, not an import file. Capped all the same.
+ */
+export function withCarriedPasswordChangelog(next: Entry, carried: EntryData): Entry {
+	if (next.type !== "login" || carried.type !== "login" || !carried.passwordChangelog?.length) {
+		return next;
+	}
+	return { ...next, passwordChangelog: carried.passwordChangelog.slice(0, MAX_PASSWORD_CHANGELOG) };
+}
+
+/**
  * Stamp the changelog onto an entry about to be persisted. Assigning the key even when
  * the result is `undefined` is deliberate: it strips a caller-supplied value, and
  * `JSON.stringify` drops the undefined key before it ever reaches the blob.

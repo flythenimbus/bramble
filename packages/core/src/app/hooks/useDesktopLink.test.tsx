@@ -4,6 +4,8 @@ import { I18nProvider } from "@lingui/react";
 import { act, renderHook } from "@testing-library/react";
 import { type ReactNode, useSyncExternalStore } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { aliasConfiguredHintKeyFor } from "../../aliases/config";
+import { backupTargetsKeyFor } from "../../backup/config";
 import { type Platform, PlatformProvider } from "../../context/PlatformContext";
 import { syncKeyFor } from "../../sync/sync-keys";
 import { useDesktopLink } from "./useDesktopLink";
@@ -42,6 +44,12 @@ const h = vi.hoisted(() => ({
 	attaches: true,
 	/** Set to make attaching fail outright, as a dead pipe to the background would. */
 	attachThrows: false,
+	/** The open vault's sync conflicts. */
+	conflicts: new Map<string, unknown>(),
+	/** What removing a vault whose entries were copied out answers. */
+	carriedRemoved: true,
+	/** The options each import was made with. */
+	importOptions: [] as unknown[],
 }));
 
 /** The open vault, re-rendering subscribers when a join switches it, as the provider does. */
@@ -62,7 +70,7 @@ function switchTo(id: string) {
 
 vi.mock("../../hooks/useVault", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../hooks/useVault")>()),
-	useVault: () => ({ entries: h.entries, files: h.files }),
+	useVault: () => ({ entries: h.entries, files: h.files, conflicts: h.conflicts }),
 	// Like the real provider, each action is bound to the vault open when it was made.
 	useVaultActions: () => {
 		const at = useActive();
@@ -75,15 +83,20 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 				if (h.afterJoin) switchTo(h.afterJoin);
 				return h.joinOpens;
 			},
-			importEntries: async (items: unknown[], attachments: unknown[] = []) => {
+			importEntries: async (items: unknown[], attachments: unknown[] = [], opts?: unknown) => {
 				h.steps.push(`import@${at}`);
 				if (h.importFails) throw new Error("disk full");
 				h.imported.push([items, attachments]);
+				h.importOptions.push(opts);
 			},
 			readEntries: () => h.desktopEntries,
 			deleteEmptyVault: async (id: string, _entries?: number, _files?: number) => {
 				h.steps.push(`deleteEmpty:${id}@${at}`);
 				return at !== id;
+			},
+			deleteCarriedVault: async (id: string) => {
+				h.steps.push(`deleteCarried:${id}@${at}`);
+				return h.carriedRemoved;
 			},
 		};
 	},
@@ -287,6 +300,118 @@ describe("combining into the desktop's vault", () => {
 		h.failStage = false;
 	}
 
+	describe("the old vault afterwards", () => {
+		/** A browser vault with one login and a file, all of which fits in the desktop's. */
+		function oneFullVault() {
+			twoFullVaults();
+			h.entries = [login("a", "new.com")];
+			h.desktopEntries = [];
+			h.summary = { name: "Home", empty: true, entries: 0 };
+			h.conflicts = new Map();
+			h.carriedRemoved = true;
+			h.failStage = false;
+			h.meta.clear();
+			h.attaches = true;
+		}
+		const combineAs = async (opts: { keepCopy?: boolean } = {}) => {
+			const result = await linkedFrom("settings");
+			h.steps = [];
+			await act(async () => {
+				await result.current.accept("pw", opts);
+			});
+			return result;
+		};
+		const SET_ASIDE = ["stage", "join", "import@new", "setAside:v1@new"];
+
+		it("goes, once all of it is in the desktop's, with nothing asked", async () => {
+			oneFullVault();
+			const result = await combineAs();
+			expect(h.steps).toEqual(["stage", "join", "import@new", "deleteCarried:v1@new"]);
+			expect(result.current.combined?.keptUnasked).toBe(false);
+		});
+
+		it("stays when asked to keep a copy", async () => {
+			oneFullVault();
+			const result = await combineAs({ keepCopy: true });
+			expect(h.steps).toEqual(SET_ASIDE);
+			expect(result.current.combined?.keptUnasked).toBe(false);
+		});
+
+		it.each([
+			[
+				"look-alikes held back for review",
+				() => {
+					h.desktopEntries = [{ ...login("x", "new.com"), username: "U" }];
+				},
+			],
+			[
+				"a file that did not copy",
+				() => {
+					h.failStage = true;
+				},
+			],
+			[
+				"entries it could not decrypt",
+				() => {
+					h.meta.set("quarantine:v1", JSON.stringify([{ id: "q" }]));
+				},
+			],
+			[
+				"versions in a sync conflict",
+				() => {
+					h.conflicts = new Map([["a", {}]]);
+				},
+			],
+			[
+				"an email alias provider and its key",
+				() => {
+					h.meta.set(aliasConfiguredHintKeyFor("v1"), true);
+				},
+			],
+			[
+				"backup targets",
+				() => {
+					h.meta.set(backupTargetsKeyFor("v1"), [{ id: "t" }]);
+				},
+			],
+		])("stays, and says so, when it holds %s, which do not come across", async (_what, arrange) => {
+			oneFullVault();
+			arrange();
+			const result = await combineAs();
+			expect(h.steps.at(-1)).toBe("setAside:v1@new");
+			expect(h.steps).not.toContain("deleteCarried:v1@new");
+			expect(result.current.combined?.keptUnasked).toBe(true);
+			h.meta.clear();
+			h.conflicts = new Map();
+		});
+
+		it("stays when the pairing did not finish", async () => {
+			oneFullVault();
+			h.attaches = false;
+			const result = await combineAs();
+			expect(h.steps).toEqual(SET_ASIDE);
+			expect(result.current.error).toMatch(/didn't finish/i);
+			h.attaches = true;
+		});
+
+		it("stays when the copy is not on disk to read back", async () => {
+			oneFullVault();
+			h.carriedRemoved = false;
+			const result = await combineAs();
+			expect(h.steps.at(-1)).toBe("setAside:v1@new");
+			expect(result.current.combined?.keptUnasked).toBe(true);
+			h.carriedRemoved = true;
+		});
+
+		it("stays when the copy itself fails", async () => {
+			oneFullVault();
+			h.importFails = true;
+			await combineAs();
+			h.importFails = false;
+			expect(h.steps).not.toContain("deleteCarried:v1@new");
+		});
+	});
+
 	it("carries before the join, copies after it, and sets the old vault aside", async () => {
 		twoFullVaults();
 		const result = await linkedFrom("settings");
@@ -340,6 +465,19 @@ describe("combining into the desktop's vault", () => {
 		} finally {
 			h.attachThrows = false;
 		}
+	});
+
+	it("copies as the user's own vault, so old passwords come too, whichever way they arrive", async () => {
+		twoFullVaults();
+		h.importOptions = [];
+		const result = await linkedFrom("settings");
+		await act(async () => {
+			await result.current.accept("pw", { choice: "combine" });
+		});
+		await act(async () => {
+			await result.current.copyHeldBack();
+		});
+		expect(h.importOptions).toEqual([{ ownVault: true }, { ownVault: true }]);
 	});
 
 	it("copies the held-back look-alikes when asked to", async () => {

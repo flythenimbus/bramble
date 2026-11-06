@@ -71,6 +71,12 @@ it and cannot destroy it.
 The same rule means an import file cannot seed a changelog, so a hostile file
 cannot pre-fill the log or grow it past the cap.
 
+Combining a vault when linking the desktop app is the one exception
+(`withCarriedPasswordChangelog`). Those entries come out of a vault the user just
+had unlocked, and the old vault may be removed afterwards, so the log moves with
+them, still capped. A login identical but for its log is not an exact duplicate,
+so it is held back for review instead of dropped, and its vault stays.
+
 ### What counts as a change
 
 A row is recorded only when the password actually differs from the stored one.
@@ -141,7 +147,7 @@ unrelated and deliberately named "changelog" to keep the two apart.
 
 - **Import.** KDBX `History` elements, and the equivalents in the 1Password and
   Bitwarden exports, are still skipped on import. Only rotations performed in
-  Bramble produce rows.
+  Bramble produce rows, and only a combine moves them between vaults.
 - **Export.** The changelog stays local to the vault.
 - **A retention setting.** The cap is a constant.
 - **Any way to purge.** No per-row delete, no "clear history", no off switch. If
