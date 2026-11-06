@@ -120,6 +120,48 @@ test("settings: combines this browser's vault and its files into the desktop's",
 		.toContain("note.txt");
 });
 
+test("settings: an entry on both sides keeps what the browser's copy held, and the old vault goes", async ({
+	ext,
+}) => {
+	const both = { username: "both@example.com", password: "Both-sides-pw-321" };
+	await desktopAddLogin("On both sides", both);
+	await createVault(ext.page, ext.extensionId, BROWSER_PW);
+	const popup = await ext.popup();
+	await addLogin(popup, "On both sides", { ...both, tag: "from-browser" });
+
+	await desktopConnect();
+	const shown = await linkFromSettings(popup);
+	expect(await desktopSymbols()).toBe(shown);
+	await popup.getByRole("button", { name: "They match" }).click();
+	await desktopApprove();
+
+	await expect(popup.getByText("You have two vaults")).toBeVisible();
+	await popup.getByText("Combine into one").click();
+	await popup.getByLabel("Master password").last().fill(DESKTOP_PW);
+	await popup.getByRole("button", { name: "Continue", exact: true }).click();
+	await expect(popup.getByText("This vault syncs with the desktop app.")).toBeVisible({
+		timeout: 30_000,
+	});
+
+	// The box was left unticked and all of it came across, so the old vault goes.
+	await expect
+		.poll(async () => {
+			const registry = (await ext.stored("vault.registry")) as { vaults: unknown[] };
+			return registry.vaults.length;
+		})
+		.toBe(1);
+	expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(1);
+
+	// One entry, with the tag, here and on the desktop.
+	await popup.getByRole("button", { name: "Go to vault" }).click();
+	await expect(popup.getByText("On both sides")).toHaveCount(1);
+	await popup.getByText("On both sides").click();
+	await expect(popup.getByText("from-browser")).toBeVisible();
+	await expect
+		.poll(() => desktopEntryText("On both sides"), { timeout: 30_000 })
+		.toContain("from-browser");
+});
+
 test("approving and then leaving the screen links nothing", async ({ ext, desktop }) => {
 	const before = desktop.linkedBrowsers();
 	await desktopConnect();

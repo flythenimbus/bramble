@@ -297,6 +297,9 @@ export function useDesktopLink({
 			let joined = false;
 			let copying = false;
 			try {
+				// Read first: a save landing while the files are staged must show as a change.
+				const oldBlob =
+					combining && oldId ? await storage.readVaultBlob(oldId).catch(() => null) : null;
 				const carry =
 					combining && oldId
 						? await collectCarry(entries, files, platformFiles?.forVault(oldId) ?? null)
@@ -318,15 +321,21 @@ export function useDesktopLink({
 				if (carry && oldId) {
 					copying = true;
 					const placed = placeCarry(now.actions.readEntries(), carry);
-					if (placed.items.length || placed.attachments.length) {
-						await now.actions.importEntries(placed.items, placed.attachments, { ownVault: true });
-					}
+					const fileHashes =
+						placed.items.length || placed.attachments.length || placed.matched.length
+							? await now.actions.importEntries(placed.items, placed.attachments, {
+									ownVault: true,
+									matched: placed.matched,
+								})
+							: [];
+					copying = false;
 					// Removed only with nothing left behind that it alone holds, and a pairing that
 					// finished: a vault that goes cannot be asked for anything later.
 					const contents = await readVaultContents(storage, oldId, 0, 0);
 					const targets = await storage.getMeta<unknown[]>(backupTargetsKeyFor(oldId));
 					const whole =
 						placed.heldBack.items.length === 0 &&
+						placed.tagsLeftOver === 0 &&
 						carry.uncarried === 0 &&
 						oldConflicts === 0 &&
 						!targets?.length &&
@@ -335,7 +344,10 @@ export function useDesktopLink({
 						whole &&
 						attached &&
 						!opts?.keepCopy &&
-						(await now.actions.deleteCarriedVault(oldId).catch(() => false));
+						oldBlob !== null &&
+						(await now.actions
+							.deleteCarriedVault(oldId, { blob: oldBlob, items: carry.items, fileHashes })
+							.catch(() => false));
 					if (!removed) await now.registry.setAside(oldId);
 					setCombined({
 						heldBack: placed.heldBack,

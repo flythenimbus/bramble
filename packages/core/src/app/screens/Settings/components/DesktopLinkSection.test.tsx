@@ -77,6 +77,7 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 		importEntries: async (items: unknown[]) => {
 			h.steps.push("import");
 			h.imported = items;
+			return [];
 		},
 		readEntries: () => [],
 		deleteCarriedVault: async () => {
@@ -106,6 +107,7 @@ vi.mock("../../../../sync/enrollment", async (importOriginal) => ({
 const platform = {
 	target: "chromium",
 	storage: {
+		readVaultBlob: async () => new Uint8Array([1]),
 		getMeta: async (key: string) => {
 			if (!key.startsWith("sync.group:")) return undefined;
 			const id = key.split(":")[1] ?? "";
@@ -345,6 +347,28 @@ describe("when both sides have entries", () => {
 		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
 		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined", "import", "setAside"]));
+	});
+
+	it("keeps the choice and the tick for the retry after a mistyped password", async () => {
+		twoVaults();
+		h.joinFails = true;
+		await mountAndLink();
+		await screen.findByText(/you have two vaults/i);
+		fireEvent.click(screen.getByRole("radio", { name: /combine into one/i }));
+		fireEvent.click(screen.getByRole("checkbox", { name: /keep a copy of this vault/i }));
+		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "typo" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+		await waitFor(() => expect(screen.getByText(/join failed/i)).toBeTruthy());
+
+		h.joinFails = false;
+		expect(
+			(screen.getByRole("checkbox", { name: /keep a copy/i }) as HTMLInputElement).checked,
+		).toBe(true);
+		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
+		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
+
+		await waitFor(() => expect(h.steps).toContain("setAside"));
+		expect(h.steps).not.toContain("removeOld");
 	});
 
 	it("no longer promises the old vault stays", async () => {

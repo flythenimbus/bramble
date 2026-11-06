@@ -121,6 +121,13 @@ export function DesktopLinkSection() {
 		};
 	}, [desktopLink, status?.paired, storage, syncKey]);
 
+	// What the user chose belongs to the invite: a mistyped password keeps it for the retry.
+	useEffect(() => {
+		if (link.invite) return;
+		setChoice(null);
+		setKeepCopy(false);
+	}, [link.invite]);
+
 	if (!desktopLink) return null;
 
 	const unlink = async () => {
@@ -148,8 +155,6 @@ export function DesktopLinkSection() {
 	const acceptInvite = async () => {
 		await link.accept(invitePassword, { choice: choice ?? undefined, keepCopy });
 		setInvitePassword("");
-		setChoice(null);
-		setKeepCopy(false);
 	};
 
 	const outcome = link.outcome;

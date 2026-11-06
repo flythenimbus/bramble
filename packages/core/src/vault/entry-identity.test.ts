@@ -29,6 +29,12 @@ describe("entryContentKey", () => {
 		expect(entryContentKey(written)).toBe(entryContentKey(login()));
 	});
 
+	// The app writes it, a file cannot seed it, and a combine folds it across rather than lose it.
+	it("ignores the old passwords a login has built up", () => {
+		const rotated = login({ passwordChangelog: [{ value: "older", changedAt: 1 }] });
+		expect(entryContentKey(stored(rotated))).toBe(entryContentKey(login()));
+	});
+
 	it("ignores usage metadata picked up after the import", () => {
 		// breach is login-only, so build the login shape directly rather than spreading the union.
 		const used = stored(login({ lastUsedAt: 1, breach: { leaked: true, checkedAt: 2 } }));

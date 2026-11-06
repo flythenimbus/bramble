@@ -26,7 +26,8 @@ import { PART_STAMP_FIELDS } from "./parts";
  * included so re-importing the file an entry came from still recognizes the archived copy,
  * and `tags` for the same reason: an import can seed them, but they are curated locally
  * afterwards, and a hand-added tag must not make the source file look like a new entry. Part
- * stamps are sync bookkeeping every write adds.
+ * stamps are sync bookkeeping every write adds, and old passwords are the log the app keeps: no
+ * file can seed one (see password-changelog.ts).
  */
 const METADATA_KEYS = new Set<string>([
 	"id",
@@ -36,6 +37,7 @@ const METADATA_KEYS = new Set<string>([
 	"archivedAt",
 	"tags",
 	"breach",
+	"passwordChangelog",
 	...PART_STAMP_FIELDS,
 ]);
 

@@ -161,15 +161,18 @@ export async function desktopGoToVault(): Promise<void> {
 	await desk("await front(); await click(/^Go to vault$/);");
 }
 
-export async function desktopAddLogin(name: string): Promise<void> {
+export async function desktopAddLogin(
+	name: string,
+	{ username = "desk@example.com", password = "Desk-made-pw-789" } = {},
+): Promise<void> {
 	await desk(`
 		await front();
 		await click(/^Go to vault$/);
 		await click(/^Add New$/);
 		await click(/^Login/);
 		await fill("input[name=name]", ${JSON.stringify(name)});
-		await fill("input[name=username]", "desk@example.com");
-		await fill('input[type="password"]', "Desk-made-pw-789");
+		await fill("input[name=username]", ${JSON.stringify(username)});
+		await fill('input[type="password"]', ${JSON.stringify(password)});
 		await click(/^Save Login$/);
 		await waitFor(() => text().includes(${JSON.stringify(name)}));
 	`);
@@ -224,12 +227,20 @@ export async function joinFromSetup(page: Page): Promise<void> {
 }
 
 /** Add a login through the vault list's Add New. */
-export async function addLogin(popup: Page, name: string): Promise<void> {
+export async function addLogin(
+	popup: Page,
+	name: string,
+	{ username = "browser@example.com", password = "Browser-only-pw-456", tag = "" } = {},
+): Promise<void> {
 	await popup.getByRole("button", { name: /Add New/i }).click();
 	await popup.getByRole("button", { name: /^Login Add a new login/ }).click();
 	await popup.getByLabel(/^Name$/).fill(name);
-	await popup.getByLabel(/Username or email/i).fill("browser@example.com");
-	await popup.locator('input[type="password"]').first().fill("Browser-only-pw-456");
+	await popup.getByLabel(/Username or email/i).fill(username);
+	await popup.locator('input[type="password"]').first().fill(password);
+	if (tag) {
+		await popup.getByLabel("Add a tag").fill(tag);
+		await popup.getByLabel("Add a tag").press("Enter");
+	}
 	await popup.getByRole("button", { name: /Save Login/i }).click();
 	await expect(popup.getByText(name)).toBeVisible();
 }

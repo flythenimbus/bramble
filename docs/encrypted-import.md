@@ -17,7 +17,8 @@ through their own parsers with no decryption step and are not covered here.
 Every one of them, encrypted or not, lands in the same place: `ImportShell` runs
 `splitAlreadyImported` (`core/vault/entry-identity.ts`) over the parsed entries
 before the preview, so re-importing a file adds nothing and says how many it
-skipped. That check compares content, so it only catches the same file: the same
+skipped. That check compares content, leaving out what the vault adds afterwards
+(dates, tags, archived state, breach results, old passwords), so it only catches the same file: the same
 login exported by another manager differs field by field (custom fields, extra
 URLs, titles, notes), and importing a second manager's export used to double the
 vault. A second, looser check holds those back: a login with the same site

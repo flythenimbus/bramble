@@ -29,6 +29,7 @@ import {
 import { base64ToBytes } from "../util/bytes";
 import type { EncryptedEntry, VaultBlob } from "../vault-format";
 import { toAutofillIndex } from "./autofill-index";
+import { foldCarriedCopy, type MatchedCopy } from "./combine-into";
 import { createEntriesBlobStore } from "./entries-blob";
 import { entryDataSchema } from "./entry-normalize";
 import { cascadeFilesForEntries, type SealedFile, withSealedFiles } from "./file-mutations";
@@ -115,6 +116,8 @@ export interface EntryMutationsDeps {
 export interface ImportOptions {
 	/** These come out of another vault the user holds, not a file, so their old passwords stay. */
 	ownVault?: boolean;
+	/** Copies of entries already here, from another vault the user holds: folded in by this write. */
+	matched?: readonly MatchedCopy[];
 }
 
 export interface EntryMutations {
@@ -593,6 +596,19 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 					hlc,
 				);
 			});
+			const copies = new Map<string, EntryData[]>();
+			for (const { id, copy } of opts.matched ?? []) {
+				copies.set(id, [...(copies.get(id) ?? []), copy]);
+			}
+			// Like setTags: an edit that syncs, with `updatedAt` left alone.
+			const entries = current.entries.map((e) => {
+				const next = (copies.get(e.id) ?? []).reduce<Entry>(foldCarriedCopy, e);
+				if (next === e) return e;
+				const version = editVersion(current, e.id, c.send());
+				stamps.set(e.id, version.hlc);
+				causal.set(e.id, version.causal);
+				return withPartStamps(next, priorOf(current, e.id), version.hlc);
+			});
 			const known = new Set(current.entries.map((e) => e.id));
 			const placed = files.map(({ sealed, ...on }) => {
 				const entryId = "item" in on ? withIds[on.item]?.id : on.entryId;
@@ -604,7 +620,7 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 			});
 			return persist({
 				...current,
-				entries: [...current.entries, ...withIds],
+				entries: [...entries, ...withIds],
 				stamps,
 				causal,
 				manifest:

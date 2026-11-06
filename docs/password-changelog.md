@@ -74,8 +74,10 @@ cannot pre-fill the log or grow it past the cap.
 Combining a vault when linking the desktop app is the one exception
 (`withCarriedPasswordChangelog`). Those entries come out of a vault the user just
 had unlocked, and the old vault may be removed afterwards, so the log moves with
-them, still capped. A login identical but for its log is not an exact duplicate,
-so it is held back for review instead of dropped, and its vault stays.
+them, still capped. A copy of a login the desktop's vault already holds joins its
+log to that login's (`foldCarriedCopy`), newest first and capped as usual. Import's
+dedup ignores the log for the same reason it ignores tags: it is what the vault
+wrote, not what a file holds.
 
 ### What counts as a change
 

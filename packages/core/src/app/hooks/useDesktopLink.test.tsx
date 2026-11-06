@@ -50,6 +50,11 @@ const h = vi.hoisted(() => ({
 	carriedRemoved: true,
 	/** The options each import was made with. */
 	importOptions: [] as unknown[],
+	/** What each removal was told about the copy. */
+	copied: [] as unknown[],
+	/** Set to fail reading the old vault's bytes. */
+	blobFails: false,
+	setAsideFails: false,
 }));
 
 /** The open vault, re-rendering subscribers when a join switches it, as the provider does. */
@@ -88,14 +93,16 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 				if (h.importFails) throw new Error("disk full");
 				h.imported.push([items, attachments]);
 				h.importOptions.push(opts);
+				return attachments.map((_, i) => `hash${i}`);
 			},
 			readEntries: () => h.desktopEntries,
 			deleteEmptyVault: async (id: string, _entries?: number, _files?: number) => {
 				h.steps.push(`deleteEmpty:${id}@${at}`);
 				return at !== id;
 			},
-			deleteCarriedVault: async (id: string) => {
+			deleteCarriedVault: async (id: string, copied: unknown) => {
 				h.steps.push(`deleteCarried:${id}@${at}`);
+				h.copied.push(copied);
 				return h.carriedRemoved;
 			},
 		};
@@ -110,6 +117,7 @@ vi.mock("../../hooks/useVaultRegistry", () => ({
 			activeId: at,
 			setAside: async (id: string) => {
 				h.steps.push(`setAside:${id}@${at}`);
+				if (h.setAsideFails) throw new Error("storage full");
 			},
 		};
 	},
@@ -124,6 +132,10 @@ const platform = {
 	storage: {
 		getMeta: async (k: string) => h.meta.get(k),
 		readQuarantine: async (id: string) => (h.meta.get(`quarantine:${id}`) as string) ?? null,
+		readVaultBlob: async () => {
+			if (h.blobFails) throw new Error("no blob");
+			return new Uint8Array([7]);
+		},
 	},
 	shell: {
 		onSyncEvent: (cb: (e: { kind: string; sas?: string; sasEmoji?: number[] }) => void) => {
@@ -410,6 +422,99 @@ describe("combining into the desktop's vault", () => {
 			h.importFails = false;
 			expect(h.steps).not.toContain("deleteCarried:v1@new");
 		});
+
+		it("tells the removal what to check, and how the old vault looked when the copy began", async () => {
+			oneFullVault();
+			h.copied = [];
+			await combineAs();
+			const [copied] = h.copied as {
+				blob: Uint8Array;
+				items: { name: string }[];
+				fileHashes: string[];
+			}[];
+			expect(copied?.blob).toEqual(new Uint8Array([7]));
+			expect(copied?.items.map((e) => e.name)).toEqual(["new.com"]);
+			expect(copied?.fileHashes).toEqual(["hash0"]);
+		});
+
+		it("reads how the old vault looked before staging its files, which can take a while", async () => {
+			oneFullVault();
+			const order: string[] = [];
+			const read = platform.storage.readVaultBlob;
+			platform.storage.readVaultBlob = async () => {
+				order.push(`read@${h.steps.length}`);
+				return new Uint8Array([7]);
+			};
+			try {
+				await combineAs();
+			} finally {
+				platform.storage.readVaultBlob = read;
+			}
+			// No step yet: not the staging, not the join.
+			expect(order).toEqual(["read@0"]);
+		});
+
+		it("stays when how it looked could not be read, having nothing to compare with", async () => {
+			oneFullVault();
+			h.blobFails = true;
+			try {
+				const result = await combineAs();
+				expect(h.steps).toEqual(SET_ASIDE);
+				expect(result.current.combined?.keptUnasked).toBe(true);
+			} finally {
+				h.blobFails = false;
+			}
+		});
+
+		describe("when the desktop's vault already holds its entries", () => {
+			function sameOnBoth(browser: Record<string, unknown>, desktop: Record<string, unknown> = {}) {
+				oneFullVault();
+				h.entries = [{ ...login("a", "same.com"), ...browser }];
+				h.desktopEntries = [{ ...login("x", "same.com"), ...desktop }];
+				h.files = [];
+				h.imported = [];
+				h.importOptions = [];
+				h.summary = { name: "Home", empty: false, entries: 1 };
+			}
+			const combineThem = () => combineAs({ choice: "combine" } as { keepCopy?: boolean });
+
+			it("brings what each copy holds besides, and the old vault goes as asked", async () => {
+				sameOnBoth({ tags: ["work"], archivedAt: undefined }, { archivedAt: 5 });
+				const result = await combineThem();
+				expect(h.steps).toEqual(["join", "import@new", "deleteCarried:v1@new"]);
+				expect(h.imported[0]?.[0]).toEqual([]);
+				expect(h.importOptions[0]).toMatchObject({
+					matched: [{ id: "x", copy: { tags: ["work"] } }],
+				});
+				expect(result.current.combined?.keptUnasked).toBe(false);
+			});
+
+			it("writes nothing when they hold the same, and the old vault still goes", async () => {
+				sameOnBoth({ tags: ["work"] }, { tags: ["work"] });
+				await combineThem();
+				expect(h.steps).toEqual(["join", "deleteCarried:v1@new"]);
+			});
+
+			it("stays when its tags will not fit on the entry", async () => {
+				const tags = Array.from({ length: 32 }, (_, i) => `d${i}`);
+				sameOnBoth({ tags: ["extra"] }, { tags });
+				const result = await combineThem();
+				expect(h.steps).toEqual(["join", "setAside:v1@new"]);
+				expect(result.current.combined?.keptUnasked).toBe(true);
+			});
+		});
+
+		it("does not blame the copy for a failure after it", async () => {
+			oneFullVault();
+			h.carriedRemoved = false;
+			h.setAsideFails = true;
+			try {
+				const result = await combineAs();
+				expect(result.current.error).toBe("storage full");
+			} finally {
+				h.setAsideFails = false;
+			}
+		});
 	});
 
 	it("carries before the join, copies after it, and sets the old vault aside", async () => {
@@ -477,7 +582,7 @@ describe("combining into the desktop's vault", () => {
 		await act(async () => {
 			await result.current.copyHeldBack();
 		});
-		expect(h.importOptions).toEqual([{ ownVault: true }, { ownVault: true }]);
+		expect(h.importOptions).toMatchObject([{ ownVault: true }, { ownVault: true }]);
 	});
 
 	it("copies the held-back look-alikes when asked to", async () => {

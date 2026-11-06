@@ -9,6 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useVaultNameSync, VAULT_NAME_KEY } from "../app/hooks/useVaultName";
 import { type Platform, PlatformProvider } from "../context/PlatformContext";
 import type { EntriesPayload } from "../sync";
+import { fileRecord } from "../test/vault-fixtures";
+import type { CopiedOut } from "../vault/combine-into";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 import { type SyncedSettingsAccess, useSyncedSettings } from "./synced-settings";
 import { useVault, useVaultActions, VaultProvider } from "./useVault";
@@ -35,6 +37,12 @@ vi.mock("../vault-format", async (importOriginal) => ({
 		entriesCiphertext: new Uint8Array([1]),
 	}),
 	encodeVaultBlob: () => new Uint8Array([1, 2, 3]),
+}));
+
+// Past a merge in flight, in real use. No merge runs in these tests.
+vi.mock("../vault/combine-into", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../vault/combine-into")>()),
+	MERGE_SETTLE_MS: 5,
 }));
 
 const at = (wall: number, node: string) => ({ wall, counter: 0, node });
@@ -69,7 +77,12 @@ function makePlatform(
 	let gate: Promise<void> | null = new Promise<void>((r) => {
 		release = r;
 	});
-	let lastDisk = Object.values(disks)[0] as EntriesPayload;
+	/** Which vault each write went to, in the order of `writes`. */
+	const writtenTo: string[] = [];
+	const locked: string[] = [];
+	const onDisk = new Map(Object.entries(disks));
+	const firstVault = Object.keys(disks)[0] as string;
+	const failing = { registryWrites: false };
 	let onExternalLock: (() => void) | null = null;
 	const crypto = {
 		isLocked: async () => opts.locked?.() ?? false,
@@ -79,13 +92,6 @@ function makePlatform(
 		},
 		onExternalChange: () => () => {},
 		unwrapVekPassword: async () => true,
-		decryptWithVek: async () => JSON.stringify(lastDisk),
-		encryptWithVek: async (plaintext: string) => {
-			const payload = JSON.parse(plaintext) as EntriesPayload;
-			writes.push(payload);
-			lastDisk = payload;
-			return { iv: "AAAAAAAAAAAAAAAA", ciphertext: "AA==" };
-		},
 		encryptEntry: async (json: string) => ({
 			ciphertext: `ct:${json}`,
 			iv: "i",
@@ -97,13 +103,29 @@ function makePlatform(
 			if (gate) await gate;
 			return ps.map((p) => (p.ciphertext.startsWith("ct:") ? p.ciphertext.slice(3) : null));
 		},
-		lock: async () => {},
 	};
+	/** Each vault's disk through its own key, as the real adapters scope it. */
+	const scoped = (id: string) => ({
+		...crypto,
+		withVault: scoped,
+		decryptWithVek: async () => JSON.stringify(onDisk.get(id) ?? { entries: [], tombstones: [] }),
+		encryptWithVek: async (plaintext: string) => {
+			const payload = JSON.parse(plaintext) as EntriesPayload;
+			writes.push(payload);
+			writtenTo.push(id);
+			onDisk.set(id, payload);
+			return { iv: "AAAAAAAAAAAAAAAA", ciphertext: "AA==" };
+		},
+		lock: async () => void locked.push(id),
+	});
 	const platform = {
 		target: "chromium",
 		storage: {
 			getMeta: async (k: string) => meta.get(k),
-			setMeta: async (k: string, v: unknown) => void meta.set(k, v),
+			setMeta: async (k: string, v: unknown) => {
+				if (failing.registryWrites && k === VAULT_REGISTRY_KEY) throw new Error("storage full");
+				meta.set(k, v);
+			},
 			removeMeta: async (k: string) => void meta.delete(k),
 			hasVaultHandle: async () => true,
 			readVaultBlob: async () => new Uint8Array([1]),
@@ -113,7 +135,7 @@ function makePlatform(
 			readQuarantine: async () => null,
 			writeQuarantine: async () => {},
 		},
-		crypto: { ...crypto, withVault: () => crypto },
+		crypto: scoped(firstVault),
 		autofill: { clearIndex: async () => {}, setIndex: async () => {} },
 		shell: {
 			setActiveVault: async () => {},
@@ -126,7 +148,10 @@ function makePlatform(
 	return {
 		platform,
 		writes,
+		writtenTo,
 		erased,
+		locked,
+		failing,
 		/** Let the load that is holding at decrypt finish. */
 		finishLoad: () => {
 			gate = null;
@@ -140,8 +165,8 @@ function makePlatform(
 		},
 		/** A background lock (auto-lock alarm), as the provider hears of it. */
 		lockFromOutside: () => onExternalLock?.(),
-		setDisk: (p: EntriesPayload) => {
-			lastDisk = p;
+		setDisk: (p: EntriesPayload, id = firstVault) => {
+			onDisk.set(id, p);
 		},
 	};
 }
@@ -274,44 +299,108 @@ describe("removing a vault whose entries were copied out", () => {
 		return seen;
 	}
 
-	it("erases it, and its record, when the open vault holds the copy on disk", async () => {
+	const copied = (over: Partial<CopiedOut> = {}): CopiedOut => ({
+		blob: new Uint8Array([1]),
+		items: [JSON.parse(LOGIN)],
+		fileHashes: [],
+		...over,
+	});
+	const remove = async (seen: Awaited<ReturnType<typeof open>>, id: string, proof = copied()) => {
+		let removed: boolean | undefined;
+		await act(async () => {
+			removed = await seen.actions?.deleteCarriedVault(id, proof);
+		});
+		return removed;
+	};
+
+	it("erases it, its record and its key when all of the copy is on disk", async () => {
 		const p = vaults();
 		const seen = await open(p);
-		let removed: boolean | undefined;
 
-		await act(async () => {
-			removed = await seen.actions?.deleteCarriedVault("old");
-		});
+		expect(await remove(seen, "old")).toBe(true);
 
-		expect(removed).toBe(true);
 		expect(p.erased).toEqual(["old"]);
 		expect(seen.registry?.vaults.map((v) => v.id)).toEqual(["v1"]);
+		expect(p.locked).toEqual(["old"]);
 	});
 
-	it("refuses when the disk holds less than memory does, whatever the screen says", async () => {
+	it("refuses when an item is not on disk, though as many entries are as memory holds", async () => {
+		// A merge overwrote the import, and memory was reloaded from what it left.
 		const p = vaults();
 		const seen = await open(p);
-		p.setDisk({ entries: [], tombstones: [] });
+		const other = LOGIN.replace("Keep me", "Something else");
+		p.setDisk({ entries: [{ ...entry("z"), ciphertext: `ct:${other}` }], tombstones: [] });
+
+		expect(await remove(seen, "old")).toBe(false);
+		expect(p.erased).toEqual([]);
+		expect(seen.registry?.vaults.map((v) => v.id)).toEqual(["v1", "old"]);
+	});
+
+	it("refuses when what was folded into an entry is not on disk", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		const items = [{ ...JSON.parse(LOGIN), tags: ["work"] }];
+
+		expect(await remove(seen, "old", copied({ items }))).toBe(false);
+		expect(p.erased).toEqual([]);
+	});
+
+	it("refuses when the old vault changed after the copy began", async () => {
+		// A login saved from the page into the old vault: it is in no copy.
+		const p = vaults();
+		const seen = await open(p);
+
+		expect(await remove(seen, "old", copied({ blob: new Uint8Array([9]) }))).toBe(false);
+		expect(p.erased).toEqual([]);
+	});
+
+	it("refuses when a file the copy stored is not on disk", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		const held = fileRecord({ id: "f1" });
+		p.setDisk({ entries: [entry("a")], tombstones: [], files: [held] });
+
+		expect(await remove(seen, "old", copied({ fileHashes: [held.hash, "f".repeat(64)] }))).toBe(
+			false,
+		);
+		expect(p.erased).toEqual([]);
+
+		expect(await remove(seen, "old", copied({ fileHashes: [held.hash] }))).toBe(true);
+	});
+
+	it("reads the disk only after a merge in flight has had time to land", async () => {
+		const p = vaults();
+		const seen = await open(p);
 		let removed: boolean | undefined;
 
 		await act(async () => {
-			removed = await seen.actions?.deleteCarriedVault("old");
+			const removing = seen.actions?.deleteCarriedVault("old", copied());
+			p.setDisk({ entries: [], tombstones: [] });
+			removed = await removing;
 		});
 
 		expect(removed).toBe(false);
 		expect(p.erased).toEqual([]);
 	});
 
+	it("leaves it whole when its record cannot be removed", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		p.failing.registryWrites = true;
+
+		await act(async () => {
+			await expect(seen.actions?.deleteCarriedVault("old", copied())).rejects.toThrow();
+		});
+
+		expect(p.erased).toEqual([]);
+		expect(p.locked).toEqual([]);
+	});
+
 	it("refuses the vault that is open", async () => {
 		const p = vaults();
 		const seen = await open(p);
-		let removed: boolean | undefined;
 
-		await act(async () => {
-			removed = await seen.actions?.deleteCarriedVault("v1");
-		});
-
-		expect(removed).toBe(false);
+		expect(await remove(seen, "v1")).toBe(false);
 		expect(p.erased).toEqual([]);
 	});
 });
@@ -355,10 +444,16 @@ describe("the open vault changing under an unlocked view", () => {
 	it("holds its settings as not ready until the new vault has loaded", async () => {
 		// Linking from Settings: the join opens another vault with this screen still up. Until it has
 		// loaded, the memory and settings in hand are still the old vault's.
-		const p = makePlatform({ v1: { entries: [entry("a")], tombstones: [], settings: NAMED } }, [
-			{ id: "v1", label: "Personal", createdAt: 1 },
-			{ id: "v2", label: "", createdAt: 2 },
-		]);
+		const p = makePlatform(
+			{
+				v1: { entries: [entry("a")], tombstones: [], settings: NAMED },
+				v2: { entries: [entry("b")], tombstones: [] },
+			},
+			[
+				{ id: "v1", label: "Personal", createdAt: 1 },
+				{ id: "v2", label: "", createdAt: 2 },
+			],
+		);
 		const seen = mount(p.platform);
 		await settle();
 		await act(async () => seen.registry?.selectVault("v1"));
@@ -383,8 +478,20 @@ describe("the open vault changing under an unlocked view", () => {
 		// The old vault's name was not put on the new one.
 		expect(seen.registry?.vaults.find((v) => v.id === "v2")?.label).toBe("");
 
-		// Once it has loaded, it writes as itself.
+		// Once it has loaded, it writes as itself: over its own entries, to its own file.
 		p.finishLoad();
 		await waitFor(() => expect(seen.synced?.ready).toBe(true));
+		await act(async () => {
+			await seen.actions?.addEntry({
+				type: "login",
+				name: "Right vault",
+				urls: [],
+				username: "",
+				password: "",
+			});
+		});
+		expect(p.writtenTo.at(-1)).toBe("v2");
+		expect(p.writes.at(-1)?.entries.map((e) => e.id)).toContain("b");
+		expect(p.writes.at(-1)?.entries.map((e) => e.id)).not.toContain("a");
 	});
 });

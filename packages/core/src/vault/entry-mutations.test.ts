@@ -394,6 +394,92 @@ describe("createEntryMutations", () => {
 		});
 	});
 
+	describe("importing copies of entries the vault already holds", () => {
+		const versionOf = (s: VaultEntries, id: string) => ({
+			hlc: s.stamps.get(id)!,
+			...s.causal.get(id),
+		});
+		const seeded = async () => {
+			const h = harness();
+			const state = await h.mutations.importMany(empty(), [login("a"), login("b")]);
+			return { h, state, id: state.entries[0]!.id, other: state.entries[1]!.id };
+		};
+
+		it("folds them in by the same write as the new entries", async () => {
+			const { h, state, id } = await seeded();
+			const writes = h.writes();
+			const next = await h.mutations.importMany(state, [login("c")], [], {
+				ownVault: true,
+				matched: [{ id, copy: { ...login("a"), tags: ["work"] } }],
+			});
+			expect(h.writes()).toBe(writes + 1);
+			expect(next.entries.map((e) => e.name)).toEqual(["a", "b", "c"]);
+			expect(next.entries[0]?.tags).toEqual(["work"]);
+		});
+
+		it("folds every copy of the one entry", async () => {
+			const { h, state, id } = await seeded();
+			const next = await h.mutations.importMany(state, [], [], {
+				matched: [
+					{ id, copy: { ...login("a"), tags: ["one"] } },
+					{ id, copy: { ...login("a"), tags: ["two"] } },
+				],
+			});
+			expect(next.entries[0]?.tags).toEqual(["one", "two"]);
+		});
+
+		it("stamps the change as an edit, so it syncs, and leaves the entry's date and the others", async () => {
+			const { h, state, id, other } = await seeded();
+			const before = state.entries[0]!;
+			const next = await h.mutations.importMany(state, [], [], {
+				matched: [{ id, copy: { ...login("a"), tags: ["work"] } }],
+			});
+			const stamp = next.stamps.get(id)!;
+			expect(compareHlc(stamp, state.stamps.get(id)!)).toBeGreaterThan(0);
+			expect(containsHistory(versionOf(next, id), versionOf(state, id))).toBe(true);
+			expect(next.entries[0]?.updatedAt).toBe(before.updatedAt);
+			expect(next.entries[0]?.partStampsAt).toEqual(stamp);
+			expect(next.stamps.get(other)).toEqual(state.stamps.get(other));
+			expect(next.entries[1]).toBe(state.entries[1]);
+		});
+
+		it("makes no new version of an entry the copy adds nothing to", async () => {
+			const { h, state, id } = await seeded();
+			const next = await h.mutations.importMany(state, [], [], {
+				matched: [{ id, copy: login("a") }],
+			});
+			expect(next.stamps.get(id)).toEqual(state.stamps.get(id));
+			expect(next.entries[0]).toBe(state.entries[0]);
+		});
+
+		it("restores an archived entry, and keeps old passwords from the copy", async () => {
+			const { h, state, id } = await seeded();
+			const archived = await h.mutations.setArchived(state, [id], true);
+			const next = await h.mutations.importMany(archived, [], [], {
+				matched: [
+					{
+						id,
+						copy: loginWith("a", { passwordChangelog: [{ value: "older", changedAt: 1 }] }),
+					},
+				],
+			});
+			const entry = next.entries[0]!;
+			expect(entry.archivedAt).toBeUndefined();
+			expect(entry.type === "login" && entry.passwordChangelog?.map((r) => r.value)).toEqual([
+				"older",
+			]);
+		});
+
+		it("takes nothing for an entry a sync took away meanwhile", async () => {
+			const { h, state, id } = await seeded();
+			const gone = await h.mutations.remove(state, id);
+			const next = await h.mutations.importMany(gone, [], [], {
+				matched: [{ id, copy: { ...login("a"), tags: ["work"] } }],
+			});
+			expect(next.entries.map((e) => e.name)).toEqual(["b"]);
+		});
+	});
+
 	it("ignores a caller-supplied changelog and derives it from the stored entry", async () => {
 		let t = 1000;
 		const h = harness(() => t);

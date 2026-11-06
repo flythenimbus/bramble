@@ -59,17 +59,16 @@ export function withPasswordChangelog(
 }
 
 /**
- * Fold the passwords of the versions a conflict resolution discards into the kept login's
- * changelog, with their own rows, so resolving can't lose a credential. Deduplicated by value
- * (newest kept), newest first, capped as usual; the kept password itself is never a row.
+ * A login's log with the passwords of the versions in `superseded` folded in, each with its own
+ * rows. Deduplicated by value (newest kept), newest first, capped as usual; the login's password
+ * itself is never a row.
  */
-export function withSupersededPasswords(
-	entry: Entry,
+export function foldedPasswordChangelog(
+	login: LoginEntryData,
 	superseded: readonly EntryData[],
 	changedAt: number,
-): Entry {
-	if (entry.type !== "login") return entry;
-	const rows: PasswordChange[] = [...(entry.passwordChangelog ?? [])];
+): PasswordChange[] | undefined {
+	const rows: PasswordChange[] = [...(login.passwordChangelog ?? [])];
 	for (const v of superseded) {
 		if (v.type !== "login") continue;
 		if (v.password) rows.push({ value: v.password, changedAt });
@@ -77,12 +76,25 @@ export function withSupersededPasswords(
 	}
 	const newest = new Map<string, PasswordChange>();
 	for (const row of rows) {
-		if (row.value === "" || row.value === entry.password) continue;
+		if (row.value === "" || row.value === login.password) continue;
 		const cur = newest.get(row.value);
 		if (!cur || row.changedAt > cur.changedAt) newest.set(row.value, row);
 	}
 	const kept = [...newest.values()]
 		.sort((a, b) => b.changedAt - a.changedAt)
 		.slice(0, MAX_PASSWORD_CHANGELOG);
-	return { ...entry, passwordChangelog: kept.length > 0 ? kept : undefined };
+	return kept.length > 0 ? kept : undefined;
+}
+
+/**
+ * Fold the passwords of the versions a conflict resolution discards into the kept login's
+ * changelog, so resolving can't lose a credential.
+ */
+export function withSupersededPasswords(
+	entry: Entry,
+	superseded: readonly EntryData[],
+	changedAt: number,
+): Entry {
+	if (entry.type !== "login") return entry;
+	return { ...entry, passwordChangelog: foldedPasswordChangelog(entry, superseded, changedAt) };
 }

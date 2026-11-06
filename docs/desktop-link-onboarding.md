@@ -157,14 +157,22 @@ mine unless marked otherwise.
 - **The desktop's vault is the one that stays.**
 - **The browser's entries and files are copied into it** through `importEntries` with their
   attachments, using the normal two-tier dedup. Unlike today's checkbox, files must come along.
+- **A copy of an entry the desktop's vault holds is folded into that entry,** by the same write. Its
+  tags are added, its old passwords joined (newest five), and an entry archived on one side only comes
+  back, since hiding a login in use is worse than showing an archived one. The change syncs as an edit
+  and leaves `updatedAt` alone. Dates and breach results stay as the desktop has them. Without this,
+  unticking the box would lose the browser's tags (the user's decision, 2026-11-06: fold them, never
+  keep the vault over them).
 - **Keeping the browser's old vault is opt-in.** A checkbox on the combine screen, "Keep a copy of
   this vault", starts unticked (the user's decision, 2026-11-06: the copy is the point, and a second
   vault nobody asked for is clutter). Unticked, the old vault is removed once all of it has come
-  across, with the copy read back from disk first.
+  across. First a second's wait for a background merge in flight, then the disk has to agree: every
+  entry and file of the copy there, with all it held, and the old vault's bytes unchanged since the
+  copy began, so a login saved into it meanwhile is not lost.
 - **It stays anyway when some of it did not come across,** and the result screen says so: look-alikes
   held back for review, files that did not copy, entries it could not decrypt, versions in a sync
-  conflict, an email alias provider and its key, or backup targets. So does a pairing that did not
-  finish. Nothing is lost by being left unticked: logins bring their old passwords with them.
+  conflict, tags past the 32 an entry can carry, an email alias provider and its key, or backup
+  targets. So does a pairing that did not finish.
 - **A kept vault stays in the vault list,** locked, under its own master password and in its own sync
   group, until the user deletes it. It is labelled so it is obviously the old one, for example
   "Personal (before linking)". Names sync across the group, so this label must be local to this
@@ -581,6 +589,7 @@ Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode
 - Case 2 combines into the desktop's empty vault without asking.
 - Keeping the old vault after a combine is an unticked checkbox, not the default. It stays regardless
   when any of it did not come across.
+- A copy of an entry the desktop's vault holds folds into it: tags, old passwords, and active wins.
 - Held-back duplicates stay in the old vault, with "Copy them anyway".
 - Failure is loud on a partial copy.
 - Piece 3: the extension holds its open vault's link, and a link in progress stays held until it

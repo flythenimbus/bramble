@@ -232,6 +232,7 @@ import {
 	wrapRecoverySlot as buildRecoverySlot,
 	buildVaultBytes,
 } from "../vault/build-vault";
+import { type CopiedOut, holdsCarried, MERGE_SETTLE_MS, sameBytes } from "../vault/combine-into";
 import { createEntriesBlobStore } from "../vault/entries-blob";
 import {
 	conflictsOf,
@@ -354,9 +355,9 @@ export interface VaultActions {
 	deleteVault(auth: DeleteVaultAuth): Promise<boolean>;
 	/** Remove a vault linking left empty (never the open one; re-checks emptiness). */
 	deleteEmptyVault(id: string, entryCount: number, fileCount: number): Promise<boolean>;
-	/** Remove a vault whose entries were copied into the open one, once that copy is on disk. False
-	 * when it is not, and the vault stays. */
-	deleteCarriedVault(id: string): Promise<boolean>;
+	/** Remove a vault whose entries were copied into the open one, once all of that copy is on disk
+	 * and the vault has not moved on since it began. False otherwise, and the vault stays. */
+	deleteCarriedVault(id: string, copied: CopiedOut): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	/** Save a backup file. Resolves with any attachments it had to leave out. */
 	/** Throws BackupIncompleteError rather than save a backup missing any of the vault. */
@@ -401,12 +402,13 @@ export interface VaultActions {
 	/**
 	 * Add entries in one write, with any files the import brings. Every file is sealed first,
 	 * so one that cannot be stops the import before anything is written: whole or not at all.
+	 * Resolves with the hash of each file stored.
 	 */
 	importEntries(
 		items: EntryData[],
 		attachments?: PlacedAttachment[],
 		opts?: ImportOptions,
-	): Promise<void>;
+	): Promise<string[]>;
 	/** The displayed version of an entry, for an edit form to save against (see `updateEntry`). */
 	openVersion(id: string): OpenedVersion | undefined;
 	/**
@@ -1482,7 +1484,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 
 	const importEntries = useCallback(
-		async (items: EntryData[], attachments: PlacedAttachment[] = [], opts?: ImportOptions) => {
+		async (
+			items: EntryData[],
+			attachments: PlacedAttachment[] = [],
+			opts?: ImportOptions,
+		): Promise<string[]> => {
 			const files: ImportedFile[] = [];
 			const sealer = vaultFiles?.sealer;
 			for (const a of attachments) {
@@ -1495,6 +1501,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				);
 			}
 			commitEntries(await mutations.importMany(snapshotEntries(), items, files, opts));
+			return files.map((f) => f.sealed.hash);
 		},
 		[mutations, snapshotEntries, commitEntries, vaultFiles],
 	);
@@ -2265,17 +2272,39 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	);
 
 	const deleteCarriedVault = useCallback(
-		async (id: string): Promise<boolean> => {
+		async (id: string, copied: CopiedOut): Promise<boolean> => {
 			if (id === activeId) return false;
+			// A background merge in flight can still overwrite the import: let it land, then read.
+			await new Promise((r) => setTimeout(r, MERGE_SETTLE_MS));
+			// A save landed in it after the copy began, which only it holds.
+			if (!sameBytes(await storage.readVaultBlob(id), copied.blob)) return false;
 			// From disk, not memory: what is on screen once had nothing behind it.
 			const store = createEntriesBlobStore({ crypto, storage, readDecodedBlob });
 			const onDisk = await store.readEntriesPayload();
-			if (onDisk.entries.length < latestRef.current.entries.length) return false;
-			await eraseVaultData(id);
+			const plaintexts = await crypto.decryptEntries(
+				onDisk.entries.map(({ ciphertext, iv, wrappedDek, dekIv }) => ({
+					ciphertext,
+					iv,
+					wrappedDek,
+					dekIv,
+				})),
+			);
+			const held = plaintexts.flatMap((p) =>
+				p == null ? [] : [normalizeEntryData(JSON.parse(p))],
+			);
+			if (!holdsCarried(held, copied.items)) return false;
+			const files = new Set(onDisk.files?.map((f) => f.hash));
+			if (!copied.fileHashes.every((h) => files.has(h))) return false;
+			// The record first: a failure here leaves the vault whole, not a name with nothing behind it.
 			await forgetEmptyRecord(id);
+			await eraseVaultData(id);
+			await platformCrypto
+				.withVault?.(id)
+				.lock()
+				.catch(() => {});
 			return true;
 		},
-		[activeId, crypto, storage, readDecodedBlob, eraseVaultData, forgetEmptyRecord],
+		[activeId, crypto, platformCrypto, storage, readDecodedBlob, eraseVaultData, forgetEmptyRecord],
 	);
 
 	// Every action is referentially stable (state reads route through latestRef), so this
