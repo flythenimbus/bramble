@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PairedBrowser } from "../../../../adapters/pairing";
+import { backupTargetsKeyFor } from "../../../../backup/config";
 import { usePlatform } from "../../../../context/PlatformContext";
 import { UnrecognizedDeviceError } from "../../../../hooks/useSyncEnrollment";
 import { useVault, useVaultActions } from "../../../../hooks/useVault";
@@ -211,10 +212,12 @@ export function BrowserPairingSection() {
 		if (!pairing.setVaultSummary || !activeId) return;
 		const index = vaults.findIndex((v) => v.id === activeId);
 		const contents = await readVaultContents(storage, activeId, entries.length, files.length);
+		const targets = await storage.getMeta<unknown[]>(backupTargetsKeyFor(activeId));
 		await pairing.setVaultSummary({
 			name: displayLabel(vaults[index]?.label ?? "", Math.max(0, index)),
 			empty: isVaultEmpty(contents),
 			entries: entries.length,
+			backupTargets: (targets?.length ?? 0) > 0,
 		});
 	};
 

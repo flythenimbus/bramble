@@ -75,6 +75,18 @@ export interface AliasConfig {
 	apiKey?: string;
 }
 
+/** Whether two configs are the same account, whatever order their options were written in. */
+export function sameAliasConfig(a: AliasConfig, b: AliasConfig): boolean {
+	const options = (c: AliasConfig) =>
+		JSON.stringify(Object.entries(c.options).sort(([x], [y]) => x.localeCompare(y)));
+	return (
+		a.provider === b.provider &&
+		(a.baseUrl ?? "") === (b.baseUrl ?? "") &&
+		(a.apiKey ?? "") === (b.apiKey ?? "") &&
+		options(a) === options(b)
+	);
+}
+
 /** Whether a stored value is still shaped like a config. Storage is not a trusted input: this
  * may have been written by another build or hand-edited. */
 export function isAliasConfig(v: unknown): v is AliasConfig {

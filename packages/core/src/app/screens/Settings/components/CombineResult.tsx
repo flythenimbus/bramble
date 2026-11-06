@@ -11,6 +11,21 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 	const asking = combined.pendingRemoval !== null;
 	return (
 		<div className="space-y-2">
+			{combined.leftBehind.alias && (
+				<p className="text-xs text-muted-foreground">
+					<Trans>
+						The desktop's vault has its own email alias provider, so this vault's wasn't brought
+						over.
+					</Trans>
+				</p>
+			)}
+			{combined.leftBehind.backupTargets && (
+				<p className="text-xs text-muted-foreground">
+					<Trans>
+						The desktop's vault already has a backup target, so this vault's weren't brought over.
+					</Trans>
+				</p>
+			)}
 			{held > 0 && (
 				<div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
 					<span>
@@ -30,7 +45,7 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 						<Button
 							variant="secondary"
 							size="sm"
-							disabled={link.answeringHeldBack}
+							disabled={link.finishingCombine}
 							onClick={() => void link.copyHeldBack()}
 						>
 							<Trans>Copy them anyway</Trans>
@@ -39,8 +54,8 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 							<Button
 								variant="ghost"
 								size="sm"
-								disabled={link.answeringHeldBack}
-								onClick={() => void link.leaveOutHeldBack()}
+								disabled={link.finishingCombine}
+								onClick={() => void link.removeOldVault()}
 							>
 								<Trans>Leave them out</Trans>
 							</Button>
@@ -65,6 +80,16 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 				<p className="text-xs text-muted-foreground">
 					<Trans>Some of it didn't copy, so the old vault is kept.</Trans>
 				</p>
+			)}
+			{asking && held === 0 && (
+				<Button
+					variant="secondary"
+					size="sm"
+					disabled={link.finishingCombine}
+					onClick={() => void link.removeOldVault()}
+				>
+					<Trans>Remove the old vault</Trans>
+				</Button>
 			)}
 		</div>
 	);

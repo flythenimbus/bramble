@@ -144,8 +144,8 @@ A vault with zero entries but a phone in its roster is not empty, so it lands in
 rows. Removing a vault that fails any of these tests would lose data, so test the check hard.
 
 **My call, what the desktop discloses:** the request that asks the desktop what it holds returns
-only the vault's name, whether it is empty, and an entry count for the case 3 screen. It is
-answered only while the desktop is unlocked, and only to the browser that paired in the Connect
+only the vault's name, whether it is empty, an entry count for the case 3 screen, and whether this
+app has a backup target for the vault, which no other device can see. It is answered only while the desktop is unlocked, and only to the browser that paired in the Connect
 dialog that is open right now. That is the same binding as fix 1 in
 piece 2, so a stolen link key learns nothing at any other time.
 
@@ -171,9 +171,21 @@ mine unless marked otherwise.
   copy began, so a login saved into it meanwhile is not lost.
 - **It stays anyway only where removing it would lose something by accident** (the user's decision,
   2026-11-06), and the result screen says so: files that did not copy, entries it could not decrypt,
-  tags past the 32 an entry can carry, or a copy the disk does not bear out. So does a pairing that
-  did not finish. Versions in a sync conflict, an email alias provider and its key, and backup targets
+  tags past the 32 an entry can carry, an alias provider or backup target that failed to store, or a
+  copy the disk does not bear out. So does a pairing that did not finish. Versions in a sync conflict
   are not worth keeping it over, and go with it.
+- **Its email alias provider and backup targets come across, each only if the desktop's vault has
+  none of its own** (the user's decision, 2026-11-06). The provider is a synced setting: it is read
+  before the switch and written after, so it reaches every device in the desktop's group, key
+  included. Backup targets belong to this browser and never sync: their credentials are opened under
+  the old key before the switch and sealed under the new one after, with no backup history and no
+  inherited folder, so their snapshots carry the new vault's stamp and pruning can't reach the old
+  ones'. Whether the desktop has a target comes from the app, and an app that won't say counts as
+  having none, since losing the browser's is worse than a second destination. A target that won't
+  open already can't back up, so it is dropped without a word.
+- **Where the desktop's own stands, the result screen says so,** and the old vault waits, set aside,
+  for "Remove the old vault" (or the answer about look-alikes): those keys exist only in it. The same
+  provider on both sides is nothing to say.
 - **Look-alikes the dedup holds back are asked about first.** They hold something the desktop's entry
   lacks, so the old vault stays set aside until the answer: "Copy them anyway" or "Leave them out", and
   then it goes. Closing the screen unanswered leaves it set aside, so nothing goes without a choice.
@@ -594,6 +606,8 @@ Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode
 - Keeping the old vault after a combine is an unticked checkbox, not the default. It stays regardless
   only for a failed copy, damaged entries or an unfinished link.
 - A copy of an entry the desktop's vault holds folds into it: tags, old passwords, and active wins.
+- An alias provider or backup target comes across only where the desktop's vault has none. Where it
+  has its own, the screen says so and the old vault waits to be removed.
 - Held-back duplicates are asked about before the old vault goes: "Copy them anyway" or "Leave them
   out". With the old vault staying, they stay in it.
 - Failure is loud on a partial copy.

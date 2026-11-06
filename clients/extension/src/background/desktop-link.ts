@@ -1493,11 +1493,12 @@ export async function desktopVaultSummary(via?: string): Promise<{
 	name: string;
 	empty: boolean;
 	entries: number;
+	backupTargets?: boolean;
 } | null> {
 	try {
 		const answer = (await askDesktop({ op: "vaultSummary" }, via)) as {
 			ok?: boolean;
-			summary?: { name: string; empty: boolean; entries: number };
+			summary?: { name: string; empty: boolean; entries: number; backupTargets?: boolean };
 		};
 		return answer?.ok === true ? (answer.summary ?? null) : null;
 	} catch {

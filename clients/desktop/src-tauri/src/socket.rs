@@ -398,13 +398,17 @@ pub fn link_arm_sync_invite(payload: String, ttl_ms: u64) -> Result<(), String> 
     Ok(())
 }
 
-/// What the Connect dialog's vault holds: its name, whether it is empty, and how many entries.
+/// What the Connect dialog's vault holds: its name, whether it is empty, how many entries, and
+/// whether this app backs it up. Targets never sync, so the browser combining into it can't tell.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultSummary {
     pub name: String,
     pub empty: bool,
     pub entries: u64,
+    /// Absent from a window that predates it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backup_targets: Option<bool>,
 }
 
 static VAULT_SUMMARY: Mutex<Option<VaultSummary>> = Mutex::new(None);
@@ -2614,7 +2618,25 @@ mod tests {
             name: "Home".into(),
             empty: false,
             entries: 380,
+            backup_targets: Some(true),
         }
+    }
+
+    #[test]
+    fn the_summary_says_whether_backup_targets_exist_only_when_told() {
+        let told = serde_json::to_value(summary()).unwrap();
+        assert_eq!(told["backupTargets"], true);
+
+        // An older window publishes none: it still reads, and nothing is made up.
+        let older: VaultSummary = serde_json::from_value(
+            serde_json::json!({ "name": "Home", "empty": false, "entries": 1 }),
+        )
+        .unwrap();
+        assert_eq!(older.backup_targets, None);
+        assert!(serde_json::to_value(older)
+            .unwrap()
+            .get("backupTargets")
+            .is_none());
     }
 
     #[test]
@@ -2631,6 +2653,7 @@ mod tests {
         let got = a.recv();
         assert_eq!(got["summary"]["name"], "Home", "{got}");
         assert_eq!(got["summary"]["entries"], 380);
+        assert_eq!(got["summary"]["backupTargets"], true);
         b.send(serde_json::json!({ "op": "vaultSummary" }));
         assert_eq!(b.recv()["ok"], false);
 

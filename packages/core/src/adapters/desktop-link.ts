@@ -46,7 +46,12 @@ export interface DesktopLinkAdapter {
 	cancel?(id: string): Promise<void>;
 	/** What the desktop app's vault holds, asked right after linking and before claiming its
 	 * invite: the app answers only the browser that just linked. Null when it will not say. */
-	vaultSummary?(): Promise<{ name: string; empty: boolean; entries: number } | null>;
+	vaultSummary?(): Promise<{
+		name: string;
+		empty: boolean;
+		entries: number;
+		backupTargets?: boolean;
+	} | null>;
 	/** Reconnect over the established keys. True when the desktop app accepted. */
 	connect(): Promise<boolean>;
 	/**

@@ -52,7 +52,7 @@ export interface PairingAdapter {
 	clearSyncInvite?(): Promise<void>;
 	/** Publish what the open vault holds, for the browser linking now; null clears it. */
 	setVaultSummary?(
-		summary: { name: string; empty: boolean; entries: number } | null,
+		summary: { name: string; empty: boolean; entries: number; backupTargets?: boolean } | null,
 	): Promise<void>;
 	/** Accept an emoji link while the Connect dialog is open. */
 	beginLinkWindow?(): Promise<void>;

@@ -3,7 +3,10 @@
 
 import { useLingui } from "@lingui/react/macro";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePlatform } from "../../context/PlatformContext";
+import { isAliasConfig, sameAliasConfig } from "../../aliases/config";
+import { type BackupTargetConfig, backupTargetsKeyFor } from "../../backup/config";
+import { type Platform, usePlatform } from "../../context/PlatformContext";
+import { PREF_ALIAS_PROVIDER } from "../../hooks/usePrefs";
 import { type EntryData, useVault, useVaultActions } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
 import type { PlacedAttachment } from "../../import/types";
@@ -17,12 +20,76 @@ import {
 import type { PairingSas } from "../../sync/pairing-sas";
 import { syncKeyFor } from "../../sync/sync-keys";
 import {
+	type CarriedTarget,
 	type CopiedOut,
 	collectCarry,
 	placeCarry,
+	readCarriedTargets,
+	sealCarriedTargets,
 	withoutHeldBack,
 } from "../../vault/combine-into";
 import { holdsQuarantine, isVaultEmpty, readVaultContents } from "../../vault/vault-empty";
+
+/** What came across besides entries and files, and what stayed behind the desktop's own. */
+interface BroughtSettings {
+	/** The synced settings written, for the removal to find on disk. */
+	settings: string[];
+	leftBehind: { alias: boolean; backupTargets: boolean };
+	failed: boolean;
+}
+
+/**
+ * Bring the old vault's alias provider and backup targets into the vault that opened, each only
+ * where that vault has none of its own. A failure leaves the old vault in place: see `accept`.
+ */
+async function bringSettings(from: {
+	alias: unknown;
+	targets: readonly CarriedTarget[];
+	/** Targets never sync, so only the app can say. One that won't counts as having none: losing
+	 * the browser's targets is worse than a second destination. */
+	desktopHasTargets: boolean;
+	opened: string;
+	actions: Pick<ReturnType<typeof useVaultActions>, "readSetting" | "writeSetting">;
+	storage: Pick<Platform["storage"], "getMeta" | "setMeta">;
+	crypto: Platform["crypto"];
+}): Promise<BroughtSettings> {
+	const { alias, targets, desktopHasTargets, opened, actions, storage, crypto } = from;
+	const brought: BroughtSettings = {
+		settings: [],
+		leftBehind: { alias: false, backupTargets: false },
+		failed: false,
+	};
+	// Apart, so one failing still brings the other.
+	try {
+		if (isAliasConfig(alias)) {
+			const own = actions.readSetting(PREF_ALIAS_PROVIDER);
+			if (!isAliasConfig(own)) {
+				await actions.writeSetting(PREF_ALIAS_PROVIDER, alias);
+				brought.settings.push(PREF_ALIAS_PROVIDER);
+			} else if (!sameAliasConfig(alias, own)) {
+				brought.leftBehind.alias = true;
+			}
+		}
+	} catch {
+		brought.failed = true;
+	}
+	try {
+		if (targets.length > 0) {
+			const key = backupTargetsKeyFor(opened);
+			if (desktopHasTargets || (await storage.getMeta<unknown[]>(key))?.length) {
+				brought.leftBehind.backupTargets = true;
+			} else {
+				await storage.setMeta(
+					key,
+					await sealCarriedTargets(targets, crypto.withVault?.(opened) ?? crypto),
+				);
+			}
+		}
+	} catch {
+		brought.failed = true;
+	}
+	return brought;
+}
 
 /** How many quarantine records a vault holds (see vault/quarantine.ts). */
 async function countQuarantined(
@@ -43,6 +110,8 @@ export interface DesktopVaultSummary {
 	name: string;
 	empty: boolean;
 	entries: number;
+	/** Whether the app has a backup target for this vault. Absent from an older app. */
+	backupTargets?: boolean;
 }
 
 export function useDesktopLink({
@@ -53,7 +122,7 @@ export function useDesktopLink({
 	/** Runs once the link is up, before the invite is looked at (Settings refreshes its status). */
 	onLinked?: () => Promise<void> | void;
 }) {
-	const { desktopLink, storage, shell, files: platformFiles } = usePlatform();
+	const { desktopLink, storage, shell, crypto, files: platformFiles } = usePlatform();
 	const { t } = useLingui();
 	const vaultActions = useVaultActions();
 	const { startJoin } = vaultActions;
@@ -99,10 +168,12 @@ export function useDesktopLink({
 		quarantined: number;
 		/** The old vault stayed without being asked to: some of it did not come across. */
 		keptUnasked: boolean;
-		/** The old vault goes once the look-alikes are answered for, and what its removal checks. */
+		/** Its alias provider or backup targets gave way to the desktop vault's own. */
+		leftBehind: BroughtSettings["leftBehind"];
+		/** The old vault goes once the user answers, and what its removal checks. */
 		pendingRemoval: { id: string; copied: CopiedOut } | null;
 	} | null>(null);
-	const [answeringHeldBack, setAnsweringHeldBack] = useState(false);
+	const [finishingCombine, setFinishingCombine] = useState(false);
 
 	/** What linking does here, from what each side holds. */
 	const outcomeFor = useCallback(
@@ -284,8 +355,8 @@ export function useDesktopLink({
 	 * Combining reads this vault's entries and files BEFORE the switch, because only one vault's
 	 * key is loaded at a time, then copies them in after it. The old vault then goes, unless the user
 	 * asked to keep a copy or losing it would lose something by accident, when it stays, set aside.
-	 * With look-alikes held back it waits for the user's answer about them. Keeping them separate
-	 * copies nothing.
+	 * With look-alikes held back, or settings that gave way to the desktop's own, it waits for the
+	 * user's answer. Keeping them separate copies nothing.
 	 */
 	const accept = useCallback(
 		async (
@@ -311,6 +382,16 @@ export function useDesktopLink({
 					combining && oldId
 						? await collectCarry(entries, files, platformFiles?.forVault(oldId) ?? null)
 						: null;
+				// Also read now, under the key about to go. Throws while the vault is still loading,
+				// before anything has happened.
+				const oldAlias = combining ? latest.current.actions.readSetting(PREF_ALIAS_PROVIDER) : null;
+				const oldTargets =
+					combining && oldId
+						? await readCarriedTargets(
+								await storage.getMeta<BackupTargetConfig[]>(backupTargetsKeyFor(oldId)),
+								crypto.withVault?.(oldId) ?? crypto,
+							)
+						: [];
 				const opened = await startJoin(invite, { kind: "password", password }, undefined, {
 					viaLink: linkedBy === "emoji",
 				});
@@ -336,6 +417,26 @@ export function useDesktopLink({
 								})
 							: [];
 					copying = false;
+					const nothing: BroughtSettings = {
+						settings: [],
+						leftBehind: { alias: false, backupTargets: false },
+						failed: false,
+					};
+					const brought =
+						opened === oldId
+							? nothing
+							: now.registry.activeId !== opened
+								? // Another vault opened meanwhile: what is open is not where these belong.
+									{ ...nothing, failed: true }
+								: await bringSettings({
+										alias: oldAlias,
+										targets: oldTargets,
+										desktopHasTargets: summary?.backupTargets === true,
+										opened,
+										actions: now.actions,
+										storage,
+										crypto,
+									});
 					// Stays only over what would otherwise be lost by accident: what failed to copy,
 					// what can't be read, and a pairing that did not finish.
 					const atRisk =
@@ -343,14 +444,27 @@ export function useDesktopLink({
 						oldBlob === null ||
 						placed.tagsLeftOver > 0 ||
 						carry.uncarried > 0 ||
+						brought.failed ||
 						holdsQuarantine((await storage.readQuarantine?.(oldId)) ?? null);
 					const removal =
 						opts?.keepCopy || atRisk
 							? null
-							: { id: oldId, copied: { blob: oldBlob, items: carry.items, fileHashes } };
-					// Look-alikes hold what the desktop's entries lack, so the user answers for them first.
-					// Set aside until then: closing the screen unanswered loses nothing.
-					const asking = removal !== null && placed.heldBack.items.length > 0;
+							: {
+									id: oldId,
+									copied: {
+										blob: oldBlob,
+										items: carry.items,
+										fileHashes,
+										settings: brought.settings,
+									},
+								};
+					// Look-alikes hold what the desktop's entries lack, and settings that gave way hold a
+					// key, so the user answers first. Set aside until then: closing the screen loses nothing.
+					const asking =
+						removal !== null &&
+						(placed.heldBack.items.length > 0 ||
+							brought.leftBehind.alias ||
+							brought.leftBehind.backupTargets);
 					const removed =
 						removal !== null &&
 						!asking &&
@@ -361,6 +475,7 @@ export function useDesktopLink({
 						uncarried: carry.uncarried,
 						quarantined: await countQuarantined(storage, oldId),
 						keptUnasked: attached && !opts?.keepCopy && !removed && !asking,
+						leftBehind: brought.leftBehind,
 						pendingRemoval: asking ? removal : null,
 					});
 				}
@@ -399,6 +514,8 @@ export function useDesktopLink({
 			entries,
 			files,
 			platformFiles,
+			crypto,
+			summary,
 			startJoin,
 			vaultSwitchedFrom,
 			storage,
@@ -407,13 +524,14 @@ export function useDesktopLink({
 		],
 	);
 
-	/** The answer about the look-alikes the dedup held back, after which a vault waiting on it goes. */
-	const answerHeldBack = useCallback(
+	/** The user's answer to the result screen, after which a vault waiting on it goes. */
+	const finishCombine = useCallback(
 		async (copy: boolean) => {
-			if (!combined?.heldBack.items.length) return;
+			if (!combined) return;
 			const { heldBack, pendingRemoval } = combined;
+			if (copy ? heldBack.items.length === 0 : !pendingRemoval) return;
 			const { actions } = latest.current;
-			setAnsweringHeldBack(true);
+			setFinishingCombine(true);
 			setError(null);
 			try {
 				// As import's "Import them anyway" does.
@@ -442,13 +560,14 @@ export function useDesktopLink({
 					t`This vault's entries didn't copy into the desktop's vault. They are still in the old vault.`,
 				);
 			} finally {
-				setAnsweringHeldBack(false);
+				setFinishingCombine(false);
 			}
 		},
 		[combined, t],
 	);
-	const copyHeldBack = useCallback(() => answerHeldBack(true), [answerHeldBack]);
-	const leaveOutHeldBack = useCallback(() => answerHeldBack(false), [answerHeldBack]);
+	const copyHeldBack = useCallback(() => finishCombine(true), [finishCombine]);
+	/** Any look-alikes held back are left out. */
+	const removeOldVault = useCallback(() => finishCombine(false), [finishCombine]);
 
 	return {
 		busy,
@@ -473,9 +592,9 @@ export function useDesktopLink({
 		claimFailed,
 		retryClaim,
 		combined,
-		answeringHeldBack,
+		finishingCombine,
 		copyHeldBack,
-		leaveOutHeldBack,
+		removeOldVault,
 		otherDevices,
 		joinSas,
 		/** For the Settings poller-free path: an invite claimed elsewhere. */

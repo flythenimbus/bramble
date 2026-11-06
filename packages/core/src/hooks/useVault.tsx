@@ -441,6 +441,9 @@ export interface VaultActions {
 	/** The current entries, read synchronously: includes writes committed before their
 	 * render has landed, so sequential mutations see their own earlier writes. */
 	readEntries(): Entry[];
+	/** A synced setting of the open vault. Throws while that vault is still loading. */
+	readSetting(key: string): unknown;
+	writeSetting(key: string, value: unknown): Promise<void>;
 	verifyMasterPassword(password: string): Promise<boolean>;
 	/** Check a recovery code against the vault's recovery slots without changing lock state. */
 	verifyRecoveryCode(code: string): Promise<boolean>;
@@ -1618,6 +1621,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[mutations, snapshotEntries, commitEntries, readConflictVersions, t],
 	);
 	const readEntries = useCallback((): Entry[] => latestRef.current.entries, []);
+	const readSetting = useCallback(
+		(key: string): unknown => snapshotEntries().settings?.[key]?.value,
+		[snapshotEntries],
+	);
+	const writeSetting = useCallback(
+		async (key: string, value: unknown) => {
+			commitEntries(await mutations.setSetting(snapshotEntries(), key, value));
+		},
+		[mutations, snapshotEntries, commitEntries],
+	);
 
 	/** Check a password against the slot verifier without unlocking. */
 	const verifyMasterPassword = useCallback(
@@ -2295,6 +2308,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			if (!holdsCarried(held, copied.items)) return false;
 			const files = new Set(onDisk.files?.map((f) => f.hash));
 			if (!copied.fileHashes.every((h) => files.has(h))) return false;
+			if (copied.settings?.some((k) => onDisk.settings?.[k]?.value == null)) return false;
 			// The record first: a failure here leaves the vault whole, not a name with nothing behind it.
 			await forgetEmptyRecord(id);
 			await eraseVaultData(id);
@@ -2341,6 +2355,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			readConflictVersions,
 			resolveConflict,
 			readEntries,
+			readSetting,
+			writeSetting,
 			verifyMasterPassword,
 			verifyRecoveryCode,
 			verifyWithWebauthnKey,
@@ -2394,6 +2410,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			readConflictVersions,
 			resolveConflict,
 			readEntries,
+			readSetting,
+			writeSetting,
 			verifyMasterPassword,
 			verifyRecoveryCode,
 			verifyWithWebauthnKey,
@@ -2443,10 +2461,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// Not just unlocked: linking from Settings opens another vault under an unlocked screen,
 			// and until it has loaded, the settings in hand are still the last vault's.
 			ready: !isLocked && loadedVault === vaultKey(activeId),
-			set: async (key, value) =>
-				commitEntries(await mutations.setSetting(snapshotEntries(), key, value)),
+			set: writeSetting,
 		}),
-		[syncedSettings, isLocked, loadedVault, activeId, mutations, snapshotEntries, commitEntries],
+		[syncedSettings, isLocked, loadedVault, activeId, writeSetting],
 	);
 
 	return (

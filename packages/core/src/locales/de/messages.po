@@ -3027,6 +3027,10 @@ msgstr "Tag entfernen"
 msgid "Remove tag {tag}"
 msgstr "Tag {tag} entfernen"
 
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Remove the old vault"
+msgstr "Alten Tresor entfernen"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Remove URL"
 msgstr "URL entfernen"
@@ -3762,6 +3766,14 @@ msgstr "Der Tresor der Desktop-App konnte nicht geöffnet werden."
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "The desktop vault has {found} matching logins."
 #~ msgstr "Der Desktop-Tresor hat {found} passende Logins."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The desktop's vault already has a backup target, so this vault's weren't brought over."
+msgstr "Der Desktop-Tresor verfügt bereits über ein Backup-Ziel; das dieses Tresors wurde daher nicht übernommen."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
+msgstr "Der Desktop-Tresor verfügt über einen eigenen E-Mail-Alias-Anbieter; der dieses Tresors wurde daher nicht übernommen."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."

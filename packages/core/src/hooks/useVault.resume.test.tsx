@@ -368,6 +368,49 @@ describe("removing a vault whose entries were copied out", () => {
 		expect(await remove(seen, "old", copied({ fileHashes: [held.hash] }))).toBe(true);
 	});
 
+	it("refuses until a setting it was told to look for is on disk", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		const proof = copied({ settings: ["pref.aliasProvider"] });
+
+		expect(await remove(seen, "old", proof)).toBe(false);
+
+		// Turned off counts as not there.
+		const hlc = { wall: 1, counter: 0, node: "n" };
+		p.setDisk({
+			entries: [entry("a")],
+			tombstones: [],
+			settings: { "pref.aliasProvider": { hlc, value: null } },
+		});
+		expect(await remove(seen, "old", proof)).toBe(false);
+		expect(p.erased).toEqual([]);
+
+		p.setDisk({
+			entries: [entry("a")],
+			tombstones: [],
+			settings: { "pref.aliasProvider": { hlc, value: { provider: "addy", options: {} } } },
+		});
+		expect(await remove(seen, "old", proof)).toBe(true);
+		expect(p.erased).toEqual(["old"]);
+	});
+
+	it("reads and writes a setting of the open vault through the one writer, onto its own disk", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		const value = { provider: "addy", options: {}, apiKey: "k" };
+		expect(seen.actions?.readSetting("pref.aliasProvider")).toBeUndefined();
+
+		await act(async () => {
+			await seen.actions?.writeSetting("pref.aliasProvider", value);
+		});
+
+		expect(seen.actions?.readSetting("pref.aliasProvider")).toEqual(value);
+		expect(p.writtenTo.at(-1)).toBe("v1");
+		expect(p.writes.at(-1)?.settings?.["pref.aliasProvider"]?.value).toEqual(value);
+		// Beside what it already held, as any other write.
+		expect(p.writes.at(-1)?.entries.map((e) => e.id)).toContain("a");
+	});
+
 	it("reads the disk only after a merge in flight has had time to land", async () => {
 		const p = vaults();
 		const seen = await open(p);
@@ -441,6 +484,32 @@ describe("importing into the open vault", () => {
 });
 
 describe("the open vault changing under an unlocked view", () => {
+	it("refuses to read or write a setting until the new vault has loaded", async () => {
+		const p = makePlatform(
+			{
+				v1: { entries: [entry("a")], tombstones: [], settings: NAMED },
+				v2: { entries: [entry("b")], tombstones: [] },
+			},
+			[
+				{ id: "v1", label: "Personal", createdAt: 1 },
+				{ id: "v2", label: "", createdAt: 2 },
+			],
+		);
+		const seen = mount(p.platform);
+		await settle();
+		await act(async () => seen.registry?.selectVault("v1"));
+		p.finishLoad();
+		await waitFor(() => expect(seen.synced?.ready).toBe(true));
+
+		p.holdLoad();
+		await act(async () => seen.registry?.selectVault("v2"));
+		expect(() => seen.actions?.readSetting("pref.vaultName")).toThrow(/not finished loading/);
+		await expect(seen.actions?.writeSetting("pref.vaultName", "x")).rejects.toThrow(
+			/not finished loading/,
+		);
+		expect(p.writtenTo).toEqual([]);
+	});
+
 	it("holds its settings as not ready until the new vault has loaded", async () => {
 		// Linking from Settings: the join opens another vault with this screen still up. Until it has
 		// loaded, the memory and settings in hand are still the old vault's.

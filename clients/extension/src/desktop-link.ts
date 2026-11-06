@@ -269,7 +269,7 @@ const adapter: DesktopLinkAdapter = {
 		withNativeProxy((via) => dispatch<string | null>("DESKTOP_LINK_SYNC_KEY", { via })),
 	vaultSummary: () =>
 		withNativeProxy((via) =>
-			dispatch<{ name: string; empty: boolean; entries: number } | null>(
+			dispatch<{ name: string; empty: boolean; entries: number; backupTargets?: boolean } | null>(
 				"DESKTOP_LINK_VAULT_SUMMARY",
 				{ via },
 			),

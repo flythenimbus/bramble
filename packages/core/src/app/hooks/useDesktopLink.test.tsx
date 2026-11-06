@@ -55,6 +55,11 @@ const h = vi.hoisted(() => ({
 	/** Set to fail reading the old vault's bytes. */
 	blobFails: false,
 	setAsideFails: false,
+	/** Each vault's synced settings, by vault id. */
+	settings: {} as Record<string, Record<string, unknown>>,
+	settingWriteFails: false,
+	metaWriteFails: false,
+	sealFails: false,
 }));
 
 /** The open vault, re-rendering subscribers when a join switches it, as the provider does. */
@@ -96,6 +101,12 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 				return attachments.map((_, i) => `hash${i}`);
 			},
 			readEntries: () => h.desktopEntries,
+			readSetting: (key: string) => h.settings[at as string]?.[key],
+			writeSetting: async (key: string, value: unknown) => {
+				h.steps.push(`writeSetting@${at}`);
+				if (h.settingWriteFails) throw new Error("disk full");
+				h.settings[at as string] = { ...h.settings[at as string], [key]: value };
+			},
 			deleteEmptyVault: async (id: string, _entries?: number, _files?: number) => {
 				h.steps.push(`deleteEmpty:${id}@${at}`);
 				return at !== id;
@@ -131,11 +142,31 @@ vi.mock("../../sync/enrollment", async (importOriginal) => ({
 const platform = {
 	storage: {
 		getMeta: async (k: string) => h.meta.get(k),
+		setMeta: async (k: string, v: unknown) => {
+			h.steps.push(`setMeta:${k}`);
+			if (h.metaWriteFails) throw new Error("storage full");
+			h.meta.set(k, v);
+		},
 		readQuarantine: async (id: string) => (h.meta.get(`quarantine:${id}`) as string) ?? null,
 		readVaultBlob: async () => {
 			if (h.blobFails) throw new Error("no blob");
 			return new Uint8Array([7]);
 		},
+	},
+	// Each vault's key opens only what it sealed, as a real one does.
+	crypto: {
+		withVault: (id: string) => ({
+			decryptWithVek: async (iv: string, ciphertext: string) => {
+				h.steps.push(`open@${id}`);
+				if (iv !== id) throw new Error("wrong key");
+				return ciphertext;
+			},
+			encryptWithVek: async (plaintext: string) => {
+				h.steps.push(`seal@${id}`);
+				if (h.sealFails) throw new Error("no key");
+				return { iv: id, ciphertext: plaintext };
+			},
+		}),
 	},
 	shell: {
 		onSyncEvent: (cb: (e: { kind: string; sas?: string; sasEmoji?: number[] }) => void) => {
@@ -324,6 +355,8 @@ describe("combining into the desktop's vault", () => {
 			h.failStage = false;
 			h.meta.clear();
 			h.attaches = true;
+			h.settings = {};
+			h.copied = [];
 		}
 		const combineAs = async (opts: { keepCopy?: boolean; choice?: "combine" } = {}) => {
 			const result = await linkedFrom("settings");
@@ -383,15 +416,17 @@ describe("combining into the desktop's vault", () => {
 				},
 			],
 			[
-				"an email alias provider and its key",
+				"a hint of an alias provider it no longer holds",
 				() => {
 					h.meta.set(aliasConfiguredHintKeyFor("v1"), true);
 				},
 			],
 			[
-				"backup targets",
+				"a backup target that can't be read, which already can't back up",
 				() => {
-					h.meta.set(backupTargetsKeyFor("v1"), [{ id: "t" }]);
+					h.meta.set(backupTargetsKeyFor("v1"), [
+						{ id: "t", creds: { iv: "x", ciphertext: "{}" } },
+					]);
 				},
 			],
 		])("goes even when it holds %s", async (_what, arrange) => {
@@ -452,7 +487,7 @@ describe("combining into the desktop's vault", () => {
 				const result = await combine();
 				h.steps = [];
 				await act(async () => {
-					await result.current.leaveOutHeldBack();
+					await result.current.removeOldVault();
 				});
 				expect(h.steps).toEqual(["deleteCarried:v1@new"]);
 				expect(namesToCheck()).toEqual(["new.com"]);
@@ -465,7 +500,7 @@ describe("combining into the desktop's vault", () => {
 				const result = await combine();
 				h.carriedRemoved = false;
 				await act(async () => {
-					await result.current.leaveOutHeldBack();
+					await result.current.removeOldVault();
 				});
 				h.carriedRemoved = true;
 				expect(result.current.combined?.pendingRemoval).toBeNull();
@@ -485,7 +520,7 @@ describe("combining into the desktop's vault", () => {
 				expect(result.current.error).toMatch(/didn't copy/i);
 				expect(result.current.combined?.heldBack.items).toHaveLength(1);
 				expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
-				expect(result.current.answeringHeldBack).toBe(false);
+				expect(result.current.finishingCombine).toBe(false);
 			});
 
 			it("asks nothing when a copy was asked for, and copying them removes nothing", async () => {
@@ -513,6 +548,310 @@ describe("combining into the desktop's vault", () => {
 				});
 				expect(h.steps).not.toContain("deleteCarried:v1@new");
 				expect(result.current.combined?.keptUnasked).toBe(true);
+			});
+		});
+
+		describe("what it brings besides entries and files", () => {
+			const ALIAS = "pref.aliasProvider";
+			const mine = { provider: "addy", options: { domain: "mine.example" }, apiKey: "my-key" };
+			const theirs = { provider: "simplelogin", options: {}, apiKey: "their-key" };
+			const liveTarget = (extra: Record<string, unknown> = {}) => ({
+				id: "t1",
+				providerId: "nextcloud",
+				provider: "webdav",
+				serverUrl: "https://dav.example/",
+				path: "/mine",
+				frequency: "daily",
+				keep: 7,
+				creds: { iv: "v1", ciphertext: '{"password":"s3"}' },
+				lastBackupAt: 5,
+				lastVaultHash: "abc",
+				...extra,
+			});
+			const targetsOf = (id: string) =>
+				h.meta.get(backupTargetsKeyFor(id)) as
+					| { creds: unknown; path: string; lastBackupAt?: number }[]
+					| undefined;
+			const withTarget = () => h.meta.set(backupTargetsKeyFor("v1"), [liveTarget()]);
+			const REMOVED = "deleteCarried:v1@new";
+			const proof = () => h.copied[0] as { settings?: string[] };
+
+			describe("the alias provider", () => {
+				it("comes across when the desktop's vault has none, in the vault that opened", async () => {
+					oneFullVault();
+					h.settings = { v1: { [ALIAS]: mine } };
+					const result = await combineAs();
+					expect(h.settings.new?.[ALIAS]).toEqual(mine);
+					expect(h.steps).toEqual(["stage", "join", "import@new", "writeSetting@new", REMOVED]);
+					expect(result.current.combined?.leftBehind.alias).toBe(false);
+					expect(result.current.combined?.pendingRemoval).toBeNull();
+					expect(result.current.combined?.keptUnasked).toBe(false);
+				});
+
+				it("has the removal check it reached the disk", async () => {
+					oneFullVault();
+					h.settings = { v1: { [ALIAS]: mine } };
+					await combineAs();
+					expect(proof().settings).toEqual([ALIAS]);
+				});
+
+				it("comes across over one the desktop's vault turned off", async () => {
+					oneFullVault();
+					h.settings = { v1: { [ALIAS]: mine }, new: { [ALIAS]: null } };
+					await combineAs();
+					expect(h.settings.new?.[ALIAS]).toEqual(mine);
+				});
+
+				it("writes nothing when the browser's vault has none", async () => {
+					oneFullVault();
+					const result = await combineAs();
+					expect(h.steps).not.toContain("writeSetting@new");
+					expect(proof().settings).toEqual([]);
+					expect(result.current.combined?.leftBehind.alias).toBe(false);
+				});
+
+				it("does not bring something not shaped like a provider", async () => {
+					oneFullVault();
+					h.settings = { v1: { [ALIAS]: { nonsense: true } } };
+					await combineAs();
+					expect(h.steps).not.toContain("writeSetting@new");
+				});
+
+				it("has nothing to say when both hold the same one, and the vault goes", async () => {
+					oneFullVault();
+					h.settings = { v1: { [ALIAS]: mine }, new: { [ALIAS]: { ...mine } } };
+					const result = await combineAs();
+					expect(h.steps).not.toContain("writeSetting@new");
+					expect(h.steps.at(-1)).toBe(REMOVED);
+					expect(result.current.combined?.leftBehind.alias).toBe(false);
+				});
+
+				it("gives way to the desktop's own, says so, and the vault waits to be removed", async () => {
+					oneFullVault();
+					h.settings = { v1: { [ALIAS]: mine }, new: { [ALIAS]: theirs } };
+					const result = await combineAs();
+					expect(h.settings.new?.[ALIAS]).toEqual(theirs);
+					expect(h.steps).not.toContain("writeSetting@new");
+					expect(h.steps).not.toContain(REMOVED);
+					expect(h.steps.at(-1)).toBe("setAside:v1@new");
+					expect(result.current.combined?.leftBehind.alias).toBe(true);
+					expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
+					expect(result.current.combined?.keptUnasked).toBe(false);
+
+					await act(async () => {
+						await result.current.removeOldVault();
+					});
+					expect(h.steps.at(-1)).toBe(REMOVED);
+					expect(result.current.combined?.pendingRemoval).toBeNull();
+					expect(result.current.combined?.leftBehind.alias).toBe(true);
+				});
+
+				it("keeps the old vault, and says so, when writing it fails", async () => {
+					oneFullVault();
+					h.settings = { v1: { [ALIAS]: mine } };
+					h.settingWriteFails = true;
+					const result = await combineAs();
+					h.settingWriteFails = false;
+					expect(h.steps).not.toContain(REMOVED);
+					expect(h.steps.at(-1)).toBe("setAside:v1@new");
+					expect(result.current.combined?.keptUnasked).toBe(true);
+					expect(result.current.error).toBeNull();
+				});
+			});
+
+			describe("backup targets", () => {
+				it("come across when the desktop has none, sealed under the desktop vault's key", async () => {
+					oneFullVault();
+					h.summary = { name: "Home", empty: true, entries: 0, backupTargets: false };
+					withTarget();
+					const result = await combineAs();
+					const [moved] = targetsOf("new") ?? [];
+					expect(moved?.creds).toEqual({ iv: "new", ciphertext: '{"password":"s3"}' });
+					expect(moved?.path).toBe("/mine");
+					expect(moved?.lastBackupAt).toBeUndefined();
+					expect(h.steps.at(-1)).toBe(REMOVED);
+					expect(result.current.combined?.leftBehind.backupTargets).toBe(false);
+				});
+
+				it("open with the old key before the join, and seal with the new one after it", async () => {
+					oneFullVault();
+					withTarget();
+					await combineAs();
+					const at = (step: string) => h.steps.indexOf(step);
+					expect(at("open@v1")).toBeGreaterThanOrEqual(0);
+					expect(at("open@v1")).toBeLessThan(at("join"));
+					expect(at("seal@new")).toBeGreaterThan(at("join"));
+					expect(h.steps).not.toContain("open@new");
+					expect(h.steps).not.toContain("seal@v1");
+				});
+
+				it.each([
+					["an older app, which does not say", { name: "Home", empty: true, entries: 0 }],
+					["an app that will not say at all", null],
+				])(
+					"come across for %s: losing them is worse than two destinations",
+					async (_what, summary) => {
+						oneFullVault();
+						h.summary = summary;
+						withTarget();
+						await combineAs({ choice: "combine" });
+						expect(targetsOf("new")).toHaveLength(1);
+					},
+				);
+
+				it("give way when the desktop has one, say so, and the vault waits to be removed", async () => {
+					oneFullVault();
+					h.summary = { name: "Home", empty: true, entries: 0, backupTargets: true };
+					withTarget();
+					const result = await combineAs();
+					expect(targetsOf("new")).toBeUndefined();
+					expect(h.steps).not.toContain("seal@new");
+					expect(h.steps).not.toContain(REMOVED);
+					expect(result.current.combined?.leftBehind.backupTargets).toBe(true);
+					expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
+
+					await act(async () => {
+						await result.current.removeOldVault();
+					});
+					expect(h.steps.at(-1)).toBe(REMOVED);
+				});
+
+				it("never overwrite what the vault that opened already has on this browser", async () => {
+					oneFullVault();
+					withTarget();
+					const own = [{ id: "own", creds: { iv: "new", ciphertext: "{}" } }];
+					h.meta.set(backupTargetsKeyFor("new"), own);
+					const result = await combineAs();
+					expect(h.meta.get(backupTargetsKeyFor("new"))).toEqual(own);
+					expect(result.current.combined?.leftBehind.backupTargets).toBe(true);
+				});
+
+				it("say nothing and hold nothing up when the only one can't be read", async () => {
+					oneFullVault();
+					h.summary = { name: "Home", empty: true, entries: 0, backupTargets: true };
+					h.meta.set(backupTargetsKeyFor("v1"), [
+						liveTarget({ creds: { iv: "other", ciphertext: "{}" } }),
+					]);
+					const result = await combineAs();
+					expect(targetsOf("new")).toBeUndefined();
+					expect(h.steps.at(-1)).toBe(REMOVED);
+					expect(result.current.combined?.leftBehind.backupTargets).toBe(false);
+				});
+
+				it.each([
+					["storing them", "metaWriteFails"],
+					["sealing them", "sealFails"],
+				] as const)("keep the old vault, and say so, when %s fails", async (_what, flag) => {
+					oneFullVault();
+					withTarget();
+					h[flag] = true;
+					const result = await combineAs();
+					h[flag] = false;
+					expect(h.steps).not.toContain(REMOVED);
+					expect(h.steps.at(-1)).toBe("setAside:v1@new");
+					expect(result.current.combined?.keptUnasked).toBe(true);
+				});
+			});
+
+			it("bring both, leaving the old vault as it was, when a copy was asked for", async () => {
+				oneFullVault();
+				h.settings = { v1: { [ALIAS]: mine } };
+				withTarget();
+				const result = await combineAs({ keepCopy: true });
+				expect(h.settings.new?.[ALIAS]).toEqual(mine);
+				expect(targetsOf("new")).toHaveLength(1);
+				expect(h.settings.v1?.[ALIAS]).toEqual(mine);
+				expect(targetsOf("v1")?.[0]?.lastBackupAt).toBe(5);
+				expect(h.steps.at(-1)).toBe("setAside:v1@new");
+				expect(result.current.combined?.pendingRemoval).toBeNull();
+				expect(result.current.combined?.keptUnasked).toBe(false);
+			});
+
+			it("touch nothing when the vaults stay separate", async () => {
+				oneFullVault();
+				h.summary = { name: "Home", empty: false, entries: 1 };
+				h.settings = { v1: { [ALIAS]: mine } };
+				withTarget();
+				await combineAs({ choice: "separate" } as never);
+				expect(h.steps).not.toContain("writeSetting@new");
+				expect(h.steps).not.toContain("open@v1");
+				expect(targetsOf("new")).toBeUndefined();
+			});
+
+			it("touch nothing when linking opens the vault that was already open", async () => {
+				oneFullVault();
+				h.settings = { v1: { [ALIAS]: mine } };
+				withTarget();
+				h.joinOpens = "v1";
+				try {
+					const result = await combineAs();
+					expect(h.steps).not.toContain("writeSetting@v1");
+					expect(h.steps).not.toContain("seal@v1");
+					expect(result.current.combined?.leftBehind).toEqual({
+						alias: false,
+						backupTargets: false,
+					});
+				} finally {
+					h.joinOpens = "new";
+				}
+			});
+
+			it("keep the old vault when another vault opened before they could land", async () => {
+				oneFullVault();
+				h.settings = { v1: { [ALIAS]: mine } };
+				withTarget();
+				h.afterJoin = "other";
+				try {
+					const result = await combineAs();
+					expect(h.settings.other).toBeUndefined();
+					expect(targetsOf("other")).toBeUndefined();
+					expect(targetsOf("new")).toBeUndefined();
+					expect(h.steps).not.toContain("deleteCarried:v1@other");
+					expect(result.current.combined?.keptUnasked).toBe(true);
+				} finally {
+					h.afterJoin = null;
+				}
+			});
+
+			it("one failing still brings the other", async () => {
+				oneFullVault();
+				h.settings = { v1: { [ALIAS]: mine } };
+				withTarget();
+				h.settingWriteFails = true;
+				const result = await combineAs();
+				h.settingWriteFails = false;
+				expect(targetsOf("new")).toHaveLength(1);
+				expect(result.current.combined?.keptUnasked).toBe(true);
+			});
+
+			it("are still left to the desktop's when the old vault stays for another reason", async () => {
+				oneFullVault();
+				h.settings = { v1: { [ALIAS]: mine }, new: { [ALIAS]: theirs } };
+				h.failStage = true;
+				const result = await combineAs();
+				expect(result.current.combined?.leftBehind.alias).toBe(true);
+				expect(result.current.combined?.pendingRemoval).toBeNull();
+				expect(result.current.combined?.keptUnasked).toBe(true);
+			});
+
+			it("wait on the look-alikes too, and the removal still checks what came across", async () => {
+				oneFullVault();
+				h.entries = [login("a", "new.com"), login("b", "alike.com")];
+				h.desktopEntries = [{ ...login("x", "alike.com"), username: "U" }];
+				h.summary = { name: "Home", empty: false, entries: 1, backupTargets: true };
+				h.settings = { v1: { [ALIAS]: mine } };
+				withTarget();
+				const result = await combineAs({ choice: "combine" });
+				expect(h.settings.new?.[ALIAS]).toEqual(mine);
+				expect(result.current.combined?.leftBehind.backupTargets).toBe(true);
+				expect(h.steps).not.toContain(REMOVED);
+
+				await act(async () => {
+					await result.current.removeOldVault();
+				});
+				expect(h.steps.at(-1)).toBe(REMOVED);
+				expect(proof().settings).toEqual([ALIAS]);
+				expect(result.current.combined?.heldBack.items).toHaveLength(0);
 			});
 		});
 

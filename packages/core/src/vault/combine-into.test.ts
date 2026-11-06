@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { type BackupTargetConfig, keyVaultIdFor, targetPrefixFor } from "../backup/config";
 import type { Entry, EntryData } from "../hooks/useVault";
 import type { FileRecord } from "../sync/entries-payload";
 import {
@@ -6,6 +7,8 @@ import {
 	foldCarriedCopy,
 	holdsCarried,
 	placeCarry,
+	readCarriedTargets,
+	sealCarriedTargets,
 	withoutHeldBack,
 } from "./combine-into";
 
@@ -257,5 +260,104 @@ describe("withoutHeldBack", () => {
 		const { heldBack } = placeCarry(existing, { items, files: [], uncarried: 0 });
 		expect(heldBack.items).toHaveLength(1);
 		expect(withoutHeldBack(items, heldBack.items)).toEqual([fresh]);
+	});
+});
+
+describe("carrying backup targets", () => {
+	const target = (id: string, creds: unknown, extra: Record<string, unknown> = {}) =>
+		({
+			id,
+			providerId: "nextcloud",
+			provider: "webdav",
+			serverUrl: "https://dav.example/",
+			path: "/backups",
+			frequency: "daily",
+			keep: 7,
+			creds,
+			...extra,
+		}) as unknown as BackupTargetConfig;
+	/** A key that can only open what it sealed, as a vault's key can. */
+	const keyed = (name: string) => ({
+		decryptWithVek: async (iv: string, ciphertext: string) => {
+			if (iv !== name) throw new Error("wrong key");
+			return ciphertext;
+		},
+		encryptWithVek: async (plaintext: string) => ({ iv: name, ciphertext: plaintext }),
+	});
+
+	it("opens each target with the old key and seals it with the new one", async () => {
+		const carried = await readCarriedTargets(
+			[target("t1", { iv: "old", ciphertext: '{"password":"s3"}' })],
+			keyed("old"),
+		);
+		const sealed = await sealCarriedTargets(carried, keyed("new"));
+		expect(sealed).toHaveLength(1);
+		expect(sealed[0]?.creds).toEqual({ iv: "new", ciphertext: '{"password":"s3"}' });
+		expect(sealed[0]?.serverUrl).toBe("https://dav.example/");
+		expect(sealed[0]?.keep).toBe(7);
+	});
+
+	it("leaves the old vault's backup history behind, so the first backup here is not skipped", async () => {
+		const carried = await readCarriedTargets(
+			[
+				target(
+					"t1",
+					{ iv: "old", ciphertext: "{}" },
+					{
+						lastBackupAt: 5,
+						lastVaultHash: "abc",
+						lastError: "nope",
+						waiting: "files",
+						failures: 3,
+						failedAt: 6,
+						sharedFolder: true,
+					},
+				),
+			],
+			keyed("old"),
+		);
+		const [sealed] = await sealCarriedTargets(carried, keyed("new"));
+		for (const key of [
+			"lastBackupAt",
+			"lastVaultHash",
+			"lastError",
+			"waiting",
+			"failures",
+			"failedAt",
+			"sharedFolder",
+		]) {
+			expect(sealed).not.toHaveProperty(key);
+		}
+	});
+
+	it("stamps its snapshots with the new vault, so pruning can't reach the old vault's", async () => {
+		const carried = await readCarriedTargets(
+			[target("t1", { iv: "old", ciphertext: "{}" }, { sharedFolder: true })],
+			keyed("old"),
+		);
+		const [sealed] = await sealCarriedTargets(carried, keyed("new"));
+		expect(keyVaultIdFor(sealed as BackupTargetConfig, "new-vault")).toBe("new-vault");
+		expect(targetPrefixFor(sealed as BackupTargetConfig, "new-vault", true)).toBe("backups");
+	});
+
+	it("skips a target whose credentials won't open: it already can't back up", async () => {
+		const carried = await readCarriedTargets(
+			[
+				target("dead", { iv: "another-vault", ciphertext: "{}" }),
+				target("live", { iv: "old", ciphertext: "{}" }),
+			],
+			keyed("old"),
+		);
+		expect(carried.map((c) => c.target.id)).toEqual(["live"]);
+	});
+
+	it("skips a target the operating system holds the credentials for: there is nothing to carry", async () => {
+		const carried = await readCarriedTargets([target("os", { wrap: "os" })], keyed("old"));
+		expect(carried).toEqual([]);
+	});
+
+	it("reads nothing from no list at all", async () => {
+		expect(await readCarriedTargets(undefined, keyed("old"))).toEqual([]);
+		expect(await readCarriedTargets([], keyed("old"))).toEqual([]);
 	});
 });

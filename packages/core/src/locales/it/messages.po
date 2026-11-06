@@ -3027,6 +3027,10 @@ msgstr "Rimuovere tag"
 msgid "Remove tag {tag}"
 msgstr "Rimuovere il tag {tag}"
 
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Remove the old vault"
+msgstr "Rimuovere il vecchio vault"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Remove URL"
 msgstr "Rimuovere URL"
@@ -3762,6 +3766,14 @@ msgstr "La cassaforte dell'app desktop non si è aperta."
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "The desktop vault has {found} matching logins."
 #~ msgstr "Il vault desktop ha {found} login corrispondenti."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The desktop's vault already has a backup target, so this vault's weren't brought over."
+msgstr "Il vault del desktop dispone già di una destinazione di backup, pertanto quella di questo vault non è stata trasferita."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
+msgstr "Il vault del desktop dispone di un proprio provider di alias email, pertanto quello di questo vault non è stato trasferito."
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."

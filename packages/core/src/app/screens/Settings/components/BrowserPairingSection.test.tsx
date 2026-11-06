@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
 	onPending: null as ((p: { sasHashB64: string; label: string }) => void) | null,
 	onDone: null as ((paired: boolean) => void) | null,
 	summaries: [] as unknown[],
+	/** This vault's backup targets on this device. */
+	targets: undefined as unknown[] | undefined,
 	onSyncEvent: null as ((e: { kind: string }) => void) | null,
 	listed: [] as unknown[],
 	/** Arming the invite waits on this, as deriving the admission key does in the app. */
@@ -76,7 +78,9 @@ const pairing = {
 
 const platform = {
 	target: "desktop",
-	storage: { getMeta: async () => undefined },
+	storage: {
+		getMeta: async (k: string) => (k.startsWith("backup.targets:") ? h.targets : undefined),
+	},
 	shell: {
 		onSyncEvent: (cb: (e: { kind: string }) => void) => {
 			h.onSyncEvent = cb;
@@ -260,10 +264,39 @@ describe("connecting a browser by emoji", () => {
 	it("tells the linking browser what this vault holds, and stops on cancel", async () => {
 		await connect();
 		await waitFor(() =>
-			expect(h.summaries).toContainEqual({ name: "Home", empty: false, entries: 2 }),
+			expect(h.summaries).toContainEqual({
+				name: "Home",
+				empty: false,
+				entries: 2,
+				backupTargets: false,
+			}),
 		);
 		fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
 		await waitFor(() => expect(h.summaries.at(-1)).toBeNull());
+	});
+
+	it("tells the linking browser when this vault has a backup target, which it can't see", async () => {
+		h.targets = [{ id: "t" }];
+		try {
+			await connect();
+			await waitFor(() =>
+				expect(h.summaries).toContainEqual(expect.objectContaining({ backupTargets: true })),
+			);
+		} finally {
+			h.targets = undefined;
+		}
+	});
+
+	it("does not count an emptied list of targets as having one", async () => {
+		h.targets = [];
+		try {
+			await connect();
+			await waitFor(() =>
+				expect(h.summaries).toContainEqual(expect.objectContaining({ backupTargets: false })),
+			);
+		} finally {
+			h.targets = undefined;
+		}
 	});
 
 	it("closes the link window and drops the invite on cancel", async () => {

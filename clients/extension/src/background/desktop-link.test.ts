@@ -402,6 +402,32 @@ describe("the held sync link", () => {
 		await vi.waitFor(() => expect(frames).toEqual(["early"]));
 	});
 
+	it("passes on whether the app has a backup target, and an older app simply doesn't say", async () => {
+		const mod = await load();
+		await open(mod, []);
+
+		const told = mod.desktopVaultSummary();
+		await vi.waitFor(() => expect(postedOps()).toContain("vaultSummary"));
+		deliver({
+			sealed: `sealed:${JSON.stringify({
+				ok: true,
+				summary: { name: "Home", empty: false, entries: 1, backupTargets: true },
+			})}`,
+		});
+		await expect(told).resolves.toMatchObject({ backupTargets: true });
+
+		const older = mod.desktopVaultSummary();
+		await vi.waitFor(() => expect(postedOps().filter((o) => o === "vaultSummary")).toHaveLength(2));
+		deliver({
+			sealed: `sealed:${JSON.stringify({
+				ok: true,
+				summary: { name: "Home", empty: false, entries: 1 },
+			})}`,
+		});
+		const answer = await older;
+		expect(answer?.backupTargets).toBeUndefined();
+	});
+
 	it("gives each of two overlapping requests its own answer", async () => {
 		// Sync asks for the app's identity while a page asks what its vault holds. One shared slot
 		// for "the request waiting" handed the first answer to the second asker, and the first

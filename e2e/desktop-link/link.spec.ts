@@ -1,10 +1,13 @@
 import type { Page } from "@playwright/test";
 import { createVault, optionsUrl } from "../extension/helpers";
+import { basicAuth, fakeWebDav } from "./fake-webdav";
 import { BROWSER_PW, DESKTOP_ENTRY, DESKTOP_PW, desk, expect, RELAY_URL, test } from "./fixtures";
 import {
 	addLogin,
+	addWebDavTarget,
 	browserOpenVaultAt,
 	desktopAddLogin,
+	desktopAliasDomain,
 	desktopApprove,
 	desktopConnect,
 	desktopConnectedBrowsers,
@@ -14,6 +17,8 @@ import {
 	desktopHide,
 	desktopListedBrowsers,
 	desktopOpenVault,
+	desktopSeedBackupTarget,
+	desktopSetAliasDomain,
 	desktopSymbols,
 	desktopUseLocalRelay,
 	desktopVisible,
@@ -21,6 +26,7 @@ import {
 	joinFromSetup,
 	linkFromSettings,
 	linkFromSetup,
+	setAliasDomain,
 } from "./steps";
 
 // Linking the desktop app and the extension, both real, on one machine. docs/desktop-link-onboarding.md
@@ -169,11 +175,14 @@ for (const [answer, copies] of [
 	test(`settings: a look-alike is asked about, and "${answer}" lets the old vault go`, async ({
 		ext,
 	}) => {
+		// Its own name per run: one desktop vault serves both, and an exact copy of the first run's
+		// would be dropped without asking.
+		const name = `Looks alike ${copies}`;
 		const both = { username: "alike@example.com", password: "Alike-pw-321" };
-		await desktopAddLogin("Looks alike", both);
+		await desktopAddLogin(name, both);
 		await createVault(ext.page, ext.extensionId, BROWSER_PW);
 		const popup = await ext.popup();
-		await addLogin(popup, "Looks alike", { ...both, notes: "only in the browser" });
+		await addLogin(popup, name, { ...both, notes: "only in the browser" });
 
 		await desktopConnect();
 		const shown = await linkFromSettings(popup);
@@ -200,7 +209,7 @@ for (const [answer, copies] of [
 		await expect(popup.getByText(/Copy them before the old vault goes/)).toHaveCount(0);
 
 		await popup.getByRole("button", { name: "Go to vault" }).click();
-		await expect(popup.getByText("Looks alike")).toHaveCount(copies);
+		await expect(popup.getByText(name)).toHaveCount(copies);
 	});
 }
 
@@ -408,6 +417,146 @@ test.describe("an empty desktop vault, linked from a browser vault that holds so
 		expect(registry.vaults.map((v) => v.label)).toEqual(["Test 1"]);
 		expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(1);
 		// Back to the vault the rest of the suite expects open.
+		await desktopOpenVault("Vault 1");
+	});
+});
+
+test.describe("the alias provider and backup targets of a vault combined in", () => {
+	const USER = "browser-user";
+	const SECRET = "browser-dav-secret";
+	const vaultCount = async (ext: { stored(key: string): Promise<unknown> }) =>
+		((await ext.stored("vault.registry")) as { vaults: unknown[] }).vaults.length;
+	/** Link from Settings as far as the desktop's vault arriving, the box as asked. */
+	const linkAndCombine = async (popup: Page, { keepCopy = false, ask = false } = {}) => {
+		await desktopConnect();
+		const shown = await linkFromSettings(popup);
+		expect(await desktopSymbols()).toBe(shown);
+		await popup.getByRole("button", { name: "They match" }).click();
+		await desktopApprove();
+		if (ask) {
+			await expect(popup.getByText("You have two vaults")).toBeVisible();
+			await popup.getByText("Combine into one").click();
+		}
+		if (keepCopy) await popup.getByText("Keep a copy of this vault").click();
+		await popup.getByLabel("Master password").last().fill(DESKTOP_PW);
+		// Settings has a tab called Sync too.
+		const offer = popup.locator("form").filter({ hasText: "Sync with the desktop app" });
+		await (ask
+			? popup.getByRole("button", { name: "Continue", exact: true })
+			: offer.getByRole("button", { name: "Sync", exact: true })
+		).click();
+		await expect(popup.getByText("This vault syncs with the desktop app.")).toBeVisible({
+			timeout: 30_000,
+		});
+	};
+
+	test("settings: both come across to a desktop vault with neither, and the backup runs on the new key", async ({
+		ext,
+	}) => {
+		const dav = await fakeWebDav();
+		try {
+			await desktopCreateAnotherVault("Has neither");
+			await desktopUseLocalRelay();
+			await createVault(ext.page, ext.extensionId, BROWSER_PW);
+			const popup = await ext.popup();
+			await addLogin(popup, "Browser only");
+			await setAliasDomain(popup, "mine.example");
+			await addWebDavTarget(popup, { url: dav.url, user: USER, password: SECRET });
+
+			await linkAndCombine(popup);
+
+			// Nothing to answer: all of it came across, so the old vault has gone already.
+			await expect.poll(() => vaultCount(ext)).toBe(1);
+			expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(1);
+			await expect(popup.getByRole("button", { name: "Remove the old vault" })).toHaveCount(0);
+
+			await popup.getByRole("button", { name: "Aliases", exact: true }).click();
+			await expect(popup.getByLabel("Your domain")).toHaveValue("mine.example");
+
+			// The old vault's key is gone. A snapshot stamped with this vault, sent with the password
+			// the target was given, means it was sealed under the new one.
+			await popup.getByRole("button", { name: "Backups", exact: true }).click();
+			await popup.getByRole("button", { name: "Back up now" }).click();
+			const registry = (await ext.stored("vault.registry")) as { vaults: { id: string }[] };
+			const stamp = `-v${registry.vaults[0]?.id.replace(/-/g, "").slice(0, 8)}.bramble`;
+			await expect
+				.poll(() => dav.snapshots().filter((name) => name.endsWith(stamp)).length, {
+					timeout: 30_000,
+				})
+				.toBeGreaterThan(0);
+			expect(dav.auths()).toEqual([basicAuth(USER, SECRET)]);
+
+			// The provider is a synced setting, so it reached the desktop over the link.
+			await expect.poll(() => desktopAliasDomain(), { timeout: 30_000 }).toBe("mine.example");
+		} finally {
+			await dav.close();
+		}
+		await desktopOpenVault("Vault 1");
+	});
+
+	test("settings: neither comes across to a desktop vault with its own, and the vault waits to be removed", async ({
+		ext,
+	}) => {
+		const dav = await fakeWebDav();
+		try {
+			await desktopCreateAnotherVault("Has both");
+			await desktopUseLocalRelay();
+			await desktopSetAliasDomain("theirs.example");
+			await desktopSeedBackupTarget("Has both");
+			await createVault(ext.page, ext.extensionId, BROWSER_PW);
+			const popup = await ext.popup();
+			await addLogin(popup, "Browser only");
+			await setAliasDomain(popup, "mine.example");
+			await addWebDavTarget(popup, { url: dav.url, user: USER, password: SECRET });
+
+			await linkAndCombine(popup, { ask: true });
+
+			// Both say so, and the old vault stays until told to go.
+			await expect(popup.getByText(/has its own email alias provider/)).toBeVisible();
+			await expect(popup.getByText(/already has a backup target/)).toBeVisible();
+			expect(await vaultCount(ext)).toBe(2);
+
+			await popup.getByRole("button", { name: "Remove the old vault" }).click();
+			await expect.poll(() => vaultCount(ext)).toBe(1);
+			expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(1);
+			await expect(popup.getByRole("button", { name: "Remove the old vault" })).toHaveCount(0);
+			// Saying so outlives the vault: it is what the user was told about what went.
+			await expect(popup.getByText(/has its own email alias provider/)).toBeVisible();
+
+			// The desktop's own stand, on both sides, and this browser has no target.
+			expect(await ext.storedKeys("backup.targets:")).toEqual([]);
+			await popup.getByRole("button", { name: "Aliases", exact: true }).click();
+			await expect(popup.getByLabel("Your domain")).toHaveValue("theirs.example");
+			expect(await desktopAliasDomain()).toBe("theirs.example");
+		} finally {
+			await dav.close();
+		}
+		await desktopOpenVault("Vault 1");
+	});
+
+	test("settings: a copy kept keeps its own too, and the vault it combined into has them as well", async ({
+		ext,
+	}) => {
+		const dav = await fakeWebDav();
+		try {
+			await desktopCreateAnotherVault("Keeps a copy");
+			await desktopUseLocalRelay();
+			await createVault(ext.page, ext.extensionId, BROWSER_PW);
+			const popup = await ext.popup();
+			await addLogin(popup, "Browser only");
+			await setAliasDomain(popup, "mine.example");
+			await addWebDavTarget(popup, { url: dav.url, user: USER, password: SECRET });
+
+			await linkAndCombine(popup, { keepCopy: true });
+
+			await expect.poll(() => vaultCount(ext)).toBe(2);
+			await expect(popup.getByRole("button", { name: "Remove the old vault" })).toHaveCount(0);
+			expect(await ext.storedKeys("backup.targets:")).toHaveLength(2);
+			await popup.getByRole("button", { name: "Aliases", exact: true }).click();
+			await expect(popup.getByLabel("Your domain")).toHaveValue("mine.example");
+		} finally {
+			await dav.close();
+		}
 		await desktopOpenVault("Vault 1");
 	});
 });

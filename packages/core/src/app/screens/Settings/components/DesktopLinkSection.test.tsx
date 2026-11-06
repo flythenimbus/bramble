@@ -80,6 +80,8 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 			return [];
 		},
 		readEntries: () => [],
+		readSetting: () => undefined,
+		writeSetting: async () => {},
 		deleteCarriedVault: async () => {
 			h.steps.push("removeOld");
 			return true;
@@ -106,6 +108,7 @@ vi.mock("../../../../sync/enrollment", async (importOriginal) => ({
 
 const platform = {
 	target: "chromium",
+	crypto: {},
 	storage: {
 		readVaultBlob: async () => new Uint8Array([1]),
 		getMeta: async (key: string) => {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { aliasConfigKeyFor, isAliasConfig, isAliasConfigKey } from "./config";
+import {
+	type AliasConfig,
+	aliasConfigKeyFor,
+	isAliasConfig,
+	isAliasConfigKey,
+	sameAliasConfig,
+} from "./config";
 import { ALIAS_PROVIDERS, describeProvider, missingRequiredFields } from "./descriptors";
 
 // The key is held in the clear: this config is a synced pref, so it rides inside the vault's
@@ -79,5 +85,29 @@ describe("provider descriptors", () => {
 		// SimpleLogin's domain is optional where Addy's is required: unset simply means the
 		// account's default domain, which is a perfectly good answer.
 		expect(missingRequiredFields("simplelogin", {})).toEqual([]);
+	});
+});
+
+describe("sameAliasConfig", () => {
+	const config = {
+		provider: "addy",
+		options: { domain: "a.example", format: "words" },
+		apiKey: "k",
+	};
+
+	it("is the same whatever order the options were written in", () => {
+		const reordered = { ...config, options: { format: "words", domain: "a.example" } };
+		expect(sameAliasConfig(config as AliasConfig, reordered as AliasConfig)).toBe(true);
+	});
+
+	it.each([
+		["provider", { ...config, provider: "simplelogin" }],
+		["key", { ...config, apiKey: "other" }],
+		["no key", { provider: "addy", options: config.options }],
+		["server", { ...config, baseUrl: "https://self.example" }],
+		["option", { ...config, options: { ...config.options, domain: "b.example" } }],
+		["fewer options", { ...config, options: { domain: "a.example" } }],
+	])("is not the same with another %s", (_what, other) => {
+		expect(sameAliasConfig(config as AliasConfig, other as AliasConfig)).toBe(false);
 	});
 });

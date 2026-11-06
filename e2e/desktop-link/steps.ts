@@ -46,6 +46,56 @@ export async function desktopApprove(): Promise<void> {
 	await desk("await front(); await click(/^Approve$/);");
 }
 
+/** Settings > Aliases, with the provider that contacts nobody: its domain is all it holds. */
+export async function desktopSetAliasDomain(domain: string): Promise<void> {
+	await desk(`
+		await front();
+		if (!find(/^Aliases$/)) await click(/^Settings$/);
+		await click(/^Aliases$/);
+		await fillLabel(/^Provider/, "catchall");
+		await fillLabel(/Your domain/, ${JSON.stringify(domain)});
+		await sleep(500);
+		await click(/^Go to vault$/);
+	`);
+}
+
+/** The alias domain the open vault holds, or "" with none. */
+export async function desktopAliasDomain(): Promise<string> {
+	return desk<string>(`
+		await front();
+		if (!find(/^Aliases$/)) await click(/^Settings$/);
+		await click(/^Aliases$/);
+		await sleep(300);
+		const value = find(/Your domain/, "label")?.control?.value ?? "";
+		await click(/^Go to vault$/);
+		return value;
+	`);
+}
+
+/** A backup target for the open vault, as the Settings form would store it. Off, so no run tries
+ * it. What is under test is the app telling the browser it has one. */
+export async function desktopSeedBackupTarget(title: string): Promise<void> {
+	await desk(`
+		const invoke = window.__TAURI_INTERNALS__.invoke;
+		const registry = await invoke("storage_get_meta", { key: "vault.registry" });
+		const vault = registry.vaults.find((v) => v.label === ${JSON.stringify(title)});
+		if (!vault) throw new Error("no vault " + JSON.stringify(registry.vaults));
+		await invoke("storage_set_meta", {
+			key: "backup.targets:" + vault.id,
+			value: [{
+				id: "desktop-target",
+				providerId: "nextcloud",
+				provider: "webdav",
+				serverUrl: "https://dav.example.test/",
+				path: "/desktop",
+				frequency: "off",
+				keep: 7,
+				creds: { iv: "AAAA", ciphertext: "BBBB" },
+			}],
+		});
+	`);
+}
+
 /** Whether the vault window is on screen, read without bringing it forward. */
 export async function desktopVisible(): Promise<boolean> {
 	return desk<boolean>(
@@ -244,6 +294,35 @@ export async function addLogin(
 	}
 	await popup.getByRole("button", { name: /Save Login/i }).click();
 	await expect(popup.getByText(name)).toBeVisible();
+}
+
+/** Settings > Aliases, with the provider that contacts nobody. Saves as it is typed. */
+export async function setAliasDomain(popup: Page, domain: string): Promise<void> {
+	await popup.getByRole("button", { name: "Settings" }).click();
+	await popup.getByRole("button", { name: "Aliases", exact: true }).click();
+	await popup.getByLabel("Provider").selectOption("catchall");
+	await popup.getByLabel("Your domain").fill(domain);
+	await popup.getByLabel("Your domain").blur();
+	await expect.poll(() => popup.getByLabel("Your domain").inputValue()).toBe(domain);
+	// Written through to the vault's settings before the screen is left.
+	await popup.waitForTimeout(500);
+	await popup.getByRole("button", { name: "Go to vault" }).click();
+}
+
+/** Settings > Backups, a Nextcloud target on the given server. */
+export async function addWebDavTarget(
+	popup: Page,
+	{ url, user, password }: { url: string; user: string; password: string },
+): Promise<void> {
+	await popup.getByRole("button", { name: "Settings" }).click();
+	await popup.getByRole("button", { name: "Backups", exact: true }).click();
+	await popup.getByRole("button", { name: /Nextcloud/i }).click();
+	await popup.getByLabel("WebDAV URL").fill(url);
+	await popup.getByLabel("Username").fill(user);
+	await popup.getByLabel("Password", { exact: true }).fill(password);
+	await popup.getByRole("button", { name: "Save" }).click();
+	await expect(popup.getByRole("button", { name: "Back up now" })).toBeVisible();
+	await popup.getByRole("button", { name: "Go to vault" }).click();
 }
 
 /** Whether a URL stays on this machine. */

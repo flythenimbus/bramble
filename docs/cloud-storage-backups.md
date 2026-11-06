@@ -57,6 +57,10 @@ already are, per-device under `backup.*` keys, and is **never** placed in a sync
 payload. The P2P sync code is untouched: no new wire field, no roster change, no
 synced settings record.
 
+Combining a browser vault into the desktop's moves its targets across when the desktop has none of
+its own, resealed under the new vault's key. See
+[desktop-link-onboarding.md](desktop-link-onboarding.md) "Combine into one".
+
 Per vault, not per device, because a shared list made every vault back up to one
 place: configuring Nextcloud in a personal vault silently configured a work vault
 with the same server, credentials and folder, with no way to separate them

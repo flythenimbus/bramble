@@ -2,7 +2,9 @@
 // Collected while the old vault is still open (only one vault's key is loaded at a time), placed
 // against the desktop's vault once it has arrived. See docs/desktop-link-onboarding.md "Combine".
 
+import type { CryptoAdapter } from "../adapters/crypto";
 import type { VaultFiles } from "../adapters/files";
+import { type BackupTargetConfig, credsAreOsHeld } from "../backup/config";
 import type { Entry, EntryData } from "../hooks/useVault";
 import type { PlacedAttachment } from "../import/types";
 import type { FileRecord } from "../sync/entries-payload";
@@ -176,6 +178,52 @@ export interface CopiedOut {
 	items: readonly EntryData[];
 	/** The hash of each file the copy stored. */
 	fileHashes: readonly string[];
+	/** The synced settings the copy wrote. */
+	settings?: readonly string[];
+}
+
+/** A backup target read out of the open vault, its secrets opened to seal under the next key. */
+export interface CarriedTarget {
+	target: Omit<BackupTargetConfig, "creds">;
+	secrets: string;
+}
+
+/**
+ * Read a vault's backup targets for carrying, before the switch takes its key away. Without their
+ * history, which is the old vault's, and with no inherited folder, so snapshots are stamped with
+ * the new vault and pruning can't reach the old one's. One that won't open already can't back up,
+ * and one the OS holds has nothing here to carry.
+ */
+export async function readCarriedTargets(
+	list: readonly BackupTargetConfig[] | null | undefined,
+	crypto: Pick<CryptoAdapter, "decryptWithVek">,
+): Promise<CarriedTarget[]> {
+	const carried: CarriedTarget[] = [];
+	for (const entry of list ?? []) {
+		const { creds, lastBackupAt, lastVaultHash, lastError, waiting, failures, failedAt, ...rest } =
+			entry;
+		const { sharedFolder: _sharedFolder, ...target } = rest;
+		if (credsAreOsHeld(creds)) continue;
+		try {
+			carried.push({ target, secrets: await crypto.decryptWithVek(creds.iv, creds.ciphertext) });
+		} catch {
+			// Nothing to rescue: see above.
+		}
+	}
+	return carried;
+}
+
+/** Seal carried targets under the key of the vault they land in. */
+export function sealCarriedTargets(
+	carried: readonly CarriedTarget[],
+	crypto: Pick<CryptoAdapter, "encryptWithVek">,
+): Promise<BackupTargetConfig[]> {
+	return Promise.all(
+		carried.map(async ({ target, secrets }) => {
+			const { iv, ciphertext } = await crypto.encryptWithVek(secrets);
+			return { ...target, creds: { iv, ciphertext } };
+		}),
+	);
 }
 
 /** Longer than a background merge takes from reading the disk to writing it back. */
