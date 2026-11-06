@@ -8,23 +8,36 @@ import { CombineResult } from "./CombineResult";
 
 type Link = ReturnType<typeof useDesktopLink>;
 
-const link = (
-	asking: boolean,
+const DELETE = "Delete old vault";
+const KEEP = "Keep it";
+
+const link = ({
+	offered = true,
 	finishing = false,
-	{ held = 2, alias = false, backupTargets = false } = {},
-) =>
+	held = 0,
+	alias = false,
+	backupTargets = false,
+	conflicted = 0,
+	uncarried = 0,
+	quarantined = 0,
+	keptUnasked = false,
+	error = null as string | null,
+} = {}) =>
 	({
 		combined: {
 			heldBack: { items: Array.from({ length: held }, () => ({ name: "a" })), attachments: [] },
-			uncarried: 0,
-			quarantined: 0,
-			keptUnasked: false,
+			uncarried,
+			quarantined,
+			conflicted,
+			keptUnasked,
 			leftBehind: { alias, backupTargets },
-			pendingRemoval: asking ? { id: "v1", copied: {} } : null,
+			pendingRemoval: offered ? { id: "v1", copied: {} } : null,
 		},
+		error,
 		finishingCombine: finishing,
 		copyHeldBack: vi.fn(async () => {}),
 		removeOldVault: vi.fn(async () => {}),
+		keepOldVault: vi.fn(),
 	}) as unknown as Link;
 
 const show = (l: Link) =>
@@ -39,86 +52,135 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 
-describe("look-alikes the desktop's vault seems to hold already", () => {
-	it("asks about them while the old vault waits to go, with both answers on offer", () => {
-		const l = show(link(true));
-		expect(l.getByText(/Copy them before the old vault goes\?/)).toBeTruthy();
-		expect(l.queryByText(/stayed in the old vault/)).toBeNull();
-		expect(screen.getByRole("button", { name: "Copy them anyway" })).toBeTruthy();
-		expect(screen.getByRole("button", { name: "Leave them out" })).toBeTruthy();
+describe("the question after a combine", () => {
+	it("asks, with both answers, when all of it came across", () => {
+		show(link());
+		expect(screen.getByRole("heading", { name: "Delete the old vault?" })).toBeTruthy();
+		expect(screen.getByText(/Its entries and files are in the desktop's vault now/)).toBeTruthy();
+		expect(screen.getByRole("button", { name: DELETE })).toBeTruthy();
+		expect(screen.getByRole("button", { name: KEEP })).toBeTruthy();
 	});
 
 	it("gives each answer to the hook", () => {
-		const copied = link(true);
-		show(copied);
-		fireEvent.click(screen.getByRole("button", { name: "Copy them anyway" }));
-		expect(copied.copyHeldBack).toHaveBeenCalledOnce();
-		expect(copied.removeOldVault).not.toHaveBeenCalled();
+		const deleting = link();
+		show(deleting);
+		fireEvent.click(screen.getByRole("button", { name: DELETE }));
+		expect(deleting.removeOldVault).toHaveBeenCalledOnce();
+		expect(deleting.keepOldVault).not.toHaveBeenCalled();
 		cleanup();
 
-		const left = link(true);
-		show(left);
-		fireEvent.click(screen.getByRole("button", { name: "Leave them out" }));
-		expect(left.removeOldVault).toHaveBeenCalledOnce();
-		expect(left.copyHeldBack).not.toHaveBeenCalled();
+		const keeping = link();
+		show(keeping);
+		fireEvent.click(screen.getByRole("button", { name: KEEP }));
+		expect(keeping.keepOldVault).toHaveBeenCalledOnce();
+		expect(keeping.removeOldVault).not.toHaveBeenCalled();
 	});
 
-	it("takes one answer: neither button works while it is being carried out", () => {
-		show(link(true, true));
-		for (const name of ["Copy them anyway", "Leave them out"]) {
+	it("reads closing it as keeping the vault", () => {
+		const l = link();
+		show(l);
+		fireEvent.keyDown(window, { key: "Escape" });
+		expect(l.keepOldVault).toHaveBeenCalledOnce();
+		expect(l.removeOldVault).not.toHaveBeenCalled();
+	});
+
+	it("takes one answer: nothing works while it is being carried out, closing included", () => {
+		const l = link({ finishing: true, held: 1 });
+		show(l);
+		for (const name of [DELETE, KEEP, "Copy them anyway"]) {
 			expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
 		}
+		fireEvent.keyDown(window, { key: "Escape" });
+		expect(l.keepOldVault).not.toHaveBeenCalled();
 	});
 
-	it("only offers the copy when the old vault stays, since nothing is lost by leaving them", () => {
-		const l = show(link(false));
-		expect(l.getByText(/stayed in the old vault/)).toBeTruthy();
-		expect(screen.getByRole("button", { name: "Copy them anyway" })).toBeTruthy();
-		expect(screen.queryByRole("button", { name: "Leave them out" })).toBeNull();
+	it("shows what went wrong inside the dialog, where it can be seen", () => {
+		show(link({ error: "Something broke" }));
+		expect(screen.getByText("Something broke")).toBeTruthy();
 	});
 });
 
-describe("what stayed with the desktop's own", () => {
-	const REMOVE = "Remove the old vault";
+describe("what the dialog says before deleting", () => {
+	it("says look-alikes go with the vault unless copied, and offers the copy", () => {
+		const l = link({ held: 2 });
+		show(l);
+		expect(screen.getByText(/2 entries look like ones .* They go if you delete/)).toBeTruthy();
+		expect(screen.queryByText(/Its entries and files are in/)).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Copy them anyway" }));
+		expect(l.copyHeldBack).toHaveBeenCalledOnce();
+		expect(l.removeOldVault).not.toHaveBeenCalled();
+	});
 
-	it("names the alias provider, and removing the old vault is one press away", () => {
-		const waiting = link(true, false, { held: 0, alias: true });
-		show(waiting);
+	it("says the alias provider stayed the desktop's", () => {
+		show(link({ alias: true }));
 		expect(screen.getByText(/has its own email alias provider/)).toBeTruthy();
 		expect(screen.queryByText(/already has a backup target/)).toBeNull();
-		fireEvent.click(screen.getByRole("button", { name: REMOVE }));
-		expect(waiting.removeOldVault).toHaveBeenCalledOnce();
 	});
 
-	it("names the backup targets", () => {
-		show(link(true, false, { held: 0, backupTargets: true }));
+	it("says the backup targets stayed the desktop's", () => {
+		show(link({ backupTargets: true }));
 		expect(screen.getByText(/already has a backup target/)).toBeTruthy();
 		expect(screen.queryByText(/has its own email alias provider/)).toBeNull();
-		expect(screen.getByRole("button", { name: REMOVE })).toBeTruthy();
 	});
 
-	it("takes the press once", () => {
-		show(link(true, true, { held: 0, alias: true }));
-		expect((screen.getByRole("button", { name: REMOVE }) as HTMLButtonElement).disabled).toBe(true);
+	it("says only the version shown of a conflict came across", () => {
+		show(link({ conflicted: 3 }));
+		expect(screen.getByText(/3 entries have a sync conflict/)).toBeTruthy();
 	});
 
-	it("leaves the look-alikes' answer to remove the vault, with no second button", () => {
-		show(link(true, false, { held: 2, alias: true }));
-		expect(screen.getByRole("button", { name: "Leave them out" })).toBeTruthy();
-		expect(screen.queryByRole("button", { name: REMOVE })).toBeNull();
+	it("says none of that when all of it came across", () => {
+		show(link());
+		for (const text of [/alias provider/, /backup target/, /sync conflict/, /look like/]) {
+			expect(screen.queryByText(text)).toBeNull();
+		}
+	});
+});
+
+describe("counting one of something", () => {
+	it("says it in the singular", () => {
+		show(link({ held: 1, conflicted: 1 }));
+		expect(screen.getByText(/^1 entry looks like one .* It goes if you delete/)).toBeTruthy();
+		expect(screen.getByText(/^1 entry has a sync conflict/)).toBeTruthy();
+		cleanup();
+
+		show(link({ offered: false, keptUnasked: true, held: 1, uncarried: 1, quarantined: 1 }));
+		expect(screen.getByText(/^1 entry looked like one .* it stayed in the old vault/)).toBeTruthy();
+		expect(screen.getByText(/^1 file didn't copy\. It is still/)).toBeTruthy();
+		expect(screen.getByText(/^1 damaged entry stayed/)).toBeTruthy();
+	});
+});
+
+describe("when the old vault has to stay", () => {
+	const stays = { offered: false, keptUnasked: true };
+
+	it("offers no delete, says why, and only closes", () => {
+		const l = link(stays);
+		show(l);
+		expect(screen.getByRole("heading", { name: "The old vault stays" })).toBeTruthy();
+		expect(screen.getByText(/Some of it didn't copy/)).toBeTruthy();
+		expect(screen.queryByRole("button", { name: DELETE })).toBeNull();
+		expect(screen.queryByRole("button", { name: KEEP })).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Done" }));
+		expect(l.keepOldVault).toHaveBeenCalledOnce();
 	});
 
-	it("still says it with no button once the vault is gone or staying", () => {
-		show(link(false, false, { held: 0, alias: true, backupTargets: true }));
-		expect(screen.getByText(/has its own email alias provider/)).toBeTruthy();
-		expect(screen.getByText(/already has a backup target/)).toBeTruthy();
-		expect(screen.queryByRole("button", { name: REMOVE })).toBeNull();
+	it("says how many files and damaged entries", () => {
+		show(link({ ...stays, uncarried: 2, quarantined: 3 }));
+		expect(screen.getByText(/2 files didn't copy/)).toBeTruthy();
+		expect(screen.getByText(/3 damaged entries stayed/)).toBeTruthy();
 	});
 
-	it("says nothing when all of it came across", () => {
-		show(link(false, false, { held: 0 }));
-		expect(screen.queryByText(/email alias provider/)).toBeNull();
-		expect(screen.queryByText(/backup target/)).toBeNull();
-		expect(screen.queryByRole("button", { name: REMOVE })).toBeNull();
+	it("says look-alikes are in the old vault, with the copy still on offer", () => {
+		show(link({ ...stays, held: 2 }));
+		expect(screen.getByText(/2 entries looked like ones .* stayed in the old vault/)).toBeTruthy();
+		expect(screen.queryByText(/They go if you delete/)).toBeNull();
+		expect(screen.getByRole("button", { name: "Copy them anyway" })).toBeTruthy();
+	});
+
+	it("explains an unfinished link with the error it came with, and not as a failed copy", () => {
+		show(link({ offered: false, error: "Linking didn't finish. Link again." }));
+		expect(screen.getByRole("heading", { name: "The old vault stays" })).toBeTruthy();
+		expect(screen.getByText(/Linking didn't finish/)).toBeTruthy();
+		expect(screen.queryByText(/Some of it didn't copy/)).toBeNull();
 	});
 });

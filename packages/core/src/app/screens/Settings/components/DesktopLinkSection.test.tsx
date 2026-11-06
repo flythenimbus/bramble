@@ -321,58 +321,66 @@ describe("when both sides have entries", () => {
 		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 	}
 
-	it("offers to keep a copy only when combining, and leaves it unticked", async () => {
+	it("asks nothing about the old vault up front: that comes with the result", async () => {
 		twoVaults();
 		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
-		const keep = () => screen.queryByRole("checkbox", { name: /keep a copy of this vault/i });
-		expect(keep()).toBeNull();
-
-		fireEvent.click(screen.getByRole("radio", { name: /keep them separate/i }));
-		expect(keep()).toBeNull();
-
 		fireEvent.click(screen.getByRole("radio", { name: /combine into one/i }));
-		expect((keep() as HTMLInputElement).checked).toBe(false);
+		expect(screen.queryByRole("checkbox")).toBeNull();
 	});
 
-	it("removes the old vault unless the box is ticked", async () => {
+	it("asks once the copy is done, and deletes the old vault only on the press", async () => {
 		twoVaults();
 		await choose(/combine into one/i);
+		await screen.findByRole("heading", { name: /delete the old vault/i });
+		expect(h.steps).toEqual(["join", "attach:joined", "import", "setAside"]);
+
+		fireEvent.click(screen.getByRole("button", { name: /^delete old vault$/i }));
+		await waitFor(() => expect(h.steps).toContain("removeOld"));
 		await waitFor(() =>
-			expect(h.steps).toEqual(["join", "attach:joined", "import", "setAside", "removeOld"]),
+			expect(screen.queryByRole("heading", { name: /delete the old vault/i })).toBeNull(),
 		);
 	});
 
-	it("keeps the old vault when the box is ticked", async () => {
+	it("keeps the old vault on Keep it, and does not ask again", async () => {
 		twoVaults();
-		await mountAndLink();
-		await screen.findByText(/you have two vaults/i);
-		fireEvent.click(screen.getByRole("radio", { name: /combine into one/i }));
-		fireEvent.click(screen.getByRole("checkbox", { name: /keep a copy of this vault/i }));
-		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
-		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
-		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined", "import", "setAside"]));
+		await choose(/combine into one/i);
+		await screen.findByRole("heading", { name: /delete the old vault/i });
+
+		fireEvent.click(screen.getByRole("button", { name: /^keep it$/i }));
+		await waitFor(() =>
+			expect(screen.queryByRole("heading", { name: /delete the old vault/i })).toBeNull(),
+		);
+		expect(h.steps).not.toContain("removeOld");
 	});
 
-	it("keeps the choice and the tick for the retry after a mistyped password", async () => {
+	it("asks nothing when the vaults stay separate", async () => {
+		twoVaults();
+		await choose(/keep them separate/i);
+		await waitFor(() => expect(h.steps).toContain("join"));
+		expect(screen.queryByRole("heading", { name: /delete the old vault/i })).toBeNull();
+		expect(h.steps).not.toContain("removeOld");
+	});
+
+	it("keeps the choice for the retry after a mistyped password", async () => {
 		twoVaults();
 		h.joinFails = true;
 		await mountAndLink();
 		await screen.findByText(/you have two vaults/i);
 		fireEvent.click(screen.getByRole("radio", { name: /combine into one/i }));
-		fireEvent.click(screen.getByRole("checkbox", { name: /keep a copy of this vault/i }));
 		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "typo" } });
 		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 		await waitFor(() => expect(screen.getByText(/join failed/i)).toBeTruthy());
 
 		h.joinFails = false;
 		expect(
-			(screen.getByRole("checkbox", { name: /keep a copy/i }) as HTMLInputElement).checked,
+			(screen.getByRole("radio", { name: /combine into one/i }) as HTMLInputElement).checked,
 		).toBe(true);
 		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
 		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
-		await waitFor(() => expect(h.steps).toContain("setAside"));
+		await screen.findByRole("heading", { name: /delete the old vault/i });
+		expect(h.steps).toContain("setAside");
 		expect(h.steps).not.toContain("removeOld");
 	});
 

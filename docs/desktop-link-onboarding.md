@@ -161,19 +161,7 @@ mine unless marked otherwise.
   tags are added, its old passwords joined (newest five), and an entry archived on one side only comes
   back, since hiding a login in use is worse than showing an archived one. The change syncs as an edit
   and leaves `updatedAt` alone. Dates and breach results stay as the desktop has them. Without this,
-  unticking the box would lose the browser's tags (the user's decision, 2026-11-06: fold them, never
-  keep the vault over them).
-- **Keeping the browser's old vault is opt-in.** A checkbox on the combine screen, "Keep a copy of
-  this vault", starts unticked (the user's decision, 2026-11-06: the copy is the point, and a second
-  vault nobody asked for is clutter). Unticked, the old vault is removed once all of it has come
-  across. First a second's wait for a background merge in flight, then the disk has to agree: every
-  entry and file of the copy there, with all it held, and the old vault's bytes unchanged since the
-  copy began, so a login saved into it meanwhile is not lost.
-- **It stays anyway only where removing it would lose something by accident** (the user's decision,
-  2026-11-06), and the result screen says so: files that did not copy, entries it could not decrypt,
-  tags past the 32 an entry can carry, an alias provider or backup target that failed to store, or a
-  copy the disk does not bear out. So does a pairing that did not finish. Versions in a sync conflict
-  are not worth keeping it over, and go with it.
+  deleting the old vault would lose the browser's tags (the user's decision, 2026-11-06: fold them).
 - **Its email alias provider and backup targets come across, each only if the desktop's vault has
   none of its own** (the user's decision, 2026-11-06). The provider is a synced setting: it is read
   before the switch and written after, so it reaches every device in the desktop's group, key
@@ -183,20 +171,24 @@ mine unless marked otherwise.
   ones'. Whether the desktop has a target comes from the app, and an app that won't say counts as
   having none, since losing the browser's is worse than a second destination. A target that won't
   open already can't back up, so it is dropped without a word.
-- **Where the desktop's own stands, the result screen says so,** and the old vault waits, set aside,
-  for "Remove the old vault" (or the answer about look-alikes): those keys exist only in it. The same
-  provider on both sides is nothing to say.
-- **Look-alikes the dedup holds back are asked about first.** They hold something the desktop's entry
-  lacks, so the old vault stays set aside until the answer: "Copy them anyway" or "Leave them out", and
-  then it goes. Closing the screen unanswered leaves it set aside, so nothing goes without a choice.
-- **It is marked as the old vault before the removal's wait,** so a window closed in that second
-  leaves it whole and labelled, for the user to delete, rather than a second vault under its old name.
+- **The user is asked whether to delete the old vault, once the copy is done** (the user's decision,
+  2026-11-06, replacing an earlier checkbox: the choice comes with the result, not before it). It is
+  never deleted without that press. Meanwhile it is marked as the old vault, so closing the window, or
+  answering "Keep it", leaves it labelled for the user to delete later the normal way.
+- **The dialog says what the press would cost.** Look-alikes the dedup held back go with the vault
+  unless copied ("Copy them anyway"). So do the versions of an entry in a sync conflict other than the
+  one shown, and an alias provider or backup targets that gave way to the desktop's own.
+- **Deleting checks first.** A second's wait for a background merge in flight, then the disk has to
+  agree: every entry and file of the copy there with all it held, the alias provider if one was
+  written, and the old vault's bytes unchanged since the copy began, so a login saved into it meanwhile
+  is not lost. If not, the vault stays and the dialog says so.
+- **Delete isn't offered where it could lose something by accident:** files that did not copy, entries
+  it could not decrypt, tags past the 32 an entry can carry, an alias provider or backup target that
+  failed to store, or a pairing that did not finish. The dialog says why the vault stays.
 - **A kept vault stays in the vault list,** locked, under its own master password and in its own sync
   group, until the user deletes it. It is labelled so it is obviously the old one, for example
   "Personal (before linking)". Names sync across the group, so this label must be local to this
   browser: a phone still using that vault must not see it change.
-- **With the old vault staying, likely duplicates stay in it.** The result screen says how many and
-  offers "Copy them anyway", matching what import does.
 - **The screen says up front that this browser will now unlock with the desktop's master
   password.**
 - **If the old vault also syncs with other devices,** one warning line names them and says only
@@ -605,13 +597,14 @@ Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode
 - Confirming the emoji on both screens, and the desktop refusing link requests with no dialog open.
 - Distinct wording for the link screens.
 - Case 2 combines into the desktop's empty vault without asking.
-- Keeping the old vault after a combine is an unticked checkbox, not the default. It stays regardless
-  only for a failed copy, damaged entries or an unfinished link.
+- After a combine the user is asked whether to delete the old vault, and it goes only on that press.
+  Closing the dialog keeps it, labelled.
 - A copy of an entry the desktop's vault holds folds into it: tags, old passwords, and active wins.
 - An alias provider or backup target comes across only where the desktop's vault has none. Where it
-  has its own, the screen says so and the old vault waits to be removed.
-- Held-back duplicates are asked about before the old vault goes: "Copy them anyway" or "Leave them
-  out". With the old vault staying, they stay in it.
+  has its own, the dialog says so.
+- Delete isn't offered after a failed copy, with damaged entries, or with an unfinished link.
+- Held-back duplicates are named in the dialog, with "Copy them anyway". They go if the old vault is
+  deleted without copying them.
 - Failure is loud on a partial copy.
 - Piece 3: the extension holds its open vault's link, and a link in progress stays held until it
   attaches or is abandoned.

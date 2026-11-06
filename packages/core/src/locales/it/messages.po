@@ -81,8 +81,8 @@ msgstr "{0} (dominio personale)"
 
 #. placeholder {0}: combined.quarantined
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "{0} damaged entries stayed in the old vault."
-msgstr "{0} voci danneggiate sono rimaste nella vecchia cassaforte."
+#~ msgid "{0} damaged entries stayed in the old vault."
+#~ msgstr "{0} voci danneggiate sono rimaste nella vecchia cassaforte."
 
 #. placeholder {0}: heldBack.length
 #: packages/core/src/app/screens/Import/ImportShell.tsx
@@ -121,6 +121,10 @@ msgstr "{browserName} si sincronizza anche con {others}. La combinazione sposta 
 #~ msgid "{browserName} stays, as \"{browserName} (before linking)\", until you delete it."
 #~ msgstr "{browserName} rimane, come \"{browserName} (prima del collegamento)\", finché non viene eliminato."
 
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{conflicted, plural, one {# entry has a sync conflict. Only the version shown came across.} other {# entries have a sync conflict. Only the version shown came across.}}"
+msgstr "{conflicted, plural, one {# voce presenta un conflitto di sincronizzazione. Solo la versione mostrata è stata trasferita.} other {# voci presentano un conflitto di sincronizzazione. Solo la versione mostrata è stata trasferita.}}"
+
 #: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
 msgid "{conflicted, plural, one {# entry has a sync conflict. Only the version you see is exported.} other {# entries have a sync conflict. Only the version you see is exported.}}"
 msgstr "{conflicted, plural, one {# elemento presenta un conflitto di sincronizzazione. Viene esportata solo la versione visualizzata.} other {# elementi presentano un conflitto di sincronizzazione. Viene esportata solo la versione visualizzata.}}"
@@ -128,6 +132,10 @@ msgstr "{conflicted, plural, one {# elemento presenta un conflitto di sincronizz
 #: packages/core/src/app/bulk-actions/export.tsx
 msgid "{conflicted, plural, one {# of these entries has a sync conflict. Only the version you see is exported.} other {# of these entries have a sync conflict. Only the version you see is exported.}}"
 msgstr "{conflicted, plural, one {# di questi elementi presenta un conflitto di sincronizzazione. Viene esportata solo la versione visualizzata.} other {# di questi elementi presentano un conflitto di sincronizzazione. Viene esportata solo la versione visualizzata.}}"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#~ msgid "{conflicted} entries have a sync conflict. Only the version shown came across."
+#~ msgstr "{conflicted} voci presentano un conflitto di sincronizzazione. È stata trasferita solo la versione mostrata."
 
 #: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
 msgid "{count, plural, one {# selected} other {# selected}}"
@@ -150,12 +158,24 @@ msgid "{from} has it. Trying again shortly."
 msgstr "{from} ce l'ha. Nuovo tentativo a breve."
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "{held} entries look like ones the desktop's vault already has. Copy them before the old vault goes?"
-msgstr "{held} voci sembrano corrispondere a quelle già presenti nel vault del desktop. Copiarle prima che il vecchio vault venga eliminato?"
+msgid "{held, plural, one {# entry looked like one the desktop's vault already has, so it stayed in the old vault.} other {# entries looked like ones the desktop's vault already has, so they stayed in the old vault.}}"
+msgstr "{held, plural, one {# voce sembrava già presente nel vault del desktop, quindi è rimasta nel vecchio vault.} other {# voci sembravano già presenti nel vault del desktop, quindi sono rimaste nel vecchio vault.}}"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "{held} entries looked like ones the desktop's vault already has, so they stayed in the old vault."
-msgstr "{held} voci risultavano simili a quelle già presenti nella cassaforte dell'app desktop, quindi sono rimaste nella vecchia cassaforte."
+msgid "{held, plural, one {# entry looks like one the desktop's vault already has, so it wasn't copied. It goes if you delete the old vault.} other {# entries look like ones the desktop's vault already has, so they weren't copied. They go if you delete the old vault.}}"
+msgstr "{held, plural, one {# voce sembra già presente nel vault del desktop, quindi non è stata copiata. Verrà eliminata se si elimina il vecchio vault.} other {# voci sembrano già presenti nel vault del desktop, quindi non sono state copiate. Verranno eliminate se si elimina il vecchio vault.}}"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#~ msgid "{held} entries look like ones the desktop's vault already has, so they weren't copied. They go if you delete the old vault."
+#~ msgstr "{held} voci risultano già presenti nella cassaforte del desktop, quindi non sono state copiate. Verranno eliminate se si elimina la vecchia cassaforte."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#~ msgid "{held} entries look like ones the desktop's vault already has. Copy them before the old vault goes?"
+#~ msgstr "{held} voci sembrano corrispondere a quelle già presenti nel vault del desktop. Copiarle prima che il vecchio vault venga eliminato?"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#~ msgid "{held} entries looked like ones the desktop's vault already has, so they stayed in the old vault."
+#~ msgstr "{held} voci risultavano simili a quelle già presenti nella cassaforte dell'app desktop, quindi sono rimaste nella vecchia cassaforte."
 
 #: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
 msgid "{hiddenCount, plural, one {# hidden by the current filter} other {# hidden by the current filter}}"
@@ -198,6 +218,14 @@ msgstr "{passkeys, plural, one {# passkey} other {# passkeys}}"
 msgid "{passwordDiffers} share a site and username with an entry you already have, but with a different password. They will be added as new entries."
 msgstr "{passwordDiffers} elementi condividono sito e nome utente con una voce già presente, ma hanno una password diversa. Verranno aggiunti come nuove voci."
 
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{quarantined, plural, one {# damaged entry stayed in the old vault.} other {# damaged entries stayed in the old vault.}}"
+msgstr "{quarantined, plural, one {# voce danneggiata è rimasta nel vecchio vault.} other {# voci danneggiate sono rimaste nel vecchio vault.}}"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#~ msgid "{quarantined} damaged entries stayed in the old vault."
+#~ msgstr "{quarantined} voci danneggiate sono rimaste nella vecchia cassaforte."
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "{remaining}s left"
 msgstr "{remaining} secondi rimasti"
@@ -215,8 +243,12 @@ msgid "{toExisting, plural, one {# attachment will be added to an entry you alre
 msgstr "{toExisting, plural, one {# allegato verrà aggiunto a una voce già in suo possesso.} other {# allegati verranno aggiunti a voci già in suo possesso.}}"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "{uncarried} files didn't copy. They are still in the old vault, which is kept until you delete it."
-msgstr "{uncarried} file non sono stati copiati. Sono ancora nella vecchia cassaforte, che viene mantenuta finché non viene eliminata."
+msgid "{uncarried, plural, one {# file didn't copy. It is still in the old vault, which is kept until you delete it.} other {# files didn't copy. They are still in the old vault, which is kept until you delete it.}}"
+msgstr "{uncarried, plural, one {# file non è stato copiato. È ancora nel vecchio vault, che viene mantenuto finché non viene eliminato.} other {# file non sono stati copiati. Sono ancora nel vecchio vault, che viene mantenuto finché non viene eliminato.}}"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#~ msgid "{uncarried} files didn't copy. They are still in the old vault, which is kept until you delete it."
+#~ msgstr "{uncarried} file non sono stati copiati. Sono ancora nella vecchia cassaforte, che viene mantenuta finché non viene eliminata."
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 #~ msgid "{withNew, plural, one {# attachment goes with them.} other {# attachments go with them.}}"
@@ -1345,6 +1377,14 @@ msgstr "Eliminare voce"
 msgid "Delete it"
 msgstr "Eliminarla"
 
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Delete old vault"
+msgstr "Eliminare la vecchia cassaforte"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Delete the old vault?"
+msgstr "Eliminare la vecchia cassaforte?"
+
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 msgid "Delete this entry permanently?"
 msgstr "Eliminare questa voce definitivamente?"
@@ -1437,6 +1477,7 @@ msgstr "Cane"
 
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Done"
 msgstr "Conferma"
@@ -2050,6 +2091,10 @@ msgstr "Elementi con allegati"
 msgid "Its credentials were entered in another vault, so this one cannot open them. Edit the target and enter them again to back up now."
 msgstr "Le sue credenziali sono state inserite in un altro archivio, quindi questo non può aprirle. Modifichi la destinazione e le inserisca di nuovo per eseguire subito il backup."
 
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Its entries and files are in the desktop's vault now."
+msgstr "Le sue voci e i suoi file sono ora nella cassaforte del desktop."
+
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 msgid "Its password is different from the version shown."
 msgstr "La sua password è diversa da quella della versione visualizzata."
@@ -2068,8 +2113,8 @@ msgid "KDBX export isn't available here."
 msgstr "L'esportazione KDBX non è disponibile qui."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
-msgid "Keep a copy of this vault"
-msgstr "Conservare una copia di questa cassaforte"
+#~ msgid "Keep a copy of this vault"
+#~ msgstr "Conservare una copia di questa cassaforte"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 msgid "Keep both"
@@ -2080,6 +2125,7 @@ msgid "Keep everything"
 msgstr "Mantenere tutto"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "Keep it"
 msgstr "Mantenerla"
 
@@ -2184,8 +2230,8 @@ msgid "Leave the credential fields blank to keep the ones you saved."
 msgstr "Lasciare vuoti i campi delle credenziali per mantenere quelli salvati."
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "Leave them out"
-msgstr "Escluderle"
+#~ msgid "Leave them out"
+#~ msgstr "Escluderle"
 
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Leave unset for your account's default domain, or pick one of your own."
@@ -3028,8 +3074,8 @@ msgid "Remove tag {tag}"
 msgstr "Rimuovere il tag {tag}"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "Remove the old vault"
-msgstr "Rimuovere il vecchio vault"
+#~ msgid "Remove the old vault"
+#~ msgstr "Rimuovere il vecchio vault"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Remove URL"
@@ -3774,6 +3820,10 @@ msgstr "Il vault del desktop dispone già di una destinazione di backup, pertant
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
 msgstr "Il vault del desktop dispone di un proprio provider di alias email, pertanto quello di questo vault non è stato trasferito."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The old vault stays"
+msgstr "Mantenere la vecchia cassaforte"
 
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 msgid "The one you saved with Export a backup, or a cloud backup."
