@@ -1031,6 +1031,8 @@ describe("the single link an earlier build kept", () => {
 		expect(h.stored.desktopLink).toEqual(legacy);
 		const hellos = h.posted.filter((m) => m.kind === "hello").map((m) => m.publicKey);
 		expect(hellos).toEqual(["pub"]);
+		// Or the unanswered request drops this link ten seconds on, in the middle of some later test.
+		await mod.closeDesktopLink();
 	});
 });
 
@@ -1571,9 +1573,16 @@ describe("pairing borrows the page's native transport", () => {
 				const mod = await load();
 				h.hasBinding = false;
 				await mod.openSyncLink(() => {});
+				h.stored = {};
+				const page = lend(EXT_SENDER);
+				await confirmOver(mod, page);
+				await expect(mod.attachLink("v1")).resolves.toBe(true);
+				await vi.waitFor(() => expect(mod.linkIsHeld()).toBe(true));
 				h.linkDowns = 0;
-				await linkedThenPageGone(mod);
-				expect(h.linkDowns).toBeGreaterThan(0);
+
+				page.drop();
+
+				await vi.waitFor(() => expect(h.linkDowns).toBeGreaterThan(0));
 			});
 
 			it("sets it once: creating it again would keep putting off its next fire", async () => {
@@ -1586,6 +1595,91 @@ describe("pairing borrows the page's native transport", () => {
 				await expect(mod.sendSyncFrame("frame")).resolves.toBe(false);
 
 				expect(h.alarmsCreated).toBe(armed);
+			});
+		});
+
+		// A page's pipe carrying the link: sync restarting, or the link settling, finds it up.
+		describe("on a worker that predates the grant, with a page's pipe carrying the link", () => {
+			async function carried(mod: Awaited<ReturnType<typeof load>>) {
+				h.hasBinding = false;
+				h.stored = {};
+				const page = lend(EXT_SENDER);
+				await confirmOver(mod, page);
+				await expect(mod.attachLink("v1")).resolves.toBe(true);
+				await vi.waitFor(() => expect(mod.linkIsHeld()).toBe(true));
+				return page;
+			}
+
+			it("tells nobody the link is down when the link settles on its vault", async () => {
+				const mod = await load();
+				h.hasBinding = false;
+				await mod.openSyncLink(() => {});
+				h.linkDowns = 0;
+				h.broadcast.length = 0;
+
+				await carried(mod);
+				await new Promise((r) => setTimeout(r, 20));
+
+				expect(h.linkDowns).toBe(0);
+				expect(h.broadcast).not.toContainEqual({ type: "DESKTOP_LINK_PIPE_LOST" });
+			});
+
+			it("says it is up, and tells nobody otherwise, when sync starts over it", async () => {
+				const mod = await load();
+				await carried(mod);
+				h.linkDowns = 0;
+				h.broadcast.length = 0;
+
+				await expect(mod.openSyncLink(() => {})).resolves.toBe(true);
+
+				expect(mod.linkIsHeld()).toBe(true);
+				expect(h.linkDowns).toBe(0);
+				expect(h.broadcast).not.toContainEqual({ type: "DESKTOP_LINK_PIPE_LOST" });
+			});
+
+			it("asks the page to let the pipe go when the vault's link is disconnected", async () => {
+				const mod = await load();
+				const page = await carried(mod);
+
+				await mod.unlinkDesktop("v1");
+				await mod.closeDesktopLink();
+
+				expect(page.sent).toContainEqual({ release: true });
+			});
+		});
+
+		describe("the wake alarm", () => {
+			const armed = () => h.alarms.set("desktop-link-wake", { delayInMinutes: 1.05 });
+
+			it("is cleared with nothing left to link", async () => {
+				const mod = await load();
+				h.stored = {};
+				armed();
+				await expect(mod.openDesktopLink()).resolves.toBe(false);
+				expect(h.alarms.size).toBe(0);
+			});
+
+			it("is cleared when the permission has been taken away", async () => {
+				const mod = await load();
+				h.hasBinding = false;
+				h.permitted = false;
+				armed();
+				await expect(mod.openDesktopLink()).resolves.toBe(false);
+				expect(h.alarms.size).toBe(0);
+			});
+
+			it("can be set again after being cleared", async () => {
+				const mod = await load();
+				h.hasBinding = false;
+				await mod.openDesktopLink();
+				expect(h.alarms.size).toBe(1);
+				const stored = h.stored;
+				h.stored = {};
+				await mod.openDesktopLink();
+				expect(h.alarms.size).toBe(0);
+				h.stored = stored;
+				await mod.openDesktopLink();
+				expect(h.alarms.size).toBe(1);
 			});
 		});
 

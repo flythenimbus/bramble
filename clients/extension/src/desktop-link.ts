@@ -106,10 +106,22 @@ function openNativeProxy(): { via: string; ready: Promise<void>; close(): void }
 		settle = resolve;
 	});
 
-	relay.onMessage.addListener((msg: { ready?: boolean; frame?: Record<string, unknown> }) => {
-		if (msg?.ready) return settle();
-		if (msg?.frame) native.postMessage(msg.frame);
-	});
+	let closed = false;
+	const close = () => {
+		if (closed) return;
+		closed = true;
+		native.disconnect();
+		relay.disconnect();
+	};
+
+	relay.onMessage.addListener(
+		(msg: { ready?: boolean; release?: boolean; frame?: Record<string, unknown> }) => {
+			if (msg?.ready) return settle();
+			// The background is done with it, and an open pipe reads as connected to the app.
+			if (msg?.release) return close();
+			if (msg?.frame) native.postMessage(msg.frame);
+		},
+	);
 	native.onMessage.addListener((frame) => relay.postMessage({ frame }));
 	native.onDisconnect.addListener(() => {
 		// Tell the background rather than just going quiet. Chrome reports a missing host, a
@@ -125,14 +137,7 @@ function openNativeProxy(): { via: string; ready: Promise<void>; close(): void }
 	// Unblock rather than hang if the background never acks (an old worker without this listener).
 	setTimeout(() => settle(), 2000);
 
-	return {
-		via,
-		ready,
-		close: () => {
-			native.disconnect();
-			relay.disconnect();
-		},
-	};
+	return { via, ready, close };
 }
 
 /**
@@ -164,6 +169,10 @@ async function withNativeProxy<T>(run: (via?: string) => Promise<T>): Promise<T>
  * the app forgets its half when this pipe closes. */
 let linkProxy: ReturnType<typeof openNativeProxy> = null;
 
+/** The port lent to carry the open vault's link, apart from `linkProxy`: neither may close the
+ * other's. */
+let lentProxy: ReturnType<typeof openNativeProxy> = null;
+
 /**
  * Carry the worker's link while this page is open, if it cannot open a pipe itself.
  *
@@ -174,12 +183,11 @@ let linkProxy: ReturnType<typeof openNativeProxy> = null;
 export function lendPipeToWorker(): void {
 	const lend = async () => {
 		if (!(await dispatch<boolean>("DESKTOP_LINK_PIPE_WANTED").catch(() => false))) return;
-		releaseLinkProxy();
-		linkProxy = openNativeProxy();
-		await linkProxy?.ready;
-		if (linkProxy) {
-			await dispatch("DESKTOP_LINK_LEND_PIPE", { via: linkProxy.via }).catch(() => {});
-		}
+		lentProxy?.close();
+		const proxy = openNativeProxy();
+		lentProxy = proxy;
+		await proxy?.ready;
+		if (proxy) await dispatch("DESKTOP_LINK_LEND_PIPE", { via: proxy.via }).catch(() => {});
 	};
 	void lend();
 	api.runtime.onMessage.addListener((message: { type?: string }) => {

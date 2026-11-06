@@ -23,6 +23,8 @@ const h = vi.hoisted(() => ({
 	relays: [] as string[],
 	/** How many lent relay ports this page closed. */
 	relaysClosed: 0,
+	/** Each relay port's listener, to speak as the background on it. */
+	relayListeners: [] as ((message: unknown) => void)[],
 	/** Whether the background says it cannot open a pipe of its own. */
 	needed: true,
 	/** Whether the background wants a pipe for its held link. */
@@ -62,7 +64,10 @@ vi.mock("./platform-api", () => ({
 					postMessage: () => {},
 					// The background acks a lent port as soon as it registers it.
 					onMessage: {
-						addListener: (cb: (m: unknown) => void) => queueMicrotask(() => cb({ ready: true })),
+						addListener: (cb: (m: unknown) => void) => {
+							h.relayListeners.push(cb);
+							queueMicrotask(() => cb({ ready: true }));
+						},
 					},
 					disconnect: () => {
 						h.relaysClosed++;
@@ -302,6 +307,46 @@ describe("lending the worker a pipe for its link", () => {
 
 		await vi.waitFor(() => expect(lentFor()).toHaveLength(2));
 		expect(h.relaysClosed).toBe(1);
+	});
+
+	it("lets a pipe go when the background is done with it, once", async () => {
+		h.binding = true;
+		h.wanted = true;
+		h.relayListeners = [];
+		vi.resetModules();
+		const { lendPipeToWorker } = await import("./desktop-link");
+		lendPipeToWorker();
+		await vi.waitFor(() => expect(lentFor()).toHaveLength(1));
+
+		h.relayListeners[0]?.({ release: true });
+		expect(h.relaysClosed).toBe(1);
+
+		// Lending again closes what it held, which has gone already.
+		for (const listener of h.listeners) listener({ type: "DESKTOP_LINK_PIPE_LOST" });
+		await vi.waitFor(() => expect(lentFor()).toHaveLength(2));
+		expect(h.relaysClosed).toBe(1);
+	});
+
+	it("keeps it apart from the pipe an emoji link is running on", async () => {
+		h.binding = true;
+		h.wanted = true;
+		h.relayListeners = [];
+		vi.resetModules();
+		const { lendPipeToWorker, extensionDesktopLink } = await import("./desktop-link");
+		lendPipeToWorker();
+		await vi.waitFor(() => expect(lentFor()).toHaveLength(1));
+		h.reply = { ok: true, data: { id: "L1", sas: { emoji: [], digits: "1" } } };
+
+		await extensionDesktopLink?.start?.();
+		expect(h.relaysClosed).toBe(0);
+
+		h.reply = { ok: true };
+		for (const listener of h.listeners) listener({ type: "DESKTOP_LINK_PIPE_LOST" });
+		await vi.waitFor(() => expect(lentFor()).toHaveLength(2));
+		// The old lent pipe, and not the link's.
+		expect(h.relaysClosed).toBe(1);
+		await extensionDesktopLink?.cancel?.("L1");
+		expect(h.relaysClosed).toBe(2);
 	});
 
 	it("ignores everything else the extension says", async () => {

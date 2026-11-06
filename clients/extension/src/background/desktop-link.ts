@@ -310,8 +310,12 @@ class ProxiedSession implements LinkTransport {
 	}
 
 	close(): void {
-		// The page owns the native port and closes it when its own proxy handle is released.
-		// Disconnecting here would race that and orphan the host process.
+		// The page owns the native port. Disconnecting here would orphan the host process, so ask.
+		try {
+			this.port.postMessage({ release: true });
+		} catch {
+			// Its page has gone, and the native port with it.
+		}
 	}
 }
 
@@ -988,15 +992,20 @@ export async function openDesktopLink(): Promise<boolean> {
 	// Nothing to connect to. Checked BEFORE arming anything: almost nobody has a desktop app
 	// paired, and an unconditional keepalive woke every one of those service workers every twenty
 	// seconds, forever, to discover the same thing each time.
-	if (!(await currentLink())) return false;
+	if (!(await currentLink())) {
+		await disarmWake();
+		return false;
+	}
 	// Paired but unreachable from here: the permission was revoked, or this worker predates the
 	// grant. Arming the keepalive would poll a pipe this context can never open. The next worker
 	// start calls this again, which is what recovers it.
 	if (!(await canOpenNativePipe())) {
+		// Carried by a page's pipe: up, whatever this worker could open. Only losing it needs the next.
+		if (held && !held.session.dead) return true;
 		await awaitNextWorker();
 		return false;
 	}
-	await api.alarms.clear(LINK_WAKE_ALARM);
+	await disarmWake();
 	linkWanted = true;
 	startKeepalive();
 	const up = (await ensureHeld()) !== null;
@@ -1033,6 +1042,12 @@ const LINK_WAKE_MINUTES = 1.05;
 /** Once per worker: creating it again would keep putting off its next fire. */
 let wakeArmed = false;
 
+/** Nothing is left for a later worker to do. A wake left set would start one every minute. */
+async function disarmWake(): Promise<void> {
+	wakeArmed = false;
+	await api.alarms.clear(LINK_WAKE_ALARM);
+}
+
 /**
  * This worker cannot open a pipe, and if it predates the grant, its successor can. Chromium replaces
  * a worker only once it has gone idle, and any API call resets that timer, so polling from here is
@@ -1042,7 +1057,10 @@ let wakeArmed = false;
  */
 async function awaitNextWorker(): Promise<void> {
 	stopKeepalive();
-	if (typeof api.runtime.connectNative === "function" || !(await permitted())) return;
+	if (typeof api.runtime.connectNative === "function" || !(await permitted())) {
+		await disarmWake();
+		return;
+	}
 	// Sync drops the app now, rather than asking this worker for the vault until it times out.
 	if (onSyncFrame) void offscreen("LINK_DOWN").catch(() => {});
 	// A page that is open can carry the link until then.

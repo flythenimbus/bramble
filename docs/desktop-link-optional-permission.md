@@ -215,7 +215,8 @@ binding gets out of the way:
   cannot reach a browser that holds no pipe, so nothing else is sure to wake the next worker. Chromium
   stops an idle worker 30 to 60 seconds after its last event, so a fire any sooner could only wake
   this one again. Set once per worker, because creating it again puts off its next fire. The fire
-  does nothing itself: a worker's start is what opens the link.
+  does nothing itself: a worker's start is what opens the link. It is cleared as soon as no later
+  worker could do better: nothing left to link, or the permission taken away.
 
 Measured in real Chromium, the link is back about 60 seconds after the page closes, with nothing for
 the user to do (`e2e/desktop-link/worker-restart.spec.ts`). That is close to the floor. The offscreen
@@ -229,6 +230,13 @@ another open page can take over. Only a worker that cannot open a pipe ever want
 never displace a connection a worker holds itself. A request on a pipe of its own finishes before
 the held link connects, since the app keys a browser's pushes by its static key and that request
 would otherwise take them and close.
+
+While a lent pipe carries the link, the link is up: `openDesktopLink` says so and tells nobody
+otherwise. Reporting `LINK_DOWN` then would drop the peer in mid-handshake, and each end would wait
+for the other to speak. A pipe the worker stops holding (the link was disconnected, or another vault
+opened) is released by the page when the worker asks, since the page owns the native port and an open
+pipe reads as connected to the app. The pipe an emoji link runs on is kept apart from the lent one,
+so neither closes the other.
 
 Two things can hold the worker up: sync with another device carrying on over the relay keeps waking
 it, and **DevTools open on the worker stops it going idle at all**, so a person watching its console
