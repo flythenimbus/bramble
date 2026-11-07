@@ -2,6 +2,7 @@
 import ArrowRight from "@tabler/icons/outline/arrow-right.svg";
 import DeviceDesktop from "@tabler/icons/outline/device-desktop.svg";
 import Devices from "@tabler/icons/outline/devices.svg";
+import FileImport from "@tabler/icons/outline/file-import.svg";
 import HelpCircle from "@tabler/icons/outline/help-circle.svg";
 import DocsHelp from "@/components/docs/DocsHelp.astro";
 import DocsSearch from "@/components/docs/DocsSearch.astro";
@@ -12,6 +13,7 @@ import Layout from "@/layouts/Layout.astro";
 import "@/styles/docs.css";
 
 const ICONS: Record<DocSection["id"], typeof Devices> = {
+	import: FileImport,
 	sync: Devices,
 	desktop: DeviceDesktop,
 };

@@ -1,6 +1,11 @@
 /** Sidebar and front-page order. An article's `section` must be one of these ids. */
 export const DOC_SECTIONS = [
 	{
+		id: "import",
+		title: "Importing",
+		description: "Bring your passwords, codes and passkeys from another app.",
+	},
+	{
 		id: "sync",
 		title: "Syncing devices",
 		description: "Keep one vault on your phones, computers and browsers.",
