@@ -6,9 +6,20 @@ export const DOC_SECTIONS = [
 		description: "Bring your passwords, codes and passkeys from another app.",
 	},
 	{
+		id: "unlock",
+		title: "Unlocking",
+		description:
+			"Master password, Face ID, Touch ID, Windows Hello, security keys and recovery codes.",
+	},
+	{
 		id: "sync",
 		title: "Syncing devices",
 		description: "Keep one vault on your phones, computers and browsers.",
+	},
+	{
+		id: "backups",
+		title: "Backups",
+		description: "Keep encrypted copies of your vault, and restore one when you need it.",
 	},
 	{
 		id: "desktop",

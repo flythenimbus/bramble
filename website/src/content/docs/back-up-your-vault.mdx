@@ -1,0 +1,121 @@
+---
+title: Back up your vault
+description: Save encrypted copies of your vault to a file or to cloud storage, and restore one when you need it.
+section: backups
+kind: guide
+order: 1
+keywords:
+  - backup
+  - back up
+  - backups
+  - restore
+  - recover
+  - export
+  - .bramble
+  - bramble file
+  - cloud backup
+  - scheduled backup
+  - automatic backup
+  - Dropbox
+  - Backblaze
+  - B2
+  - Cloudflare R2
+  - Storj
+  - Wasabi
+  - S3
+  - Nextcloud
+  - WebDAV
+  - pCloud
+  - Fastmail
+  - Google Drive
+  - iCloud Drive
+  - Proton Drive
+  - KeePass export
+  - kdbx
+  - Export a backup
+  - Import a backup
+  - Restore from backup
+  - Back up now
+  - Start at login
+  - Export as KeePass
+  - Send to another app
+  - Export selection
+  - restore my vault
+  - backup not running
+  - where are my backups
+  - is sync a backup
+updatedDate: 2026-11-07
+---
+
+Sync keeps your devices in step, but it isn't a backup: delete an entry and it's gone from every device. A backup is a copy you can go back to.
+
+Every backup is encrypted. It opens only with the master password your vault had when the backup was made.
+
+## At a glance
+
+|  | Browser extension | Phone | Desktop app |
+| --- | --- | --- | --- |
+| Backup file | Yes | Yes | Yes |
+| Cloud backups | Yes | Yes | Yes |
+| Cloud backups run | While unlocked | When you open Bramble | On schedule, even locked |
+| Dropbox sign-in | Yes | No | No |
+| Export as KeePass | Yes | Yes | Yes |
+
+Everything is under **Settings → Backups**.
+
+## Save a backup file
+
+1. Open **Settings → Backups** and choose **Export** next to **Export a backup**.
+2. Save the .bramble file somewhere other than this device, like a USB drive or your cloud storage.
+
+The file includes your attachments.
+
+## Cloud backups
+
+Bramble can upload backups to storage you choose. Only encrypted data is uploaded, so your provider can't read anything in your vault.
+
+1. Open **Settings → Backups**. Under **Cloud backups**, pick a provider.
+2. Enter its details, and choose how many backups to keep.
+3. Set **Frequency** to **Daily**, **Weekly** or **Monthly**.
+
+Choose **Back up now** to make one straight away.
+
+| Provider | Setup |
+| --- | --- |
+| Dropbox | Sign in with one click. Browser extension only. |
+| Backblaze B2, Cloudflare R2, Storj, Wasabi, other S3 | An access key for a bucket |
+| Nextcloud, pCloud, Fastmail, other WebDAV | Your WebDAV address and an app password |
+
+Google Drive, iCloud Drive and Proton Drive aren't built in. [Save a backup file](#save-a-backup-file) there instead.
+
+<Callout type="tip" title="Limit what Bramble can reach">
+For S3, make a key for that one bucket that can upload and list, but not delete. A WebDAV app password reaches every file in the account, so a separate account just for backups is safest.
+</Callout>
+
+Each vault has its own destinations and its own folder.
+
+### When cloud backups run
+
+- **Desktop app**: on schedule, even while your vault is locked, as long as Bramble is running. Turn on **Start at login** so it always is. On Linux this needs a keyring, like GNOME Keyring, KWallet or KeePassXC's Secret Service. Without one, backups run when you unlock.
+- **Browser extension**: while your vault is unlocked. A daily backup runs the first time you unlock after a day has passed.
+- **Phone**: when you open or unlock Bramble. It can't back up in the background.
+
+An unchanged vault isn't uploaded again. Set up cloud backups on the desktop app if you have it, since it keeps to the schedule.
+
+## Restore a backup
+
+Restoring adds the backup as a new vault. Nothing on your device is replaced.
+
+1. Get the .bramble file: one you saved, or one downloaded from your cloud storage.
+2. On a new device, choose **Restore from backup** when you set up Bramble. If you already have a vault, open **Settings → Backups** and choose **Restore** next to **Import a backup**.
+3. Choose the file, enter the backup's master password, and choose **Restore vault**.
+
+<Callout type="note" title="Backups need a master password">
+A backup made while your vault had no master password can't be restored. If you unlock with a security key only, [turn your master password back on](/docs/unlock-methods#unlock-with-a-key-only).
+</Callout>
+
+## Other copies
+
+- **Export as KeePass** saves a .kdbx file under a password you pick. KeePassXC or any KeePass app can open it, so you can read it without Bramble.
+- **Send to another app** (iPhone, iOS 26 or later) hands your logins, codes and passkeys straight to another password app. Attachments aren't sent.
+- **Export selection** saves only the entries you select in your vault list, under a password you pick. [Import it](/docs/import-passwords) into another vault.

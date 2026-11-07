@@ -1,9 +1,11 @@
 ---
 import ArrowRight from "@tabler/icons/outline/arrow-right.svg";
+import CloudUpload from "@tabler/icons/outline/cloud-upload.svg";
 import DeviceDesktop from "@tabler/icons/outline/device-desktop.svg";
 import Devices from "@tabler/icons/outline/devices.svg";
 import FileImport from "@tabler/icons/outline/file-import.svg";
 import HelpCircle from "@tabler/icons/outline/help-circle.svg";
+import LockOpen from "@tabler/icons/outline/lock-open.svg";
 import DocsHelp from "@/components/docs/DocsHelp.astro";
 import DocsSearch from "@/components/docs/DocsSearch.astro";
 import Footer from "@/components/Footer.astro";
@@ -14,7 +16,9 @@ import "@/styles/docs.css";
 
 const ICONS: Record<DocSection["id"], typeof Devices> = {
 	import: FileImport,
+	unlock: LockOpen,
 	sync: Devices,
+	backups: CloudUpload,
 	desktop: DeviceDesktop,
 };
 
