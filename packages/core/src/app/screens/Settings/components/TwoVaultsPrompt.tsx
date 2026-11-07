@@ -23,7 +23,6 @@ export function TwoVaultsPrompt({
 	choice: TwoVaultsChoice | null;
 	onChoice: (choice: TwoVaultsChoice) => void;
 }) {
-	const others = otherDevices.join(", ");
 	return (
 		<div className="space-y-3">
 			<p className="text-xs text-muted-foreground">
@@ -79,14 +78,27 @@ export function TwoVaultsPrompt({
 					</span>
 				</span>
 			</label>
-			{otherDevices.length > 0 && (
-				<p className="text-xs text-amber-600 dark:text-amber-400">
-					<Trans>
-						{browserName} also syncs with {others}. Combining moves only this browser; they stay on{" "}
-						{browserName}.
-					</Trans>
-				</p>
-			)}
+			<OtherDevicesWarning browserName={browserName} otherDevices={otherDevices} />
 		</div>
+	);
+}
+
+/** Combining moves only this browser, which the other devices on its vault should not be surprised by. */
+export function OtherDevicesWarning({
+	browserName,
+	otherDevices,
+}: {
+	browserName: string;
+	otherDevices: string[];
+}) {
+	if (otherDevices.length === 0) return null;
+	const others = otherDevices.join(", ");
+	return (
+		<p className="text-xs text-amber-600 dark:text-amber-400">
+			<Trans>
+				{browserName} also syncs with {others}. Combining moves only this browser; they stay on{" "}
+				{browserName}.
+			</Trans>
+		</p>
 	);
 }

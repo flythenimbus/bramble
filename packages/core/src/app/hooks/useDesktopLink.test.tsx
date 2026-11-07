@@ -60,6 +60,18 @@ const h = vi.hoisted(() => ({
 	settingWriteFails: false,
 	metaWriteFails: false,
 	sealFails: false,
+	/** What the old vault holds on disk, where it differs from what the window has in memory. */
+	diskEntries: null as unknown[] | null,
+	diskFiles: null as unknown[] | null,
+	diskUnreadable: 0,
+	/** Vaults whose key was dropped. */
+	locked: [] as string[],
+	/** Runs while an import is under way. */
+	duringImport: null as (() => void) | null,
+	/** Holds an import open, to look at the screen during it. */
+	importHold: null as Promise<void> | null,
+	/** What each removal of an empty vault was told. */
+	emptyRemovals: [] as { id: string; entries?: number; files?: number; blob?: Uint8Array }[],
 }));
 
 /** The open vault, re-rendering subscribers when a join switches it, as the provider does. */
@@ -95,19 +107,32 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 			},
 			importEntries: async (items: unknown[], attachments: unknown[] = [], opts?: unknown) => {
 				h.steps.push(`import@${at}`);
+				h.duringImport?.();
+				await h.importHold;
 				if (h.importFails) throw new Error("disk full");
 				h.imported.push([items, attachments]);
 				h.importOptions.push(opts);
 				return attachments.map((_, i) => `hash${i}`);
 			},
 			readEntries: () => h.desktopEntries,
+			readOpenVaultFromDisk: async () => {
+				const held = h.settings[at as string] ?? {};
+				return {
+					entries: h.diskEntries ?? h.entries,
+					files: h.diskFiles ?? h.files,
+					settings: Object.fromEntries(Object.entries(held).map(([k, value]) => [k, { value }])),
+					conflicted: h.conflicts.size,
+					unreadable: h.diskUnreadable,
+				};
+			},
 			readSetting: (key: string) => h.settings[at as string]?.[key],
 			writeSetting: async (key: string, value: unknown) => {
 				h.steps.push(`writeSetting@${at}`);
 				if (h.settingWriteFails) throw new Error("disk full");
 				h.settings[at as string] = { ...h.settings[at as string], [key]: value };
 			},
-			deleteEmptyVault: async (id: string, _entries?: number, _files?: number) => {
+			deleteEmptyVault: async (id: string, entries?: number, files?: number, blob?: Uint8Array) => {
+				h.emptyRemovals.push({ id, entries, files, blob });
 				h.steps.push(`deleteEmpty:${id}@${at}`);
 				return at !== id;
 			},
@@ -126,9 +151,12 @@ vi.mock("../../hooks/useVaultRegistry", () => ({
 		return {
 			vaults: h.vaults,
 			activeId: at,
-			setAside: async (id: string) => {
-				h.steps.push(`setAside:${id}@${at}`);
+			hide: async (id: string) => {
+				h.steps.push(`hide:${id}@${at}`);
 				if (h.setAsideFails) throw new Error("storage full");
+			},
+			show: async (id: string) => {
+				h.steps.push(`show:${id}@${at}`);
 			},
 		};
 	},
@@ -156,6 +184,9 @@ const platform = {
 	// Each vault's key opens only what it sealed, as a real one does.
 	crypto: {
 		withVault: (id: string) => ({
+			lock: async () => {
+				h.locked.push(id);
+			},
 			decryptWithVek: async (iv: string, ciphertext: string) => {
 				h.steps.push(`open@${id}`);
 				if (iv !== id) throw new Error("wrong key");
@@ -357,6 +388,13 @@ describe("combining into the desktop's vault", () => {
 			h.attaches = true;
 			h.settings = {};
 			h.copied = [];
+			h.diskEntries = null;
+			h.diskFiles = null;
+			h.diskUnreadable = 0;
+			h.locked = [];
+			h.duringImport = null;
+			h.importHold = null;
+			h.emptyRemovals = [];
 		}
 		const combineAs = async (opts: { choice?: "combine" | "separate" } = {}) => {
 			const result = await linkedFrom("settings");
@@ -371,10 +409,10 @@ describe("combining into the desktop's vault", () => {
 			act(async () => {
 				await result.current.removeOldVault();
 			});
-		const SET_ASIDE = ["stage", "join", "import@new", "setAside:v1@new"];
+		const SET_ASIDE = ["stage", "join", "import@new", "hide:v1@new"];
 		const REMOVED = "deleteCarried:v1@new";
 
-		it("is asked about and never removed unasked, marked as the old one meanwhile", async () => {
+		it("is asked about and never removed unasked, hidden from the list meanwhile", async () => {
 			oneFullVault();
 			const result = await combineAs();
 			expect(h.steps).toEqual(SET_ASIDE);
@@ -391,13 +429,30 @@ describe("combining into the desktop's vault", () => {
 			expect(result.current.finishingCombine).toBe(false);
 		});
 
-		it("stays when the user says so, and nothing more is asked", async () => {
+		it("is listed again under its own name when the user says keep it", async () => {
 			oneFullVault();
 			const result = await combineAs();
-			act(() => result.current.keepOldVault());
+			await act(async () => {
+				await result.current.keepOldVault();
+			});
+			expect(h.steps.at(-1)).toBe("show:v1@new");
 			expect(result.current.combined).toBeNull();
 			await remove(result);
 			expect(h.steps).not.toContain(REMOVED);
+		});
+
+		it("stays hidden, for Settings to ask again, when the dialog is closed unanswered", async () => {
+			oneFullVault();
+			const result = await combineAs();
+			act(() => result.current.closeCombined());
+			expect(result.current.combined).toBeNull();
+			expect(h.steps).toEqual(SET_ASIDE);
+		});
+
+		it("has its key dropped once the copy is done, whatever the user says next", async () => {
+			oneFullVault();
+			await combineAs();
+			expect(h.locked).toEqual(["v1"]);
 		});
 
 		it.each([
@@ -413,17 +468,20 @@ describe("combining into the desktop's vault", () => {
 					h.meta.set("quarantine:v1", JSON.stringify([{ id: "q" }]));
 				},
 			],
-		])("has no delete on offer, and says why, when it holds %s", async (_what, arrange) => {
-			oneFullVault();
-			arrange();
-			const result = await combineAs();
-			expect(h.steps.at(-1)).toBe("setAside:v1@new");
-			expect(result.current.combined?.pendingRemoval).toBeNull();
-			expect(result.current.combined?.keptUnasked).toBe(true);
-			await remove(result);
-			expect(h.steps).not.toContain(REMOVED);
-			h.meta.clear();
-		});
+		])(
+			"stays listed with no delete on offer, and says why, when it holds %s",
+			async (_what, arrange) => {
+				oneFullVault();
+				arrange();
+				const result = await combineAs();
+				expect(h.steps).not.toContain("hide:v1@new");
+				expect(result.current.combined?.pendingRemoval).toBeNull();
+				expect(result.current.combined?.keptUnasked).toBe(true);
+				await remove(result);
+				expect(h.steps).not.toContain(REMOVED);
+				h.meta.clear();
+			},
+		);
 
 		it.each([
 			[
@@ -467,34 +525,152 @@ describe("combining into the desktop's vault", () => {
 			h.conflicts = new Map();
 		});
 
-		it("has no delete on offer when the pairing did not finish, and says so", async () => {
+		it("stays listed with no delete on offer when the pairing did not finish, and says so", async () => {
 			oneFullVault();
 			h.attaches = false;
 			const result = await combineAs();
 			h.attaches = true;
-			expect(h.steps).toEqual(SET_ASIDE);
+			expect(h.steps).not.toContain("hide:v1@new");
 			expect(result.current.combined?.pendingRemoval).toBeNull();
 			expect(result.current.error).toMatch(/didn't finish/i);
 		});
 
-		it("stays, and says so, when the disk disagrees at the press", async () => {
+		it("comes back to the list, and says the copy couldn't be confirmed, when the check fails", async () => {
 			oneFullVault();
 			h.carriedRemoved = false;
 			const result = await combineAs();
 			await remove(result);
 			h.carriedRemoved = true;
-			expect(h.steps.at(-1)).toBe(REMOVED);
+			expect(h.steps.slice(-2)).toEqual([REMOVED, "show:v1@new"]);
 			expect(result.current.combined?.pendingRemoval).toBeNull();
-			expect(result.current.combined?.keptUnasked).toBe(true);
+			expect(result.current.combined?.copyUnconfirmed).toBe(true);
+			expect(result.current.combined?.keptUnasked).toBe(false);
 			expect(result.current.finishingCombine).toBe(false);
 		});
 
-		it("stays when the copy itself fails", async () => {
+		it("stays listed, and is not hidden, when the copy itself fails", async () => {
 			oneFullVault();
 			h.importFails = true;
 			await combineAs();
 			h.importFails = false;
 			expect(h.steps).not.toContain(REMOVED);
+			expect(h.steps).not.toContain("hide:v1@new");
+		});
+
+		describe("the copy comes from the disk, not from what this window has in memory", () => {
+			it("brings a login saved from another window that this one never saw", async () => {
+				oneFullVault();
+				h.imported = [];
+				h.diskEntries = [login("a", "new.com"), login("z", "saved-elsewhere.com")];
+				await combineAs();
+				const names = ((h.imported[0]?.[0] ?? []) as { name: string }[]).map((e) => e.name);
+				expect(names).toEqual(["new.com", "saved-elsewhere.com"]);
+			});
+
+			it("has the removal look for what was on disk too", async () => {
+				oneFullVault();
+				h.diskEntries = [login("a", "new.com"), login("z", "saved-elsewhere.com")];
+				await remove(await combineAs());
+				const { items } = h.copied[0] as { items: { name: string }[] };
+				expect(items.map((e) => e.name)).toEqual(["new.com", "saved-elsewhere.com"]);
+			});
+
+			it("does not bring what memory holds and the disk no longer does", async () => {
+				oneFullVault();
+				h.imported = [];
+				h.diskEntries = [];
+				h.diskFiles = [];
+				await combineAs();
+				expect(h.steps).not.toContain("import@new");
+			});
+
+			it("brings a file only the disk knows of", async () => {
+				oneFullVault();
+				h.imported = [];
+				h.files = [];
+				h.diskFiles = [{ id: "f9", entryId: "a", hash: "9".repeat(64) }];
+				await combineAs();
+				expect(h.imported[0]?.[1]).toHaveLength(1);
+			});
+
+			it("offers no delete when the disk holds an entry that won't open", async () => {
+				oneFullVault();
+				h.diskUnreadable = 1;
+				const result = await combineAs();
+				expect(result.current.combined?.pendingRemoval).toBeNull();
+				expect(result.current.combined?.keptUnasked).toBe(true);
+				expect(h.steps).not.toContain("hide:v1@new");
+			});
+
+			it("decides what linking does from the disk too", async () => {
+				oneFullVault();
+				h.entries = [];
+				h.files = [];
+				h.diskEntries = [login("z", "saved-elsewhere.com")];
+				h.diskFiles = [];
+				const result = await linkedFrom("settings");
+				expect(result.current.outcome).toBe("combine");
+			});
+
+			it("does not call a vault empty on memory's word, and it is not removed", async () => {
+				oneFullVault();
+				h.entries = [];
+				h.files = [];
+				h.summary = { name: "Home", empty: true, entries: 0 };
+				// Saved elsewhere after the outcome was decided: the outcome says take.
+				const result = await linkedFrom("settings");
+				expect(result.current.outcome).toBe("take");
+				h.diskEntries = [login("z", "saved-elsewhere.com")];
+				h.diskFiles = [];
+				h.steps = [];
+				await act(async () => {
+					await result.current.accept("pw");
+				});
+				expect(h.emptyRemovals).toMatchObject([{ id: "v1", entries: 1, files: 0 }]);
+			});
+		});
+
+		it("says a copy is under way until the dialog can take over", async () => {
+			oneFullVault();
+			const result = await linkedFrom("settings");
+			let release = () => {};
+			h.importHold = new Promise((resolve) => {
+				release = resolve;
+			});
+			expect(result.current.copyingOver).toBe(false);
+			let accepted: Promise<boolean> | undefined;
+			await act(async () => {
+				accepted = result.current.accept("pw");
+				await vi.waitFor(() => expect(h.steps).toContain("import@new"));
+			});
+			expect(result.current.copyingOver).toBe(true);
+			expect(result.current.combined).toBeNull();
+			await act(async () => {
+				release();
+				await accepted;
+			});
+			expect(result.current.copyingOver).toBe(false);
+			expect(result.current.combined).not.toBeNull();
+		});
+
+		it("stops saying so when the copy fails", async () => {
+			oneFullVault();
+			h.importFails = true;
+			const result = await combineAs();
+			h.importFails = false;
+			expect(result.current.copyingOver).toBe(false);
+		});
+
+		it("does not delete an empty vault that changed after it was read", async () => {
+			oneFullVault();
+			h.entries = [];
+			h.files = [];
+			h.summary = { name: "Home", empty: true, entries: 0 };
+			const result = await linkedFrom("settings");
+			await act(async () => {
+				await result.current.accept("pw");
+			});
+			expect(h.emptyRemovals[0]?.blob).toEqual(new Uint8Array([7]));
 		});
 
 		it("tells the removal what to check, and how the old vault looked when the copy began", async () => {
@@ -533,7 +709,7 @@ describe("combining into the desktop's vault", () => {
 			h.blobFails = true;
 			try {
 				const result = await combineAs();
-				expect(h.steps).toEqual(SET_ASIDE);
+				expect(h.steps).not.toContain("hide:v1@new");
 				expect(result.current.combined?.pendingRemoval).toBeNull();
 				expect(result.current.combined?.keptUnasked).toBe(true);
 			} finally {
@@ -541,7 +717,7 @@ describe("combining into the desktop's vault", () => {
 			}
 		});
 
-		it("does not blame the copy when marking the vault fails, and has nothing to ask", async () => {
+		it("does not blame the copy when hiding the vault fails, and has nothing to ask", async () => {
 			oneFullVault();
 			h.setAsideFails = true;
 			try {
@@ -561,7 +737,7 @@ describe("combining into the desktop's vault", () => {
 			h.joinOpens = "v1";
 			try {
 				const result = await combineAs();
-				expect(h.steps).not.toContain("setAside:v1@v1");
+				expect(h.steps).not.toContain("hide:v1@v1");
 				expect(h.steps).not.toContain("import@v1");
 				expect(h.steps).not.toContain("writeSetting@v1");
 				expect(h.steps).not.toContain("seal@v1");
@@ -586,7 +762,7 @@ describe("combining into the desktop's vault", () => {
 			it("brings what each copy holds besides, and the old vault can go", async () => {
 				sameOnBoth({ tags: ["work"], archivedAt: undefined }, { archivedAt: 5 });
 				const result = await combineThem();
-				expect(h.steps).toEqual(["join", "import@new", "setAside:v1@new"]);
+				expect(h.steps).toEqual(["join", "import@new", "hide:v1@new"]);
 				expect(h.imported[0]?.[0]).toEqual([]);
 				expect(h.importOptions[0]).toMatchObject({
 					matched: [{ id: "x", copy: { tags: ["work"] } }],
@@ -598,7 +774,7 @@ describe("combining into the desktop's vault", () => {
 			it("writes nothing when they hold the same, and the old vault can still go", async () => {
 				sameOnBoth({ tags: ["work"] }, { tags: ["work"] });
 				const result = await combineThem();
-				expect(h.steps).toEqual(["join", "setAside:v1@new"]);
+				expect(h.steps).toEqual(["join", "hide:v1@new"]);
 				expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
 			});
 
@@ -606,7 +782,7 @@ describe("combining into the desktop's vault", () => {
 				const tags = Array.from({ length: 32 }, (_, i) => `d${i}`);
 				sameOnBoth({ tags: ["extra"] }, { tags });
 				const result = await combineThem();
-				expect(h.steps).toEqual(["join", "setAside:v1@new"]);
+				expect(h.steps).toEqual(["join"]);
 				expect(result.current.combined?.pendingRemoval).toBeNull();
 				expect(result.current.combined?.keptUnasked).toBe(true);
 			});
@@ -734,7 +910,7 @@ describe("combining into the desktop's vault", () => {
 						"join",
 						"import@new",
 						"writeSetting@new",
-						"setAside:v1@new",
+						"hide:v1@new",
 					]);
 					expect(result.current.combined?.leftBehind.alias).toBe(false);
 					expect(result.current.combined?.keptUnasked).toBe(false);
@@ -763,11 +939,22 @@ describe("combining into the desktop's vault", () => {
 					expect(proof().settings).toEqual([]);
 				});
 
-				it("does not bring something not shaped like a provider", async () => {
+				it("brings a provider this build doesn't know, as it is, for a build that does", async () => {
 					oneFullVault();
-					h.settings = { v1: { [ALIAS]: { nonsense: true } } };
+					const newer = { provider: "from-a-newer-build", apiKey: "k" };
+					h.settings = { v1: { [ALIAS]: newer } };
 					await combineAs();
+					expect(h.settings.new?.[ALIAS]).toEqual(newer);
+				});
+
+				it("never overwrites a desktop provider this build doesn't know", async () => {
+					oneFullVault();
+					const newer = { provider: "from-a-newer-build", apiKey: "their-key" };
+					h.settings = { v1: { [ALIAS]: mine }, new: { [ALIAS]: newer } };
+					const result = await combineAs();
+					expect(h.settings.new?.[ALIAS]).toEqual(newer);
 					expect(h.steps).not.toContain("writeSetting@new");
+					expect(result.current.combined?.leftBehind.alias).toBe(true);
 				});
 
 				it("has nothing to say when both hold the same one", async () => {
@@ -794,7 +981,7 @@ describe("combining into the desktop's vault", () => {
 					h.settingWriteFails = true;
 					const result = await combineAs();
 					h.settingWriteFails = false;
-					expect(h.steps.at(-1)).toBe("setAside:v1@new");
+					expect(h.steps).not.toContain("hide:v1@new");
 					expect(result.current.combined?.pendingRemoval).toBeNull();
 					expect(result.current.combined?.keptUnasked).toBe(true);
 					expect(result.current.error).toBeNull();
@@ -861,15 +1048,29 @@ describe("combining into the desktop's vault", () => {
 					expect(result.current.combined?.leftBehind.backupTargets).toBe(true);
 				});
 
-				it("say nothing when the only one can't be read", async () => {
+				it("say how many couldn't be read, without holding up the delete", async () => {
 					oneFullVault();
 					h.summary = { name: "Home", empty: true, entries: 0, backupTargets: true };
 					h.meta.set(backupTargetsKeyFor("v1"), [
-						liveTarget({ creds: { iv: "other", ciphertext: "{}" } }),
+						liveTarget({ id: "a", creds: { iv: "other", ciphertext: "{}" } }),
+						liveTarget({ id: "b", creds: { iv: "another", ciphertext: "{}" } }),
 					]);
 					const result = await combineAs();
 					expect(targetsOf("new")).toBeUndefined();
 					expect(result.current.combined?.leftBehind.backupTargets).toBe(false);
+					expect(result.current.combined?.leftBehind.unreadableTargets).toBe(2);
+					expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
+				});
+
+				it("still bring the ones that open alongside one that won't", async () => {
+					oneFullVault();
+					h.meta.set(backupTargetsKeyFor("v1"), [
+						liveTarget({ id: "a", creds: { iv: "other", ciphertext: "{}" } }),
+						liveTarget({ id: "b" }),
+					]);
+					const result = await combineAs();
+					expect(targetsOf("new")).toHaveLength(1);
+					expect(result.current.combined?.leftBehind.unreadableTargets).toBe(1);
 				});
 
 				it.each([
@@ -909,6 +1110,23 @@ describe("combining into the desktop's vault", () => {
 				expect(h.steps).not.toContain("writeSetting@new");
 				expect(h.steps).not.toContain("open@v1");
 				expect(targetsOf("new")).toBeUndefined();
+			});
+
+			it("take delete off the offer when another vault opened during the import", async () => {
+				oneFullVault();
+				h.settings = { v1: { [ALIAS]: mine } };
+				withTarget();
+				h.duringImport = () => switchTo("other");
+				try {
+					const result = await combineAs();
+					expect(h.settings.other).toBeUndefined();
+					expect(targetsOf("other")).toBeUndefined();
+					expect(result.current.combined?.pendingRemoval).toBeNull();
+					expect(result.current.combined?.keptUnasked).toBe(true);
+				} finally {
+					h.duringImport = null;
+					h.active = undefined;
+				}
 			});
 
 			it("take delete off the offer when another vault opened before they could land", async () => {
@@ -961,7 +1179,7 @@ describe("combining into the desktop's vault", () => {
 			await result.current.accept("pw", { choice: "combine" });
 		});
 
-		expect(h.steps).toEqual(["stage", "join", "import@new", "setAside:v1@new"]);
+		expect(h.steps).toEqual(["stage", "join", "import@new", "hide:v1@new"]);
 		expect(h.imported[0]?.[0]).toHaveLength(1);
 		expect(h.imported[0]?.[1]).toHaveLength(1);
 		expect(result.current.combined?.heldBack.items).toHaveLength(1);
@@ -979,7 +1197,7 @@ describe("combining into the desktop's vault", () => {
 				done = await result.current.accept("pw", { choice: "combine" });
 			});
 
-			expect(h.steps).toEqual(["stage", "join", "import@new", "setAside:v1@new"]);
+			expect(h.steps).toEqual(["stage", "join", "import@new"]);
 			expect(done).toBe(false);
 			expect(result.current.error).toMatch(/didn't finish/i);
 		} finally {
@@ -998,7 +1216,7 @@ describe("combining into the desktop's vault", () => {
 				done = await result.current.accept("pw", { choice: "combine" });
 			});
 
-			expect(h.steps).toEqual(["stage", "join", "import@new", "setAside:v1@new"]);
+			expect(h.steps).toEqual(["stage", "join", "import@new"]);
 			expect(done).toBe(false);
 			expect(result.current.error).toMatch(/didn't finish/i);
 		} finally {

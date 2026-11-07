@@ -16,8 +16,9 @@ import { TextField } from "../../../components/ui/text-field";
 import { useDesktopLink } from "../../../hooks/useDesktopLink";
 import { usePopOut } from "../../../hooks/usePopOut";
 import { CombineResult } from "./CombineResult";
+import { HiddenVaultRow } from "./HiddenVaultRow";
 import { Row, Section } from "./primitives";
-import { type TwoVaultsChoice, TwoVaultsPrompt } from "./TwoVaultsPrompt";
+import { OtherDevicesWarning, type TwoVaultsChoice, TwoVaultsPrompt } from "./TwoVaultsPrompt";
 
 /** Codes are 8 characters from an alphabet with no lookalikes; see the desktop app's
  * pairing.rs. Anything longer is a paste that picked up whitespace. */
@@ -29,7 +30,7 @@ export function DesktopLinkSection() {
 	const { desktopLink, storage } = usePlatform();
 	const { t } = useLingui();
 	const { entries } = useVault();
-	const { syncKey, vaults, activeId } = useVaultRegistry();
+	const { syncKey, vaults, hiddenVaults, activeId } = useVaultRegistry();
 	// The toolbar popup closes the moment the user switches to the desktop app, which a join asks
 	// them to do, and the vault it was receiving goes with it. So that much runs in a window.
 	const { canPopOut, popOut } = usePopOut();
@@ -54,7 +55,6 @@ export function DesktopLinkSection() {
 	const [unlinking, setUnlinking] = useState(false);
 	/** Combine or keep separate, when both sides hold entries. Nothing until the user picks. */
 	const [choice, setChoice] = useState<TwoVaultsChoice | null>(null);
-	/** Keep the old vault after combining. Off unless asked: all of it is in the desktop's by then. */
 
 	const refresh = useCallback(async () => {
 		if (!desktopLink) return;
@@ -346,7 +346,17 @@ export function DesktopLinkSection() {
 					<Trans>Try again</Trans>
 				</Button>
 			)}
+			{hiddenVaults
+				.filter((v) => v.id !== link.combined?.pendingRemoval?.id)
+				.map((v, i) => (
+					<HiddenVaultRow key={v.id} vault={v} index={i} />
+				))}
 			{link.combined && <CombineResult link={link} />}
+			<Modal open={link.copyingOver} onClose={() => {}} dismissable={false} className="max-w-sm">
+				<p className="p-5 text-sm text-muted-foreground">
+					<Trans>Copying into the desktop's vault…</Trans>
+				</p>
+			</Modal>
 			<Modal
 				open={link.invite !== null}
 				// No "Not now": a link without the vault is half a pairing, so closing lets it go.
@@ -419,6 +429,9 @@ export function DesktopLinkSection() {
 										</Trans>
 									)}
 								</p>
+							)}
+							{outcome === "combine" && (
+								<OtherDevicesWarning browserName={browserName} otherDevices={link.otherDevices} />
 							)}
 							<PasswordField
 								label={t`Master password`}

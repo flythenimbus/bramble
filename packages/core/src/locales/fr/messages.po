@@ -28,6 +28,11 @@ msgstr "{0, plural, one {# pièce jointe du fichier de sauvegarde était endomma
 msgid "{0, plural, one {# attachment restored with it.} other {# attachments restored with it.}}"
 msgstr "{0, plural, one {# pièce jointe restaurée avec lui.} other {# pièces jointes restaurées avec lui.}}"
 
+#. placeholder {0}: leftBehind.unreadableTargets
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{0, plural, one {# backup target couldn't be opened, so it wasn't brought over.} other {# backup targets couldn't be opened, so they weren't brought over.}}"
+msgstr "{0, plural, one {# cible de sauvegarde n'a pas pu être ouverte, elle n'a donc pas été importée.} other {# cibles de sauvegarde n'ont pas pu être ouvertes, elles n'ont donc pas été importées.}}"
+
 #. placeholder {0}: unsigned.length
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "{0, plural, one {# device has not signed its roster entry yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell it from an impostor.} other {# devices have not signed their roster entries yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell them from an impostor.}}"
@@ -203,8 +208,12 @@ msgid "{moving, plural, one {Restore # entry?} other {Restore # entries?}}"
 msgstr "{moving, plural, one {Restaurer # entrée ?} other {Restaurer # entrées ?}}"
 
 #: packages/core/src/app/hooks/useVaultTitle.tsx
-msgid "{name} (before linking)"
-msgstr "{name} (avant liaison)"
+#~ msgid "{name} (before linking)"
+#~ msgstr "{name} (avant liaison)"
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
+msgstr "L'élément {name} est masqué sur ce navigateur. Ses entrées ont été copiées dans le coffre de l'application de bureau."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "{passkeys, plural, one {# passkey is stored on these entries and is deleted with them.} other {# passkeys are stored on these entries and are deleted with them.}}"
@@ -1200,6 +1209,10 @@ msgstr "Copier quand même"
 msgid "Copy verification code"
 msgstr "Copier le code de vérification"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Copying into the desktop's vault…"
+msgstr "Copie dans le coffre de l'application de bureau…"
+
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Copying your desktop app's vault…"
 msgstr "Copie du coffre de votre application de bureau…"
@@ -1366,6 +1379,7 @@ msgstr "Mode sombre"
 #: packages/core/src/app/bulk-actions/delete.tsx
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Delete"
 msgstr "Supprimer"
 
@@ -1374,6 +1388,7 @@ msgid "Delete entry"
 msgstr "Supprimer l'entrée"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Delete it"
 msgstr "Supprimer"
 
@@ -2126,6 +2141,7 @@ msgstr "Tout conserver"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Keep it"
 msgstr "Conserver"
 
@@ -3767,6 +3783,10 @@ msgstr "C’est une sauvegarde complète de coffre. Restaurez-la plutôt : elle 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "The browser was not linked."
 msgstr "Le navigateur n'a pas été lié."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The copy couldn't be confirmed, so the old vault is kept."
+msgstr "La copie n'a pas pu être confirmée, l'ancien coffre est donc conservé."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "The desktop app answered."

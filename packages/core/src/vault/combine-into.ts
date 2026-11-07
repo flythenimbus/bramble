@@ -191,26 +191,32 @@ export interface CarriedTarget {
 /**
  * Read a vault's backup targets for carrying, before the switch takes its key away. Without their
  * history, which is the old vault's, and with no inherited folder, so snapshots are stamped with
- * the new vault and pruning can't reach the old one's. One that won't open already can't back up,
- * and one the OS holds has nothing here to carry.
+ * the new vault and pruning can't reach the old one's. `unreadable` counts the ones this can't
+ * carry: a target from the old device-global list can be sealed under a sibling vault's key and
+ * still work there, and a timeout looks the same as a wrong key, so these are said, never dropped
+ * quietly.
  */
 export async function readCarriedTargets(
 	list: readonly BackupTargetConfig[] | null | undefined,
 	crypto: Pick<CryptoAdapter, "decryptWithVek">,
-): Promise<CarriedTarget[]> {
-	const carried: CarriedTarget[] = [];
+): Promise<{ targets: CarriedTarget[]; unreadable: number }> {
+	const targets: CarriedTarget[] = [];
+	let unreadable = 0;
 	for (const entry of list ?? []) {
 		const { creds, lastBackupAt, lastVaultHash, lastError, waiting, failures, failedAt, ...rest } =
 			entry;
 		const { sharedFolder: _sharedFolder, ...target } = rest;
-		if (credsAreOsHeld(creds)) continue;
+		if (credsAreOsHeld(creds)) {
+			unreadable++;
+			continue;
+		}
 		try {
-			carried.push({ target, secrets: await crypto.decryptWithVek(creds.iv, creds.ciphertext) });
+			targets.push({ target, secrets: await crypto.decryptWithVek(creds.iv, creds.ciphertext) });
 		} catch {
-			// Nothing to rescue: see above.
+			unreadable++;
 		}
 	}
-	return carried;
+	return { targets, unreadable };
 }
 
 /** Seal carried targets under the key of the vault they land in. */

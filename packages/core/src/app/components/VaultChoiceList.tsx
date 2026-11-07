@@ -2,7 +2,7 @@ import { useLingui } from "@lingui/react/macro";
 import { ChevronRight } from "lucide-react";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
 import { formatDate } from "../../util/format-date";
-import { useVaultTitle } from "../hooks/useVaultTitle";
+import { displayLabel } from "../../vault/vault-registry";
 import { Button } from "./ui/button";
 
 /** Up-to-two-letter avatar initials for a vault label. */
@@ -18,14 +18,13 @@ export function initials(label: string): string {
  * where a credential transfer lands sees the same list they know from unlocking.
  */
 export function VaultChoiceList({ onSelect }: { onSelect: (id: string) => void }) {
-	const vaultTitle = useVaultTitle();
 	const { vaults } = useVaultRegistry();
 	const { t } = useLingui();
 
 	return (
 		<div className="space-y-3">
 			{vaults.map((v, i) => {
-				const label = vaultTitle(v, i);
+				const label = displayLabel(v.label, i);
 				return (
 					<Button
 						key={v.id}

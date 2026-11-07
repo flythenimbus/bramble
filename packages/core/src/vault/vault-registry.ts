@@ -13,9 +13,9 @@ const VaultRecordSchema = z.object({
 	/** User-facing label. May be blank; a blank label renders as "Vault N" by position. */
 	label: z.string(),
 	createdAt: z.number(),
-	/** Set when linking combined this vault into the desktop app's. Local to this device: the
-	 * synced name is left alone, so a phone still using the vault sees no change. */
-	setAsideAt: z.number().optional(),
+	/** Set while a vault combined into the desktop app's waits for the user to delete or keep it.
+	 * Off every list. Local to this device. */
+	hiddenAt: z.number().optional(),
 });
 export type VaultRecord = z.infer<typeof VaultRecordSchema>;
 
@@ -56,8 +56,31 @@ export function renameVault(reg: VaultRegistry, id: string, label: string): Vaul
 }
 
 /** Mark a vault as the one linking set aside, kept until the user deletes it. */
-export function markSetAside(reg: VaultRegistry, id: string, at: number): VaultRegistry {
-	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, setAsideAt: at } : v)) };
+export function hideVault(reg: VaultRegistry, id: string, at: number): VaultRegistry {
+	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, hiddenAt: at } : v)) };
+}
+
+/** List a hidden vault again. */
+export function showVault(reg: VaultRegistry, id: string): VaultRegistry {
+	return {
+		...reg,
+		vaults: reg.vaults.map((v) => {
+			if (v.id !== id) return v;
+			const { hiddenAt: _hiddenAt, ...shown } = v;
+			return shown;
+		}),
+	};
+}
+
+/** The vaults to show. A hidden one is listed if nothing else is, rather than stranded. */
+export function listedVaults(reg: VaultRegistry): VaultRecord[] {
+	const listed = reg.vaults.filter((v) => v.hiddenAt === undefined);
+	return listed.length > 0 ? listed : reg.vaults;
+}
+
+export function hiddenVaults(reg: VaultRegistry): VaultRecord[] {
+	const listed = new Set(listedVaults(reg));
+	return reg.vaults.filter((v) => !listed.has(v));
 }
 
 /** Look up a vault record by id. */

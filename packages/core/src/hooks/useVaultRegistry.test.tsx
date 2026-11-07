@@ -54,6 +54,37 @@ describe("VaultRegistryProvider", () => {
 		expect(v.activeId).toBe("a");
 	});
 
+	describe("with a vault hidden after a combine", () => {
+		const stored = {
+			vaults: [
+				{ id: "old", label: "Personal", createdAt: 1, hiddenAt: 5 },
+				{ id: "new", label: "Home", createdAt: 2 },
+			],
+		};
+
+		it("lists only the others, and selects the one left without asking", async () => {
+			const { get } = mount(stored);
+			await vi.waitFor(() => expect(get().ready).toBe(true));
+			expect(get().vaults.map((v) => v.id)).toEqual(["new"]);
+			expect(get().hiddenVaults.map((v) => v.id)).toEqual(["old"]);
+			expect(get().activeId).toBe("new");
+		});
+
+		it("still calls the first registered vault the default, as the background does", async () => {
+			const { get } = mount(stored);
+			await vi.waitFor(() => expect(get().ready).toBe(true));
+			expect(get().defaultVaultId).toBe("old");
+		});
+
+		it("falls back to a listed vault for a flat sync key", async () => {
+			const { get } = mount({
+				vaults: [...stored.vaults, { id: "third", label: "", createdAt: 3 }],
+			});
+			await vi.waitFor(() => expect(get().ready).toBe(true));
+			expect(get().syncKey("sync.group")).toBe("sync.group:new");
+		});
+	});
+
 	it("does not auto-select when several vaults exist (picker)", async () => {
 		const { get } = mount(two);
 		await act(async () => {});

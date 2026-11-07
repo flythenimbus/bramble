@@ -20,12 +20,12 @@ import { usePrefs } from "../../../hooks/usePrefs";
 import { useVault } from "../../../hooks/useVault";
 import { useVaultRegistry } from "../../../hooks/useVaultRegistry";
 import { effectiveAllowPasscode, StaleBiometricCacheError } from "../../../vault/biometric-unlock";
+import { displayLabel } from "../../../vault/vault-registry";
 import { BrambleGlyph } from "../../components/BrambleGlyph";
 import { CryptoErrorText } from "../../components/CryptoErrorText";
 import { Button } from "../../components/ui/button";
 import { PasswordField } from "../../components/ui/password-field";
 import { usePopOut } from "../../hooks/usePopOut";
-import { useVaultTitle } from "../../hooks/useVaultTitle";
 import { useWebauthnHandoff, type WebauthnHandoff } from "../../hooks/useWebauthnHandoff";
 import { useWebauthnUnlock } from "../../hooks/useWebauthnUnlock";
 import { platformKeyAutoOffered, shouldAutoPromptBiometric } from "./auto-biometric";
@@ -45,7 +45,6 @@ const AUTO_PROMPT_RETRY_MS = 400;
 const rawError = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function Auth() {
-	const vaultTitle = useVaultTitle();
 	const {
 		hasVault,
 		lockedByUser,
@@ -73,7 +72,8 @@ export function Auth() {
 	// The vault this screen is unlocking, named in the top-left (mirrors the unlocked header).
 	// Absent on first run, when there's no vault yet.
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
-	const vaultLabel = activeIndex >= 0 ? vaultTitle(vaults[activeIndex]!, activeIndex) : null;
+	const vaultLabel =
+		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
 	const canWebauthnUnlock = useWebauthnUnlock();
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();

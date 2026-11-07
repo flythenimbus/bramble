@@ -4,6 +4,7 @@ import { Dices, ExternalLink, Lock, Settings as SettingsIcon } from "lucide-reac
 import { usePlatform } from "../../context/PlatformContext";
 import { useVault } from "../../hooks/useVault";
 import { useVaultRegistry } from "../../hooks/useVaultRegistry";
+import { displayLabel } from "../../vault/vault-registry";
 import { BrambleGlyph } from "../components/BrambleGlyph";
 import { PasskeySavedToast } from "../components/PasskeySavedToast";
 import { BackButton } from "../components/ui/back-button";
@@ -11,11 +12,9 @@ import { Button } from "../components/ui/button";
 import { usePopOut } from "../hooks/usePopOut";
 import { useRouteBack } from "../hooks/useRouteBack";
 import { useVaultNameSync } from "../hooks/useVaultName";
-import { useVaultTitle } from "../hooks/useVaultTitle";
 
 /** App chrome (header with back/lock/theme/settings) wrapping the routed Outlet. */
 export function AppLayout() {
-	const vaultTitle = useVaultTitle();
 	const navigate = useNavigate();
 	const { lock } = useVault();
 	const { popOut, canPopOut } = usePopOut();
@@ -27,7 +26,8 @@ export function AppLayout() {
 	const { activeId, vaults } = useVaultRegistry();
 	useVaultNameSync();
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
-	const vaultLabel = activeIndex >= 0 ? vaultTitle(vaults[activeIndex]!, activeIndex) : null;
+	const vaultLabel =
+		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
 
 	const onBack = useRouteBack();
 

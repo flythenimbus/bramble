@@ -13,10 +13,13 @@ import { syncKeyFor } from "../sync/sync-keys";
 import {
 	addVault,
 	EMPTY_REGISTRY,
-	markSetAside,
+	hiddenVaults,
+	hideVault,
+	listedVaults,
 	parseRegistry,
 	removeVault,
 	renameVault,
+	showVault,
 	VAULT_REGISTRY_KEY,
 	type VaultRecord,
 	type VaultRegistry,
@@ -25,7 +28,12 @@ import {
 export interface VaultRegistryValue {
 	/** True once the registry has been read from storage. */
 	ready: boolean;
+	/** The vaults to show. Not a hidden one: see `hiddenVaults`. */
 	vaults: VaultRecord[];
+	/** Vaults combined into the desktop app's, waiting for the user to delete or keep them. */
+	hiddenVaults: VaultRecord[];
+	/** The first registered vault, hidden or not, as the background reckons it. */
+	defaultVaultId: string | undefined;
 	/** The vault the app currently operates on, or undefined before it resolves (callers that omit an
 	 * id then fall back to the first/only vault). */
 	activeId: string | undefined;
@@ -53,9 +61,11 @@ export interface VaultRegistryValue {
 	dropActiveRecord: () => Promise<void>;
 	/** Re-read the registry from storage (after a create/rename/delete elsewhere). */
 	refresh: () => Promise<void>;
-	/** Mark a vault as set aside by linking (local to this device). Reads storage fresh, since a
-	 * join has usually just added a record this render has not seen. */
-	setAside: (id: string) => Promise<void>;
+	/** Take a vault off the lists (local to this device). Reads storage fresh, since a join has
+	 * usually just added a record this render has not seen. */
+	hide: (id: string) => Promise<void>;
+	/** List a hidden vault again, under its own name. */
+	show: (id: string) => Promise<void>;
 	/** Forget the record of a vault deleteEmptyVault has erased. Never the active one: that is
 	 * dropActiveRecord's, behind a re-auth. */
 	forgetEmptyRecord: (id: string) => Promise<void>;
@@ -67,6 +77,8 @@ export interface VaultRegistryValue {
 const DEFAULT: VaultRegistryValue = {
 	ready: true,
 	vaults: [],
+	hiddenVaults: [],
+	defaultVaultId: undefined,
 	activeId: undefined,
 	syncKey: (k) => k,
 	selectVault: () => {},
@@ -75,15 +87,18 @@ const DEFAULT: VaultRegistryValue = {
 	rename: async () => {},
 	dropActiveRecord: async () => {},
 	refresh: async () => {},
-	setAside: async () => {},
+	hide: async () => {},
+	show: async () => {},
 	forgetEmptyRecord: async () => {},
 };
 
 const VaultRegistryContext = createContext<VaultRegistryValue>(DEFAULT);
 
 /** The vault to select with no choice made: the only one, since the router skips the picker for it. */
-const soleVaultId = (reg: VaultRegistry) =>
-	reg.vaults.length === 1 ? reg.vaults[0]?.id : undefined;
+const soleVaultId = (reg: VaultRegistry) => {
+	const listed = listedVaults(reg);
+	return listed.length === 1 ? listed[0]?.id : undefined;
+};
 
 export function useVaultRegistry(): VaultRegistryValue {
 	return useContext(VaultRegistryContext);
@@ -126,10 +141,10 @@ export function VaultRegistryProvider({
 	// selected). Every vault's sync value lives at `<key>:<id>`.
 	const syncKey = useCallback(
 		(flatKey: string) => {
-			const v = activeId ?? registry.vaults[0]?.id;
+			const v = activeId ?? listedVaults(registry)[0]?.id;
 			return v ? syncKeyFor(flatKey, v) : flatKey;
 		},
-		[activeId, registry.vaults],
+		[activeId, registry],
 	);
 
 	// Write a new registry to storage and reflect it in state.
@@ -168,10 +183,18 @@ export function VaultRegistryProvider({
 		setActiveId(soleVaultId(next));
 	}, [registry, persist, activeId]);
 
-	const setAside = useCallback(
+	const hide = useCallback(
 		async (id: string) => {
 			const current = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
-			await persist(markSetAside(current, id, Date.now()));
+			await persist(hideVault(current, id, Date.now()));
+		},
+		[storage, persist],
+	);
+
+	const show = useCallback(
+		async (id: string) => {
+			const current = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
+			await persist(showVault(current, id));
 		},
 		[storage, persist],
 	);
@@ -188,7 +211,9 @@ export function VaultRegistryProvider({
 	const value = useMemo<VaultRegistryValue>(
 		() => ({
 			ready,
-			vaults: registry.vaults,
+			vaults: listedVaults(registry),
+			hiddenVaults: hiddenVaults(registry),
+			defaultVaultId: registry.vaults[0]?.id,
 			activeId,
 			syncKey,
 			selectVault,
@@ -197,7 +222,8 @@ export function VaultRegistryProvider({
 			rename,
 			dropActiveRecord,
 			refresh,
-			setAside,
+			hide,
+			show,
 			forgetEmptyRecord,
 		}),
 		[
@@ -211,7 +237,8 @@ export function VaultRegistryProvider({
 			rename,
 			dropActiveRecord,
 			refresh,
-			setAside,
+			hide,
+			show,
 			forgetEmptyRecord,
 		],
 	);

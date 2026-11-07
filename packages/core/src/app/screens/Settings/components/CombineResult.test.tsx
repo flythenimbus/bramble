@@ -17,6 +17,8 @@ const link = ({
 	held = 0,
 	alias = false,
 	backupTargets = false,
+	unreadableTargets = 0,
+	copyUnconfirmed = false,
 	conflicted = 0,
 	uncarried = 0,
 	quarantined = 0,
@@ -25,19 +27,24 @@ const link = ({
 } = {}) =>
 	({
 		combined: {
-			heldBack: { items: Array.from({ length: held }, () => ({ name: "a" })), attachments: [] },
+			heldBack: {
+				items: Array.from({ length: held }, (_, i) => ({ name: `Look-alike ${i + 1}` })),
+				attachments: [],
+			},
 			uncarried,
 			quarantined,
 			conflicted,
 			keptUnasked,
-			leftBehind: { alias, backupTargets },
+			copyUnconfirmed,
+			leftBehind: { alias, backupTargets, unreadableTargets },
 			pendingRemoval: offered ? { id: "v1", copied: {} } : null,
 		},
 		error,
 		finishingCombine: finishing,
 		copyHeldBack: vi.fn(async () => {}),
 		removeOldVault: vi.fn(async () => {}),
-		keepOldVault: vi.fn(),
+		keepOldVault: vi.fn(async () => {}),
+		closeCombined: vi.fn(),
 	}) as unknown as Link;
 
 const show = (l: Link) =>
@@ -76,11 +83,12 @@ describe("the question after a combine", () => {
 		expect(keeping.removeOldVault).not.toHaveBeenCalled();
 	});
 
-	it("reads closing it as keeping the vault", () => {
+	it("reads closing it as no answer yet, neither keeping nor deleting", () => {
 		const l = link();
 		show(l);
 		fireEvent.keyDown(window, { key: "Escape" });
-		expect(l.keepOldVault).toHaveBeenCalledOnce();
+		expect(l.closeCombined).toHaveBeenCalledOnce();
+		expect(l.keepOldVault).not.toHaveBeenCalled();
 		expect(l.removeOldVault).not.toHaveBeenCalled();
 	});
 
@@ -91,7 +99,7 @@ describe("the question after a combine", () => {
 			expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
 		}
 		fireEvent.keyDown(window, { key: "Escape" });
-		expect(l.keepOldVault).not.toHaveBeenCalled();
+		expect(l.closeCombined).not.toHaveBeenCalled();
 	});
 
 	it("shows what went wrong inside the dialog, where it can be seen", () => {
@@ -109,6 +117,20 @@ describe("what the dialog says before deleting", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Copy them anyway" }));
 		expect(l.copyHeldBack).toHaveBeenCalledOnce();
 		expect(l.removeOldVault).not.toHaveBeenCalled();
+	});
+
+	it("names the look-alikes, since what they hold is what would go", () => {
+		show(link({ held: 2 }));
+		expect(screen.getByText("Look-alike 1, Look-alike 2")).toBeTruthy();
+	});
+
+	it("says how many backup targets couldn't be opened", () => {
+		show(link({ unreadableTargets: 2 }));
+		expect(screen.getByText(/2 backup targets couldn't be opened/)).toBeTruthy();
+		expect(screen.queryByText(/Its entries and files are in/)).toBeTruthy();
+		cleanup();
+		show(link({ unreadableTargets: 1 }));
+		expect(screen.getByText(/1 backup target couldn't be opened/)).toBeTruthy();
 	});
 
 	it("says the alias provider stayed the desktop's", () => {
@@ -161,7 +183,14 @@ describe("when the old vault has to stay", () => {
 		expect(screen.queryByRole("button", { name: DELETE })).toBeNull();
 		expect(screen.queryByRole("button", { name: KEEP })).toBeNull();
 		fireEvent.click(screen.getByRole("button", { name: "Done" }));
-		expect(l.keepOldVault).toHaveBeenCalledOnce();
+		expect(l.closeCombined).toHaveBeenCalledOnce();
+		expect(l.keepOldVault).not.toHaveBeenCalled();
+	});
+
+	it("gives the real reason when the check at the press failed", () => {
+		show(link({ offered: false, copyUnconfirmed: true }));
+		expect(screen.getByText(/The copy couldn't be confirmed/)).toBeTruthy();
+		expect(screen.queryByText(/Some of it didn't copy/)).toBeNull();
 	});
 
 	it("says how many files and damaged entries", () => {

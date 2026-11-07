@@ -5,7 +5,7 @@ import {
 	isAliasConfig,
 } from "@core/aliases";
 import { decodeEntriesPayload } from "@core/sync";
-import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
+import { listedVaults, parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { extensionStorage } from "../storage";
 import { sendToOffscreen } from "./offscreen-client";
 import { getActiveVaultId } from "./session";
@@ -68,7 +68,7 @@ export async function aliasAvailable(): Promise<boolean> {
  */
 export async function aliasConfiguredAnywhere(): Promise<boolean> {
 	const reg = parseRegistry(await extensionStorage.getMeta(VAULT_REGISTRY_KEY).catch(() => null));
-	for (const v of reg.vaults) {
+	for (const v of listedVaults(reg)) {
 		const hint = await extensionStorage
 			.getMeta<boolean>(aliasConfiguredHintKeyFor(v.id))
 			.catch(() => undefined);

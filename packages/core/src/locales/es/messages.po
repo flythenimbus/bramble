@@ -28,6 +28,11 @@ msgstr "{0, plural, one {# archivo adjunto del archivo de respaldo estaba dañad
 msgid "{0, plural, one {# attachment restored with it.} other {# attachments restored with it.}}"
 msgstr "{0, plural, one {# archivo adjunto restaurado con él.} other {# archivos adjuntos restaurados con él.}}"
 
+#. placeholder {0}: leftBehind.unreadableTargets
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{0, plural, one {# backup target couldn't be opened, so it wasn't brought over.} other {# backup targets couldn't be opened, so they weren't brought over.}}"
+msgstr "{0, plural, one {No se pudo abrir # destino de copia de seguridad, así que no se transfirió.} other {No se pudieron abrir # destinos de copia de seguridad, así que no se transfirieron.}}"
+
 #. placeholder {0}: unsigned.length
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "{0, plural, one {# device has not signed its roster entry yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell it from an impostor.} other {# devices have not signed their roster entries yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell them from an impostor.}}"
@@ -203,8 +208,12 @@ msgid "{moving, plural, one {Restore # entry?} other {Restore # entries?}}"
 msgstr "{moving, plural, one {¿Restaurar # entrada?} other {¿Restaurar # entradas?}}"
 
 #: packages/core/src/app/hooks/useVaultTitle.tsx
-msgid "{name} (before linking)"
-msgstr "{name} (antes de vincular)"
+#~ msgid "{name} (before linking)"
+#~ msgstr "{name} (antes de vincular)"
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
+msgstr "{name} está oculto en este navegador. Sus entradas se copiaron en la caja fuerte del escritorio."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "{passkeys, plural, one {# passkey is stored on these entries and is deleted with them.} other {# passkeys are stored on these entries and are deleted with them.}}"
@@ -1200,6 +1209,10 @@ msgstr "Copiar de todos modos"
 msgid "Copy verification code"
 msgstr "Copiar código de verificación"
 
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Copying into the desktop's vault…"
+msgstr "Copiando en la caja fuerte del escritorio…"
+
 #: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
 msgid "Copying your desktop app's vault…"
 msgstr "Copiando la bóveda de su aplicación de escritorio…"
@@ -1366,6 +1379,7 @@ msgstr "Oscuro"
 #: packages/core/src/app/bulk-actions/delete.tsx
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Delete"
 msgstr "Eliminar"
 
@@ -1374,6 +1388,7 @@ msgid "Delete entry"
 msgstr "Eliminar entrada"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Delete it"
 msgstr "Eliminarla"
 
@@ -2126,6 +2141,7 @@ msgstr "Conservar todo"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Keep it"
 msgstr "Conservarla"
 
@@ -3767,6 +3783,10 @@ msgstr "Es una copia de seguridad completa de la caja fuerte. Restáurela en su 
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "The browser was not linked."
 msgstr "El navegador no se vinculó."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The copy couldn't be confirmed, so the old vault is kept."
+msgstr "No se pudo confirmar la copia, por lo que se mantiene la caja fuerte antigua."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "The desktop app answered."

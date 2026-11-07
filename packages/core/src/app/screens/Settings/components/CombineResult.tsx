@@ -4,12 +4,12 @@ import { Modal } from "../../../components/ui/modal";
 import type { useDesktopLink } from "../../../hooks/useDesktopLink";
 
 /** What a combine did and left behind, and the one thing left to decide: whether the old vault
- * goes. Closing it keeps the vault, set aside. */
+ * goes. Closing it decides nothing: the vault stays hidden, and Settings asks again. */
 export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink> }) {
 	const combined = link.combined;
 	if (!combined) return null;
 	const held = combined.heldBack.items.length;
-	const { uncarried, quarantined, conflicted, leftBehind, keptUnasked } = combined;
+	const { uncarried, quarantined, conflicted, leftBehind, keptUnasked, copyUnconfirmed } = combined;
 	const asking = combined.pendingRemoval !== null;
 	const busy = link.finishingCombine;
 	const note = "text-xs text-muted-foreground";
@@ -17,7 +17,7 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 		<Modal
 			open
 			onClose={() => {
-				if (!busy) link.keepOldVault();
+				if (!busy) link.closeCombined();
 			}}
 			className="max-w-sm"
 		>
@@ -57,6 +57,11 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 						</Button>
 					</div>
 				)}
+				{held > 0 && (
+					<p className="max-h-20 overflow-y-auto text-xs text-foreground">
+						{combined.heldBack.items.map((item) => item.name).join(", ")}
+					</p>
+				)}
 				{conflicted > 0 && (
 					<p className={note}>
 						<Plural
@@ -79,6 +84,15 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 						<Trans>
 							The desktop's vault already has a backup target, so this vault's weren't brought over.
 						</Trans>
+					</p>
+				)}
+				{leftBehind.unreadableTargets > 0 && (
+					<p className={note}>
+						<Plural
+							value={leftBehind.unreadableTargets}
+							one="# backup target couldn't be opened, so it wasn't brought over."
+							other="# backup targets couldn't be opened, so they weren't brought over."
+						/>
 					</p>
 				)}
 				{quarantined > 0 && (
@@ -104,11 +118,21 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 						<Trans>Some of it didn't copy, so the old vault is kept.</Trans>
 					</p>
 				)}
+				{copyUnconfirmed && (
+					<p className={note}>
+						<Trans>The copy couldn't be confirmed, so the old vault is kept.</Trans>
+					</p>
+				)}
 				{link.error && <p className="text-xs text-destructive">{link.error}</p>}
 				<div className="flex justify-end gap-2 pt-1">
 					{asking ? (
 						<>
-							<Button variant="secondary" size="sm" disabled={busy} onClick={link.keepOldVault}>
+							<Button
+								variant="secondary"
+								size="sm"
+								disabled={busy}
+								onClick={() => void link.keepOldVault()}
+							>
 								<Trans>Keep it</Trans>
 							</Button>
 							<Button
@@ -121,7 +145,7 @@ export function CombineResult({ link }: { link: ReturnType<typeof useDesktopLink
 							</Button>
 						</>
 					) : (
-						<Button variant="secondary" size="sm" disabled={busy} onClick={link.keepOldVault}>
+						<Button variant="secondary" size="sm" disabled={busy} onClick={link.closeCombined}>
 							<Trans>Done</Trans>
 						</Button>
 					)}

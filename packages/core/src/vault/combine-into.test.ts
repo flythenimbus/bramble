@@ -286,7 +286,7 @@ describe("carrying backup targets", () => {
 	});
 
 	it("opens each target with the old key and seals it with the new one", async () => {
-		const carried = await readCarriedTargets(
+		const { targets: carried } = await readCarriedTargets(
 			[target("t1", { iv: "old", ciphertext: '{"password":"s3"}' })],
 			keyed("old"),
 		);
@@ -298,7 +298,7 @@ describe("carrying backup targets", () => {
 	});
 
 	it("leaves the old vault's backup history behind, so the first backup here is not skipped", async () => {
-		const carried = await readCarriedTargets(
+		const { targets: carried } = await readCarriedTargets(
 			[
 				target(
 					"t1",
@@ -331,7 +331,7 @@ describe("carrying backup targets", () => {
 	});
 
 	it("stamps its snapshots with the new vault, so pruning can't reach the old vault's", async () => {
-		const carried = await readCarriedTargets(
+		const { targets: carried } = await readCarriedTargets(
 			[target("t1", { iv: "old", ciphertext: "{}" }, { sharedFolder: true })],
 			keyed("old"),
 		);
@@ -340,24 +340,28 @@ describe("carrying backup targets", () => {
 		expect(targetPrefixFor(sealed as BackupTargetConfig, "new-vault", true)).toBe("backups");
 	});
 
-	it("skips a target whose credentials won't open: it already can't back up", async () => {
-		const carried = await readCarriedTargets(
+	it("counts a target whose credentials won't open, rather than dropping it quietly", async () => {
+		const read = await readCarriedTargets(
 			[
 				target("dead", { iv: "another-vault", ciphertext: "{}" }),
 				target("live", { iv: "old", ciphertext: "{}" }),
 			],
 			keyed("old"),
 		);
-		expect(carried.map((c) => c.target.id)).toEqual(["live"]);
+		expect(read.targets.map((c) => c.target.id)).toEqual(["live"]);
+		expect(read.unreadable).toBe(1);
 	});
 
-	it("skips a target the operating system holds the credentials for: there is nothing to carry", async () => {
-		const carried = await readCarriedTargets([target("os", { wrap: "os" })], keyed("old"));
-		expect(carried).toEqual([]);
+	it("counts a target the operating system holds the credentials for", async () => {
+		const read = await readCarriedTargets([target("os", { wrap: "os" })], keyed("old"));
+		expect(read).toEqual({ targets: [], unreadable: 1 });
 	});
 
 	it("reads nothing from no list at all", async () => {
-		expect(await readCarriedTargets(undefined, keyed("old"))).toEqual([]);
-		expect(await readCarriedTargets([], keyed("old"))).toEqual([]);
+		expect(await readCarriedTargets(undefined, keyed("old"))).toEqual({
+			targets: [],
+			unreadable: 0,
+		});
+		expect(await readCarriedTargets([], keyed("old"))).toEqual({ targets: [], unreadable: 0 });
 	});
 });

@@ -113,19 +113,19 @@ test("settings: combines this browser's vault and its files into the desktop's",
 		timeout: 30_000,
 	});
 
-	// Asked what to do with the old vault, the user keeps it.
+	// Asked what to do with the old vault, the user keeps it: an ordinary vault again, listed under
+	// its own name.
 	await popup.getByRole("button", { name: "Keep it" }).click();
-
-	// The browser now opens the desktop's vault with its own entry and file copied in, and keeps
-	// its old vault set aside.
 	await expect
 		.poll(async () => {
 			const registry = (await ext.stored("vault.registry")) as {
-				vaults: { setAsideAt?: number }[];
+				vaults: { hiddenAt?: number }[];
 			};
-			return registry.vaults.filter((v) => v.setAsideAt).length;
+			return [registry.vaults.length, registry.vaults.filter((v) => v.hiddenAt).length];
 		})
-		.toBe(1);
+		.toEqual([2, 0]);
+	await expect(popup.getByText(/before linking/)).toHaveCount(0);
+
 	await popup.getByRole("button", { name: "Go to vault" }).click();
 	await expect(popup.getByText(DESKTOP_ENTRY)).toBeVisible();
 	await popup.getByText("Browser only").first().click();
@@ -195,6 +195,13 @@ for (const [copied, copies] of [
 		await createVault(ext.page, ext.extensionId, BROWSER_PW);
 		const popup = await ext.popup();
 		await addLogin(popup, name, { ...both, notes: "only in the browser" });
+		await popup.getByText(name).first().click();
+		await popup.locator('input[type="file"]').setInputFiles({
+			name: "held.txt",
+			mimeType: "text/plain",
+			buffer: Buffer.from("held back\n"),
+		});
+		await expect(popup.getByText("held.txt")).toBeVisible();
 
 		await desktopConnect();
 		const shown = await linkFromSettings(popup);
@@ -209,10 +216,10 @@ for (const [copied, copies] of [
 		const warning = popup.getByText(/It goes if you delete the old vault/);
 		await expect(warning).toBeVisible({ timeout: 30_000 });
 
-		// Nothing goes on its own: the old vault waits for the answer, set aside.
+		// Nothing goes on its own: the old vault waits for the answer, hidden.
 		const vaults = async () =>
-			((await ext.stored("vault.registry")) as { vaults: { setAsideAt?: number }[] }).vaults;
-		expect((await vaults()).filter((v) => v.setAsideAt)).toHaveLength(1);
+			((await ext.stored("vault.registry")) as { vaults: { hiddenAt?: number }[] }).vaults;
+		expect((await vaults()).filter((v) => v.hiddenAt)).toHaveLength(1);
 
 		if (copied) {
 			await popup.getByRole("button", { name: "Copy them anyway" }).click();
@@ -225,6 +232,17 @@ for (const [copied, copies] of [
 
 		await popup.getByRole("button", { name: "Go to vault" }).click();
 		await expect(popup.getByText(name)).toHaveCount(copies);
+		if (copied) {
+			// Its file came too, though the old vault's key was dropped before the copy was asked for.
+			const found: number[] = [];
+			for (const i of [0, 1]) {
+				await popup.getByText(name).nth(i).click();
+				await popup.waitForTimeout(300);
+				found.push(await popup.getByText("held.txt").count());
+				await popup.getByRole("button", { name: "Go to vault" }).click();
+			}
+			expect(found.reduce((a, b) => a + b)).toBeGreaterThan(0);
+		}
 	});
 }
 
@@ -443,12 +461,22 @@ test.describe("a window closed around the question", () => {
 	test.use({ borrowsPipe: true });
 
 	/** Combine into a new desktop vault, as far as the question. */
-	const toTheQuestion = async (ext: Browser, title: string) => {
+	const toTheQuestion = async (
+		ext: Browser,
+		title: string,
+		{ seenHere = true, savedElsewhere = false } = {},
+	) => {
 		await desktopCreateAnotherVault(title);
 		await desktopUseLocalRelay();
 		await createVault(ext.page, ext.extensionId, BROWSER_PW);
 		const popup = await ext.popup();
-		await addLogin(popup, "Browser only");
+		if (seenHere) await addLogin(popup, "Browser only");
+		if (savedElsewhere) {
+			// A window's save reaches no other window's memory.
+			const other = await ext.popup();
+			await addLogin(other, "Saved elsewhere");
+			await other.close();
+		}
 
 		await desktopConnect();
 		const shown = await linkFromSettings(popup);
@@ -463,33 +491,82 @@ test.describe("a window closed around the question", () => {
 		});
 		return popup;
 	};
-	/** The old vault is still there in full, marked as the old one, and nothing asks again. */
-	const stillWhole = async (ext: Browser, title: string) => {
-		const vaults = async () =>
-			((await ext.stored("vault.registry")) as { vaults: { setAsideAt?: number }[] }).vaults;
-		expect(await vaults()).toHaveLength(2);
-		expect((await vaults()).filter((v) => v.setAsideAt)).toHaveLength(1);
+	const vaults = async (ext: Browser) =>
+		((await ext.stored("vault.registry")) as { vaults: { hiddenAt?: number }[] }).vaults;
+	/** The old vault is still there in full, off the lists, and Settings asks again. */
+	const stillHidden = async (ext: Browser, title: string) => {
+		expect(await vaults(ext)).toHaveLength(2);
+		expect((await vaults(ext)).filter((v) => v.hiddenAt)).toHaveLength(1);
 		expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(2);
 
 		const again = await ext.popup();
 		await again.getByRole("button", { name: "Go to vault" }).click();
-		await expect(again.getByText("Browser only").first()).toBeVisible({ timeout: 15_000 });
 		await expect(again.getByTestId("active-vault-label")).toHaveText(title);
 		await expect(again.getByRole("button", { name: "Delete old vault" })).toHaveCount(0);
-		await desktopOpenVault("Vault 1");
+
+		await again.getByRole("button", { name: "Settings" }).click();
+		await again.getByRole("button", { name: "Sync", exact: true }).click();
+		await expect(again.getByText(/is hidden on this browser/)).toBeVisible();
+		return again;
 	};
 
-	test("before answering leaves the old vault whole and labelled", async ({ ext }) => {
+	test("before answering leaves the old vault hidden, and Keep it in Settings lists it", async ({
+		ext,
+	}) => {
 		const popup = await toTheQuestion(ext, "Closed unanswered");
 		await popup.close();
-		await stillWhole(ext, "Closed unanswered");
+		const again = await stillHidden(ext, "Closed unanswered");
+
+		await again.getByRole("button", { name: "Keep it" }).click();
+		await expect.poll(async () => (await vaults(ext)).filter((v) => v.hiddenAt).length).toBe(0);
+		await expect(again.getByText(/is hidden on this browser/)).toHaveCount(0);
+		await desktopOpenVault("Vault 1");
 	});
 
-	test("in the second after pressing delete leaves it whole and labelled too", async ({ ext }) => {
+	test("in the second after pressing delete leaves it hidden, and Delete in Settings ends it", async ({
+		ext,
+	}) => {
 		const popup = await toTheQuestion(ext, "Closed mid-delete");
 		await popup.getByRole("button", { name: "Delete old vault" }).click();
 		await popup.close();
-		await stillWhole(ext, "Closed mid-delete");
+		const again = await stillHidden(ext, "Closed mid-delete");
+
+		await again.getByRole("button", { name: "Delete", exact: true }).click();
+		await again.getByRole("button", { name: "Delete it" }).click();
+		await expect.poll(async () => (await vaults(ext)).length).toBe(1);
+		expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(1);
+		await desktopOpenVault("Vault 1");
+	});
+
+	test("a login saved in another window comes across, and isn't lost with the old vault", async ({
+		ext,
+	}) => {
+		const popup = await toTheQuestion(ext, "Two windows", { savedElsewhere: true });
+		await popup.getByRole("button", { name: "Delete old vault" }).click();
+		await expect.poll(async () => (await vaults(ext)).length).toBe(1);
+
+		await popup.getByRole("button", { name: "Go to vault" }).click();
+		await expect(popup.getByText("Browser only").first()).toBeVisible();
+		await expect(popup.getByText("Saved elsewhere").first()).toBeVisible();
+		await expect
+			.poll(() => desktopEntryText("Saved elsewhere"), { timeout: 30_000 })
+			.toContain("Saved elsewhere");
+		await desktopOpenVault("Vault 1");
+	});
+
+	test("a window that thinks its vault is empty still combines what the disk holds", async ({
+		ext,
+	}) => {
+		const popup = await toTheQuestion(ext, "Looks empty", {
+			seenHere: false,
+			savedElsewhere: true,
+		});
+		await popup.getByRole("button", { name: "Delete old vault" }).click();
+		await expect.poll(async () => (await vaults(ext)).length).toBe(1);
+
+		await popup.getByRole("button", { name: "Go to vault" }).click();
+		await expect(popup.getByText("Saved elsewhere").first()).toBeVisible();
+		await desktopOpenVault("Vault 1");
 	});
 });
 

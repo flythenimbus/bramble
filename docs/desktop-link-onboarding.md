@@ -156,7 +156,9 @@ mine unless marked otherwise.
 
 - **The desktop's vault is the one that stays.**
 - **The browser's entries and files are copied into it** through `importEntries` with their
-  attachments, using the normal two-tier dedup. Unlike today's checkbox, files must come along.
+  attachments, using the normal two-tier dedup. Unlike today's checkbox, files must come along. The copy
+  is read from the disk, not from the window's memory: a save in another window never reaches this one,
+  and the check before deleting would otherwise pass without it.
 - **A copy of an entry the desktop's vault holds is folded into that entry,** by the same write. Its
   tags are added, its old passwords joined (newest five), and an entry archived on one side only comes
   back, since hiding a login in use is worse than showing an archived one. The change syncs as an edit
@@ -170,33 +172,39 @@ mine unless marked otherwise.
   inherited folder, so their snapshots carry the new vault's stamp and pruning can't reach the old
   ones'. Whether the desktop has a target comes from the app, and an app that won't say counts as
   having none, since losing the browser's is worse than a second destination. A target that won't
-  open already can't back up, so it is dropped without a word.
-- **The user is asked whether to delete the old vault, once the copy is done** (the user's decision,
-  2026-11-06, replacing an earlier checkbox: the choice comes with the result, not before it). It is
-  never deleted without that press. Meanwhile it is marked as the old vault, so closing the window, or
-  answering "Keep it", leaves it labelled for the user to delete later the normal way.
+  open isn't carried, and the dialog says how many: one from the old device-global list can be sealed
+  under a sibling vault's key and still work there. Any stored alias value counts, shaped like a
+  provider this build knows or not: extension and app version independently, so a newer one's is
+  neither overwritten nor lost.
+- **The old vault is hidden once the copy is done, and the user is asked whether to delete it** (the
+  user's decision, 2026-11-06, replacing an earlier checkbox and a "(before linking)" label: the choice
+  comes with the result, and no listed vault is marked as the old one). It is never deleted without a
+  press. "Keep it" makes it an ordinary vault again, listed under its own name. Closing the dialog
+  decides nothing: it stays hidden and Settings > Sync asks again, for as long as it takes. Its key is
+  dropped either way. There is no timer. A hidden vault is listed anyway if no other vault is left, so
+  it can't be stranded.
 - **The dialog says what the press would cost.** Look-alikes the dedup held back go with the vault
   unless copied ("Copy them anyway"). So do the versions of an entry in a sync conflict other than the
   one shown, and an alias provider or backup targets that gave way to the desktop's own.
 - **Deleting checks first.** A second's wait for a background merge in flight, then the disk has to
   agree: every entry and file of the copy there with all it held, the alias provider if one was
   written, and the old vault's bytes unchanged since the copy began, so a login saved into it meanwhile
-  is not lost. If not, the vault stays and the dialog says so.
+  is not lost. Memory has to hold the copy too, or this page's next write would take it off the disk.
+  If not, the vault is listed again and the dialog says so. Once the dialog is closed that proof is
+  gone, so Delete in Settings is on the user's word, behind a confirm.
 - **Delete isn't offered where it could lose something by accident:** files that did not copy, entries
   it could not decrypt, tags past the 32 an entry can carry, an alias provider or backup target that
-  failed to store, or a pairing that did not finish. The dialog says why the vault stays.
-- **A kept vault stays in the vault list,** locked, under its own master password and in its own sync
-  group, until the user deletes it. It is labelled so it is obviously the old one, for example
-  "Personal (before linking)". Names sync across the group, so this label must be local to this
-  browser: a phone still using that vault must not see it change.
+  failed to store, or a pairing that did not finish. The vault stays listed under its own name, and
+  the dialog says why.
 - **The screen says up front that this browser will now unlock with the desktop's master
   password.**
 - **If the old vault also syncs with other devices,** one warning line names them and says only
   this browser moves. They stay on the old vault.
 - **Failure is loud, not silent.** The order stays safe, as it is today: the desktop's vault
   arrives first, then the copy runs, and the originals stay untouched in the old vault. If any
-  entry or file fails to copy, say how many and offer to retry. Never report success after a
-  partial copy.
+  entry or file fails to copy, say how many, and the old vault stays listed. Never report success
+  after a partial copy. A dialog that can't be dismissed shows while the copy runs, so the result
+  isn't lost by leaving the screen. Not built: a retry after a failed copy.
 - **Memory:** today the entries are held decrypted across the vault switch, because the two
   vaults have different keys and only one is loaded at a time. Files make that bigger. How to
   carry large files without holding them all in memory is for the builder to decide.
@@ -446,7 +454,7 @@ to a vault only once the flow ends with that vault holding the desktop's vault:
 | --- | --- |
 | take (X empty) | the vault the copy creates, which replaces X |
 | add (setup's "add a vault") | the vault the copy creates |
-| combine | the desktop's vault, now in the browser; X goes, or is set aside if kept |
+| combine | the desktop's vault, now in the browser; X is hidden until the user deletes or keeps it |
 | ask, then combine or keep separate | the vault holding the desktop's vault |
 | switch (another browser vault already holds it) | that vault, replacing its previous link |
 
@@ -597,8 +605,9 @@ Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode
 - Confirming the emoji on both screens, and the desktop refusing link requests with no dialog open.
 - Distinct wording for the link screens.
 - Case 2 combines into the desktop's empty vault without asking.
-- After a combine the user is asked whether to delete the old vault, and it goes only on that press.
-  Closing the dialog keeps it, labelled.
+- After a combine the old vault is hidden and the user is asked whether to delete it, and it goes
+  only on that press. Keep it lists it under its own name. Closing the dialog leaves it hidden, and
+  Settings asks again.
 - A copy of an entry the desktop's vault holds folds into it: tags, old passwords, and active wins.
 - An alias provider or backup target comes across only where the desktop's vault has none. Where it
   has its own, the dialog says so.

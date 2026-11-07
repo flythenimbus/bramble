@@ -15,6 +15,12 @@ const h = vi.hoisted(() => ({
 	entries: [] as Entry[],
 	vaults: [] as { id: string; label: string; createdAt: number }[],
 	groupOf: new Map<string, string>(),
+	/** Vaults hidden after a combine. */
+	hidden: [] as { id: string; label: string; createdAt: number; hiddenAt?: number }[],
+	/** Holds an import open, to look at the screen during it. */
+	importHold: null as Promise<void> | null,
+	/** The app says its vault is empty, so linking combines without asking. */
+	desktopEmpty: false,
 	/** Ordered log of what the flow did, so ordering is assertable rather than assumed. */
 	steps: [] as string[],
 	imported: null as unknown[] | null,
@@ -76,10 +82,22 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 		},
 		importEntries: async (items: unknown[]) => {
 			h.steps.push("import");
+			await h.importHold;
 			h.imported = items;
 			return [];
 		},
 		readEntries: () => [],
+		readOpenVaultFromDisk: async () => ({
+			entries: h.entries,
+			files: [],
+			settings: undefined,
+			conflicted: 0,
+			unreadable: 0,
+		}),
+		deleteHiddenVault: async (id: string) => {
+			h.steps.push(`deleteHidden:${id}`);
+			return true;
+		},
 		readSetting: () => undefined,
 		writeSetting: async () => {},
 		deleteCarriedVault: async () => {
@@ -93,8 +111,12 @@ vi.mock("../../../../hooks/useVaultRegistry", () => ({
 	useVaultRegistry: () => ({
 		vaults: h.vaults,
 		activeId: h.vaults.length ? h.activeVault : undefined,
-		setAside: async () => {
-			h.steps.push("setAside");
+		hiddenVaults: h.hidden,
+		show: async (id: string) => {
+			h.steps.push(`show:${id}`);
+		},
+		hide: async () => {
+			h.steps.push("hide");
 		},
 		syncKey: (k: string) => `${k}:${h.activeVault}`,
 	}),
@@ -118,7 +140,9 @@ const platform = {
 			if (!group) return undefined;
 			return {
 				groupKey: group,
-				roster: { devices: (h.rosterOf.get(id) ?? []).map((publicKey) => ({ publicKey })) },
+				roster: {
+					devices: (h.rosterOf.get(id) ?? []).map((publicKey) => ({ publicKey, label: publicKey })),
+				},
 			};
 		},
 	},
@@ -135,6 +159,7 @@ const platform = {
 			return h.invite;
 		},
 		desktopSyncKey: async () => h.desktopKey,
+		vaultSummary: async () => (h.desktopEmpty ? { name: "Home", empty: true, entries: 0 } : null),
 		start: async () => h.startResult,
 		confirm: async (id: string, matches: boolean) => {
 			h.confirms.push([id, matches]);
@@ -201,6 +226,9 @@ afterEach(() => {
 	h.entries = [];
 	h.vaults = [];
 	h.groupOf.clear();
+	h.hidden = [];
+	h.importHold = null;
+	h.desktopEmpty = false;
 	h.steps.length = 0;
 	h.imported = null;
 	h.joinLabel = null;
@@ -333,13 +361,37 @@ describe("when both sides have entries", () => {
 		twoVaults();
 		await choose(/combine into one/i);
 		await screen.findByRole("heading", { name: /delete the old vault/i });
-		expect(h.steps).toEqual(["join", "attach:joined", "import", "setAside"]);
+		expect(h.steps).toEqual(["join", "attach:joined", "import", "hide"]);
 
 		fireEvent.click(screen.getByRole("button", { name: /^delete old vault$/i }));
 		await waitFor(() => expect(h.steps).toContain("removeOld"));
 		await waitFor(() =>
 			expect(screen.queryByRole("heading", { name: /delete the old vault/i })).toBeNull(),
 		);
+	});
+
+	it("shows that a copy is under way, and that it can't be dismissed", async () => {
+		twoVaults();
+		let release = () => {};
+		h.importHold = new Promise((resolve) => {
+			release = resolve;
+		});
+		await choose(/combine into one/i);
+		await screen.findByText(/copying into the desktop's vault/i);
+		fireEvent.keyDown(window, { key: "Escape" });
+		expect(screen.getByText(/copying into the desktop's vault/i)).toBeTruthy();
+		release();
+		h.importHold = null;
+		await screen.findByRole("heading", { name: /delete the old vault/i });
+		expect(screen.queryByText(/copying into the desktop's vault/i)).toBeNull();
+	});
+
+	it("warns about other devices on the automatic combine too", async () => {
+		twoVaults();
+		h.rosterOf.set("v1", ["Phone"]);
+		h.desktopEmpty = true;
+		await mountAndLink();
+		await screen.findByText(/also syncs with Phone/i);
 	});
 
 	it("keeps the old vault on Keep it, and does not ask again", async () => {
@@ -380,7 +432,7 @@ describe("when both sides have entries", () => {
 		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
 		await screen.findByRole("heading", { name: /delete the old vault/i });
-		expect(h.steps).toContain("setAside");
+		expect(h.steps).toContain("hide");
 		expect(h.steps).not.toContain("removeOld");
 	});
 
@@ -430,6 +482,48 @@ describe("when both sides have entries", () => {
 		await waitFor(() => expect(screen.getByText(/join failed/i)).toBeTruthy());
 		expect(h.steps).toEqual(["join"]);
 		expect(h.imported).toBeNull();
+	});
+});
+
+describe("a vault left hidden by a closed dialog", () => {
+	const hidden = { id: "old", label: "Personal", createdAt: 1, hiddenAt: 5 };
+
+	it("is asked about again in Settings, by name, with both answers", async () => {
+		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
+		h.hidden = [hidden];
+		h.entries = [];
+		mount();
+		await screen.findByText(/Personal is hidden on this browser/i);
+		expect(screen.getByRole("button", { name: /^keep it$/i })).toBeTruthy();
+		expect(screen.getByRole("button", { name: /^delete$/i })).toBeTruthy();
+	});
+
+	it("is listed again on Keep it", async () => {
+		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
+		h.hidden = [hidden];
+		h.steps = [];
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^keep it$/i }));
+		await waitFor(() => expect(h.steps).toContain("show:old"));
+		expect(h.steps).not.toContain("deleteHidden:old");
+	});
+
+	it("is deleted only after confirming", async () => {
+		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
+		h.hidden = [hidden];
+		h.steps = [];
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
+		expect(h.steps).not.toContain("deleteHidden:old");
+		fireEvent.click(await screen.findByRole("button", { name: /^delete it$/i }));
+		await waitFor(() => expect(h.steps).toContain("deleteHidden:old"));
+	});
+
+	it("asks nothing with none hidden", async () => {
+		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
+		h.hidden = [];
+		mount();
+		await waitFor(() => expect(screen.queryByText(/is hidden on this browser/i)).toBeNull());
 	});
 });
 

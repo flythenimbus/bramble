@@ -368,6 +368,96 @@ describe("removing a vault whose entries were copied out", () => {
 		expect(await remove(seen, "old", copied({ fileHashes: [held.hash] }))).toBe(true);
 	});
 
+	it("refuses when memory lost the copy, though the disk still holds it", async () => {
+		// A reload that read the disk before the import finishes after it. The next write from
+		// this page would then take the copy off the disk too.
+		const p = vaults();
+		const seen = await open(p);
+		const onlyOnDisk = copied({ items: [{ ...JSON.parse(LOGIN), name: "Only on disk" }] });
+		p.setDisk({
+			entries: [
+				entry("a"),
+				{ ...entry("b"), ciphertext: `ct:${JSON.stringify(onlyOnDisk.items[0])}` },
+			],
+			tombstones: [],
+		});
+		expect(await remove(seen, "old", onlyOnDisk)).toBe(false);
+		expect(p.erased).toEqual([]);
+	});
+
+	it("compares the old vault's bytes last, closest to the erase", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		const order: string[] = [];
+		const { readVaultBlob } = p.platform.storage;
+		p.platform.storage.readVaultBlob = async (id?: string) => {
+			order.push(id === "old" ? "old" : "open");
+			return readVaultBlob(id);
+		};
+		await remove(seen, "old");
+		expect(order.indexOf("old")).toBeGreaterThan(order.indexOf("open"));
+	});
+
+	it("reads the open vault from its disk, not from what memory holds", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		const saved = { ...JSON.parse(LOGIN), name: "Saved elsewhere" };
+		const held = fileRecord({ id: "f1" });
+		p.setDisk({
+			entries: [
+				entry("a"),
+				{ ...entry("b"), ciphertext: `ct:${JSON.stringify(saved)}` },
+				{ ...entry("c"), ciphertext: "will not open" },
+			],
+			tombstones: [],
+			files: [held],
+		});
+		const onDisk = await seen.actions?.readOpenVaultFromDisk();
+		expect(onDisk?.entries.map((e) => e.id)).toEqual(["a", "b"]);
+		expect(onDisk?.entries[1]?.name).toBe("Saved elsewhere");
+		expect(onDisk?.files.map((f) => f.hash)).toEqual([held.hash]);
+		expect(onDisk?.unreadable).toBe(1);
+		expect(seen.state?.entries.map((e) => e.id)).toEqual(["a"]);
+	});
+
+	it("deletes a hidden vault on the user's word, its key and record too", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		await act(async () => seen.registry?.hide("old"));
+		let removed: boolean | undefined;
+		await act(async () => {
+			removed = await seen.actions?.deleteHiddenVault("old");
+		});
+		expect(removed).toBe(true);
+		expect(p.erased).toEqual(["old"]);
+		expect(p.locked).toEqual(["old"]);
+		expect(seen.registry?.hiddenVaults).toEqual([]);
+	});
+
+	it("refuses that for a vault that isn't hidden, whichever it is", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		for (const id of ["old", "v1", "missing"]) {
+			let removed: boolean | undefined;
+			await act(async () => {
+				removed = await seen.actions?.deleteHiddenVault(id);
+			});
+			expect(removed).toBe(false);
+		}
+		expect(p.erased).toEqual([]);
+	});
+
+	it("will not delete an empty vault whose bytes changed after they were read", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		let removed: boolean | undefined;
+		await act(async () => {
+			removed = await seen.actions?.deleteEmptyVault("old", 0, 0, new Uint8Array([9]));
+		});
+		expect(removed).toBe(false);
+		expect(p.erased).toEqual([]);
+	});
+
 	it("refuses until a setting it was told to look for is on disk", async () => {
 		const p = vaults();
 		const seen = await open(p);

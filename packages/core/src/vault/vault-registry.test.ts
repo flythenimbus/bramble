@@ -4,10 +4,13 @@ import {
 	displayLabel,
 	EMPTY_REGISTRY,
 	findVault,
-	markSetAside,
+	hiddenVaults,
+	hideVault,
+	listedVaults,
 	parseRegistry,
 	removeVault,
 	renameVault,
+	showVault,
 	type VaultRegistry,
 } from "./vault-registry";
 
@@ -91,16 +94,38 @@ describe("parseRegistry", () => {
 	});
 });
 
-describe("a vault set aside by linking", () => {
-	const reg = { vaults: [{ id: "v1", label: "Personal", createdAt: 1 }] };
+describe("a vault hidden after a combine", () => {
+	const reg = { vaults: [rec("old", "Personal", 1), rec("new", "Home", 2)] };
 
-	it("parses a record from before the field existed", () => {
-		expect(parseRegistry(reg).vaults[0]?.setAsideAt).toBeUndefined();
+	it("parses a record from before the field existed, and one from the label it replaced", () => {
+		expect(parseRegistry(reg).vaults[0]?.hiddenAt).toBeUndefined();
+		const labelled = { vaults: [{ ...rec("old"), setAsideAt: 5 }] };
+		expect(listedVaults(parseRegistry(labelled)).map((v) => v.id)).toEqual(["old"]);
 	});
 
-	it("is marked on this device only, and survives a synced rename", () => {
-		const marked = markSetAside(reg, "v1", 5);
-		expect(parseRegistry(marked).vaults[0]?.setAsideAt).toBe(5);
-		expect(renameVault(marked, "v1", "Personal (renamed)").vaults[0]?.setAsideAt).toBe(5);
+	it("leaves the list, keeping its place in the registry, which storage depends on", () => {
+		const hidden = hideVault(reg, "old", 5);
+		expect(listedVaults(hidden).map((v) => v.id)).toEqual(["new"]);
+		expect(hiddenVaults(hidden).map((v) => v.id)).toEqual(["old"]);
+		expect(hidden.vaults.map((v) => v.id)).toEqual(["old", "new"]);
+		expect(parseRegistry(hidden).vaults[0]?.hiddenAt).toBe(5);
+	});
+
+	it("comes back under its own name, unmarked", () => {
+		const shown = showVault(hideVault(reg, "old", 5), "old");
+		expect(listedVaults(shown).map((v) => v.label)).toEqual(["Personal", "Home"]);
+		expect(shown.vaults[0]).not.toHaveProperty("hiddenAt");
+		expect(hiddenVaults(shown)).toEqual([]);
+	});
+
+	it("is listed rather than stranded when no other vault is left", () => {
+		const alone = { vaults: [{ ...rec("old"), hiddenAt: 5 }] };
+		expect(listedVaults(alone).map((v) => v.id)).toEqual(["old"]);
+		expect(hiddenVaults(alone)).toEqual([]);
+	});
+
+	it("touches no other vault", () => {
+		expect(hideVault(reg, "old", 5).vaults[1]).toEqual(reg.vaults[1]);
+		expect(showVault(reg, "missing")).toEqual(reg);
 	});
 });

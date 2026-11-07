@@ -66,9 +66,9 @@ function originOf(t: {
 export function useBackup() {
 	const { storage, crypto, shell, backupCreds, http, backupActivity, files } = usePlatform();
 	// Targets, credentials and snapshots all belong to the vault the user is currently in.
-	const { activeId, vaults, ready } = useVaultRegistry();
+	const { activeId, vaults, defaultVaultId, ready } = useVaultRegistry();
 	const vaultId = activeId ?? vaults[0]?.id;
-	const isDefault = vaultId != null && vaultId === vaults[0]?.id;
+	const isDefault = vaultId != null && vaultId === (defaultVaultId ?? vaults[0]?.id);
 	const vaultIds = useMemo(() => vaults.map((v) => v.id), [vaults]);
 	// undefined = still loading (or no vault resolved yet).
 	const [targets, setTargets] = useState<BackupTargetConfig[] | undefined>(undefined);
