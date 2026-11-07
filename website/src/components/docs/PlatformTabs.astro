@@ -1,0 +1,102 @@
+---
+/**
+ * Steps that differ per app. Give each app a named slot; only the slots given become tabs:
+ *
+ *   <PlatformTabs>
+ *     <div slot="extension">...</div>
+ *     <div slot="ios">...</div>
+ *   </PlatformTabs>
+ *
+ * The reader's choice is remembered and applied to every switch on every page.
+ */
+import { tabsList, tabsTrigger } from "@/components/starwind/tabs/variants";
+
+const PLATFORMS = {
+	mobile: "Phone",
+	ios: "iPhone & iPad",
+	android: "Android",
+	computer: "Computer",
+	extension: "Browser",
+	desktop: "Desktop app",
+} as const;
+
+const present = (Object.keys(PLATFORMS) as (keyof typeof PLATFORMS)[]).filter((p) =>
+	Astro.slots.has(p),
+);
+const panels = await Promise.all(present.map((p) => Astro.slots.render(p)));
+---
+
+<div data-platform-tabs class="platform-tabs">
+	<div role="tablist" aria-label="App" class={tabsList({ class: "flex w-full flex-wrap sm:w-fit" })}>
+		{
+			present.map((p, i) => (
+				<button
+					type="button"
+					role="tab"
+					data-platform={p}
+					data-slot="tabs-trigger"
+					data-state={i === 0 ? "active" : "inactive"}
+					aria-selected={i === 0 ? "true" : "false"}
+					tabindex={i === 0 ? 0 : -1}
+					class={tabsTrigger({ class: "text-sm" })}
+				>
+					{PLATFORMS[p]}
+				</button>
+			))
+		}
+	</div>
+	{
+		present.map((p, i) => (
+			<div role="tabpanel" data-platform-panel={p} hidden={i !== 0} class="platform-panel">
+				<Fragment set:html={panels[i]} />
+			</div>
+		))
+	}
+</div>
+
+<script>
+	import { detect } from "@/scripts/platform";
+
+	const KEY = "docs-platform";
+	const groups = [...document.querySelectorAll<HTMLElement>("[data-platform-tabs]")];
+
+	function show(group: HTMLElement, platform: string) {
+		const tabs = [...group.querySelectorAll<HTMLButtonElement>("[data-platform]")];
+		if (!tabs.some((t) => t.dataset.platform === platform)) return false;
+		for (const t of tabs) {
+			const on = t.dataset.platform === platform;
+			t.dataset.state = on ? "active" : "inactive";
+			t.setAttribute("aria-selected", String(on));
+			t.tabIndex = on ? 0 : -1;
+		}
+		for (const panel of group.querySelectorAll<HTMLElement>("[data-platform-panel]")) {
+			panel.hidden = panel.dataset.platformPanel !== platform;
+		}
+		return true;
+	}
+
+	function choose(platform: string) {
+		localStorage.setItem(KEY, platform);
+		for (const g of groups) show(g, platform);
+	}
+
+	const os = detect().os;
+	const guess = os === "ios" || os === "android" ? [os, "mobile"] : ["computer", "extension"];
+	const preferred = [localStorage.getItem(KEY), ...guess].filter((p): p is string => !!p);
+
+	for (const group of groups) {
+		preferred.some((p) => show(group, p));
+		const tabs = [...group.querySelectorAll<HTMLButtonElement>("[data-platform]")];
+		tabs.forEach((tab, i) => {
+			tab.addEventListener("click", () => choose(tab.dataset.platform ?? ""));
+			tab.addEventListener("keydown", (e) => {
+				const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+				if (!step) return;
+				e.preventDefault();
+				const next = tabs[(i + step + tabs.length) % tabs.length];
+				choose(next.dataset.platform ?? "");
+				next.focus();
+			});
+		});
+	}
+</script>

@@ -1,0 +1,29 @@
+---
+import AlertTriangle from "@tabler/icons/outline/alert-triangle.svg";
+import Bulb from "@tabler/icons/outline/bulb.svg";
+import InfoCircle from "@tabler/icons/outline/info-circle.svg";
+
+interface Props {
+	type?: "note" | "tip" | "warning";
+	title?: string;
+}
+
+const { type = "note", title } = Astro.props;
+const Icon = { note: InfoCircle, tip: Bulb, warning: AlertTriangle }[type];
+---
+
+<aside
+	data-callout={type}
+	class:list={[
+		"flex gap-3 rounded-lg border px-4 py-3.5 text-[0.9375rem] leading-relaxed",
+		type === "warning"
+			? "border-warning/60 bg-warning/10 [&_svg]:text-warning"
+			: "border-border bg-muted/40 [&_svg]:text-muted-foreground",
+	]}
+>
+	<Icon class="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+	<div class="min-w-0 [&_a]:underline [&_a]:underline-offset-2 [&_strong]:font-semibold [&>*+*]:mt-2">
+		{title && <p class="font-semibold text-foreground">{title}</p>}
+		<slot />
+	</div>
+</aside>

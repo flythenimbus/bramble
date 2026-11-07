@@ -1,0 +1,57 @@
+---
+import type { MarkdownHeading } from "astro";
+
+interface Props {
+	headings: MarkdownHeading[];
+}
+
+const headings = Astro.props.headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{
+	headings.length > 1 && (
+		<nav aria-labelledby="toc-title" data-toc class="text-sm">
+			<p id="toc-title" class="font-semibold text-foreground">
+				On this page
+			</p>
+			<ul class="mt-3 flex flex-col gap-2 border-l border-border">
+				{headings.map((h) => (
+					<li>
+						<a
+							href={`#${h.slug}`}
+							data-toc-link={h.slug}
+							class:list={[
+								"-ml-px block border-l border-transparent text-muted-foreground transition-colors hover:text-foreground data-[active]:border-foreground data-[active]:text-foreground",
+								h.depth === 3 ? "pl-6" : "pl-3",
+							]}
+						>
+							{h.text}
+						</a>
+					</li>
+				))}
+			</ul>
+		</nav>
+	)
+}
+
+<script>
+	// Mark the section being read: the last heading that has scrolled above the reading line.
+	const links = [...document.querySelectorAll<HTMLAnchorElement>("[data-toc-link]")];
+	const targets = links
+		.map((a) => document.getElementById(a.dataset.tocLink ?? ""))
+		.filter((el): el is HTMLElement => el !== null);
+
+	function update() {
+		const line = 120;
+		let current = targets[0];
+		for (const el of targets) {
+			if (el.getBoundingClientRect().top <= line) current = el;
+		}
+		for (const a of links) a.toggleAttribute("data-active", a.dataset.tocLink === current?.id);
+	}
+
+	if (targets.length > 0) {
+		update();
+		addEventListener("scroll", update, { passive: true });
+	}
+</script>

@@ -1,0 +1,101 @@
+/* Docs pages: steps, headings with links, keyboard keys, tables, search marks. */
+
+.docs-prose :is(h2, h3) {
+	position: relative;
+	scroll-margin-top: 7rem;
+}
+
+.heading-anchor {
+	margin-left: 0.5rem;
+	color: var(--muted-foreground);
+	font-weight: 400;
+	text-decoration: none !important;
+	opacity: 0;
+	transition: opacity 0.15s;
+}
+:is(h2, h3):hover > .heading-anchor,
+.heading-anchor:focus-visible {
+	opacity: 1;
+}
+
+/* Ordered lists are steps: a numbered circle beside each. */
+.docs-prose ol {
+	list-style: none;
+	padding-left: 0;
+	counter-reset: step;
+}
+.docs-prose ol > li {
+	position: relative;
+	padding-left: 2.25rem;
+	counter-increment: step;
+}
+.docs-prose ol > li::before {
+	content: counter(step);
+	position: absolute;
+	top: 0.125rem;
+	left: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	border-radius: 9999px;
+	background: var(--muted);
+	color: var(--foreground);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	line-height: 1;
+}
+.docs-prose ol > li > * + * {
+	margin-top: 0.75rem;
+}
+
+.docs-prose table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9375rem;
+}
+.docs-prose th {
+	text-align: left;
+	font-weight: 600;
+	color: var(--foreground);
+}
+.docs-prose :is(th, td) {
+	border-bottom: 1px solid var(--border);
+	padding: 0.625rem 0.75rem 0.625rem 0;
+	vertical-align: top;
+}
+.docs-prose td {
+	color: var(--muted-foreground);
+}
+
+.platform-panel {
+	margin-top: 1rem;
+}
+/* Each panel holds the slotted wrapper, so space the wrapper's children. */
+.platform-panel > * > * + * {
+	margin-top: 1.25rem;
+}
+
+.kbd,
+.docs-prose kbd {
+	display: inline-block;
+	min-width: 1.25rem;
+	border: 1px solid var(--border);
+	border-bottom-width: 2px;
+	border-radius: 0.3rem;
+	padding: 0 0.3rem;
+	font-family: inherit;
+	font-size: 0.75rem;
+	line-height: 1.25rem;
+	text-align: center;
+	color: var(--muted-foreground);
+	background: var(--background);
+}
+
+[data-search-results] mark {
+	background: color-mix(in oklab, var(--foreground) 12%, transparent);
+	color: inherit;
+	border-radius: 0.2rem;
+	padding: 0 0.1rem;
+}

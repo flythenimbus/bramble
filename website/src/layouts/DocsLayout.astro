@@ -1,0 +1,185 @@
+---
+import type { MarkdownHeading } from "astro";
+import ChevronDown from "@tabler/icons/outline/chevron-down.svg";
+import ChevronLeft from "@tabler/icons/outline/chevron-left.svg";
+import ChevronRight from "@tabler/icons/outline/chevron-right.svg";
+import Pencil from "@tabler/icons/outline/pencil.svg";
+import SearchIcon from "@tabler/icons/outline/search.svg";
+import DocsHelp from "@/components/docs/DocsHelp.astro";
+import DocsNav from "@/components/docs/DocsNav.astro";
+import SearchDialog from "@/components/docs/SearchDialog.astro";
+import Toc from "@/components/docs/Toc.astro";
+import Footer from "@/components/Footer.astro";
+import Header from "@/components/Header.astro";
+import { Badge } from "@/components/starwind/badge";
+import { LINKS } from "@/consts";
+import { DOC_KINDS, type Doc, docHref, sectionOf } from "@/docs";
+import Layout from "@/layouts/Layout.astro";
+import { formatPostDate } from "@/posts";
+import "@/styles/prose.css";
+import "@/styles/docs.css";
+
+interface Props {
+	doc: Doc;
+	docs: Doc[];
+	headings: MarkdownHeading[];
+}
+
+const { doc, docs, headings } = Astro.props;
+const { title, description, kind, updatedDate } = doc.data;
+const section = sectionOf(doc);
+const at = docs.findIndex((d) => d.id === doc.id);
+const prev = docs[at - 1];
+const next = docs[at + 1];
+const editUrl = `${LINKS.github}/edit/main/website/src/content/docs/${doc.id}.mdx`;
+---
+
+<Layout title={title} description={description} path={docHref(doc)}>
+	<Header />
+	<div
+		class="mx-auto max-w-7xl px-4 sm:px-6 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[15rem_minmax(0,1fr)_13rem]"
+	>
+		<aside class="hidden lg:block">
+			<div class="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto py-10 pr-2">
+				<button
+					type="button"
+					data-open-search
+					class="mb-7 flex w-full items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+				>
+					<SearchIcon class="size-4" aria-hidden="true" />
+					Search
+					<kbd class="kbd ml-auto">/</kbd>
+				</button>
+				<DocsNav docs={docs} currentId={doc.id} />
+			</div>
+		</aside>
+
+		<div
+			class="sticky top-16 z-40 -mx-4 flex items-center gap-2 border-b border-border/60 bg-background/90 px-4 py-2 backdrop-blur-md sm:-mx-6 sm:px-6 lg:hidden"
+		>
+			<details data-docs-menu class="group">
+				<summary
+					class="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium hover:bg-muted [&::-webkit-details-marker]:hidden"
+				>
+					Menu
+					<ChevronDown class="size-4 transition-transform group-open:rotate-180" aria-hidden="true" />
+				</summary>
+				<div
+					class="absolute inset-x-0 top-full max-h-[70vh] overflow-y-auto border-b border-border bg-background px-4 py-6 shadow-lg sm:px-6"
+				>
+					<DocsNav docs={docs} currentId={doc.id} />
+				</div>
+			</details>
+			<button
+				type="button"
+				data-open-search
+				aria-label="Search the docs"
+				class="ml-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+			>
+				<SearchIcon class="size-4" aria-hidden="true" />
+				Search
+			</button>
+		</div>
+
+		<main class="min-w-0 py-8 lg:py-12">
+			<nav aria-label="Breadcrumb" class="text-sm text-muted-foreground">
+				<ol class="flex flex-wrap items-center gap-1.5">
+					<li><a href="/docs" class="hover:text-foreground">Docs</a></li>
+					<li aria-hidden="true">/</li>
+					<li><a href={`/docs#${section.id}`} class="hover:text-foreground">{section.title}</a></li>
+				</ol>
+			</nav>
+
+			<header class="mt-5 mb-10">
+				<Badge variant="outline" size="sm">{DOC_KINDS[kind]}</Badge>
+				{doc.data.draft && <Badge variant="warning" size="sm">Draft: not in the built site</Badge>}
+				<h1 class="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{title}</h1>
+				<p class="mt-3 text-lg text-muted-foreground">{description}</p>
+			</header>
+
+			<article class="prose docs-prose" data-docs-article>
+				<slot />
+			</article>
+
+			<div
+				class="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 text-sm text-muted-foreground"
+			>
+				<p>Updated <time datetime={updatedDate.toISOString()}>{formatPostDate(updatedDate)}</time></p>
+				<a
+					href={editUrl}
+					target="_blank"
+					rel="noopener"
+					class="inline-flex items-center gap-1.5 hover:text-foreground"
+				>
+					<Pencil class="size-4" aria-hidden="true" />
+					Suggest an edit
+				</a>
+			</div>
+
+			{
+				(prev || next) && (
+					<nav aria-label="More docs" class="mt-8 grid gap-3 sm:grid-cols-2">
+						{prev ? (
+							<a
+								href={docHref(prev)}
+								class="group rounded-lg border border-border p-4 transition-colors hover:bg-muted/50"
+							>
+								<span class="flex items-center gap-1 text-xs text-muted-foreground">
+									<ChevronLeft class="size-3.5" aria-hidden="true" />
+									Previous
+								</span>
+								<span class="mt-1 block font-medium">{prev.data.title}</span>
+							</a>
+						) : (
+							<span class="hidden sm:block" />
+						)}
+						{next && (
+							<a
+								href={docHref(next)}
+								class="group rounded-lg border border-border p-4 text-right transition-colors hover:bg-muted/50"
+							>
+								<span class="flex items-center justify-end gap-1 text-xs text-muted-foreground">
+									Next
+									<ChevronRight class="size-3.5" aria-hidden="true" />
+								</span>
+								<span class="mt-1 block font-medium">{next.data.title}</span>
+							</a>
+						)}
+					</nav>
+				)
+			}
+
+			<div class="mt-8">
+				<DocsHelp />
+			</div>
+		</main>
+
+		<aside class="hidden xl:block">
+			<div class="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto py-12">
+				<Toc headings={headings} />
+			</div>
+		</aside>
+	</div>
+	<Footer />
+	<SearchDialog />
+</Layout>
+
+<script>
+	// A link on every section heading, so a reply can point at the exact step.
+	for (const h of document.querySelectorAll<HTMLElement>(
+		"[data-docs-article] :is(h2, h3)[id]",
+	)) {
+		const a = document.createElement("a");
+		a.href = `#${h.id}`;
+		a.className = "heading-anchor";
+		a.setAttribute("aria-label", `Link to “${h.textContent}”`);
+		a.textContent = "#";
+		h.append(a);
+	}
+
+	// Close the small-screen menu after picking an article or tapping outside it.
+	const menu = document.querySelector<HTMLDetailsElement>("[data-docs-menu]");
+	document.addEventListener("click", (e) => {
+		if (menu?.open && !menu.contains(e.target as Node)) menu.open = false;
+	});
+</script>

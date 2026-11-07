@@ -1,0 +1,34 @@
+---
+/**
+ * A self-hosted video. Nothing loads until the reader presses play, apart from the poster.
+ * Put files in public/docs/videos/ (Cloudflare Pages serves files up to 25 MiB) or pass a full URL.
+ */
+interface Props {
+	src: string;
+	/** What the video shows, for screen readers. */
+	title: string;
+	poster?: string;
+	caption?: string;
+	width?: number;
+	height?: number;
+}
+
+const { src, title, poster, caption, width = 1280, height = 720 } = Astro.props;
+---
+
+<figure>
+	<video
+		src={src}
+		poster={poster}
+		width={width}
+		height={height}
+		aria-label={title}
+		controls
+		playsinline
+		preload={poster ? "none" : "metadata"}
+		class="h-auto w-full rounded-lg border border-border bg-muted"
+	>
+		<a href={src}>Download the video</a>
+	</video>
+	{caption && <figcaption class="mt-2 text-sm text-muted-foreground">{caption}</figcaption>}
+</figure>

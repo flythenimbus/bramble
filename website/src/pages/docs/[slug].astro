@@ -1,0 +1,20 @@
+---
+import { render } from "astro:content";
+import Callout from "@/components/docs/Callout.astro";
+import PlatformTabs from "@/components/docs/PlatformTabs.astro";
+import Video from "@/components/docs/Video.astro";
+import { getDocs } from "@/docs";
+import DocsLayout from "@/layouts/DocsLayout.astro";
+
+export async function getStaticPaths() {
+	const docs = await getDocs();
+	return docs.map((doc) => ({ params: { slug: doc.id }, props: { doc, docs } }));
+}
+
+const { doc, docs } = Astro.props;
+const { Content, headings } = await render(doc);
+---
+
+<DocsLayout doc={doc} docs={docs} headings={headings}>
+	<Content components={{ Callout, PlatformTabs, Video }} />
+</DocsLayout>

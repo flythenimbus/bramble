@@ -12,11 +12,39 @@ is visually identical to the product.
 - `/`: landing page (`src/pages/index.astro`)
 - `/privacy`: privacy policy (`src/pages/privacy.astro`)
 - `/support`: support / FAQ (`src/pages/support.astro`)
+- `/docs`: help articles and search (`src/pages/docs/`, articles in `src/content/docs/`)
 
 Pages are emitted as flat `.html` files (`build.format: "file"`). Cloudflare
 Pages serves them at the clean `/privacy` and `/support` paths (the canonical
 URLs) and redirects the legacy `bramble.sh/privacy.html` /
 `bramble.sh/support.html` URLs to them, so both keep working.
+
+## Docs (`/docs`)
+
+Each article is one MDX file, `src/content/docs/<slug>.mdx`, served at `/docs/<slug>`. Replies
+to issues link to these URLs, so don't rename a published file.
+
+Frontmatter (schema in `src/content.config.ts`):
+
+- `title`, `description`: the description is the line under the title and the search snippet.
+- `section`: one of the ids in `src/docs-sections.ts`, which also sets the sidebar order.
+- `kind`: `guide` (how to do something) or `question` (one problem, titled as the question).
+- `order`: position among the section's articles of the same kind.
+- `keywords`: words people search for that the text doesn't use, and the exact error messages
+  the article covers.
+- `updatedDate`, and `draft: true` to show an article in `pnpm dev` only (e.g. until the
+  release it describes ships).
+
+Components, usable without an import:
+
+- `<Callout type="note|tip|warning" title="...">`
+- `<PlatformTabs>` with a `<div slot="...">` per app: `mobile`, `ios`, `android`, `computer`,
+  `extension`, `desktop`. The reader's choice is remembered across pages.
+- `<Video src="/docs/videos/x.mp4" title="..." poster="..." caption="..." />` for self-hosted
+  video. Files go in `public/docs/videos/` (Cloudflare Pages caps a file at 25 MiB).
+
+Numbered lists render as steps. Search runs in the browser over `/docs/search.json`, built from
+the articles; the ranking is in `src/scripts/docs-search.ts`.
 
 ## Commands
 

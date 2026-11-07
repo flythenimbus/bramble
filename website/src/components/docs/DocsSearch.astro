@@ -1,0 +1,208 @@
+---
+import SearchIcon from "@tabler/icons/outline/search.svg";
+
+interface Props {
+	/** Prefix for element ids; unique per page. */
+	id: string;
+	/** "hero" is the large box on /docs; "dialog" sits inside the search dialog. */
+	variant?: "hero" | "dialog";
+	/** Mirror the query into `#q=` so a search can be linked and survives Back. */
+	syncUrl?: boolean;
+}
+
+const { id, variant = "dialog", syncUrl = false } = Astro.props;
+const hero = variant === "hero";
+---
+
+<div data-docs-search data-sync-url={syncUrl ? "" : undefined} class="relative">
+	<label for={`${id}-input`} class="sr-only">Search the docs</label>
+	<div
+		class:list={[
+			"flex items-center gap-3 rounded-lg border border-input bg-background transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30",
+			hero ? "h-14 px-4 shadow-sm" : "h-12 px-3",
+		]}
+	>
+		<SearchIcon class="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+		<input
+			id={`${id}-input`}
+			type="search"
+			role="combobox"
+			aria-autocomplete="list"
+			aria-expanded="false"
+			aria-controls={`${id}-results`}
+			autocomplete="off"
+			spellcheck="false"
+			enterkeyhint="go"
+			placeholder="Search the docs"
+			data-search-input
+			class:list={[
+				"min-w-0 flex-1 border-0 bg-transparent p-0 text-foreground placeholder:text-muted-foreground focus:ring-0 focus:outline-none [&::-webkit-search-cancel-button]:hidden",
+				hero ? "text-base sm:text-lg" : "text-base",
+			]}
+		/>
+		{
+			hero && (
+				<kbd
+					data-search-shortcut
+					class="hidden rounded border border-border px-1.5 py-0.5 font-sans text-xs text-muted-foreground sm:inline"
+				>
+					/
+				</kbd>
+			)
+		}
+	</div>
+	<p data-search-status class="sr-only" aria-live="polite"></p>
+	<ul
+		id={`${id}-results`}
+		role="listbox"
+		aria-label="Search results"
+		data-search-results
+		hidden
+		class:list={[
+			"flex flex-col gap-0.5 overflow-y-auto",
+			hero
+				? "mt-2 max-h-[min(28rem,60vh)] rounded-lg border border-border bg-background p-1.5 shadow-lg"
+				: "mt-2 max-h-[60vh] p-0.5",
+		]}
+	>
+	</ul>
+</div>
+
+<script>
+	import { LINKS } from "@/consts";
+	import { highlight, loadIndex, search, type SearchHit } from "@/scripts/docs-search";
+
+	for (const root of document.querySelectorAll<HTMLElement>("[data-docs-search]")) mount(root);
+
+	function mount(root: HTMLElement) {
+		const input = root.querySelector<HTMLInputElement>("[data-search-input]")!;
+		const list = root.querySelector<HTMLUListElement>("[data-search-results]")!;
+		const status = root.querySelector<HTMLElement>("[data-search-status]")!;
+		const syncUrl = root.hasAttribute("data-sync-url");
+		let hits: SearchHit[] = [];
+		let active = -1;
+
+		input.addEventListener("focus", () => void loadIndex().catch(() => {}), { once: true });
+		input.addEventListener("input", run);
+		input.addEventListener("keydown", (e) => {
+			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+				if (hits.length === 0) return;
+				e.preventDefault();
+				const step = e.key === "ArrowDown" ? 1 : -1;
+				setActive((active + step + hits.length) % hits.length);
+			} else if (e.key === "Enter" && active >= 0) {
+				e.preventDefault();
+				location.href = hits[active].doc.href;
+			} else if (e.key === "Escape" && !root.closest("dialog") && input.value) {
+				input.value = "";
+				run();
+			}
+		});
+		list.addEventListener("mousemove", (e) => {
+			const option = (e.target as HTMLElement).closest<HTMLElement>("[role=option]");
+			if (option) setActive(Number(option.dataset.index));
+		});
+
+		// The query lives in the fragment (#q=...), which browsers never send to the server.
+		if (syncUrl) {
+			const q = new URLSearchParams(location.hash.slice(1)).get("q");
+			if (q) {
+				input.value = q;
+				run();
+			}
+		}
+
+		async function run() {
+			const query = input.value;
+			if (syncUrl) {
+				const hash = query.trim() ? `#${new URLSearchParams({ q: query })}` : "";
+				history.replaceState(null, "", `${location.pathname}${hash}`);
+			}
+			if (!query.trim()) return render([], query);
+			try {
+				const index = await loadIndex();
+				if (input.value === query) render(search(index, query), query);
+			} catch {
+				renderMessage("Search isn't available right now. Try reloading the page.");
+			}
+		}
+
+		function render(results: SearchHit[], query: string) {
+			hits = results;
+			list.hidden = !query.trim();
+			input.setAttribute("aria-expanded", String(!list.hidden));
+			status.textContent = query.trim() ? `${results.length} results` : "";
+			if (results.length === 0) {
+				if (query.trim()) {
+					renderMessage(
+						`No results for “${escape(query.trim())}”. Try other words, or <a class="underline underline-offset-2" href="${LINKS.github}/discussions">ask on GitHub</a>.`,
+					);
+				}
+				return setActive(-1);
+			}
+			list.innerHTML = results
+				.map(
+					({ doc, terms, excerpt }, i) => `
+					<li role="option" id="${list.id}-${i}" data-index="${i}" aria-selected="false" class="group">
+						<a href="${doc.href}" tabindex="-1" class="block rounded-md px-3 py-2.5 group-aria-selected:bg-muted">
+							<span class="block text-xs text-muted-foreground">${escape(doc.section)} · ${escape(doc.kind)}</span>
+							<span class="mt-0.5 block font-medium text-foreground">${highlight(doc.title, terms)}</span>
+							<span class="mt-0.5 line-clamp-2 block text-sm text-muted-foreground">${highlight(excerpt ?? doc.description, terms)}</span>
+						</a>
+					</li>`,
+				)
+				.join("");
+			setActive(0);
+		}
+
+		function renderMessage(html: string) {
+			hits = [];
+			list.hidden = false;
+			list.innerHTML = `<li role="presentation" class="px-3 py-4 text-sm text-muted-foreground">${html}</li>`;
+			setActive(-1);
+		}
+
+		function setActive(i: number) {
+			active = i;
+			for (const option of list.querySelectorAll<HTMLElement>("[role=option]")) {
+				option.setAttribute("aria-selected", String(Number(option.dataset.index) === i));
+			}
+			const current = i >= 0 ? document.getElementById(`${list.id}-${i}`) : null;
+			if (current) {
+				input.setAttribute("aria-activedescendant", current.id);
+				current.scrollIntoView({ block: "nearest" });
+			} else {
+				input.removeAttribute("aria-activedescendant");
+			}
+		}
+	}
+
+	function escape(s: string) {
+		const el = document.createElement("span");
+		el.textContent = s;
+		return el.innerHTML;
+	}
+
+	// "/" or Cmd/Ctrl+K: open the search dialog where there is one, else focus the page's box.
+	const dialog = document.querySelector<HTMLDialogElement>("[data-search-dialog]");
+	function openSearch() {
+		const input = (dialog ?? document).querySelector<HTMLInputElement>("[data-search-input]");
+		if (dialog && !dialog.open) dialog.showModal();
+		input?.focus();
+		input?.select();
+	}
+	for (const button of document.querySelectorAll("[data-open-search]")) {
+		button.addEventListener("click", openSearch);
+	}
+	document.addEventListener("keydown", (e) => {
+		const t = e.target as HTMLElement;
+		const typing = t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
+		if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !typing)) {
+			e.preventDefault();
+			openSearch();
+		}
+	});
+	dialog?.addEventListener("click", (e) => {
+		if (e.target === dialog) dialog.close();
+	});
+</script>

@@ -1,0 +1,18 @@
+---
+import DocsSearch from "@/components/docs/DocsSearch.astro";
+---
+
+<dialog
+	data-search-dialog
+	aria-label="Search the docs"
+	class="mx-auto mt-[12vh] w-[calc(100%-2rem)] max-w-xl rounded-xl border border-border bg-background p-0 text-foreground shadow-2xl backdrop:bg-black/40 backdrop:backdrop-blur-sm"
+>
+	<div class="p-3">
+		<DocsSearch id="dialog-search" variant="dialog" />
+		<p class="mt-2 hidden gap-4 px-1 text-xs text-muted-foreground sm:flex">
+			<span><kbd class="kbd">↑</kbd> <kbd class="kbd">↓</kbd> to move</span>
+			<span><kbd class="kbd">↵</kbd> to open</span>
+			<span><kbd class="kbd">esc</kbd> to close</span>
+		</p>
+	</div>
+</dialog>
