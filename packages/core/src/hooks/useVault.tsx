@@ -653,9 +653,14 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// it. The ref is what writes check; the state is what `synced.ready` reads.
 	const loadedVaultRef = useRef<string | null>(null);
 	const [loadedVault, setLoadedVault] = useState<string | null>(null);
+	// The entries ciphertext memory came from, so a save can tell another window wrote since. See
+	// createEntryMutations.
+	const diskSeenRef = useRef<Uint8Array | null>(null);
+	const reloadAfterMergeRef = useRef<() => void>(() => {});
 	const markLoaded = useCallback((key: string | null) => {
 		loadedVaultRef.current = key;
 		setLoadedVault(key);
+		if (key === null) diskSeenRef.current = null;
 	}, []);
 	// Mirrored in state so consumers re-render when a value changes, including when a remote
 	// merge lands one. The ref is what mutations thread; this is what the UI reads.
@@ -777,6 +782,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			if (blob.entriesCiphertext.length === 0) {
 				vaultStateRef.current = emptyVaultSyncState();
 				latestRef.current = { ...latestRef.current, entries: [] };
+				diskSeenRef.current = blob.entriesCiphertext;
 				markLoaded(vaultKey(targetId));
 				setConflicts(NO_CONFLICTS);
 				setSyncedSettings(undefined);
@@ -893,6 +899,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			// read before the render lands would otherwise pair new stamps with old content.
 			vaultStateRef.current = syncState;
 			latestRef.current = { ...latestRef.current, entries: decrypted };
+			// What this load read, not what the disk holds by now: a save since then must still merge.
+			diskSeenRef.current = blob.entriesCiphertext;
 			markLoaded(vaultKey(targetId));
 			setConflicts(conflictsOf(loaded));
 			setEntries(decrypted);
@@ -900,6 +908,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		},
 		[readDecodedBlob, crypto, storage, autofill, ensureClock, publishIndex, activeId, markLoaded],
 	);
+
+	// Once the caller has committed what it wrote, so this load replaces that rather than the reverse.
+	reloadAfterMergeRef.current = () => {
+		setTimeout(() => void loadEntries().catch(() => {}), 0);
+	};
 
 	// After a successful unwrap: load, or lock again so nothing syncs a vault that didn't open.
 	const openUnlocked = useCallback(
@@ -1309,6 +1322,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			);
 			await storage.writeVaultBlob(bytes, newId);
 			vaultStateRef.current = emptyVaultSyncState();
+			diskSeenRef.current = decodeVaultBlob(bytes).entriesCiphertext;
 			markLoaded(newId);
 			setConflicts(NO_CONFLICTS);
 			setSyncedSettings(undefined);
@@ -1409,7 +1423,16 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// each is a transition that persists and returns the next state, which we
 	// commit here. The shared persist primitives also back the sync-enrollment hook.
 	const mutations = useMemo(
-		() => createEntryMutations({ crypto, storage, autofill, readDecodedBlob, clock: ensureClock }),
+		() =>
+			createEntryMutations({
+				crypto,
+				storage,
+				autofill,
+				readDecodedBlob,
+				clock: ensureClock,
+				diskSeen: diskSeenRef,
+				onDiskMerged: () => reloadAfterMergeRef.current(),
+			}),
 		[crypto, storage, autofill, readDecodedBlob, ensureClock],
 	);
 

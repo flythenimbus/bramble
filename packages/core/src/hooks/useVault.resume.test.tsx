@@ -20,6 +20,9 @@ i18n.load("en", {});
 i18n.activate("en");
 afterEach(cleanup);
 
+/** What the disk's ciphertext reads as: another window's save moves it on. */
+const diskVersion = vi.hoisted(() => ({ current: 1 }));
+
 vi.mock("../vault-format", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../vault-format")>()),
 	decodeVaultBlob: () => ({
@@ -34,7 +37,7 @@ vi.mock("../vault-format", async (importOriginal) => ({
 			},
 		],
 		entriesIv: new Uint8Array(12),
-		entriesCiphertext: new Uint8Array([1]),
+		entriesCiphertext: new Uint8Array([diskVersion.current]),
 	}),
 	encodeVaultBlob: () => new Uint8Array([1, 2, 3]),
 }));
@@ -104,11 +107,19 @@ function makePlatform(
 			return ps.map((p) => (p.ciphertext.startsWith("ct:") ? p.ciphertext.slice(3) : null));
 		},
 	};
+	let notified = 0;
+	let payloadReads = 0;
 	/** Each vault's disk through its own key, as the real adapters scope it. */
 	const scoped = (id: string) => ({
 		...crypto,
 		withVault: scoped,
-		decryptWithVek: async () => JSON.stringify(onDisk.get(id) ?? { entries: [], tombstones: [] }),
+		notifyExternalChange: () => {
+			notified++;
+		},
+		decryptWithVek: async () => {
+			payloadReads++;
+			return JSON.stringify(onDisk.get(id) ?? { entries: [], tombstones: [] });
+		},
 		encryptWithVek: async (plaintext: string) => {
 			const payload = JSON.parse(plaintext) as EntriesPayload;
 			writes.push(payload);
@@ -147,6 +158,8 @@ function makePlatform(
 	} as unknown as Platform;
 	return {
 		platform,
+		notified: () => notified,
+		payloadReads: () => payloadReads,
 		writes,
 		writtenTo,
 		erased,
@@ -652,5 +665,94 @@ describe("the open vault changing under an unlocked view", () => {
 		expect(p.writtenTo.at(-1)).toBe("v2");
 		expect(p.writes.at(-1)?.entries.map((e) => e.id)).toContain("b");
 		expect(p.writes.at(-1)?.entries.map((e) => e.id)).not.toContain("a");
+	});
+});
+
+describe("another window saving under an open one", () => {
+	const seenLogin = (name: string) => JSON.stringify({ ...JSON.parse(LOGIN), name });
+	const otherWindowSaves = (p: ReturnType<typeof makePlatform>, payload: EntriesPayload) => {
+		p.setDisk(payload);
+		diskVersion.current++;
+	};
+	async function openOne() {
+		diskVersion.current = 1;
+		const p = makePlatform({ v1: { entries: [entry("a")], tombstones: [] } }, [
+			{ id: "v1", label: "", createdAt: 1 },
+		]);
+		const seen = mount(p.platform);
+		await settle();
+		await act(async () => seen.registry?.selectVault("v1"));
+		p.finishLoad();
+		await waitFor(() => expect(seen.synced?.ready).toBe(true));
+		return { p, seen };
+	}
+	const newLogin = {
+		type: "login" as const,
+		name: "Saved here",
+		urls: [],
+		username: "",
+		password: "",
+	};
+
+	it("keeps what it saved, and shows it here once the disk has been read again", async () => {
+		const { p, seen } = await openOne();
+		otherWindowSaves(p, {
+			entries: [entry("a"), { ...entry("b"), ciphertext: `ct:${seenLogin("Saved elsewhere")}` }],
+			tombstones: [],
+		});
+
+		await act(async () => {
+			await seen.actions?.addEntry(newLogin);
+		});
+
+		expect(p.writes.at(-1)?.entries.map((e) => e.id)).toContain("b");
+		expect(p.writes.at(-1)?.entries).toHaveLength(3);
+		await waitFor(() =>
+			expect(seen.state?.entries.map((e) => e.name)).toContain("Saved elsewhere"),
+		);
+		expect(seen.state?.entries.map((e) => e.name)).toContain("Saved here");
+	});
+
+	it("does not bring back what it deleted", async () => {
+		const { p, seen } = await openOne();
+		otherWindowSaves(p, {
+			entries: [],
+			tombstones: [{ id: "a", hlc: at(9_000_000_000_000, "other") }],
+		});
+		await act(async () => {
+			await seen.actions?.addEntry(newLogin);
+		});
+		expect(p.writes.at(-1)?.entries.map((e) => e.id)).not.toContain("a");
+		await waitFor(() => expect(seen.state?.entries.map((e) => e.id)).not.toContain("a"));
+	});
+
+	it("writes as before with nothing else having written, and reads nothing back", async () => {
+		const { p, seen } = await openOne();
+		const before = seen.state?.entries.length ?? 0;
+		const reads = p.payloadReads();
+		await act(async () => {
+			await seen.actions?.addEntry(newLogin);
+		});
+		expect(p.writes.at(-1)?.entries).toHaveLength(before + 1);
+		// The same again: its own write is what the disk holds now.
+		await act(async () => {
+			await seen.actions?.addEntry({ ...newLogin, name: "Saved here too" });
+		});
+		expect(p.writes.at(-1)?.entries).toHaveLength(before + 2);
+		expect(p.payloadReads()).toBe(reads);
+		await act(async () => {
+			await new Promise((r) => setTimeout(r, 20));
+		});
+		expect(seen.state?.entries).toHaveLength(before + 2);
+		expect(p.payloadReads()).toBe(reads);
+	});
+
+	it("tells other windows it saved", async () => {
+		const { p, seen } = await openOne();
+		const before = p.notified();
+		await act(async () => {
+			await seen.actions?.addEntry(newLogin);
+		});
+		expect(p.notified()).toBe(before + 1);
 	});
 });

@@ -192,6 +192,9 @@ export interface CryptoAdapter {
 	// Fires on vault-content changes from outside this UI context (background
 	// corner-prompt save). Returns an unsubscribe function.
 	onExternalChange(callback: () => void): () => void;
+	// Tell other UI contexts this one saved, so their onExternalChange fires. Absent where there is
+	// only one UI context to tell.
+	notifyExternalChange?(): void;
 
 	generateSalt(): Promise<string>;
 	generateSlotId(): Promise<string>;

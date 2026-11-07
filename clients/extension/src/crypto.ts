@@ -140,6 +140,13 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 			return () => api.runtime.onMessage.removeListener(handler);
 		},
 
+		// Reaches every other extension page, never this one. Rejects with no other page open.
+		notifyExternalChange() {
+			void Promise.resolve(api.runtime.sendMessage({ type: "VAULT_CHANGED_EXTERNAL" })).catch(
+				() => {},
+			);
+		},
+
 		generateVek: () => send<string>("CRYPTO_GENERATE_VEK"),
 		unlockWithVek: (vekB64) =>
 			send("CRYPTO_UNLOCK_WITH_VEK", { vekB64 } satisfies CryptoUnlockWithVek),

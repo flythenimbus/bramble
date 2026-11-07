@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Entry, EntryData, LoginEntryData } from "../hooks/useVault";
 import {
 	compareHlc,
@@ -18,7 +18,7 @@ import {
 	type VaultEntries,
 	vaultEntriesFromPayload,
 } from "./entry-mutations";
-import { harness } from "./entry-mutations.harness";
+import { harness, twoWindows } from "./entry-mutations.harness";
 import { effectivePartStamps, PART_STAMP_FIELDS } from "./parts";
 import { MAX_PASSWORD_CHANGELOG } from "./password-changelog";
 
@@ -1461,5 +1461,161 @@ describe("createEntryMutations: saving from the version the form opened", () => 
 			opened,
 		);
 		expect(next.conflicts.map((e) => e.hlc)).toEqual([theirs]);
+	});
+});
+
+describe("createEntryMutations: two windows on one vault", () => {
+	const names = (entries: { name: string }[]) => entries.map((e) => e.name).sort();
+	/** Both windows loaded, and what each holds. */
+	async function opened() {
+		const w = twoWindows();
+		return { ...w, one: await w.first.load(), two: await w.second.load() };
+	}
+
+	it("a save from a stale window keeps what the other window saved", async () => {
+		const { first, second, one, two } = await opened();
+		await first.mutations.add(one, login("Saved first"));
+		await second.mutations.add(two, login("Saved second"));
+		const onDisk = await first.load();
+		expect(names(onDisk.entries)).toEqual(["Saved first", "Saved second"]);
+	});
+
+	it("a delete in the other window stays deleted", async () => {
+		const { first, second, one } = await opened();
+		const added = await first.mutations.add(one, login("Short lived"));
+		const stale = await second.load();
+		const id = added.entries[0]?.id as string;
+		await first.mutations.remove(added, id);
+
+		await second.mutations.add(stale, login("Saved second"));
+
+		const onDisk = await first.load();
+		expect(names(onDisk.entries)).toEqual(["Saved second"]);
+		expect(onDisk.tombstones.has(id)).toBe(true);
+	});
+
+	it("an edit in the other window survives a save of another entry", async () => {
+		const { first, second, one } = await opened();
+		const added = await first.mutations.add(one, login("Mine"));
+		const stale = await second.load();
+		const id = added.entries[0]?.id as string;
+		await first.mutations.update(added, id, loginWith("Mine", { password: "changed" }));
+
+		await second.mutations.add(stale, login("Other"));
+
+		const onDisk = await first.load();
+		const mine = onDisk.entries.find((e) => e.id === id) as { password?: string };
+		expect(mine.password).toBe("changed");
+		expect(onDisk.conflicts).toEqual([]);
+	});
+
+	it("a setting from the other window survives", async () => {
+		const { first, second, one, two } = await opened();
+		await first.mutations.setSetting(one, "pref.aliasProvider", { provider: "addy" });
+		await second.mutations.add(two, login("Other"));
+		const onDisk = await first.load();
+		expect(onDisk.settings?.["pref.aliasProvider"]?.value).toEqual({ provider: "addy" });
+	});
+
+	it("its own change wins over the same entry's unchanged copy on disk", async () => {
+		const { first, second, one } = await opened();
+		const added = await first.mutations.add(one, login("Mine"));
+		const stale = await second.load();
+		const id = added.entries[0]?.id as string;
+		await first.mutations.add(added, login("Unrelated"));
+
+		await second.mutations.update(stale, id, loginWith("Mine", { notes: "from the second" }));
+
+		const onDisk = await first.load();
+		const mine = onDisk.entries.find((e) => e.id === id) as { notes?: string };
+		expect(mine.notes).toBe("from the second");
+		expect(names(onDisk.entries)).toEqual(["Mine", "Unrelated"]);
+	});
+
+	it("keeps its own copy where the disk's has the same stamp, as with a use recorded here", async () => {
+		const { first, second, one } = await opened();
+		const added = await first.mutations.add(one, login("Mine"));
+		const stale = await second.load();
+		const id = added.entries[0]?.id as string;
+		await first.mutations.add(added, login("Unrelated"));
+
+		await second.mutations.touch(stale, id);
+
+		const onDisk = await first.load();
+		const mine = onDisk.entries.find((e) => e.id === id) as { lastUsedAt?: number };
+		expect(mine.lastUsedAt).toBeDefined();
+	});
+
+	it("asks for a reload after merging, and goes on merging until it has one", async () => {
+		const { first, second, one, two } = await opened();
+		await first.mutations.add(one, login("Saved first"));
+
+		const afterMerge = await second.mutations.add(two, login("Saved second"));
+		expect(second.reloads()).toBe(1);
+		expect(second.seen.current).toBeNull();
+
+		// Before the reload lands, memory still lacks the first window's login.
+		await second.mutations.add(afterMerge, login("Saved third"));
+		expect(second.reloads()).toBe(2);
+		expect(names((await first.load()).entries)).toEqual([
+			"Saved first",
+			"Saved second",
+			"Saved third",
+		]);
+	});
+
+	it("needs no merge or reload when nothing else wrote", async () => {
+		const { first, one } = await opened();
+		const decrypt = vi.spyOn(first.crypto, "decryptWithVek");
+		const added = await first.mutations.add(one, login("One"));
+		const again = await first.mutations.add(added, login("Two"));
+		await first.mutations.remove(again, again.entries[0]?.id as string);
+		expect(first.reloads()).toBe(0);
+		expect(decrypt).not.toHaveBeenCalled();
+		expect(first.seen.current).not.toBeNull();
+	});
+
+	it("goes on merging if a load landed during its write, since memory is about to be behind", async () => {
+		const { first, second, one, two } = await opened();
+		await first.mutations.add(one, login("Saved first"));
+		// Heard of the first window's save and reloaded while this write was finishing.
+		second.duringIndex.run = () => second.load();
+		await second.mutations.add(await second.load(), login("Saved second"));
+		second.duringIndex.run = null;
+		expect(second.seen.current).toBeNull();
+		await second.mutations.add(two, login("From stale memory"));
+		expect(names((await first.load()).entries)).toEqual([
+			"From stale memory",
+			"Saved first",
+			"Saved second",
+		]);
+	});
+
+	it("merges when it has no record of the disk at all", async () => {
+		const { first, second, one, two } = await opened();
+		await first.mutations.add(one, login("Saved first"));
+		second.seen.current = null;
+		await second.mutations.add(two, login("Saved second"));
+		expect(names((await first.load()).entries)).toEqual(["Saved first", "Saved second"]);
+	});
+
+	it("writes nothing when the other window's save can't be opened", async () => {
+		const { first, second, one, two, disk } = await opened();
+		await first.mutations.add(one, login("Saved first"));
+		const before = disk.bytes;
+		vi.spyOn(second.crypto, "decryptWithVek").mockRejectedValue(new Error("wrong key"));
+		await expect(second.mutations.add(two, login("Saved second"))).rejects.toThrow("wrong key");
+		expect(disk.bytes).toBe(before);
+	});
+
+	it("tells other windows after each save, and not after a failed one", async () => {
+		const { first, one } = await opened();
+		const added = await first.mutations.add(one, login("One"));
+		expect(first.notified.count).toBe(1);
+		await first.mutations.add(added, login("Two"));
+		expect(first.notified.count).toBe(2);
+		vi.spyOn(first.crypto, "encryptWithVek").mockRejectedValue(new Error("no key"));
+		await expect(first.mutations.add(added, login("Three"))).rejects.toThrow("no key");
+		expect(first.notified.count).toBe(2);
 	});
 });

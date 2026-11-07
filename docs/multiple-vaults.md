@@ -1383,3 +1383,25 @@ hardening), and full multi-vault autofill Tier 2 (search all vaults; post-v1). D
   vault without unlocking, unlike a sync merge).
 - The Rust core and the VLT1 format (no change; a vault stays one blob = one slot set
   + one entries list).
+
+## Two windows
+
+Each open extension window (the toolbar popup, a Settings window, an options tab) holds the vault in
+its own memory and writes the whole vault from there. With nothing more, a window that missed another
+window's save would write over it, and a deleted login would come back.
+
+Two things stop that. After a save, a window tells the others (`notifyExternalChange`, the same message
+background writers send), and they reload. And each window remembers the entries ciphertext its memory
+came from (`diskSeen`). If the disk holds anything else when it saves, it merges with the disk using the
+same merge sync uses, then reloads. A plain save with nothing else having written is exactly what it
+always was: no extra decrypt, and no merge.
+
+Until that reload lands the window has no record of the disk, so any further save merges too. A load
+that lands while a write is finishing clears the record as well, since what the caller is about to commit
+is behind what the load read.
+
+Limits, both small: the gap between reading the disk and writing it is still a few milliseconds wide, so
+two saves landing inside it can lose one. And every window on a device shares one sync identity, so the
+same entry edited in two windows at once is not seen as a conflict: the later save wins, as a later edit on
+one device always has. Saving in two windows at the same millisecond needs two hands; the second limit is the
+one a person could meet.

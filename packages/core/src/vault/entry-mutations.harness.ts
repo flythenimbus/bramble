@@ -15,7 +15,7 @@ import {
 	type PasswordSlot,
 	SLOT_KIND_PASSWORD,
 } from "../vault-format";
-import { createEntryMutations } from "./entry-mutations";
+import { createEntryMutations, vaultEntriesFromPayload } from "./entry-mutations";
 
 const te = new TextEncoder();
 const td = new TextDecoder();
@@ -50,7 +50,68 @@ function emptyVaultBytes(): Uint8Array {
 // exercised end to end. The clock is a real HybridClock with a frozen wall time,
 // so stamps differ only by their monotonic counter.
 export function harness(now: () => number = () => 1000, node = "device-a") {
-	let disk = emptyVaultBytes();
+	return harnessOn({ bytes: emptyVaultBytes() }, now, node);
+}
+
+/**
+ * Two windows on one vault, as the extension's popup and a Settings window are: one disk and one
+ * device, each with its own memory, its own record of what the disk held, and its own clock.
+ */
+export function twoWindows() {
+	const disk = { bytes: emptyVaultBytes() };
+	const open = () => {
+		const seen: { current: Uint8Array | null } = { current: null };
+		let reloads = 0;
+		const notified = { count: 0 };
+		const duringIndex: { run: (() => Promise<unknown>) | null } = { run: null };
+		const win = harnessOn(disk, () => 1000, "device-a", {
+			duringIndex,
+			diskSeen: seen,
+			onDiskMerged: () => {
+				reloads++;
+			},
+			notifyExternalChange: () => {
+				notified.count++;
+			},
+		});
+		return {
+			...win,
+			seen,
+			notified,
+			duringIndex,
+			reloads: () => reloads,
+			/** What opening the vault does: memory and its record of the disk, from one read. */
+			load: async () => {
+				const { blob } = decodeBlob(disk.bytes);
+				const payload = await win.mutations.readEntriesPayload();
+				const plaintexts = await win.crypto.decryptEntries(payload.entries);
+				const decrypted = payload.entries.map((enc, i) => ({
+					id: enc.id,
+					...JSON.parse(plaintexts[i] as string),
+				}));
+				seen.current = blob.entriesCiphertext;
+				return vaultEntriesFromPayload(payload, decrypted);
+			},
+		};
+	};
+	return { first: open(), second: open(), disk };
+}
+
+function decodeBlob(bytes: Uint8Array) {
+	return { blob: decodeVaultBlob(bytes) };
+}
+
+function harnessOn(
+	disk: { bytes: Uint8Array },
+	now: () => number,
+	node: string,
+	window?: {
+		duringIndex: { run: (() => Promise<unknown>) | null };
+		diskSeen: { current: Uint8Array | null };
+		onDiskMerged: () => void;
+		notifyExternalChange: () => void;
+	},
+) {
 	let writes = 0;
 	const indexCalls: unknown[][] = [];
 	const crypto = {
@@ -67,19 +128,21 @@ export function harness(now: () => number = () => 1000, node = "device-a") {
 		decryptWithVek: async (_iv: string, ciphertext: string) => td.decode(base64ToBytes(ciphertext)),
 		decryptEntries: async (ps: { ciphertext: string }[]) =>
 			ps.map((p) => (p.ciphertext.startsWith("ct:") ? p.ciphertext.slice(3) : null)),
+		...(window ? { notifyExternalChange: window.notifyExternalChange } : {}),
 	};
 	const storage = {
 		writeVaultBlob: async (bytes: Uint8Array) => {
-			disk = bytes;
+			disk.bytes = bytes;
 			writes++;
 		},
 	};
 	const autofill = {
 		setIndex: async (entries: { type: string }[]) => {
 			indexCalls.push(entries);
+			await window?.duringIndex.run?.();
 		},
 	};
-	const readDecodedBlob = async () => ({ blob: decodeVaultBlob(disk) });
+	const readDecodedBlob = async () => decodeBlob(disk.bytes);
 	const c = new HybridClock(node, now);
 	const mutations = createEntryMutations({
 		crypto,
@@ -87,6 +150,7 @@ export function harness(now: () => number = () => 1000, node = "device-a") {
 		autofill,
 		readDecodedBlob,
 		clock: async () => c,
+		...(window ? { diskSeen: window.diskSeen, onDiskMerged: window.onDiskMerged } : {}),
 	});
 	return { mutations, writes: () => writes, indexCalls, crypto, clock: c };
 }
