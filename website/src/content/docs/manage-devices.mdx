@@ -1,0 +1,60 @@
+---
+title: See and remove devices
+description: Check which devices sync your vault, rename or remove one, or stop syncing this device.
+section: sync
+kind: guide
+order: 3
+keywords:
+  - device list
+  - remove device
+  - revoke
+  - lost phone
+  - stolen
+  - rename
+  - disconnect
+  - stop syncing
+  - turn off sync
+  - relay url
+  - turn server
+  - ice
+  - I lost my phone
+  - my phone was stolen
+  - sold my old phone
+  - remove an old device
+  - which devices have my vault
+  - change device name
+  - leave sync
+  - self-host relay
+updatedDate: 2026-11-07
+---
+
+Open **Settings → Sync**. Under **Device sync** you'll see:
+
+- **Synced · 3 devices**, or **Waiting for a device to join…** if no other device has joined yet.
+- **Last synced**, with how long ago.
+- Every device in the group. The one you're holding is tagged **This device**.
+
+## Rename a device
+
+Choose the pencil next to a device and type a new **Device name**. The new name shows on all your devices.
+
+## Remove a device
+
+Choose the trash icon next to the device, then **Remove**. The device stops syncing with the rest of the group.
+
+Removing a device doesn't erase the copy already on it. That copy stays encrypted, and opens only with your master password or a quick unlock set up on that device.
+
+## Stop syncing this device
+
+Choose **Disconnect**, then **Confirm disconnect**. Your entries stay on this device, and your other devices aren't affected.
+
+To sync again later, [join the group again](/docs/add-a-device) with a new code from another device.
+
+## Use your own relay
+
+Under **Advanced**, you can point Bramble at your own servers:
+
+- **Nostr relay URL**: the relay that introduces your devices to each other. Use your own or any public Nostr relay.
+- **TURN / ICE servers URL**: an address that returns your own ICE servers as JSON.
+
+Most people never need to change these. A device that joins later picks up the same settings.

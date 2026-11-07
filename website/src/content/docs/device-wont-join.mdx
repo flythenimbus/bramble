@@ -1,0 +1,77 @@
+---
+title: Why won't my device join?
+description: What to do when a pairing code expires, gets stuck connecting, or is turned down.
+section: sync
+kind: question
+order: 1
+keywords:
+  - pairing failed
+  - sync not working
+  - symbols don't match
+  - emoji don't match
+  - stuck
+  - connecting
+  - expired
+  - error
+  - camera
+  - qr
+  - That pairing code has expired
+  - That doesn't match your other device's master password
+  - didn't confirm this pairing
+  - didn't respond
+  - couldn't be verified
+  - didn't finish
+  - No QR code detected
+  - Camera permission denied
+  - not a bramble pairing code
+  - no longer recognize this one
+  - new phone won't connect
+  - can't pair
+  - pairing doesn't work
+  - code doesn't work
+  - nothing happens
+  - stuck connecting
+  - devices don't sync
+  - phone won't connect to laptop
+updatedDate: 2026-11-07
+---
+
+## Check these first
+
+- Both devices are online and unlocked.
+- The **Add a device** screen stays open on your other device until pairing finishes.
+- You approve within 3 minutes of making the code.
+- You enter the master password your other device uses.
+- Both devices run the latest version of Bramble.
+
+## Stuck on “Connecting to your other device…”
+
+The new device can't reach your other device. Try these in order:
+
+1. Make sure the code hasn't expired. If it has, choose **Generate a new code**.
+2. Turn off any VPN or firewall on either device, or try a different network.
+3. Check that the date and time are right on both devices. A clock that's far off breaks the secure connection to the relay.
+
+## Messages and what to do
+
+| Message | What to do |
+| --- | --- |
+| This code has expired. | Choose **Generate a new code** and approve within 3 minutes. |
+| That pairing code has expired. Generate a new one and try again. | The code was more than 3 minutes old. Make a new one on your other device. |
+| That doesn't match your other device's master password. | Use the master password of the device that showed the code, then make a new code. This one is used up. |
+| Your other device didn't confirm this pairing. That code is now used up. | The other device chose **Reject** or closed the screen. Make a new code and approve the symbols. |
+| That device didn't respond. It's probably running an older version of Bramble. | Update Bramble on the other device, then make a new code. |
+| That device couldn't be verified, so nothing was sent. | Make a new code and try again. |
+| A device tried to connect but didn't finish. This code still works. | Try joining again from the new device with the same code. |
+| No QR code detected. Try again, or paste the code. | Hold the camera steady in good light, or choose **Paste code instead**. |
+| Camera permission denied. | Allow camera access for Bramble in your phone's settings, or paste the code. |
+| not a bramble pairing code | Copy the whole code with **Copy** on your other device and paste it again. |
+| Not syncing: your other devices no longer recognize this one. | This device was removed from the group. Choose **Disconnect**, then [join again](/docs/add-a-device) with a new code. |
+
+## The symbols don't match
+
+Choose **Reject**. Someone else may have your code. Start again with a new code, and show it only to the device you're adding.
+
+## The other device shows numbers, not symbols
+
+It runs an older version of Bramble. Compare the 12 digits under **Older version on the other device? Compare this instead:**, or update Bramble on that device.

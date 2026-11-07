@@ -1,0 +1,88 @@
+---
+title: Add a device
+description: Pair a phone, browser or computer with your vault using a one-time code.
+section: sync
+kind: guide
+order: 2
+keywords:
+  - pair
+  - pairing
+  - join
+  - invite
+  - new phone
+  - qr code
+  - scan
+  - pairing code
+  - symbols
+  - emoji
+  - link phone
+  - second device
+  - set up sync
+  - sync my phone and computer
+  - get my passwords on my new phone
+  - transfer my vault to another device
+  - move to a new phone
+  - connect my laptop
+  - use Bramble on two devices
+  - join a device
+  - Add another device
+updatedDate: 2026-11-07
+---
+
+## Before you start
+
+- Install Bramble on the new device.
+- Keep a device that already has your vault unlocked and nearby.
+- Have your master password ready. If you unlock with only a security key, [turn on a master password first](/docs/pairing-needs-master-password).
+- Both devices need to be online.
+
+## On the device that has your vault
+
+1. Open **Settings → Sync**. Under **Device sync**, choose **Add a device**.
+2. Enter your master password and choose **Continue**.
+3. Bramble shows a QR code and a text code. Keep this screen open: the code lasts 3 minutes.
+
+<Callout type="warning" title="Keep the code private">
+Anyone who sees the code while it's on screen could try to join with it. Show it only to the device you're adding. [Why this matters](/docs/pairing-code-safety).
+</Callout>
+
+## On the new device
+
+<PlatformTabs>
+<div slot="mobile">
+
+1. Open Bramble and choose the **Join a device** tab. If this phone already has a vault, choose **Create another vault** on the unlock screen first.
+2. Choose **Scan QR code** and point the camera at the code. Or choose **Paste code instead** and paste the text code.
+3. Enter your master password, the same one your other device uses, and choose **Join vault**.
+
+</div>
+<div slot="computer">
+
+1. Open the Bramble browser extension or desktop app and choose the **Join a device** tab. If it already has a vault, choose **Create another vault** on the unlock screen first.
+2. Paste the text code into **Pairing code**. On the other device, **Copy** puts the code on the clipboard.
+3. Enter your master password, the same one your other device uses, and choose **Join vault**.
+
+</div>
+</PlatformTabs>
+
+<Callout type="tip">
+Adding a computer while your vault is only on your phone? The computer can't scan, so copy the code on the phone and paste it on the computer. Apple's Universal Clipboard does this between an iPhone and a Mac.
+</Callout>
+
+## Check the symbols
+
+Both devices now show the same row of symbols.
+
+1. On the new device, **Check this matches** shows the symbols. Leave it open.
+2. On the device that has your vault, **Is this your device?** shows them too. If they're exactly the same, choose **They match, approve**. If anything differs, choose **Reject**: someone else is trying to join.
+3. Keep both screens open while the vault copies.
+
+Approve before the 3-minute timer runs out. When the copy finishes, the new device opens your vault, and from then on your devices sync on their own.
+
+## Add more devices
+
+Repeat these steps from any device in the group. Once a device has joined, the button reads **Add another device**.
+
+## Something went wrong?
+
+See [Why won't my device join?](/docs/device-wont-join)

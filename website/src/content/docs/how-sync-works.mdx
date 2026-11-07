@@ -1,0 +1,56 @@
+---
+title: How sync works
+description: Your devices keep one vault up to date by talking to each other directly. There's no account, and no server keeps a copy.
+section: sync
+kind: guide
+order: 1
+keywords:
+  - peer to peer
+  - p2p
+  - cloud
+  - server
+  - account
+  - offline
+  - background
+  - relay
+  - encrypted
+  - group
+  - where are my passwords stored
+  - is there a cloud
+  - do I need an account
+  - sync without internet
+  - how does sync work
+  - is sync safe
+  - who can see my vault
+  - use the same passwords on phone and computer
+updatedDate: 2026-11-07
+---
+
+Bramble keeps the same vault on your phones, computers and browsers. There's no Bramble account, and no server holds your vault. Your devices sync with each other directly, end-to-end encrypted.
+
+Sync is optional. It stays off until you [add a device](/docs/add-a-device).
+
+## Your devices form a group
+
+You add each device once, with a short-lived code from a device that already has the vault. From then on it's part of the group. Any device in the group can add the next one, so you never have to pair every device with every other.
+
+## Sync runs on its own
+
+A device in the group syncs in the background whenever it's unlocked. There's no sync button to press and no window to keep open.
+
+## Two devices need to be on at the same time
+
+Nothing stores your vault in between your devices, so changes travel only while at least two of them are unlocked and online together. A device that was off catches up the next time it's unlocked alongside another one.
+
+## It works on any network
+
+Your devices don't need to share Wi-Fi. A relay helps them find each other, and when they can't connect directly, their traffic passes through a relay server. The relays only ever see encrypted data, never your vault. See the [privacy policy](/privacy) for details.
+
+## Every device uses the same master password
+
+When a device joins, you unlock it with your vault's master password, the same one your other devices use. Each device can still add its own quick unlock, like Face ID or a fingerprint.
+
+## Next steps
+
+- [Add a device](/docs/add-a-device)
+- [See and remove devices](/docs/manage-devices)

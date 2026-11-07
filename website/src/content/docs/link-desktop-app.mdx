@@ -1,0 +1,82 @@
+---
+title: Link the browser extension to the desktop app
+description: Use the desktop app's vault in your browser, and fill and unlock without doing it twice.
+section: desktop
+kind: guide
+order: 1
+keywords:
+  - connect a browser
+  - desktop link
+  - native messaging
+  - permission
+  - extension
+  - chrome
+  - firefox
+  - brave
+  - edge
+  - vivaldi
+  - arc
+  - opera
+  - unlock once
+  - quick panel
+  - shortcut
+  - disconnect
+  - unlink
+  - connect extension to desktop app
+  - use the desktop app with my browser
+  - fill from the desktop app
+  - Using Bramble desktop?
+  - link it
+  - stop using the app
+updatedDate: 2026-11-07
+draft: true
+---
+
+When the Bramble desktop app and the browser extension are on the same computer, link them. Then:
+
+- They share one vault and keep it in sync on your computer, not over the internet.
+- The browser fills and unlocks through the desktop app, so you don't unlock twice.
+
+## Before you start
+
+- Install the desktop app and the browser extension on the same computer.
+- The desktop app's vault needs a master password. If you unlock it with only a security key, turn on a master password in **Settings → Security** first.
+- Installed the browser after the desktop app? Quit and reopen the desktop app so it can find the browser.
+
+## Link them
+
+1. In the desktop app, open **Settings → Sync**. Under **Browser extension**, choose **Connect** next to **Connect a browser**.
+2. Enter your master password and choose **Continue**. Leave this window open: it waits 3 minutes.
+3. In the browser extension:
+   - Setting up the extension for the first time? Choose **Link** on the **Using Bramble desktop?** banner.
+   - Already using it? Open **Settings → Sync** and find **Desktop app**. In the toolbar popup, choose **Continue in a window** first.
+4. If the browser asks for permission, choose **Allow and continue** and accept the browser's prompt.
+5. Choose **Link**.
+6. Both screens show a row of symbols. If they're the same, choose **They match** in the extension and **Approve** in the desktop app. If they differ, choose **They don't match**.
+7. If the extension asks for a master password, enter the one for the desktop app's vault.
+
+## What happens to the browser's vault
+
+It depends on what's already in the browser:
+
+| In the browser | What happens |
+| --- | --- |
+| Nothing yet (first setup) | The browser copies the desktop app's vault. Keep the desktop app open until it finishes. |
+| An empty vault | The browser switches to the desktop app's vault and removes the empty one. |
+| Entries, while the desktop vault is empty | The browser's entries and files move into the desktop app's vault. |
+| Entries on both sides | You choose: [combine them or keep them separate](/docs/combine-or-keep-separate). |
+
+Whenever the browser ends up on the desktop app's vault, it unlocks with the desktop app's master password.
+
+## Fill from the desktop app
+
+Press <kbd>⌘</kbd> <kbd>Shift</kbd> <kbd>Space</kbd> on a Mac, or <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Space</kbd> on Windows and Linux, to open the desktop app's quick panel. Pick an entry and choose **Fill on …** to fill it on the page open in your linked browser.
+
+## Disconnect
+
+- **In the extension:** open **Settings → Sync → Desktop app**, choose **Disconnect**, then **Stop using the app**. The vault keeps syncing with the desktop app, and nothing is deleted. To take this browser out of the vault entirely, [remove it from the device list](/docs/manage-devices#remove-a-device).
+- **In the desktop app:** open **Settings → Sync**. Under **Browser extension**, choose the trash icon next to the browser, then **Disconnect**.
+
+## Something went wrong?
+
+See [Why won't the extension link to the desktop app?](/docs/desktop-link-not-working)
