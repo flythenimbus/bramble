@@ -12,6 +12,7 @@ import {
 } from "../sync";
 import { fileRecord } from "../test/vault-fixtures";
 import type { EncryptedEntry } from "../vault-format";
+import { decodeVaultBlob } from "../vault-format";
 import {
 	conflictsOf,
 	type OpenedVersion,
@@ -1552,7 +1553,7 @@ describe("createEntryMutations: two windows on one vault", () => {
 
 		const afterMerge = await second.mutations.add(two, login("Saved second"));
 		expect(second.reloads()).toBe(1);
-		expect(second.seen.current).toBeNull();
+		expect(afterMerge.diskSeen).toBeNull();
 
 		// Before the reload lands, memory still lacks the first window's login.
 		await second.mutations.add(afterMerge, login("Saved third"));
@@ -1564,6 +1565,27 @@ describe("createEntryMutations: two windows on one vault", () => {
 		]);
 	});
 
+	it("asks for that reload last, after the index, which the caller's commit follows", async () => {
+		const { first, second, one, two } = await opened();
+		await first.mutations.add(one, login("Saved first"));
+		let reloadsDuringIndex = -1;
+		second.duringIndex.run = async () => {
+			reloadsDuringIndex = second.reloads();
+		};
+		await second.mutations.add(two, login("Saved second"));
+		expect(reloadsDuringIndex).toBe(0);
+		expect(second.reloads()).toBe(1);
+	});
+
+	it("compares the state it is writing, whatever a reload has since seen", async () => {
+		const { first, second, one, two } = await opened();
+		await first.mutations.add(one, login("Saved first"));
+		// Heard of it and reloaded, while this snapshot, taken before, was on its way to the disk.
+		await second.load();
+		await second.mutations.add(two, login("From the old snapshot"));
+		expect(names((await first.load()).entries)).toEqual(["From the old snapshot", "Saved first"]);
+	});
+
 	it("needs no merge or reload when nothing else wrote", async () => {
 		const { first, one } = await opened();
 		const decrypt = vi.spyOn(first.crypto, "decryptWithVek");
@@ -1572,31 +1594,39 @@ describe("createEntryMutations: two windows on one vault", () => {
 		await first.mutations.remove(again, again.entries[0]?.id as string);
 		expect(first.reloads()).toBe(0);
 		expect(decrypt).not.toHaveBeenCalled();
-		expect(first.seen.current).not.toBeNull();
 	});
 
-	it("goes on merging if a load landed during its write, since memory is about to be behind", async () => {
-		const { first, second, one, two } = await opened();
-		await first.mutations.add(one, login("Saved first"));
-		// Heard of the first window's save and reloaded while this write was finishing.
-		second.duringIndex.run = () => second.load();
-		await second.mutations.add(await second.load(), login("Saved second"));
-		second.duringIndex.run = null;
-		expect(second.seen.current).toBeNull();
-		await second.mutations.add(two, login("From stale memory"));
-		expect(names((await first.load()).entries)).toEqual([
-			"From stale memory",
-			"Saved first",
-			"Saved second",
-		]);
+	it("carries what it wrote as what the disk holds", async () => {
+		const { first, one, disk } = await opened();
+		const added = await first.mutations.add(one, login("One"));
+		expect(added.diskSeen).toEqual(decodeVaultBlob(disk.bytes).entriesCiphertext);
 	});
 
 	it("merges when it has no record of the disk at all", async () => {
 		const { first, second, one, two } = await opened();
 		await first.mutations.add(one, login("Saved first"));
-		second.seen.current = null;
-		await second.mutations.add(two, login("Saved second"));
+		await second.mutations.add({ ...two, diskSeen: null }, login("Saved second"));
 		expect(names((await first.load()).entries)).toEqual(["Saved first", "Saved second"]);
+	});
+
+	it("writes plainly where a platform doesn't track the disk", async () => {
+		const { first, second, one } = await opened();
+		const { diskSeen: _diskSeen, ...untracked } = one;
+		await first.mutations.add(one, login("Saved first"));
+		const decrypt = vi.spyOn(second.crypto, "decryptWithVek");
+		const written = await second.mutations.add(untracked, login("Saved second"));
+		expect(decrypt).not.toHaveBeenCalled();
+		expect(second.reloads()).toBe(0);
+		expect(written).not.toHaveProperty("diskSeen");
+	});
+
+	it("tells other windows once it's on disk, even if the index then refuses", async () => {
+		const { first, one } = await opened();
+		first.duringIndex.run = async () => {
+			throw new Error("no lease");
+		};
+		await expect(first.mutations.add(one, login("One"))).rejects.toThrow("no lease");
+		expect(first.notified.count).toBe(1);
 	});
 
 	it("writes nothing when the other window's save can't be opened", async () => {

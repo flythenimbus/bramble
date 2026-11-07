@@ -60,13 +60,11 @@ export function harness(now: () => number = () => 1000, node = "device-a") {
 export function twoWindows() {
 	const disk = { bytes: emptyVaultBytes() };
 	const open = () => {
-		const seen: { current: Uint8Array | null } = { current: null };
 		let reloads = 0;
 		const notified = { count: 0 };
 		const duringIndex: { run: (() => Promise<unknown>) | null } = { run: null };
 		const win = harnessOn(disk, () => 1000, "device-a", {
 			duringIndex,
-			diskSeen: seen,
 			onDiskMerged: () => {
 				reloads++;
 			},
@@ -76,7 +74,6 @@ export function twoWindows() {
 		});
 		return {
 			...win,
-			seen,
 			notified,
 			duringIndex,
 			reloads: () => reloads,
@@ -89,8 +86,10 @@ export function twoWindows() {
 					id: enc.id,
 					...JSON.parse(plaintexts[i] as string),
 				}));
-				seen.current = blob.entriesCiphertext;
-				return vaultEntriesFromPayload(payload, decrypted);
+				return {
+					...vaultEntriesFromPayload(payload, decrypted),
+					diskSeen: blob.entriesCiphertext,
+				};
 			},
 		};
 	};
@@ -107,7 +106,6 @@ function harnessOn(
 	node: string,
 	window?: {
 		duringIndex: { run: (() => Promise<unknown>) | null };
-		diskSeen: { current: Uint8Array | null };
 		onDiskMerged: () => void;
 		notifyExternalChange: () => void;
 	},
@@ -150,7 +148,7 @@ function harnessOn(
 		autofill,
 		readDecodedBlob,
 		clock: async () => c,
-		...(window ? { diskSeen: window.diskSeen, onDiskMerged: window.onDiskMerged } : {}),
+		...(window ? { onDiskMerged: window.onDiskMerged } : {}),
 	});
 	return { mutations, writes: () => writes, indexCalls, crypto, clock: c };
 }

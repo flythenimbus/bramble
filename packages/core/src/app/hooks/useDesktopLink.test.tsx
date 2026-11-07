@@ -8,6 +8,7 @@ import { aliasConfiguredHintKeyFor } from "../../aliases/config";
 import { backupTargetsKeyFor } from "../../backup/config";
 import { type Platform, PlatformProvider } from "../../context/PlatformContext";
 import { syncKeyFor } from "../../sync/sync-keys";
+import { sha256Hex } from "../../util/hash";
 import { useDesktopLink } from "./useDesktopLink";
 
 // The one link flow behind both the setup banner and Settings: emoji, then what the desktop vault
@@ -64,6 +65,10 @@ const h = vi.hoisted(() => ({
 	diskEntries: null as unknown[] | null,
 	diskFiles: null as unknown[] | null,
 	diskUnreadable: 0,
+	/** What the last vault hidden was hidden with. */
+	hiddenAs: null as { blobHash: string; into: string } | null,
+	/** The old vault's bytes on the second read and after: saved into during the join. */
+	blobAfterJoin: null as Uint8Array | null,
 	/** Vaults whose key was dropped. */
 	locked: [] as string[],
 	/** Runs while an import is under way. */
@@ -151,8 +156,9 @@ vi.mock("../../hooks/useVaultRegistry", () => ({
 		return {
 			vaults: h.vaults,
 			activeId: at,
-			hide: async (id: string) => {
+			hide: async (id: string, copy: { blobHash: string; into: string }) => {
 				h.steps.push(`hide:${id}@${at}`);
+				h.hiddenAs = copy;
 				if (h.setAsideFails) throw new Error("storage full");
 			},
 			show: async (id: string) => {
@@ -178,7 +184,7 @@ const platform = {
 		readQuarantine: async (id: string) => (h.meta.get(`quarantine:${id}`) as string) ?? null,
 		readVaultBlob: async () => {
 			if (h.blobFails) throw new Error("no blob");
-			return new Uint8Array([7]);
+			return h.steps.includes("join") && h.blobAfterJoin ? h.blobAfterJoin : new Uint8Array([7]);
 		},
 	},
 	// Each vault's key opens only what it sealed, as a real one does.
@@ -395,6 +401,8 @@ describe("combining into the desktop's vault", () => {
 			h.duringImport = null;
 			h.importHold = null;
 			h.emptyRemovals = [];
+			h.blobAfterJoin = null;
+			h.hiddenAs = null;
 		}
 		const combineAs = async (opts: { choice?: "combine" | "separate" } = {}) => {
 			const result = await linkedFrom("settings");
@@ -454,6 +462,75 @@ describe("combining into the desktop's vault", () => {
 			await combineAs();
 			expect(h.locked).toEqual(["v1"]);
 		});
+
+		it("has its key dropped when the copy fails too", async () => {
+			oneFullVault();
+			h.importFails = true;
+			await combineAs();
+			h.importFails = false;
+			expect(h.locked).toEqual(["v1"]);
+		});
+
+		it("is hidden with what a later Delete checks: its bytes, and which vault holds the copy", async () => {
+			oneFullVault();
+			await combineAs();
+			expect(h.hiddenAs).toEqual({ blobHash: await sha256Hex(new Uint8Array([7])), into: "new" });
+		});
+
+		it("stays listed with no delete on offer when it was saved into during the join", async () => {
+			oneFullVault();
+			h.blobAfterJoin = new Uint8Array([8]);
+			const result = await combineAs();
+			expect(h.steps).not.toContain("hide:v1@new");
+			expect(result.current.combined?.pendingRemoval).toBeNull();
+			expect(result.current.combined?.keptUnasked).toBe(true);
+		});
+
+		it.each([
+			[
+				"versions in a sync conflict",
+				() => {
+					h.conflicts = new Map([["a", {}]]);
+				},
+			],
+			[
+				"an alias provider that gave way to the desktop's",
+				() => {
+					h.settings = {
+						v1: { "pref.aliasProvider": { provider: "addy", options: {}, apiKey: "k" } },
+						new: { "pref.aliasProvider": { provider: "simplelogin", options: {}, apiKey: "j" } },
+					};
+				},
+			],
+			[
+				"a backup target that gave way to the desktop's",
+				() => {
+					h.summary = { name: "Home", empty: true, entries: 0, backupTargets: true };
+					h.meta.set(backupTargetsKeyFor("v1"), [
+						{ id: "t", creds: { iv: "v1", ciphertext: "{}" } },
+					]);
+				},
+			],
+			[
+				"a backup target that can't be opened",
+				() => {
+					h.meta.set(backupTargetsKeyFor("v1"), [
+						{ id: "t", creds: { iv: "other", ciphertext: "{}" } },
+					]);
+				},
+			],
+		])(
+			"isn't hidden with %s in it: the Settings row couldn't say what deleting costs",
+			async (_what, arrange) => {
+				oneFullVault();
+				arrange();
+				const result = await combineAs();
+				expect(h.steps).not.toContain("hide:v1@new");
+				expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
+				h.meta.clear();
+				h.conflicts = new Map();
+			},
+		);
 
 		it.each([
 			[
@@ -701,7 +778,7 @@ describe("combining into the desktop's vault", () => {
 				platform.storage.readVaultBlob = read;
 			}
 			// No step yet: not the staging, not the join.
-			expect(order).toEqual(["read@0"]);
+			expect(order[0]).toBe("read@0");
 		});
 
 		it("has no delete on offer when how it looked could not be read, with nothing to compare", async () => {
@@ -808,10 +885,11 @@ describe("combining into the desktop's vault", () => {
 			const namesToCheck = () =>
 				(h.copied[0] as { items: { name: string }[] }).items.map((e) => e.name);
 
-			it("holds them back and leaves the deleting to the user", async () => {
+			it("holds them back, stays listed, and leaves the deleting to the user", async () => {
 				withLookAlike();
 				const result = await combine();
 				expect(h.steps).not.toContain(REMOVED);
+				expect(h.steps).not.toContain("hide:v1@new");
 				expect(result.current.combined?.heldBack.items).toHaveLength(1);
 				expect(result.current.combined?.pendingRemoval?.id).toBe("v1");
 				expect(result.current.combined?.keptUnasked).toBe(false);
@@ -1179,7 +1257,7 @@ describe("combining into the desktop's vault", () => {
 			await result.current.accept("pw", { choice: "combine" });
 		});
 
-		expect(h.steps).toEqual(["stage", "join", "import@new", "hide:v1@new"]);
+		expect(h.steps).toEqual(["stage", "join", "import@new"]);
 		expect(h.imported[0]?.[0]).toHaveLength(1);
 		expect(h.imported[0]?.[1]).toHaveLength(1);
 		expect(result.current.combined?.heldBack.items).toHaveLength(1);

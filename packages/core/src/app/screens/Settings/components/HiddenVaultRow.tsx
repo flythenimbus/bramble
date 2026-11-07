@@ -1,16 +1,25 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { useVaultActions } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
-import { displayLabel, type VaultRecord } from "../../../../vault/vault-registry";
+import type { VaultRecord } from "../../../../vault/vault-registry";
 import { Button } from "../../../components/ui/button";
 import { InlineConfirm } from "../../../components/ui/inline-confirm";
 
 /** The question a closed dialog left open: a vault combined into the desktop's, hidden until the
  * user deletes or keeps it. */
-export function HiddenVaultRow({ vault, index }: { vault: VaultRecord; index: number }) {
+export function HiddenVaultRow({
+	vault,
+	onChangedSince,
+}: {
+	vault: VaultRecord;
+	/** It changed after the copy, so it was listed rather than deleted. */
+	onChangedSince: (message: string) => void;
+}) {
+	const { t } = useLingui();
 	const { deleteHiddenVault } = useVaultActions();
 	const { show } = useVaultRegistry();
-	const name = displayLabel(vault.label, index);
+	// Not "Vault N": that counts listed vaults, and could name the one open.
+	const name = vault.label.trim() || t`The old vault`;
 	return (
 		<div className="space-y-2">
 			<p className="text-xs text-muted-foreground">
@@ -26,7 +35,9 @@ export function HiddenVaultRow({ vault, index }: { vault: VaultRecord; index: nu
 					variant="destructiveOutline"
 					confirmLabel={<Trans>Delete it</Trans>}
 					onConfirm={async () => {
-						await deleteHiddenVault(vault.id);
+						if (await deleteHiddenVault(vault.id)) return;
+						await show(vault.id);
+						onChangedSince(t`${name} changed after the copy, so it's listed again.`);
 					}}
 					trigger={(arm) => (
 						<Button variant="secondary" size="sm" onClick={arm}>

@@ -19,12 +19,14 @@ import {
 } from "../../sync/link-outcome";
 import type { PairingSas } from "../../sync/pairing-sas";
 import { syncKeyFor } from "../../sync/sync-keys";
+import { sha256Hex } from "../../util/hash";
 import {
 	type CarriedTarget,
 	type CopiedOut,
 	collectCarry,
 	placeCarry,
 	readCarriedTargets,
+	sameBytes,
 	sealCarriedTargets,
 	withoutHeldBack,
 } from "../../vault/combine-into";
@@ -181,7 +183,7 @@ export function useDesktopLink({
 		copyUnconfirmed: boolean;
 		/** Settings that gave way to the desktop vault's own, and backup targets that won't open. */
 		leftBehind: BroughtSettings["leftBehind"] & { unreadableTargets: number };
-		/** Deleting the old vault is on offer, and what doing so checks. It is hidden meanwhile. */
+		/** Deleting the old vault is on offer, and what doing so checks. */
 		pendingRemoval: { id: string; copied: CopiedOut } | null;
 	} | null>(null);
 	const [finishingCombine, setFinishingCombine] = useState(false);
@@ -375,8 +377,9 @@ export function useDesktopLink({
 	 * Combining reads this vault's entries and files BEFORE the switch, because only one vault's
 	 * key is loaded at a time, then copies them in after it. From the disk, not memory: a login saved
 	 * in another window never reaches this one, and the check before deleting would pass without it.
-	 * The old vault is then hidden, and `combined` asks the user whether to delete it. Where that
-	 * could lose something by accident it stays listed instead. Keeping them separate copies nothing.
+	 * `combined` then asks the user whether to delete the old vault, hidden meanwhile unless something
+	 * stayed behind in it. Where deleting could lose something by accident it isn't on offer. Keeping
+	 * them separate copies nothing.
 	 */
 	const accept = useCallback(
 		async (
@@ -391,6 +394,7 @@ export function useDesktopLink({
 			// Past the join the invite form is gone, so a failure has to show in `error` instead.
 			let joined = false;
 			let copying = false;
+			let oldKeyToDrop: string | null = null;
 			try {
 				const taking = outcome === "take";
 				// Read first: a save landing while the files are staged must show as a change.
@@ -438,6 +442,7 @@ export function useDesktopLink({
 				// Relinking the vault that already syncs with the desktop's opens no other.
 				const now = opened === oldId ? latest.current : await vaultSwitchedFrom(oldId);
 				if (carry && onDisk && oldId && opened !== oldId) {
+					oldKeyToDrop = oldId;
 					copying = true;
 					setCopyingOver(true);
 					const placed = placeCarry(now.actions.readEntries(), carry);
@@ -476,14 +481,23 @@ export function useDesktopLink({
 						carry.uncarried > 0 ||
 						onDisk.unreadable > 0 ||
 						brought.failed ||
+						// A save during the join isn't in the copy.
+						!sameBytes(await storage.readVaultBlob(oldId), oldBlob) ||
 						holdsQuarantine((await storage.readQuarantine?.(oldId)) ?? null);
-					const deletable = attached && !copyAtRisk;
-					if (deletable) await afterCopy.registry.hide(oldId);
-					// Copied or not, nothing needs its key now, and it should not stay in memory.
-					await crypto
-						.withVault?.(oldId)
-						.lock()
-						.catch(() => {});
+					// Hidden only when deleting it later costs nothing the Settings row can't say. With
+					// something left behind it stays listed, so it can't be deleted unawares.
+					const leavesSomething =
+						placed.heldBack.items.length > 0 ||
+						onDisk.conflicted > 0 ||
+						brought.leftBehind.alias ||
+						brought.leftBehind.backupTargets ||
+						oldTargets.unreadable > 0;
+					if (attached && !copyAtRisk && !leavesSomething) {
+						await afterCopy.registry.hide(oldId, {
+							blobHash: await sha256Hex(oldBlob),
+							into: opened,
+						});
+					}
 					setCombined({
 						heldBack: placed.heldBack,
 						uncarried: carry.uncarried,
@@ -536,6 +550,13 @@ export function useDesktopLink({
 				}
 				return false;
 			} finally {
+				// Copied or not, nothing needs its key now, and it should not stay in memory.
+				if (oldKeyToDrop) {
+					await crypto
+						.withVault?.(oldKeyToDrop)
+						.lock()
+						.catch(() => {});
+				}
 				setJoining(false);
 				setCopyingOver(false);
 			}

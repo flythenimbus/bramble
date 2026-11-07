@@ -39,7 +39,11 @@ export interface EntriesBlobStore {
 	readEntriesPayload(): Promise<EntriesPayload>;
 	/** Encrypt + write an entries payload under the VEK, preserving the slot list.
 	 * Does not touch the autofill index or any in-memory state. */
-	writeEntriesBlob(payload: EntriesPayload): Promise<void>;
+	writeEntriesBlob(
+		payload: EntriesPayload,
+		/** Handed the entries ciphertext once it is on disk. */
+		onWritten?: (entriesCiphertext: Uint8Array) => void,
+	): Promise<void>;
 }
 
 export function createEntriesBlobStore({
@@ -62,7 +66,7 @@ export function createEntriesBlobStore({
 		// did) meant the ciphertext was produced under whatever key was loaded at that moment, then
 		// married to a slot list read afterwards — two independent snapshots, and nothing checked
 		// they belonged together.
-		async writeEntriesBlob(payload) {
+		async writeEntriesBlob(payload, onWritten) {
 			const { blob } = await readDecodedBlob();
 			if (verifyVekBeforeWrite && blob.entriesCiphertext.length > 0) {
 				try {
@@ -80,13 +84,15 @@ export function createEntriesBlobStore({
 				}
 			}
 			const { iv, ciphertext } = await crypto.encryptWithVek(encodeEntriesPayload(payload));
+			const entriesCiphertext = base64ToBytes(ciphertext);
 			await storage.writeVaultBlob(
 				encodeVaultBlob({
 					slots: blob.slots,
 					entriesIv: base64ToBytes(iv),
-					entriesCiphertext: base64ToBytes(ciphertext),
+					entriesCiphertext,
 				}),
 			);
+			onWritten?.(entriesCiphertext);
 		},
 	};
 }

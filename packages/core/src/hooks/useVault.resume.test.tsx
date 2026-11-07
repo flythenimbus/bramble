@@ -2,6 +2,7 @@
 // Every mutation rewrites the whole vault from what the provider holds in memory. So nothing may
 // write until that memory holds the open vault: a view reopened on an unlocked vault once published
 // the vault's name over an empty snapshot, and the vault's entries were gone from disk.
+
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
@@ -10,6 +11,8 @@ import { useVaultNameSync, VAULT_NAME_KEY } from "../app/hooks/useVaultName";
 import { type Platform, PlatformProvider } from "../context/PlatformContext";
 import type { EntriesPayload } from "../sync";
 import { fileRecord } from "../test/vault-fixtures";
+import { bytesToBase64 } from "../util/bytes";
+import { sha256Hex } from "../util/hash";
 import type { CopiedOut } from "../vault/combine-into";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 import { type SyncedSettingsAccess, useSyncedSettings } from "./synced-settings";
@@ -70,7 +73,7 @@ const NAMED = { [VAULT_NAME_KEY]: { hlc: at(5, "laptop"), value: "Personal" } };
 function makePlatform(
 	disks: Record<string, EntriesPayload>,
 	vaults: { id: string; label: string; createdAt: number }[],
-	opts: { locked?: () => boolean } = {},
+	opts: { locked?: () => boolean; oneWindow?: boolean } = {},
 ) {
 	const meta = new Map<string, unknown>([[VAULT_REGISTRY_KEY, { vaults }]]);
 	/** Every payload written to disk, oldest first. */
@@ -87,20 +90,28 @@ function makePlatform(
 	const firstVault = Object.keys(disks)[0] as string;
 	const failing = { registryWrites: false };
 	let onExternalLock: (() => void) | null = null;
+	const heard = new Set<() => void>();
+	/** Runs inside the next entry's encryption, which on the extension is a round trip. */
+	const duringEncrypt: { run: (() => Promise<void>) | null } = { run: null };
+	/** How long the autofill index takes, also a round trip there. */
+	const indexDelay = { ms: 0 };
 	const crypto = {
 		isLocked: async () => opts.locked?.() ?? false,
 		onExternalLock: (cb: () => void) => {
 			onExternalLock = cb;
 			return () => {};
 		},
-		onExternalChange: () => () => {},
+		onExternalChange: (cb: () => void) => {
+			heard.add(cb);
+			return () => heard.delete(cb);
+		},
 		unwrapVekPassword: async () => true,
-		encryptEntry: async (json: string) => ({
-			ciphertext: `ct:${json}`,
-			iv: "i",
-			wrappedDek: "w",
-			dekIv: "d",
-		}),
+		encryptEntry: async (json: string) => {
+			const run = duringEncrypt.run;
+			duringEncrypt.run = null;
+			await run?.();
+			return { ciphertext: `ct:${json}`, iv: "i", wrappedDek: "w", dekIv: "d" };
+		},
 		// Held open, so a test can look at everything that happens while the vault is still loading.
 		decryptEntries: async (ps: { ciphertext: string }[]) => {
 			if (gate) await gate;
@@ -113,9 +124,13 @@ function makePlatform(
 	const scoped = (id: string) => ({
 		...crypto,
 		withVault: scoped,
-		notifyExternalChange: () => {
-			notified++;
-		},
+		...(opts.oneWindow
+			? {}
+			: {
+					notifyExternalChange: () => {
+						notified++;
+					},
+				}),
 		decryptWithVek: async () => {
 			payloadReads++;
 			return JSON.stringify(onDisk.get(id) ?? { entries: [], tombstones: [] });
@@ -125,7 +140,11 @@ function makePlatform(
 			writes.push(payload);
 			writtenTo.push(id);
 			onDisk.set(id, payload);
-			return { iv: "AAAAAAAAAAAAAAAA", ciphertext: "AA==" };
+			// As the disk's ciphertext will read back.
+			return {
+				iv: "AAAAAAAAAAAAAAAA",
+				ciphertext: bytesToBase64(new Uint8Array([diskVersion.current])),
+			};
 		},
 		lock: async () => void locked.push(id),
 	});
@@ -147,7 +166,12 @@ function makePlatform(
 			writeQuarantine: async () => {},
 		},
 		crypto: scoped(firstVault),
-		autofill: { clearIndex: async () => {}, setIndex: async () => {} },
+		autofill: {
+			clearIndex: async () => {},
+			setIndex: async () => {
+				if (indexDelay.ms) await new Promise((r) => setTimeout(r, indexDelay.ms));
+			},
+		},
 		shell: {
 			setActiveVault: async () => {},
 			onSyncStatus: () => () => {},
@@ -159,6 +183,12 @@ function makePlatform(
 	return {
 		platform,
 		notified: () => notified,
+		duringEncrypt,
+		indexDelay,
+		/** What a window does on hearing another window saved. */
+		hear: () => {
+			for (const cb of heard) cb();
+		},
 		payloadReads: () => payloadReads,
 		writes,
 		writtenTo,
@@ -436,7 +466,12 @@ describe("removing a vault whose entries were copied out", () => {
 	it("deletes a hidden vault on the user's word, its key and record too", async () => {
 		const p = vaults();
 		const seen = await open(p);
-		await act(async () => seen.registry?.hide("old"));
+		await act(async () =>
+			seen.registry?.hide("old", {
+				blobHash: await sha256Hex(new Uint8Array([1])),
+				into: "v1",
+			}),
+		);
 		let removed: boolean | undefined;
 		await act(async () => {
 			removed = await seen.actions?.deleteHiddenVault("old");
@@ -445,6 +480,18 @@ describe("removing a vault whose entries were copied out", () => {
 		expect(p.erased).toEqual(["old"]);
 		expect(p.locked).toEqual(["old"]);
 		expect(seen.registry?.hiddenVaults).toEqual([]);
+	});
+
+	it("refuses that if it changed after the copy, as another window could have saved into it", async () => {
+		const p = vaults();
+		const seen = await open(p);
+		await act(async () => seen.registry?.hide("old", { blobHash: "from before", into: "v1" }));
+		let removed: boolean | undefined;
+		await act(async () => {
+			removed = await seen.actions?.deleteHiddenVault("old");
+		});
+		expect(removed).toBe(false);
+		expect(p.erased).toEqual([]);
 	});
 
 	it("refuses that for a vault that isn't hidden, whichever it is", async () => {
@@ -724,6 +771,83 @@ describe("another window saving under an open one", () => {
 		});
 		expect(p.writes.at(-1)?.entries.map((e) => e.id)).not.toContain("a");
 		await waitFor(() => expect(seen.state?.entries.map((e) => e.id)).not.toContain("a"));
+	});
+
+	it("doesn't take a reload during its own write for having caught up", async () => {
+		// The snapshot is taken, the other window saves, this window hears and reloads, and only then
+		// does this write reach the disk, still holding the old snapshot. An attachment's seal makes
+		// that gap as long as the file takes.
+		const { p, seen } = await openOne();
+		p.duringEncrypt.run = async () => {
+			otherWindowSaves(p, {
+				entries: [entry("a"), { ...entry("b"), ciphertext: `ct:${seenLogin("Saved elsewhere")}` }],
+				tombstones: [],
+			});
+			p.hear();
+			await new Promise((r) => setTimeout(r, 20));
+		};
+		await act(async () => {
+			await seen.actions?.addEntry(newLogin);
+		});
+		expect(p.writes.at(-1)?.entries.map((e) => e.id)).toContain("b");
+		expect(p.writes.at(-1)?.entries).toHaveLength(3);
+	});
+
+	it("doesn't let the reload after a merge land before the merge is committed", async () => {
+		// The index is a round trip the reload can beat. Committing what this window knew after that
+		// would leave memory short of what it merged with, and the next save would write over it.
+		const { p, seen } = await openOne();
+		p.indexDelay.ms = 40;
+		otherWindowSaves(p, {
+			entries: [entry("a"), { ...entry("b"), ciphertext: `ct:${seenLogin("Saved elsewhere")}` }],
+			tombstones: [],
+		});
+		await act(async () => {
+			await seen.actions?.addEntry(newLogin);
+		});
+		p.indexDelay.ms = 0;
+		await waitFor(() =>
+			expect(seen.state?.entries.map((e) => e.name)).toContain("Saved elsewhere"),
+		);
+		await act(async () => {
+			await seen.actions?.addEntry({ ...newLogin, name: "Saved here too" });
+		});
+		const written = p.writes.at(-1)?.entries.map((e) => e.id);
+		expect(written).toContain("b");
+		expect(written).toHaveLength(4);
+	});
+
+	it("reads nothing extra, and merges with nothing, where there is only ever one window", async () => {
+		diskVersion.current = 1;
+		const p = makePlatform(
+			{ v1: { entries: [entry("a")], tombstones: [] } },
+			[{ id: "v1", label: "", createdAt: 1 }],
+			{ oneWindow: true },
+		);
+		const seen = mount(p.platform);
+		await settle();
+		await act(async () => seen.registry?.selectVault("v1"));
+		p.finishLoad();
+		await waitFor(() => expect(seen.synced?.ready).toBe(true));
+		// A background sync write, say, which that platform's own reload picks up.
+		diskVersion.current++;
+		const reads = p.payloadReads();
+		await act(async () => {
+			await seen.actions?.addEntry(newLogin);
+		});
+		expect(p.payloadReads()).toBe(reads);
+	});
+
+	it("drops a reload under way when the vault locks, leaving nothing decrypted", async () => {
+		const { p, seen } = await openOne();
+		p.holdLoad();
+		act(() => p.hear());
+		await act(async () => p.lockFromOutside());
+		p.finishLoad();
+		await settle();
+		expect(seen.state?.isLocked).toBe(true);
+		expect(seen.state?.entries).toEqual([]);
+		expect(seen.synced?.settings).toBeUndefined();
 	});
 
 	it("writes as before with nothing else having written, and reads nothing back", async () => {

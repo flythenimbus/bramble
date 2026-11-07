@@ -63,7 +63,7 @@ export interface VaultRegistryValue {
 	refresh: () => Promise<void>;
 	/** Take a vault off the lists (local to this device). Reads storage fresh, since a join has
 	 * usually just added a record this render has not seen. */
-	hide: (id: string) => Promise<void>;
+	hide: (id: string, copy: { blobHash: string; into: string }) => Promise<void>;
 	/** List a hidden vault again, under its own name. */
 	show: (id: string) => Promise<void>;
 	/** Forget the record of a vault deleteEmptyVault has erased. Never the active one: that is
@@ -169,24 +169,28 @@ export function VaultRegistryProvider({
 	// rename or delete another vault.
 	const rename = useCallback(
 		async (label: string) => {
-			if (activeId) await persist(renameVault(registry, activeId, label));
+			if (!activeId) return;
+			// Fresh: this runs from a reload after another window's rename, and this render's registry
+			// may lack a vault added elsewhere.
+			const current = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
+			await persist(renameVault(current, activeId, label));
 		},
-		[registry, persist, activeId],
+		[storage, persist, activeId],
 	);
 	// State only: forget the active vault's record and deselect it (selecting the only vault left,
 	// as on launch). The blob is erased by
 	// useVault.deleteVault() (after re-auth), which then calls this. Not a standalone delete.
 	const dropActiveRecord = useCallback(async () => {
 		if (!activeId) return;
-		const next = removeVault(registry, activeId);
+		const next = removeVault(parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY)), activeId);
 		await persist(next);
 		setActiveId(soleVaultId(next));
-	}, [registry, persist, activeId]);
+	}, [storage, persist, activeId]);
 
 	const hide = useCallback(
-		async (id: string) => {
+		async (id: string, copy: { blobHash: string; into: string }) => {
 			const current = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
-			await persist(hideVault(current, id, Date.now()));
+			await persist(hideVault(current, id, { at: Date.now(), ...copy }));
 		},
 		[storage, persist],
 	);

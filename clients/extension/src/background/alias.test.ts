@@ -16,7 +16,7 @@ const { aliasConfiguredAnywhere } = await import("./alias");
 describe("whether a locked browser offers an alias unlock row", () => {
 	beforeEach(() => meta.clear());
 
-	const vaults = (...list: { id: string; hiddenAt?: number }[]) =>
+	const vaults = (...list: { id: string; hidden?: unknown }[]) =>
 		meta.set(VAULT_REGISTRY_KEY, {
 			vaults: list.map((v) => ({ label: "", createdAt: 1, ...v })),
 		});
@@ -28,7 +28,7 @@ describe("whether a locked browser offers an alias unlock row", () => {
 	});
 
 	it("does not for a provider only a hidden vault has: unlocking can't reach it", async () => {
-		vaults({ id: "old", hiddenAt: 5 }, { id: "new" });
+		vaults({ id: "old", hidden: { at: 5, blobHash: "abc", into: "new" } }, { id: "new" });
 		meta.set(aliasConfiguredHintKeyFor("old"), true);
 		expect(await aliasConfiguredAnywhere()).toBe(false);
 	});

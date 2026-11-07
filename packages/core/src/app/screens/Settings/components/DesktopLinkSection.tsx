@@ -348,8 +348,8 @@ export function DesktopLinkSection() {
 			)}
 			{hiddenVaults
 				.filter((v) => v.id !== link.combined?.pendingRemoval?.id)
-				.map((v, i) => (
-					<HiddenVaultRow key={v.id} vault={v} index={i} />
+				.map((v) => (
+					<HiddenVaultRow key={v.id} vault={v} onChangedSince={link.setError} />
 				))}
 			{link.combined && <CombineResult link={link} />}
 			<Modal open={link.copyingOver} onClose={() => {}} dismissable={false} className="max-w-sm">

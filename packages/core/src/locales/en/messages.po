@@ -212,6 +212,10 @@ msgstr "{moving, plural, one {Restore # entry?} other {Restore # entries?}}"
 #~ msgstr "{name} (before linking)"
 
 #: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "{name} changed after the copy, so it's listed again."
+msgstr "{name} changed after the copy, so it's listed again."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
 msgstr "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
 
@@ -3840,6 +3844,10 @@ msgstr "The desktop's vault already has a backup target, so this vault's weren't
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
 msgstr "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "The old vault"
+msgstr "The old vault"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The old vault stays"

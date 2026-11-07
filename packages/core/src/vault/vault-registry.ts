@@ -15,7 +15,15 @@ const VaultRecordSchema = z.object({
 	createdAt: z.number(),
 	/** Set while a vault combined into the desktop app's waits for the user to delete or keep it.
 	 * Off every list. Local to this device. */
-	hiddenAt: z.number().optional(),
+	hidden: z
+		.object({
+			at: z.number(),
+			/** Its bytes when the copy was made: anything saved into it since is not in the copy. */
+			blobHash: z.string(),
+			/** The vault holding the copy. With that gone, this is the only copy again. */
+			into: z.string(),
+		})
+		.optional(),
 });
 export type VaultRecord = z.infer<typeof VaultRecordSchema>;
 
@@ -45,9 +53,18 @@ export function addVault(reg: VaultRegistry, record: VaultRecord): VaultRegistry
 	return { vaults: [...reg.vaults, record] };
 }
 
-/** Remove a vault. */
+/** Remove a vault. One hidden for holding a copy in it is an ordinary vault again. */
 export function removeVault(reg: VaultRegistry, id: string): VaultRegistry {
-	return { vaults: reg.vaults.filter((v) => v.id !== id) };
+	return {
+		vaults: reg.vaults
+			.filter((v) => v.id !== id)
+			.map((v) => (v.hidden?.into === id ? shown(v) : v)),
+	};
+}
+
+function shown(record: VaultRecord): VaultRecord {
+	const { hidden: _hidden, ...rest } = record;
+	return rest;
 }
 
 /** Rename a vault. A blank label falls back to "Vault N" at display time (see displayLabel). */
@@ -56,25 +73,22 @@ export function renameVault(reg: VaultRegistry, id: string, label: string): Vaul
 }
 
 /** Mark a vault as the one linking set aside, kept until the user deletes it. */
-export function hideVault(reg: VaultRegistry, id: string, at: number): VaultRegistry {
-	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, hiddenAt: at } : v)) };
+export function hideVault(
+	reg: VaultRegistry,
+	id: string,
+	hidden: NonNullable<VaultRecord["hidden"]>,
+): VaultRegistry {
+	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, hidden } : v)) };
 }
 
 /** List a hidden vault again. */
 export function showVault(reg: VaultRegistry, id: string): VaultRegistry {
-	return {
-		...reg,
-		vaults: reg.vaults.map((v) => {
-			if (v.id !== id) return v;
-			const { hiddenAt: _hiddenAt, ...shown } = v;
-			return shown;
-		}),
-	};
+	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? shown(v) : v)) };
 }
 
 /** The vaults to show. A hidden one is listed if nothing else is, rather than stranded. */
 export function listedVaults(reg: VaultRegistry): VaultRecord[] {
-	const listed = reg.vaults.filter((v) => v.hiddenAt === undefined);
+	const listed = reg.vaults.filter((v) => v.hidden === undefined);
 	return listed.length > 0 ? listed : reg.vaults;
 }
 

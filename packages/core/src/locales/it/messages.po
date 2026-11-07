@@ -212,6 +212,10 @@ msgstr "{moving, plural, one {Ripristinare # elemento?} other {Ripristinare # el
 #~ msgstr "{name} (prima del collegamento)"
 
 #: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "{name} changed after the copy, so it's listed again."
+msgstr "{name} è cambiato dopo la copia, quindi viene elencato di nuovo."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
 msgstr "{name} è nascosto su questo browser. Le sue voci sono state copiate nel vault del desktop."
 
@@ -3840,6 +3844,10 @@ msgstr "Il vault del desktop dispone già di una destinazione di backup, pertant
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
 msgstr "Il vault del desktop dispone di un proprio provider di alias email, pertanto quello di questo vault non è stato trasferito."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "The old vault"
+msgstr "La vecchia cassaforte"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The old vault stays"

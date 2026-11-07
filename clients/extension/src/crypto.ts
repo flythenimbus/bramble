@@ -133,8 +133,12 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 		},
 
 		onExternalChange(callback: () => void) {
-			const handler = (message: { type?: string } | undefined) => {
-				if (message?.type === "VAULT_CHANGED_EXTERNAL") callback();
+			const handler = (message: { type?: string; vaultId?: string } | undefined) => {
+				if (message?.type !== "VAULT_CHANGED_EXTERNAL") return;
+				// Background writers name no vault. A window on another vault has nothing to read, and
+				// its reload would publish its logins under the open vault's autofill session.
+				if (message.vaultId && vaultId && message.vaultId !== vaultId) return;
+				callback();
 			};
 			api.runtime.onMessage.addListener(handler);
 			return () => api.runtime.onMessage.removeListener(handler);
@@ -142,9 +146,9 @@ function makeCrypto(vaultId?: string): CryptoAdapter {
 
 		// Reaches every other extension page, never this one. Rejects with no other page open.
 		notifyExternalChange() {
-			void Promise.resolve(api.runtime.sendMessage({ type: "VAULT_CHANGED_EXTERNAL" })).catch(
-				() => {},
-			);
+			void Promise.resolve(
+				api.runtime.sendMessage({ type: "VAULT_CHANGED_EXTERNAL", vaultId }),
+			).catch(() => {});
 		},
 
 		generateVek: () => send<string>("CRYPTO_GENERATE_VEK"),

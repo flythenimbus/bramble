@@ -95,37 +95,56 @@ describe("parseRegistry", () => {
 });
 
 describe("a vault hidden after a combine", () => {
-	const reg = { vaults: [rec("old", "Personal", 1), rec("new", "Home", 2)] };
+	const reg = {
+		vaults: [rec("old", "Personal", 1), rec("new", "Home", 2), rec("other", "Work", 3)],
+	};
+	const copy = { at: 5, blobHash: "abc", into: "new" };
 
 	it("parses a record from before the field existed, and one from the label it replaced", () => {
-		expect(parseRegistry(reg).vaults[0]?.hiddenAt).toBeUndefined();
+		expect(parseRegistry(reg).vaults[0]?.hidden).toBeUndefined();
 		const labelled = { vaults: [{ ...rec("old"), setAsideAt: 5 }] };
 		expect(listedVaults(parseRegistry(labelled)).map((v) => v.id)).toEqual(["old"]);
 	});
 
 	it("leaves the list, keeping its place in the registry, which storage depends on", () => {
-		const hidden = hideVault(reg, "old", 5);
-		expect(listedVaults(hidden).map((v) => v.id)).toEqual(["new"]);
+		const hidden = hideVault(reg, "old", copy);
+		expect(listedVaults(hidden).map((v) => v.id)).toEqual(["new", "other"]);
 		expect(hiddenVaults(hidden).map((v) => v.id)).toEqual(["old"]);
-		expect(hidden.vaults.map((v) => v.id)).toEqual(["old", "new"]);
-		expect(parseRegistry(hidden).vaults[0]?.hiddenAt).toBe(5);
+		expect(hidden.vaults.map((v) => v.id)).toEqual(["old", "new", "other"]);
+		expect(parseRegistry(hidden).vaults[0]?.hidden).toEqual(copy);
 	});
 
 	it("comes back under its own name, unmarked", () => {
-		const shown = showVault(hideVault(reg, "old", 5), "old");
-		expect(listedVaults(shown).map((v) => v.label)).toEqual(["Personal", "Home"]);
-		expect(shown.vaults[0]).not.toHaveProperty("hiddenAt");
+		const shown = showVault(hideVault(reg, "old", copy), "old");
+		expect(listedVaults(shown).map((v) => v.label)).toEqual(["Personal", "Home", "Work"]);
+		expect(shown.vaults[0]).not.toHaveProperty("hidden");
 		expect(hiddenVaults(shown)).toEqual([]);
 	});
 
 	it("is listed rather than stranded when no other vault is left", () => {
-		const alone = { vaults: [{ ...rec("old"), hiddenAt: 5 }] };
+		const alone = { vaults: [{ ...rec("old"), hidden: copy }] };
 		expect(listedVaults(alone).map((v) => v.id)).toEqual(["old"]);
 		expect(hiddenVaults(alone)).toEqual([]);
 	});
 
+	it("becomes an ordinary vault for good when the vault holding its copy goes", () => {
+		// Listing it only while nothing else is would hide it again at the next vault added, and
+		// its Delete would take logins added since, which were never copied.
+		const hidden = hideVault(reg, "old", copy);
+		const gone = removeVault(hidden, "new");
+		expect(gone.vaults[0]).not.toHaveProperty("hidden");
+		expect(listedVaults(gone).map((v) => v.id)).toEqual(["old", "other"]);
+		const added = addVault(gone, rec("later"));
+		expect(hiddenVaults(added)).toEqual([]);
+	});
+
+	it("stays hidden when some other vault goes", () => {
+		const gone = removeVault(hideVault(reg, "old", copy), "other");
+		expect(hiddenVaults(gone).map((v) => v.id)).toEqual(["old"]);
+	});
+
 	it("touches no other vault", () => {
-		expect(hideVault(reg, "old", 5).vaults[1]).toEqual(reg.vaults[1]);
+		expect(hideVault(reg, "old", copy).vaults[1]).toEqual(reg.vaults[1]);
 		expect(showVault(reg, "missing")).toEqual(reg);
 	});
 });

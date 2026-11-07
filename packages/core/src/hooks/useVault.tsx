@@ -16,6 +16,7 @@ import type { PickedAttachment } from "../adapters/files";
 import { buildBackup } from "../backup/archive";
 import { usePlatform } from "../context/PlatformContext";
 import type { PlacedAttachment } from "../import/types";
+import { sha256Hex } from "../util/hash";
 import { isVaultEmpty, readVaultContents } from "../vault/vault-empty";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 import {
@@ -376,7 +377,8 @@ export interface VaultActions {
 	/** Remove a vault whose entries were copied into the open one, once all of that copy is on disk
 	 * and the vault has not moved on since it began. False otherwise, and the vault stays. */
 	deleteCarriedVault(id: string, copied: CopiedOut): Promise<boolean>;
-	/** Delete a hidden vault, on the user's word, once the proof a copy gave is gone. */
+	/** Delete a hidden vault on the user's word, once the copy's proof is gone. False if it changed
+	 * since the copy was made, or isn't hidden. */
 	deleteHiddenVault(id: string): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	/** Save a backup file. Resolves with any attachments it had to leave out. */
@@ -653,14 +655,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// it. The ref is what writes check; the state is what `synced.ready` reads.
 	const loadedVaultRef = useRef<string | null>(null);
 	const [loadedVault, setLoadedVault] = useState<string | null>(null);
-	// The entries ciphertext memory came from, so a save can tell another window wrote since. See
-	// createEntryMutations.
-	const diskSeenRef = useRef<Uint8Array | null>(null);
 	const reloadAfterMergeRef = useRef<() => void>(() => {});
+	// Moves on when the open vault closes or changes, so a reload that started before can't land after.
+	const openGenerationRef = useRef(0);
 	const markLoaded = useCallback((key: string | null) => {
 		loadedVaultRef.current = key;
 		setLoadedVault(key);
-		if (key === null) diskSeenRef.current = null;
 	}, []);
 	// Mirrored in state so consumers re-render when a value changes, including when a remote
 	// merge lands one. The ref is what mutations thread; this is what the UI reads.
@@ -768,8 +768,11 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// `vaultId` names the vault when the caller just created or selected it and this closure's
 	// `activeId` hasn't caught up (the restore screen's first-vault unlock).
 	const loadEntries = useCallback(
-		async (vaultId?: string) => {
+		async (vaultId?: string, superseded?: () => boolean) => {
 			const targetId = vaultId ?? activeId;
+			// Tracked only where another window can write under this one.
+			const tracked = (ciphertext: Uint8Array) =>
+				crypto.notifyExternalChange ? { diskSeen: ciphertext } : {};
 			// Bind the eventual plaintext cache publish to the unlocked session that started this
 			// load, before any blob read/decrypt await can cross a lock/unlock or vault switch.
 			// A lease that cannot be issued is the same class of refusal as one that is rejected
@@ -779,10 +782,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				return undefined;
 			});
 			const { blob } = await readDecodedBlob();
+			if (superseded?.()) return;
 			if (blob.entriesCiphertext.length === 0) {
-				vaultStateRef.current = emptyVaultSyncState();
+				vaultStateRef.current = { ...emptyVaultSyncState(), ...tracked(blob.entriesCiphertext) };
 				latestRef.current = { ...latestRef.current, entries: [] };
-				diskSeenRef.current = blob.entriesCiphertext;
 				markLoaded(vaultKey(targetId));
 				setConflicts(NO_CONFLICTS);
 				setSyncedSettings(undefined);
@@ -837,6 +840,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					console.warn("[vault] combining siblings on load failed; keeping the conflict:", e);
 				}
 			}
+			if (superseded?.()) return;
 			setSyncedSettings(payload.settings);
 			setFiles(liveFiles(payload));
 			// Advance this device's clock past every stamp it just read, so the next
@@ -857,6 +861,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 					dekIv: enc.dekIv,
 				})),
 			);
+			if (superseded?.()) return;
 			// Decode everything readable BEFORE any write: a failed open must leave the vault as it was.
 			const unreadable: EncryptedEntry[] = [];
 			const decrypted: Entry[] = [];
@@ -897,10 +902,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			const { entries: _entries, ...syncState } = loaded;
 			// Stamps and entries change together, as in commitEntries: a write or an opened version
 			// read before the render lands would otherwise pair new stamps with old content.
-			vaultStateRef.current = syncState;
-			latestRef.current = { ...latestRef.current, entries: decrypted };
 			// What this load read, not what the disk holds by now: a save since then must still merge.
-			diskSeenRef.current = blob.entriesCiphertext;
+			vaultStateRef.current = { ...syncState, ...tracked(blob.entriesCiphertext) };
+			latestRef.current = { ...latestRef.current, entries: decrypted };
 			markLoaded(vaultKey(targetId));
 			setConflicts(conflictsOf(loaded));
 			setEntries(decrypted);
@@ -909,10 +913,18 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[readDecodedBlob, crypto, storage, autofill, ensureClock, publishIndex, activeId, markLoaded],
 	);
 
-	// Once the caller has committed what it wrote, so this load replaces that rather than the reverse.
-	reloadAfterMergeRef.current = () => {
-		setTimeout(() => void loadEntries().catch(() => {}), 0);
-	};
+	// Another window saved: read it, unless this vault has closed or changed by the time that lands.
+	const reloadOpenVault = useCallback(() => {
+		const generation = openGenerationRef.current;
+		void loadEntries(undefined, () => generation !== openGenerationRef.current).catch(() => {});
+	}, [loadEntries]);
+	useEffect(() => {
+		reloadAfterMergeRef.current = reloadOpenVault;
+	}, [reloadOpenVault]);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: moves on when the open vault changes.
+	useEffect(() => {
+		openGenerationRef.current++;
+	}, [activeId]);
 
 	// After a successful unwrap: load, or lock again so nothing syncs a vault that didn't open.
 	const openUnlocked = useCallback(
@@ -931,6 +943,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 
 	/** Drop everything decrypted, in one piece, and show the vault locked. */
 	const closeOpenVault = useCallback(() => {
+		openGenerationRef.current++;
 		vaultStateRef.current = emptyVaultSyncState();
 		latestRef.current = { ...latestRef.current, entries: [] };
 		markLoaded(null);
@@ -1056,10 +1069,8 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	// Re-decrypt when the background commits a vault write (corner-prompt path)
 	// outside this context, keeping in-memory entries in sync with disk.
 	useEffect(() => {
-		return crypto.onExternalChange(() => {
-			void loadEntries().catch(() => {});
-		});
-	}, [crypto, loadEntries]);
+		return crypto.onExternalChange(reloadOpenVault);
+	}, [crypto, reloadOpenVault]);
 
 	/** Unlock with the master password, decrypt entries, and clear lock state. */
 	const unlock = useCallback(
@@ -1321,8 +1332,12 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				emptyEntriesPayload(),
 			);
 			await storage.writeVaultBlob(bytes, newId);
-			vaultStateRef.current = emptyVaultSyncState();
-			diskSeenRef.current = decodeVaultBlob(bytes).entriesCiphertext;
+			vaultStateRef.current = {
+				...emptyVaultSyncState(),
+				...(bound.notifyExternalChange
+					? { diskSeen: decodeVaultBlob(bytes).entriesCiphertext }
+					: {}),
+			};
 			markLoaded(newId);
 			setConflicts(NO_CONFLICTS);
 			setSyncedSettings(undefined);
@@ -1430,7 +1445,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 				autofill,
 				readDecodedBlob,
 				clock: ensureClock,
-				diskSeen: diskSeenRef,
 				onDiskMerged: () => reloadAfterMergeRef.current(),
 			}),
 		[crypto, storage, autofill, readDecodedBlob, ensureClock],
@@ -2400,7 +2414,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (id: string): Promise<boolean> => {
 			if (id === activeId) return false;
 			const registry = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
-			if (registry.vaults.find((v) => v.id === id)?.hiddenAt === undefined) return false;
+			const hidden = registry.vaults.find((v) => v.id === id)?.hidden;
+			if (!hidden) return false;
+			// Another window that still had it open could have saved into it since the copy.
+			if ((await sha256Hex(await storage.readVaultBlob(id))) !== hidden.blobHash) return false;
 			await eraseOtherVault(id);
 			return true;
 		},

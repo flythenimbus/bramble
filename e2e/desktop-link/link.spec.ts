@@ -119,9 +119,9 @@ test("settings: combines this browser's vault and its files into the desktop's",
 	await expect
 		.poll(async () => {
 			const registry = (await ext.stored("vault.registry")) as {
-				vaults: { hiddenAt?: number }[];
+				vaults: { hidden?: unknown }[];
 			};
-			return [registry.vaults.length, registry.vaults.filter((v) => v.hiddenAt).length];
+			return [registry.vaults.length, registry.vaults.filter((v) => v.hidden).length];
 		})
 		.toEqual([2, 0]);
 	await expect(popup.getByText(/before linking/)).toHaveCount(0);
@@ -216,10 +216,11 @@ for (const [copied, copies] of [
 		const warning = popup.getByText(/It goes if you delete the old vault/);
 		await expect(warning).toBeVisible({ timeout: 30_000 });
 
-		// Nothing goes on its own: the old vault waits for the answer, hidden.
+		// Nothing goes on its own. The look-alike is only in the old vault, so it stays listed.
 		const vaults = async () =>
-			((await ext.stored("vault.registry")) as { vaults: { hiddenAt?: number }[] }).vaults;
-		expect((await vaults()).filter((v) => v.hiddenAt)).toHaveLength(1);
+			((await ext.stored("vault.registry")) as { vaults: { hidden?: unknown }[] }).vaults;
+		expect(await vaults()).toHaveLength(2);
+		expect((await vaults()).filter((v) => v.hidden)).toHaveLength(0);
 
 		if (copied) {
 			await popup.getByRole("button", { name: "Copy them anyway" }).click();
@@ -492,11 +493,11 @@ test.describe("a window closed around the question", () => {
 		return popup;
 	};
 	const vaults = async (ext: Browser) =>
-		((await ext.stored("vault.registry")) as { vaults: { hiddenAt?: number }[] }).vaults;
+		((await ext.stored("vault.registry")) as { vaults: { hidden?: unknown }[] }).vaults;
 	/** The old vault is still there in full, off the lists, and Settings asks again. */
 	const stillHidden = async (ext: Browser, title: string) => {
 		expect(await vaults(ext)).toHaveLength(2);
-		expect((await vaults(ext)).filter((v) => v.hiddenAt)).toHaveLength(1);
+		expect((await vaults(ext)).filter((v) => v.hidden)).toHaveLength(1);
 		expect(await ext.storedKeys("vault-blob-b64:")).toHaveLength(2);
 
 		const again = await ext.popup();
@@ -518,7 +519,7 @@ test.describe("a window closed around the question", () => {
 		const again = await stillHidden(ext, "Closed unanswered");
 
 		await again.getByRole("button", { name: "Keep it" }).click();
-		await expect.poll(async () => (await vaults(ext)).filter((v) => v.hiddenAt).length).toBe(0);
+		await expect.poll(async () => (await vaults(ext)).filter((v) => v.hidden).length).toBe(0);
 		await expect(again.getByText(/is hidden on this browser/)).toHaveCount(0);
 		await desktopOpenVault("Vault 1");
 	});

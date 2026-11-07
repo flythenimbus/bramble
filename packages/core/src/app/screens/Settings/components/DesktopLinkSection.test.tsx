@@ -15,8 +15,15 @@ const h = vi.hoisted(() => ({
 	entries: [] as Entry[],
 	vaults: [] as { id: string; label: string; createdAt: number }[],
 	groupOf: new Map<string, string>(),
+	/** Deleting a hidden vault finds it changed since the copy. */
+	hiddenChanged: false,
 	/** Vaults hidden after a combine. */
-	hidden: [] as { id: string; label: string; createdAt: number; hiddenAt?: number }[],
+	hidden: [] as {
+		id: string;
+		label: string;
+		createdAt: number;
+		hidden?: { at: number; blobHash: string; into: string };
+	}[],
 	/** Holds an import open, to look at the screen during it. */
 	importHold: null as Promise<void> | null,
 	/** The app says its vault is empty, so linking combines without asking. */
@@ -96,7 +103,7 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 		}),
 		deleteHiddenVault: async (id: string) => {
 			h.steps.push(`deleteHidden:${id}`);
-			return true;
+			return !h.hiddenChanged;
 		},
 		readSetting: () => undefined,
 		writeSetting: async () => {},
@@ -227,6 +234,7 @@ afterEach(() => {
 	h.vaults = [];
 	h.groupOf.clear();
 	h.hidden = [];
+	h.hiddenChanged = false;
 	h.importHold = null;
 	h.desktopEmpty = false;
 	h.steps.length = 0;
@@ -486,7 +494,12 @@ describe("when both sides have entries", () => {
 });
 
 describe("a vault left hidden by a closed dialog", () => {
-	const hidden = { id: "old", label: "Personal", createdAt: 1, hiddenAt: 5 };
+	const hidden = {
+		id: "old",
+		label: "Personal",
+		createdAt: 1,
+		hidden: { at: 5, blobHash: "abc", into: "v2" },
+	};
 
 	it("is asked about again in Settings, by name, with both answers", async () => {
 		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
@@ -517,6 +530,25 @@ describe("a vault left hidden by a closed dialog", () => {
 		expect(h.steps).not.toContain("deleteHidden:old");
 		fireEvent.click(await screen.findByRole("button", { name: /^delete it$/i }));
 		await waitFor(() => expect(h.steps).toContain("deleteHidden:old"));
+	});
+
+	it("is listed again, and says why, if it changed after the copy", async () => {
+		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
+		h.hidden = [hidden];
+		h.hiddenChanged = true;
+		h.steps = [];
+		mount();
+		fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
+		fireEvent.click(await screen.findByRole("button", { name: /^delete it$/i }));
+		await waitFor(() => expect(h.steps).toContain("show:old"));
+		await screen.findByText(/Personal changed after the copy/i);
+	});
+
+	it("isn't called by a number that could be the open vault's", async () => {
+		h.vaults = [{ id: "v2", label: "", createdAt: 2 }];
+		h.hidden = [{ ...hidden, label: "" }];
+		mount();
+		await screen.findByText(/The old vault is hidden on this browser/i);
 	});
 
 	it("asks nothing with none hidden", async () => {

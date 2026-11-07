@@ -212,6 +212,10 @@ msgstr "{moving, plural, one {Restaurer # entrée ?} other {Restaurer # entrées
 #~ msgstr "{name} (avant liaison)"
 
 #: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "{name} changed after the copy, so it's listed again."
+msgstr "{name} a changé après la copie et figure donc à nouveau dans la liste."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
 msgstr "L'élément {name} est masqué sur ce navigateur. Ses entrées ont été copiées dans le coffre de l'application de bureau."
 
@@ -3840,6 +3844,10 @@ msgstr "Le coffre de l’ordinateur de bureau possède déjà une cible de sauve
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
 msgstr "Le coffre de l’ordinateur de bureau possède son propre fournisseur d’alias d’e-mail ; celui de ce coffre n’a donc pas été transféré."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "The old vault"
+msgstr "L'ancien coffre-fort"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The old vault stays"

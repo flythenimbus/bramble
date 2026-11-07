@@ -1390,17 +1390,22 @@ Each open extension window (the toolbar popup, a Settings window, an options tab
 its own memory and writes the whole vault from there. With nothing more, a window that missed another
 window's save would write over it, and a deleted login would come back.
 
-Two things stop that. After a save, a window tells the others (`notifyExternalChange`, the same message
-background writers send), and they reload. And each window remembers the entries ciphertext its memory
-came from (`diskSeen`). If the disk holds anything else when it saves, it merges with the disk using the
-same merge sync uses, then reloads. A plain save with nothing else having written is exactly what it
-always was: no extra decrypt, and no merge.
+Two things stop that. After a save, a window tells the others on the same vault (`notifyExternalChange`,
+the same message background writers send), and they reload. And a window's state remembers the entries
+ciphertext it came from (`diskSeen` on `VaultEntries`). If the disk holds anything else when it saves, it
+merges with the disk using the same merge sync uses, then reloads. A plain save with nothing else having
+written is what it always was, plus one read to compare.
 
-Until that reload lands the window has no record of the disk, so any further save merges too. A load
-that lands while a write is finishing clears the record as well, since what the caller is about to commit
-is behind what the load read.
+`diskSeen` belongs to the state, not the window: a write compares the snapshot it is writing, so a reload
+landing during it can't vouch for that snapshot. After a merge it is null until the reload lands, so any
+further save merges too. The reload is asked for after the write's last await, and if it still lands before
+the caller commits, the commit brings back null, and the next save merges. A reload that was under way when
+the vault closes or changes is dropped.
 
-Limits, both small: the gap between reading the disk and writing it is still a few milliseconds wide, so
+Tracked only where `notifyExternalChange` exists, which is the extension. Desktop and mobile have one UI
+context, and each save there would pay for the reads.
+
+Limits, both small: the gap between comparing with the disk and writing it is a few milliseconds wide, so
 two saves landing inside it can lose one. And every window on a device shares one sync identity, so the
 same entry edited in two windows at once is not seen as a conflict: the later save wins, as a later edit on
 one device always has. Saving in two windows at the same millisecond needs two hands; the second limit is the

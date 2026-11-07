@@ -176,13 +176,15 @@ mine unless marked otherwise.
   under a sibling vault's key and still work there. Any stored alias value counts, shaped like a
   provider this build knows or not: extension and app version independently, so a newer one's is
   neither overwritten nor lost.
-- **The old vault is hidden once the copy is done, and the user is asked whether to delete it** (the
-  user's decision, 2026-11-06, replacing an earlier checkbox and a "(before linking)" label: the choice
-  comes with the result, and no listed vault is marked as the old one). It is never deleted without a
-  press. "Keep it" makes it an ordinary vault again, listed under its own name. Closing the dialog
-  decides nothing: it stays hidden and Settings > Sync asks again, for as long as it takes. Its key is
-  dropped either way. There is no timer. A hidden vault is listed anyway if no other vault is left, so
-  it can't be stranded.
+- **Once the copy is done, the user is asked whether to delete the old vault** (the user's decision,
+  2026-11-06, replacing an earlier checkbox and a "(before linking)" label: the choice comes with the
+  result, and no listed vault is marked as the old one). It is never deleted without a press. "Keep it"
+  makes it an ordinary vault again, under its own name. Its key is dropped either way. There is no timer.
+- **It is hidden meanwhile, if nothing stayed behind in it.** Closing the dialog then decides nothing: it
+  stays hidden and Settings > Sync asks again. With look-alikes, conflict versions, or an alias provider or
+  backup targets that didn't come across, it stays listed under its own name, so nothing can be deleted
+  unawares once the dialog that says so is gone (my call). A hidden vault is listed again if the vault
+  holding its copy is deleted, or if no other vault is left, so it can't be stranded.
 - **The dialog says what the press would cost.** Look-alikes the dedup held back go with the vault
   unless copied ("Copy them anyway"). So do the versions of an entry in a sync conflict other than the
   one shown, and an alias provider or backup targets that gave way to the desktop's own.
@@ -191,7 +193,8 @@ mine unless marked otherwise.
   written, and the old vault's bytes unchanged since the copy began, so a login saved into it meanwhile
   is not lost. Memory has to hold the copy too, or this page's next write would take it off the disk.
   If not, the vault is listed again and the dialog says so. Once the dialog is closed that proof is
-  gone, so Delete in Settings is on the user's word, behind a confirm.
+  gone, so Delete in Settings is on the user's word, behind a confirm. It still refuses, and lists the
+  vault again, if the vault's bytes changed since the copy: another window may have had it open.
 - **Delete isn't offered where it could lose something by accident:** files that did not copy, entries
   it could not decrypt, tags past the 32 an entry can carry, an alias provider or backup target that
   failed to store, or a pairing that did not finish. The vault stays listed under its own name, and

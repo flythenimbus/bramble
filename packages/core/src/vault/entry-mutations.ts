@@ -53,6 +53,14 @@ const USE_COALESCE_MS = 60_000;
  */
 export interface VaultEntries {
 	entries: Entry[];
+	/**
+	 * The entries ciphertext this state came from, so a write over anything else merges instead of
+	 * losing it: another window's save reaches this one only if it hears. Part of the state rather
+	 * than beside it, so a reload landing during a write can't vouch for the snapshot being written.
+	 * Null when not known, which merges too. Absent where a platform has one UI context and no
+	 * tracking. See docs/multiple-vaults.md "Two windows".
+	 */
+	diskSeen?: Uint8Array | null;
 	stamps: Map<string, Hlc>;
 	/** Causal history of each displayed version; absent for one written by an older build. */
 	causal: Map<string, Causal>;
@@ -112,12 +120,6 @@ export interface EntryMutationsDeps {
 	readDecodedBlob: () => Promise<{ blob: VaultBlob }>;
 	/** Lazily resolves this device's HLC; mutations stamp new writes from it. */
 	clock: () => Promise<HybridClock>;
-	/**
-	 * The entries ciphertext this UI context's memory came from, or null with no such record. Memory
-	 * is written whole, and another window's save reaches it only if that window says so, so a write
-	 * over anything else merges with it instead. See docs/multiple-vaults.md "Two windows".
-	 */
-	diskSeen?: { current: Uint8Array | null };
 	/** A write had to merge: memory lacks what it merged with until it is read again. */
 	onDiskMerged?: () => void;
 }
@@ -326,7 +328,7 @@ const sameCiphertext = (a: Uint8Array | null, b: Uint8Array) =>
 	a !== null && a.length === b.length && a.every((v, i) => v === b[i]);
 
 export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
-	const { crypto, storage, autofill, readDecodedBlob, clock, diskSeen, onDiskMerged } = deps;
+	const { crypto, storage, autofill, readDecodedBlob, clock, onDiskMerged } = deps;
 
 	// The on-disk entries format lives in one place (EntriesBlobStore); these are
 	// the same primitives the sync-enrollment path and mobile roster sync use.
@@ -413,25 +415,27 @@ export function createEntryMutations(deps: EntryMutationsDeps): EntryMutations {
 	const persist = async (next: VaultEntries): Promise<VaultEntries> => {
 		const indexLease = await autofill.beginIndexUpdate?.();
 		const payload = await buildPayload(next);
-		const onDisk = async () => (await readDecodedBlob()).blob.entriesCiphertext;
-		let written: Uint8Array | null = null;
-		if (diskSeen && !sameCiphertext(diskSeen.current, await onDisk())) {
+		let diskSeen = next.diskSeen;
+		let merged = false;
+		if (
+			diskSeen !== undefined &&
+			!sameCiphertext(diskSeen, (await readDecodedBlob()).blob.entriesCiphertext)
+		) {
 			// This write's own versions first, so one with the same stamp as the disk's stays this one.
 			await writeEntriesBlob(mergeEntriesPayload(payload, await readEntriesPayload()));
-			diskSeen.current = null;
-			onDiskMerged?.();
+			diskSeen = null;
+			merged = true;
 		} else {
-			await writeEntriesBlob(payload);
-			if (diskSeen) {
-				written = await onDisk();
-				diskSeen.current = written;
-			}
+			await writeEntriesBlob(payload, (written) => {
+				if (diskSeen !== undefined) diskSeen = written;
+			});
 		}
-		await autofill.setIndex(toAutofillIndex(next.entries), indexLease);
-		// A load that landed during this write left memory behind what the caller is about to commit.
-		if (diskSeen && written && diskSeen.current !== written) diskSeen.current = null;
+		// It's on disk now, whatever the index does.
 		crypto.notifyExternalChange?.();
-		return next;
+		await autofill.setIndex(toAutofillIndex(next.entries), indexLease);
+		// Last, so the read this asks for comes after the caller has committed.
+		if (merged) onDiskMerged?.();
+		return diskSeen === undefined ? next : { ...next, diskSeen };
 	};
 
 	// Validate at the seam (reject before encrypt), but persist the original value:

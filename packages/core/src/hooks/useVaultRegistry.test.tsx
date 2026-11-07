@@ -57,7 +57,12 @@ describe("VaultRegistryProvider", () => {
 	describe("with a vault hidden after a combine", () => {
 		const stored = {
 			vaults: [
-				{ id: "old", label: "Personal", createdAt: 1, hiddenAt: 5 },
+				{
+					id: "old",
+					label: "Personal",
+					createdAt: 1,
+					hidden: { at: 5, blobHash: "abc", into: "new" },
+				},
 				{ id: "new", label: "Home", createdAt: 2 },
 			],
 		};
@@ -83,6 +88,18 @@ describe("VaultRegistryProvider", () => {
 			await vi.waitFor(() => expect(get().ready).toBe(true));
 			expect(get().syncKey("sync.group")).toBe("sync.group:new");
 		});
+	});
+
+	it("renames against what is stored, not this window's older copy of it", async () => {
+		const stored = { vaults: [{ id: "a", label: "Mine", createdAt: 1 }] };
+		const { get, setMeta } = mount(stored);
+		await vi.waitFor(() => expect(get().activeId).toBe("a"));
+		// Another window added a vault since this one read the list.
+		stored.vaults.push({ id: "b", label: "Added elsewhere", createdAt: 2 });
+		await act(async () => get().rename("Renamed"));
+		const calls = setMeta.mock.calls as unknown as [string, { vaults: { id: string }[] }][];
+		const written = calls.at(-1)?.[1] as { vaults: { id: string }[] };
+		expect(written.vaults.map((v) => v.id)).toEqual(["a", "b"]);
 	});
 
 	it("does not auto-select when several vaults exist (picker)", async () => {

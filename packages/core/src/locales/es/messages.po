@@ -212,6 +212,10 @@ msgstr "{moving, plural, one {¿Restaurar # entrada?} other {¿Restaurar # entra
 #~ msgstr "{name} (antes de vincular)"
 
 #: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "{name} changed after the copy, so it's listed again."
+msgstr "{name} cambió tras la copia, por lo que vuelve a aparecer en la lista."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
 msgstr "{name} está oculto en este navegador. Sus entradas se copiaron en la caja fuerte del escritorio."
 
@@ -3840,6 +3844,10 @@ msgstr "La bóveda de la aplicación de escritorio ya tiene un destino de copia 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
 msgstr "La bóveda de la aplicación de escritorio tiene su propio proveedor de alias de correo electrónico, por lo que no se ha transferido el de esta bóveda."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "The old vault"
+msgstr "La caja fuerte antigua"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The old vault stays"

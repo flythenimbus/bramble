@@ -212,6 +212,10 @@ msgstr "{moving, plural, one {# Eintrag wiederherstellen?} other {# Einträge wi
 #~ msgstr "{name} (vor der Verknüpfung)"
 
 #: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "{name} changed after the copy, so it's listed again."
+msgstr "{name} wurde nach dem Kopieren geändert und wird daher erneut aufgeführt."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
 msgstr "{name} ist in diesem Browser ausgeblendet. Die zugehörigen Einträge wurden in den Desktop-Tresor kopiert."
 
@@ -3840,6 +3844,10 @@ msgstr "Der Desktop-Tresor verfügt bereits über ein Backup-Ziel; das dieses Tr
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
 msgstr "Der Desktop-Tresor verfügt über einen eigenen E-Mail-Alias-Anbieter; der dieses Tresors wurde daher nicht übernommen."
+
+#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
+msgid "The old vault"
+msgstr "Der alte Tresor"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The old vault stays"
