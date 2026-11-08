@@ -167,26 +167,45 @@ export async function desktopConnectedBrowsers(): Promise<number> {
 	);
 }
 
-/** Disconnect every browser the open vault lists, from its Settings, confirming each in its own
- * row: an armed row shows its confirm where the trigger was. */
-export async function desktopDisconnectAll(): Promise<void> {
+/** What the open vault's Settings > Sync lists: browsers under Browser extension, which are the
+ * linked ones that don't sync, and the other devices it syncs with. */
+export async function desktopSyncRows(): Promise<{ browsers: number; devices: number }> {
+	return desk(`
+		await front();
+		if (!find(/^Connect a browser$/, "p,span,div")) { await click(/^Settings$/); await click(/^Sync$/); }
+		const labels = [...document.querySelectorAll("button")].filter(visible).map((b) => b.getAttribute("aria-label") || "");
+		return {
+			browsers: labels.filter((l) => l === "Disconnect this browser").length,
+			devices: labels.filter((l) => l.startsWith("Remove ")).length,
+		};
+	`);
+}
+
+/** Remove every other device the open vault syncs with, then any browser still listed under
+ * Browser extension, from its Settings, confirming each in its own row: an armed row shows its
+ * confirm where the trigger was. */
+export async function desktopRemoveBrowsers(): Promise<void> {
 	await desk(`
 		await front();
 		if (!find(/^Connect a browser$/, "p,span,div")) { await click(/^Settings$/); await click(/^Sync$/); }
-		for (let i = 0; i < 50; i++) {
-			const trigger = [...document.querySelectorAll("button")]
-				.filter(visible)
-				.find((b) => b.getAttribute("aria-label") === "Disconnect this browser");
-			if (!trigger) return;
-			const row = trigger.parentElement;
-			trigger.click();
-			await sleep(150);
-			const confirm = await waitFor(() =>
-				[...row.querySelectorAll("button")].filter(visible).find((b) => /^Disconnect$/.test(b.textContent.trim())),
-			);
-			confirm.click();
-			await sleep(300);
-		}
+		const confirmEach = async (isTrigger, confirmText) => {
+			for (let i = 0; i < 50; i++) {
+				const trigger = [...document.querySelectorAll("button")]
+					.filter(visible)
+					.find((b) => isTrigger(b.getAttribute("aria-label") || ""));
+				if (!trigger) return;
+				const row = trigger.parentElement;
+				trigger.click();
+				await sleep(150);
+				const confirm = await waitFor(() =>
+					[...row.querySelectorAll("button")].filter(visible).find((b) => confirmText.test(b.textContent.trim())),
+				);
+				confirm.click();
+				await sleep(300);
+			}
+		};
+		await confirmEach((l) => l.startsWith("Remove "), /^Remove$/);
+		await confirmEach((l) => l === "Disconnect this browser", /^Disconnect$/);
 	`);
 }
 

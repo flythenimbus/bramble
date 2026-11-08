@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
 	targets: undefined as unknown[] | undefined,
 	onSyncEvent: null as ((e: { kind: string }) => void) | null,
 	listed: [] as unknown[],
+	/** The listed browsers that are this vault's sync devices, by link key. */
+	syncing: [] as string[],
 	/** Arming the invite waits on this, as deriving the admission key does in the app. */
 	armed: Promise.resolve() as Promise<void>,
 	/** How many times preparing the invite fails before it works. */
@@ -45,6 +47,7 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 
 const pairing = {
 	list: async () => h.listed,
+	syncing: async () => h.syncing,
 	identity: async () => "id",
 	forget: async () => true,
 	armSyncInvite: async () => {
@@ -122,6 +125,7 @@ afterEach(() => {
 	h.onDone = null;
 	h.summaries.length = 0;
 	h.listed = [];
+	h.syncing = [];
 	h.onSyncEvent = null;
 	h.armed = Promise.resolve();
 	h.inviteFailures = 0;
@@ -135,6 +139,41 @@ describe("the list of linked browsers", () => {
 		h.listed = [];
 		act(() => h.onSyncEvent?.({ kind: "roster" }));
 		await waitFor(() => expect(screen.queryByText("Chrome on Mac")).toBeNull());
+	});
+
+	it("leaves a browser that syncs this vault to the device list, where removing it does both", async () => {
+		h.listed = [
+			{ publicKey: "pk-a", label: "Chrome on Mac", pairedAt: 1 },
+			{ publicKey: "pk-b", label: "Firefox on Mac", pairedAt: 2 },
+		];
+		h.syncing = ["pk-a"];
+		mount();
+		expect(await screen.findByText("Firefox on Mac")).toBeTruthy();
+		expect(screen.queryByText("Chrome on Mac")).toBeNull();
+		expect(screen.getAllByRole("button", { name: /disconnect this browser/i })).toHaveLength(1);
+	});
+
+	it("moves a browser off this list once it starts syncing", async () => {
+		h.listed = [{ publicKey: "pk", label: "Chrome on Mac", pairedAt: 1 }];
+		mount();
+		expect(await screen.findByText("Chrome on Mac")).toBeTruthy();
+		h.syncing = ["pk"];
+		act(() => h.onSyncEvent?.({ kind: "roster" }));
+		await waitFor(() => expect(screen.queryByText("Chrome on Mac")).toBeNull());
+	});
+
+	it("doesn't take a browser that syncs already for one that just connected", async () => {
+		h.listed = [{ publicKey: "pk", label: "Chrome on Mac", pairedAt: 1 }];
+		h.syncing = ["pk"];
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		try {
+			await connect();
+			act(() => vi.advanceTimersByTime(3_000));
+			await act(async () => {});
+			expect(screen.queryByText(/connected to chrome on mac/i)).toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 

@@ -482,6 +482,13 @@ stays in it and says so.
   Settings removes a device, and when sync starts, so it also catches a browser that's offline. A
   device merely missing from the roster keeps its link, since it may be from a group this vault has
   left. A browser removed before it ever synced over the link keeps its link until it's removed here.
+- **Each browser is listed once on the desktop** (the user's decision, 2026-11-07). One that syncs the
+  open vault is in Settings > Sync's device list only, where removing it ends its sync and, by the
+  rule above, its link. Browser extension lists only linked browsers that aren't sync devices of the
+  open vault: one that hasn't synced over its link yet, or a link from an older build. Which is which
+  comes from the same record of link keys by device (`syncingLinkKeys`), and the list moves a browser
+  across as soon as that record learns it. The browser keeps its copy of the vault: nothing is deleted
+  there.
 - **Removed on the desktop.** A browser removed from a vault's list there is refused from then on.
   The desktop says so in a way the browser can tell apart from "another vault is open", and that
   browser vault drops its link and offers Link. The refusal is sealed after the handshake, so only

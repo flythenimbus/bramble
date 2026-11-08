@@ -28,6 +28,9 @@ export interface PairedBrowser {
 export interface PairingAdapter {
 	/** The browsers linked to the vault open now. */
 	list(): Promise<PairedBrowser[]>;
+	/** Which of those are the open vault's sync devices, by public key. The device list shows them,
+	 * and removing one there ends its link too, so Settings lists each browser once. */
+	syncing?(): Promise<string[]>;
 	/**
 	 * This device's own pairing identity. Exists to be *shown when it fails*: if the key has
 	 * gone from the OS credential store while browsers are still listed, nothing else in this

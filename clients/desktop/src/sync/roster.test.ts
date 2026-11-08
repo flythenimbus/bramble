@@ -498,6 +498,43 @@ describe("a browser removed from the roster", () => {
 		expect(h.ended).toEqual([]);
 	});
 
+	it("is one of the open vault's sync devices while it is in the roster", async () => {
+		const mod = await linked();
+		expect(await mod.syncingLinkKeys()).toEqual(["linkkey"]);
+	});
+
+	it("isn't once the roster removes it", async () => {
+		const mod = await linked();
+		setRoster(VAULT_A, { devices: [laptop], revoked: [tombstone("browser")] });
+		expect(await mod.syncingLinkKeys()).toEqual([]);
+	});
+
+	it("isn't the sync device of another vault that is open now", async () => {
+		const mod = await linked(VAULT_A);
+		h.meta.set("active-vault", VAULT_B);
+		setRoster(VAULT_B, { devices: [laptop, browser], revoked: [] });
+		expect(await mod.syncingLinkKeys()).toEqual([]);
+	});
+
+	it("tells Settings when it is first seen syncing over its link", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A, VAULT_B));
+		h.meta.set("active-vault", VAULT_A);
+		setRoster(VAULT_A, { devices: [laptop, browser], revoked: [] });
+		const mod = await loadRoster();
+		const kinds: string[] = [];
+		(await import("./bus")).onSyncEvent((e) => kinds.push(e.kind));
+		await startSession(mod);
+		const linkSession = h.starts[1] as unknown as {
+			onAuthenticated: (pub: string, linkKey: string) => void;
+		};
+		linkSession.onAuthenticated("browserpub", "linkkey");
+		await vi.waitFor(() => expect(kinds).toContain("roster"));
+		const seen = kinds.filter((k) => k === "roster").length;
+		linkSession.onAuthenticated("browserpub", "linkkey");
+		await new Promise((r) => setTimeout(r, 20));
+		expect(kinds.filter((k) => k === "roster")).toHaveLength(seen);
+	});
+
 	it("does nothing for a removed device that never synced over the link", async () => {
 		const mod = await linked();
 		setRoster(VAULT_A, {

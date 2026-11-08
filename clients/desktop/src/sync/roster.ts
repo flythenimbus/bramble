@@ -119,6 +119,21 @@ async function recordLinkKey(vaultId: string, devicePub: string, linkKey: string
 	const known = held[devicePub];
 	if (known?.linkKey === linkKey && known.deviceId === device.id) return;
 	await desktopStorage.setMeta(key, { ...held, [devicePub]: { linkKey, deviceId: device.id } });
+	// Settings lists a browser that syncs with the other devices, not with the linked browsers.
+	emit({ kind: "roster" });
+}
+
+/** The link keys of browsers that are sync devices of the open vault. */
+export async function syncingLinkKeys(): Promise<string[]> {
+	const vaultId = await activeVaultId();
+	if (!vaultId) return [];
+	const held = await desktopStorage.getMeta<LinkKeys>(syncKeyFor(LINK_KEYS, vaultId));
+	const group = await desktopStorage.getMeta<GroupConfig>(syncKeyFor(GROUP_KEY, vaultId));
+	if (!held || !group) return [];
+	const active = new Set(activeDevices(group.roster).map((d) => `${d.id} ${d.publicKey}`));
+	return Object.entries(held)
+		.filter(([devicePub, { deviceId }]) => active.has(`${deviceId} ${devicePub}`))
+		.map(([, { linkKey }]) => linkKey);
 }
 
 /**

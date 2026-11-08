@@ -37,7 +37,10 @@ export function BrowserPairingSection() {
 	const { inviteDevice, verifyMasterPassword } = useVaultActions();
 	const { hasPasswordSlot, entries, files } = useVault();
 	const { vaults, activeId } = useVaultRegistry();
+	/** Every linked browser, the baseline a new link is told apart from. */
 	const [browsers, setBrowsers] = useState<PairedBrowser[]>([]);
+	/** Those the device list shows, as this vault's sync devices. */
+	const [syncing, setSyncing] = useState<ReadonlySet<string>>(new Set());
 	/** The Connect dialog is open: a browser pressing Link now reaches this vault. */
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -69,6 +72,7 @@ export function BrowserPairingSection() {
 		if (!pairing) return;
 		try {
 			setBrowsers(await pairing.list());
+			setSyncing(new Set((await pairing.syncing?.().catch(() => [])) ?? []));
 			// Checked here and nowhere else. Listing browsers never fails on a missing key, so
 			// without this a device whose key has gone missing shows a perfectly normal list of
 			// browsers that can never connect again.
@@ -278,6 +282,8 @@ export function BrowserPairingSection() {
 		}
 	};
 
+	const unlisted = browsers.filter((b) => !syncing.has(b.publicKey));
+
 	return (
 		<Section icon={<Puzzle className="w-4 h-4" />} title={t`Browser extension`}>
 			{connected !== null && (
@@ -297,9 +303,9 @@ export function BrowserPairingSection() {
 						</Button>
 					</Row>
 
-					{browsers.length > 0 && (
+					{unlisted.length > 0 && (
 						<div className="space-y-2">
-							{browsers.map((browser) => (
+							{unlisted.map((browser) => (
 								<div
 									key={browser.publicKey}
 									className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2"

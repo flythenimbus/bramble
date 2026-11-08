@@ -21,14 +21,15 @@ import {
 	desktopConnect,
 	desktopConnectedBrowsers,
 	desktopCreateAnotherVault,
-	desktopDisconnectAll,
 	desktopEntryText,
 	desktopHide,
 	desktopListedBrowsers,
 	desktopOpenVault,
+	desktopRemoveBrowsers,
 	desktopSeedBackupTarget,
 	desktopSetAliasDomain,
 	desktopSymbols,
+	desktopSyncRows,
 	desktopUseLocalRelay,
 	desktopVisible,
 	isLocal,
@@ -692,12 +693,24 @@ test.describe("a link per vault", () => {
 		await expect(popup.getByText(inSecond)).not.toBeVisible();
 	});
 
-	test("a browser removed on the desktop drops its link", async ({ ext }) => {
+	test("a browser shows once on the desktop, and removing it there ends its sync and its link", async ({
+		ext,
+	}) => {
+		// Earlier tests leave browsers on this vault: count from here.
+		const before = await desktopSyncRows();
 		await linkAndJoin(ext);
 		expect(await ext.storedKeys("desktopLink:")).toHaveLength(1);
+		// Once it syncs over the link, it is listed with the other devices and not again.
+		await expect
+			.poll(async () => (await desktopSyncRows()).devices, { timeout: 30_000 })
+			.toBe(before.devices + 1);
+		await expect
+			.poll(async () => (await desktopSyncRows()).browsers, { timeout: 30_000 })
+			.toBe(before.browsers);
 
-		await desktopDisconnectAll();
-		expect(await desktopListedBrowsers()).toBe(0);
+		await desktopRemoveBrowsers();
+		expect(await desktopSyncRows()).toEqual({ browsers: 0, devices: 0 });
+		await expect.poll(desktopListedBrowsers, { timeout: 10_000 }).toBe(0);
 		// Its connection goes at once, rather than at its next frame.
 		await expect.poll(desktopConnectedBrowsers, { timeout: 10_000 }).toBe(0);
 

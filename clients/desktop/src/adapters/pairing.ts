@@ -6,9 +6,11 @@
 import type { PairedBrowser, PairingAdapter } from "@core/adapters/pairing";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { syncingLinkKeys } from "../sync/roster";
 
 export const desktopPairing: PairingAdapter = {
 	list: () => invoke<PairedBrowser[]>("pairing_list"),
+	syncing: syncingLinkKeys,
 	identity: () => invoke<string>("pairing_public_key"),
 	forget: (publicKey) => invoke<boolean>("pairing_forget", { publicKey }),
 
