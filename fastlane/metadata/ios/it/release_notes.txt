@@ -1,14 +1,16 @@
-Novità in questa versione:
+Novità di questa versione:
 
-- Le chiavi di accesso salvate in Bramble ora funzionano sui siti che le usano per proteggere i dati (iOS 18 e versioni successive).
-- Importare da Proton Pass ora include chiavi di accesso, file e tutti i siti web, mentre l'importazione da 1Password include i file. L'anteprima dell'importazione conta gli allegati prima di iniziare.
-- Creare alias email con Fastmail Masked Email.
-- I siti web di un accesso sono ora elencati insieme sotto un'unica etichetta.
-- Gli accessi il cui sito web è stato salvato senza "https://", come nas.local:5000, ora si compilano automaticamente e trovano le chiavi di accesso corrispondenti.
-- L'importazione da Apple Passwords mantiene le date di ciascun elemento e la schermata di trasferimento ora indica Bramble.
-- La creazione di più chiavi di accesso consecutive non causa più la perdita di nessuna di esse e una chiave di accesso viene offerta solo sul proprio sito.
-- Il salvataggio non si blocca più quando la connessione ha problemi, ad esempio con una VPN in uno stato anomalo. Se un salvataggio dovesse richiedere troppo tempo, l'app lo segnala.
-- Un file che si stava allegando alla chiusura dell'app non rimane più nei backup.
-- Miglioramenti della sicurezza per la sincronizzazione.
+- Aprire il sito web di un accesso direttamente dall'elenco o dall'accesso.
+- Assegnare un nome ai dispositivi. I nomi dei dispositivi e il nome del vault ora vengono visualizzati su ogni dispositivo del gruppo di sincronizzazione.
+- Filtrare l'elenco per elementi con allegati oppure toccare una scheda Panoramica per visualizzare solo quegli elementi.
+- Cancellare il campo di ricerca con un tocco.
+- Aprire il generatore di password dall'intestazione.
+- AutoFill ora gestisce vault molto grandi e propone prima l'accesso per il sottodominio del sito stesso.
+- Il vault non viene più mostrato nell'anteprima del selettore app.
+- I backup ora possono conservare solo la copia più recente.
+- Aggiungere un dispositivo alla sincronizzazione ora richiede una password principale e un vault sincronizzato la conserva.
+- Tornare indietro dalla modifica di un elemento non apre più l'editor.
+- Le impostazioni ora spiegano cosa significa il blocco automatico "Mai": il vault rimane sbloccato finché non lo blocca o non chiude l'app.
+- Il filtro per tipo usa gli stessi nomi del menu Aggiungi e le traduzioni in tedesco e spagnolo sono più chiare.
 
-Nessun account, nessun cloud. Tutto resta sui propri dispositivi.
+Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.

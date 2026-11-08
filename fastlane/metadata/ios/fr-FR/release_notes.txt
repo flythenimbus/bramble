@@ -1,14 +1,16 @@
 Nouveautés de cette version :
 
-- Les clés de passe enregistrées dans Bramble fonctionnent désormais sur les sites qui les utilisent pour protéger vos données (iOS 18 ou version ultérieure).
-- L’importation depuis Proton Pass récupère désormais vos clés de passe, vos fichiers et tous vos sites web, et l’importation depuis 1Password récupère vos fichiers. L’aperçu de l’importation compte les pièces jointes avant de commencer.
-- Créer des alias e-mail avec Fastmail Masked Email.
-- Les sites web d’un identifiant sont désormais regroupés sous une seule étiquette.
-- Les identifiants dont le site web a été enregistré sans « https:// », comme nas.local:5000, sont désormais remplis automatiquement et retrouvent leurs clés de passe.
-- L’importation depuis Apple Passwords conserve les dates de chaque élément, et l’écran de transfert mentionne désormais Bramble.
-- La création de plusieurs clés de passe à la suite n’en perd plus aucune, et une clé de passe n’est proposée que sur son propre site.
-- L’enregistrement ne se bloque plus lorsque votre connexion est instable, par exemple avec un VPN en mauvais état. Si un enregistrement prend trop de temps, l’application vous le signale.
-- Un fichier que vous étiez en train de joindre lorsque l’application s’est fermée ne subsiste plus dans vos sauvegardes.
-- Améliorations de la sécurité de la synchronisation.
+- Ouvrir le site web d’un identifiant directement depuis la liste ou depuis sa fiche.
+- Nommer vos appareils. Le nom des appareils et celui de votre coffre s’affichent désormais sur chaque appareil du groupe de synchronisation.
+- Filtrer la liste pour afficher les éléments comportant des pièces jointes, ou toucher une carte Aperçu pour n’afficher que ces éléments.
+- Effacer le champ de recherche en un seul toucher.
+- Ouvrir le générateur de mots de passe depuis l’en-tête.
+- AutoFill gère désormais les coffres très volumineux et propose en premier l’identifiant du sous-domaine du site.
+- Votre coffre n’apparaît plus dans l’aperçu du sélecteur d’applications.
+- Les sauvegardes peuvent désormais ne conserver que la copie la plus récente.
+- L’ajout d’un appareil à la synchronisation nécessite désormais un mot de passe maître, et un coffre synchronisé le conserve.
+- Revenir en arrière après avoir modifié un élément ne rouvre plus l’éditeur.
+- Les réglages indiquent désormais ce que signifie le verrouillage automatique « Jamais » : le coffre reste déverrouillé jusqu’à ce que vous le verrouilliez ou fermiez l’application.
+- Le filtre par type utilise les mêmes noms que le menu Ajouter, et les traductions en allemand et en espagnol sont plus claires.
 
-Aucun compte, aucun cloud. Tout reste sur vos appareils.
+Pas de compte, pas de cloud. Tout reste sur vos appareils.

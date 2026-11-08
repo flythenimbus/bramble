@@ -1,14 +1,16 @@
 Novidades desta versão:
 
-- As chaves de acesso salvas no Bramble agora funcionam em sites que as usam para proteger seus dados (iOS 18 ou posterior).
-- A importação do Proton Pass agora inclui suas chaves de acesso, arquivos e todos os sites, e a importação do 1Password inclui seus arquivos. A prévia da importação conta os anexos antes de começar.
-- Criar alias de e-mail com o Fastmail Masked Email.
-- Os sites de um login agora são exibidos juntos sob um único rótulo.
-- Logins cujo site foi salvo sem "https://", como nas.local:5000, agora preenchem automaticamente e encontram suas chaves de acesso.
-- A importação do Apple Passwords mantém as datas de cada item, e a tela de transferência agora exibe o nome Bramble.
-- A criação de várias chaves de acesso em sequência não perde mais nenhuma delas, e uma chave de acesso só é oferecida no site correspondente.
-- O salvamento não fica mais travado quando a conexão apresenta instabilidade, por exemplo, com uma VPN em mau estado. Se um salvamento demorar demais, o app informa.
-- Um arquivo que estava sendo anexado quando o app fechou não permanece mais nos seus backups.
-- Melhorias de segurança na sincronização.
+- Abrir o site de um login diretamente da lista ou do próprio login.
+- Nomear seus dispositivos. Os nomes dos dispositivos e o nome do seu cofre agora aparecem em todos os dispositivos do grupo de sincronização.
+- Filtrar a lista para itens com anexos ou tocar em um cartão da Visão Geral para mostrar apenas esses itens.
+- Limpar a caixa de pesquisa com um toque.
+- Abrir o gerador de senhas pelo cabeçalho.
+- O AutoFill agora lida com cofres muito grandes e oferece primeiro o login do próprio subdomínio do site.
+- Seu cofre não aparece mais na pré-visualização do alternador de apps.
+- Os backups agora podem manter apenas a cópia mais recente.
+- Adicionar um dispositivo à sincronização agora exige uma senha mestra, e um cofre que sincroniza a mantém.
+- Voltar da edição de um item não abre mais o editor.
+- As configurações agora explicam o que significa o bloqueio automático "Nunca": o cofre permanece desbloqueado até você bloqueá-lo ou fechar o app.
+- O filtro de tipo usa os mesmos nomes do menu Adicionar, e as traduções em alemão e espanhol estão mais claras.
 
-Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.
+Sem conta, sem nuvem. Tudo fica nos seus dispositivos.

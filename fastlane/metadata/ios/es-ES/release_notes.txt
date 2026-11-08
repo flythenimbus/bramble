@@ -1,14 +1,16 @@
 Novedades de esta versión:
 
-- Las claves de acceso guardadas en Bramble ahora funcionan en sitios que las usan para proteger sus datos (iOS 18 y versiones posteriores).
-- Importar desde Proton Pass ahora trae sus claves de acceso, archivos y todos los sitios web, e importar desde 1Password trae sus archivos. La vista previa de importación cuenta los archivos adjuntos antes de empezar.
-- Crear alias de correo con Fastmail Masked Email.
-- Los sitios web de un inicio de sesión ahora se muestran agrupados bajo una misma etiqueta.
-- Las credenciales cuyo sitio web se guardó sin "https://", como nas.local:5000, ahora se autocompletan y encuentran sus claves de acceso.
-- Importar desde Apple Passwords conserva las fechas de cada elemento y la pantalla de transferencia ahora muestra el nombre de Bramble.
-- Crear varias claves de acceso seguidas ya no hace que se pierda ninguna, y una clave de acceso solo se ofrece en su propio sitio.
-- Guardar ya no se bloquea cuando su conexión falla, por ejemplo con una VPN en mal estado. Si un guardado tarda demasiado, la aplicación lo indica.
-- Un archivo que estaba adjuntando cuando se cerró la aplicación ya no permanece en sus copias de seguridad.
-- Mejoras de seguridad en la sincronización.
+- Abrir el sitio web de un inicio de sesión directamente desde la lista o desde el propio inicio de sesión.
+- Poner nombre a sus dispositivos. Los nombres de los dispositivos y el nombre de su bóveda ahora se muestran en todos los dispositivos del grupo de sincronización.
+- Filtrar la lista para ver solo los elementos con adjuntos, o tocar una tarjeta de Resumen para mostrar únicamente esos elementos.
+- Borrar el campo de búsqueda con un toque.
+- Abrir el generador de contraseñas desde la cabecera.
+- AutoFill ahora gestiona bóvedas muy grandes y ofrece primero el inicio de sesión del subdominio del sitio.
+- Su bóveda ya no se muestra en la vista previa del selector de aplicaciones.
+- Las copias de seguridad ahora pueden conservar solo la copia más reciente.
+- Añadir un dispositivo a la sincronización ahora requiere una contraseña maestra, y una bóveda que se sincroniza la conserva.
+- Volver atrás desde la edición de un elemento ya no vuelve a abrir el editor.
+- Ajustes ahora indica qué significa «Nunca» en el bloqueo automático: la bóveda permanece desbloqueada hasta que la bloquee o cierre la aplicación.
+- El filtro de tipo usa los mismos nombres que el menú Añadir, y las traducciones al alemán y al español son más claras.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

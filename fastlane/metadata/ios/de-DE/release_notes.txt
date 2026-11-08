@@ -1,14 +1,16 @@
 Neu in dieser Version:
 
-- In Bramble gespeicherte Passkeys funktionieren jetzt auf Websites, die sie zum Schutz Ihrer Daten verwenden (iOS 18 oder neuer).
-- Der Import aus Proton Pass übernimmt jetzt Ihre Passkeys, Dateien und alle Websites, und der Import aus 1Password übernimmt Ihre Dateien. Die Importvorschau zählt Anhänge, bevor Sie beginnen.
-- E-Mail-Aliase mit Fastmail Masked Email erstellen.
-- Die Websites eines Logins werden jetzt zusammen unter einem Label aufgeführt.
-- Anmeldedaten, deren Website ohne „https://“ gespeichert wurde, z. B. nas.local:5000, werden jetzt automatisch ausgefüllt und ihre Passkeys werden gefunden.
-- Der Import aus Apple Passwords behält die Datumsangaben jedes Eintrags bei, und der Übertragungsbildschirm nennt jetzt Bramble.
-- Beim Erstellen mehrerer Passkeys hintereinander geht keiner mehr verloren, und ein Passkey wird nur auf seiner eigenen Website angeboten.
-- Das Speichern bleibt nicht mehr hängen, wenn Ihre Verbindung Probleme macht, z. B. bei einem VPN in einem schlechten Zustand. Falls ein Speichern einmal zu lange dauert, weist die App darauf hin.
-- Eine Datei, die Sie beim Schließen der App gerade angehängt hatten, verbleibt nicht länger in Ihren Backups.
-- Sicherheitsverbesserungen bei der Synchronisierung.
+- Website eines Logins direkt aus der Liste oder aus dem Login öffnen.
+- Geräte benennen. Gerätenamen und der Name Ihres Tresors werden jetzt auf jedem Gerät in der Sync-Gruppe angezeigt.
+- Liste nach Einträgen mit Anhängen filtern oder auf eine Übersichtskarte tippen, um nur diese Einträge anzuzeigen.
+- Suchfeld mit einem Tippen leeren.
+- Passwortgenerator über die Kopfzeile öffnen.
+- AutoFill verarbeitet jetzt sehr große Tresore und bietet zuerst das Login für die eigene Subdomain der Website an.
+- Ihr Tresor wird nicht mehr in der Vorschau des App-Umschalters angezeigt.
+- Backups können jetzt auch nur die neueste Kopie behalten.
+- Das Hinzufügen eines Geräts zur Synchronisierung erfordert jetzt ein Master-Passwort, und ein Tresor, der synchronisiert wird, behält es bei.
+- Wenn Sie die Bearbeitung eines Eintrags verlassen, öffnet sich der Editor nicht mehr erneut.
+- Die Einstellungen erklären jetzt, was „Nie“ bei der automatischen Sperre bedeutet: Der Tresor bleibt entsperrt, bis Sie ihn sperren oder die App schließen.
+- Der Typfilter verwendet dieselben Namen wie das Menü „Hinzufügen“, und die deutschen und spanischen Übersetzungen sind klarer.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.
