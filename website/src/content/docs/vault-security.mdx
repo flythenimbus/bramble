@@ -55,18 +55,18 @@ Bramble encrypts your vault on your device, and only your devices hold the key t
 - **One random key per vault.** Each vault has its own random 256-bit key, made on your device when you create the vault. Everything in the vault is encrypted with AES-256-GCM. Each entry has its own key, and the vault key protects them all.
 - **Your master password unlocks that key.** Bramble runs your master password through Argon2id (64 MiB of memory, 3 passes) to make the key that unlocks your vault's key. That makes every guess slow and expensive for anyone trying to crack it.
 - **Other ways in work the same way.** Your recovery code goes through Argon2id too. Security keys, and Touch ID or Windows Hello in the browser extension, unlock with a secret that only your key or passkey can produce.
-- **Quick unlock in the apps stays on the device.** In the phone and desktop apps, Face ID, fingerprint, Touch ID and Windows Hello keep your vault's key behind your device's own lock, on that device only.
+- **Quick unlock in the apps stays on the device.** In the phone and desktop apps, Face ID, fingerprint and Touch ID keep your vault's key behind your device's own lock, on that device only.
 
 Your master password is never stored and never sent anywhere. That's why nobody can reset it for you: see [I forgot my master password](/docs/forgot-master-password).
 
-While your vault is unlocked, its key is held in memory. Locking clears it. To lock sooner, set **Auto-lock timeout** in **Settings → General**.
+While your vault is unlocked, its key is held in memory. Locking clears it from Bramble's memory.
 
 ## Where your data is stored
 
 | What | Where |
 | --- | --- |
 | Your encrypted vault | On your devices only: in the browser's extension storage, the phone app's private storage, or the desktop app's data folder. |
-| Face ID, fingerprint, Touch ID and Windows Hello unlock | Your device's secure storage, like the Keychain on Apple devices. |
+| Face ID, fingerprint and Touch ID unlock in the apps | Your device's secure storage, like the Keychain on Apple devices. |
 | The desktop app's sync identity and cloud backup sign-ins | Your computer's credential store, like the macOS Keychain. |
 | Backups | Where you put them. A cloud backup is your encrypted vault, so the storage provider can't read it. See [Back up your vault](/docs/back-up-your-vault). |
 | Your master password | Nowhere. |
@@ -77,7 +77,7 @@ Sync is end-to-end encrypted. Your devices connect to each other directly where 
 
 | Server | Can see | Can't see |
 | --- | --- | --- |
-| Signaling relay, which introduces your devices | Encrypted messages, your IP addresses, and when your devices connect | Your vault, your passwords, your master password, or any key that decrypts them |
+| Signaling relay, which introduces your devices | Encrypted messages (and encrypted sync data, for devices that can't connect directly), your IP addresses, and when your devices connect | Your vault in readable form, your passwords, your master password, or any key that decrypts them |
 | TURN relay (Cloudflare by default), used when your devices can't connect directly | Your IP addresses, how much data passes, and roughly how big each attached file is | The same: everything passing through is encrypted |
 
 You can use your own servers. Open **Settings → Sync**, expand **Advanced**, and set **Nostr relay URL** and **TURN / ICE servers URL**.
@@ -86,7 +86,7 @@ See [How sync works](/docs/how-sync-works).
 
 ## No tracking
 
-Bramble has no analytics, telemetry or ads, and collects nothing about you. It only goes online for features you turn on yourself:
+Bramble has no analytics, telemetry or ads. It only goes online for features you turn on yourself:
 
 - **Sync**, after you [add a device](/docs/add-a-device).
 - **Cloud backups**, to the storage you choose.

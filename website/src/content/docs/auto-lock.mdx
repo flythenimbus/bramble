@@ -40,7 +40,7 @@ Auto-lock clears your vault's key from memory after a while, so someone who pick
 
 ## Choose a timeout
 
-Open **Settings → General** and pick an **Auto-lock timeout**:
+In the browser extension and the phone app, open **Settings → General** and pick an **Auto-lock timeout**:
 
 | Option | When your vault locks |
 | --- | --- |
@@ -49,10 +49,6 @@ Open **Settings → General** and pick an **Auto-lock timeout**:
 | **Never** | Only when you lock it, or quit the browser or app. |
 
 The default is **15 minutes**.
-
-<Callout type="warning" title="The desktop app doesn't auto-lock">
-The desktop app shows the same setting, but it doesn't lock on a timer or when your screen locks. It stays unlocked until you lock it or quit it.
-</Callout>
 
 ## What counts as activity
 
@@ -77,7 +73,7 @@ Time Bramble spends in the background counts as inactivity. With **5 minutes**, 
 </div>
 <div slot="desktop">
 
-The desktop app doesn't lock on a timer, so activity doesn't matter. Lock it with the lock button, or quit it.
+Lock the desktop app with the lock button when you step away, or quit it.
 
 </div>
 </PlatformTabs>
@@ -87,21 +83,14 @@ The desktop app doesn't lock on a timer, so activity doesn't matter. Lock it wit
 <PlatformTabs>
 <div slot="extension">
 
-**Lock when the screen locks** is in **Settings → General** and is on by default. It locks your vault when your computer's screen locks, whatever the timeout.
+In Chrome and other Chromium browsers, **Lock when the screen locks** is in **Settings → General** and is on by default. It locks your vault when your computer's screen locks, whatever the timeout.
 
 To stay unlocked through screen locks, choose **Never** and turn this off.
-
-Firefox doesn't tell extensions when the screen locks, so in Firefox this switch has no effect. Use a timeout instead.
 
 </div>
 <div slot="mobile">
 
 Locking your phone counts as leaving Bramble. With **Immediate**, your vault locks. With a timeout, the time keeps counting.
-
-</div>
-<div slot="desktop">
-
-The desktop app stays unlocked when your screen locks.
 
 </div>
 </PlatformTabs>
@@ -127,7 +116,7 @@ Bramble keeps your vault's key only in memory. Whenever Bramble starts again, it
 <div slot="desktop">
 
 - Closing the window hides Bramble in the menu bar or system tray. Your vault stays unlocked.
-- Quitting locks it. Choose **Quit Bramble** from Bramble's icon in the menu bar or tray, or press Cmd+Q on a Mac or Ctrl+Q on Windows and Linux.
+- Quitting locks it. Choose **Quit Bramble** from Bramble's icon in the menu bar or tray, or press Cmd+Q on a Mac or Ctrl+Q on Linux.
 
 </div>
 </PlatformTabs>
@@ -142,7 +131,7 @@ Autofill on your phone follows the same setting, with its own timer:
 - A timeout: after you unlock once, autofill fills without asking until that long passes without a fill.
 - **Never**: after you unlock once, autofill stops asking.
 
-Locking the Bramble app doesn't lock autofill. To make autofill ask again right away, choose **Immediate**.
+To make autofill ask every time, choose **Immediate**.
 
 Some sites ask Bramble to confirm it's you before a passkey sign-in. Those still ask, whatever the timeout.
 

@@ -64,14 +64,14 @@ Passkeys need Android 14 or later, and Bramble turned on as a passkey provider. 
 
 ### The browser never asks Bramble
 
-On phones without Google Play services, such as GrapheneOS, some Chromium-based browsers, including Brave and Vivaldi, don't pass passkey requests to Android's passkey managers. Bramble never sees the request. Vanadium works.
+On phones without Google Play services, such as GrapheneOS, some Chromium-based browsers, such as Brave and Vivaldi, don't currently pass passkey requests to Android's passkey managers. Bramble never sees the request. Vanadium works.
 
 ### The site says the request timed out or was cancelled
 
 Bramble reads the site's address only from browsers on its built-in list. It's the same list autofill uses: see [Browsers that match the site](/docs/set-up-autofill-android#browsers-that-match-the-site). To ask for another browser, email support@bramble.sh.
 
-## Touch ID in LibreWolf
+## Touch ID in other Firefox-based browsers
 
-If adding Touch ID under **Tap to unlock** in LibreWolf on a Mac fails with "Registration was cancelled or timed out. Please try again.", the problem is LibreWolf. macOS lets a browser use Touch ID only with a permission from Apple. Firefox has it, and LibreWolf doesn't.
+Adding Touch ID under **Tap to unlock** may fail in some Firefox-based browsers on a Mac, such as LibreWolf, with "Registration was cancelled or timed out. Please try again."
 
-This is about unlocking Bramble, not your website passkeys. In LibreWolf, unlock with your master password, or use Touch ID in Firefox or a Chromium browser. See [Ways to unlock your vault](/docs/unlock-methods).
+This is about unlocking Bramble, not your website passkeys. In those browsers, unlock with your master password, or use Touch ID in Firefox or a Chromium browser. See [Ways to unlock your vault](/docs/unlock-methods).

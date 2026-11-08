@@ -50,20 +50,20 @@ Every vault has a master password, and it unlocks your vault on any device. Each
 |  | Browser extension | Phone | Desktop app |
 | --- | --- | --- | --- |
 | Master password | Yes | Yes | Yes |
-| Face ID or fingerprint | No | Yes | No |
-| Touch ID or Windows Hello | Mac, Windows | No | Mac, Windows |
-| Security key | Chrome, Brave | No | No |
+| Face ID, Touch ID or fingerprint | No | Yes | No |
+| Touch ID or Windows Hello | Mac, Windows | No | Mac |
+| Security key | Chromium browsers | No | No |
 | Recovery code | Yes | Yes | Yes |
 
-All of them are under **Settings → Security**.
+All of them are under **Settings → Security**, and each is set up on one device at a time.
 
 ## Master password
 
 Your master password encrypts your vault. Bramble never stores it or sends it anywhere, so nobody can reset it for you.
 
-- Every device in your sync group uses the same one.
+- A device you add starts with the master password of the device it joined from.
 - You need it to [add a device](/docs/add-a-device), connect a browser and [restore a backup](/docs/back-up-your-vault#restore-a-backup), even when you unlock another way day to day.
-- To change it, open **Settings → Security** and choose **Change**.
+- To change it, open **Settings → Security** and choose **Change**. This changes it on that device only, so change it on each of your devices.
 
 ## Face ID or fingerprint (phone)
 
@@ -84,24 +84,23 @@ Your phone's secure hardware keeps the key, so this works on that phone only. Yo
 2. Choose **This device** and confirm with Touch ID or Windows Hello.
 3. If your computer asks where to save the passkey, choose **iCloud Keychain** or **Windows Hello**. A passkey saved in the browser can't unlock your vault.
 
-On a Mac, it works on every Mac signed in to your Apple Account. On Windows, it works on that PC only.
+It works in that browser only. Set it up in each browser you use.
 
 Turn on **Unlock on open** to get the prompt as soon as Bramble opens.
 
 ### In the desktop app
 
 1. Unlock with your master password.
-2. Open **Settings → Security** and turn on **Touch ID** or **Windows Hello**.
+2. Open **Settings → Security** and turn on **Touch ID**.
 
 It works on that computer only.
 
-- **Allow passcode fallback** (Mac) lets your Mac's login password unlock your vault too. It's off by default.
-- Windows Hello always accepts your Windows Hello PIN.
+- **Allow passcode fallback** lets your Mac's login password unlock your vault too. It's off by default.
 - Linux has no secure equivalent, so the desktop app on Linux unlocks with your master password.
 
 ## Security key
 
-Use a FIDO2 key, like a YubiKey 5, in the Chrome or Brave extension. Firefox can't unlock with a security key.
+Use a FIDO2 key, like a YubiKey 5, in the extension in Chrome, Brave or another Chromium browser. Firefox can't unlock with a security key.
 
 1. Open **Settings → Security**. Under **Tap to unlock**, choose **Add**.
 2. Choose **Security key** and tap your key twice: once to create the passkey, then once to read its secret.
@@ -121,20 +120,22 @@ Adding a device, connecting a browser and restoring a backup all need a master p
 A recovery code gets you into your vault if you forget your master password. It looks like `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`.
 
 - Bramble shows you one when you create a vault. Write it down and keep it somewhere safe, away from your devices.
-- No code yet, or lost it? Open **Settings → Security** and choose **Generate** or **Reset** next to **Recovery code**. Resetting stops the old code from working.
+- No code yet, or lost it? Open **Settings → Security** and choose **Generate** or **Reset** next to **Recovery code**. Resetting replaces the code on that device only. Your other devices still accept the old one, so reset it on each of them.
 
 ### Forgot your master password?
 
 1. On the unlock screen, choose **Unlock with recovery code** and enter your code.
-2. Bramble opens **Settings → Security**. Enter your recovery code again and set a new master password.
+2. Bramble opens **Settings → Security**. Next to **Change your master password**, choose **Change**, enter your recovery code again and set a new master password.
 3. Your code keeps working. Reset it if anyone else could have seen it.
+
+The new master password is set on that device only. Do the same on your other devices.
 
 If you lose your master password, your recovery code and your keys, nobody can open your vault, not even us.
 
 ## When your vault locks
 
-Open **Settings → General** and set **Auto-lock timeout**: from **Immediate** to **1 hour**, or **Never**.
+In the browser extension and the phone app, open **Settings → General** and set **Auto-lock timeout**: from **Immediate** to **1 hour**, or **Never**.
 
 - **Never** keeps your vault unlocked until you lock it or close Bramble.
-- In the browser extension, **Lock when the screen locks** also locks your vault when your computer's screen locks.
+- In Chrome and other Chromium browsers, **Lock when the screen locks** also locks your vault when your computer's screen locks.
 - Lock any time with the lock button at the top of Bramble.

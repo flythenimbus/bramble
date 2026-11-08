@@ -48,7 +48,7 @@ draft: true
 ## The login doesn't show up
 
 - **The site doesn't match.** By default, a login is offered on its whole domain: one saved for `accounts.example.com` also shows on `www.example.com`. A different domain needs its own entry: open the login, choose **Add URL** under **Websites**, and add it.
-- **Subdomain match is narrower.** In the login's editor, under **Advanced**, **Subdomain match** sets where it's offered:
+- **Subdomain match is narrower** (browser extension only). In the login's editor, under **Advanced**, **Subdomain match** sets where it's offered:
 
   | Setting | Offered on |
   | --- | --- |
@@ -78,16 +78,13 @@ Many sign-in and payment forms sit in a frame from another site.
 
 - **Card fields** work in any frame. The list shows over the page.
 - **Login fields** in a frame from the same site work the same way.
-- **Login fields in a frame from another site** keep the list inside that frame, so the page can't tell whether you have a login for that site. If the frame is too small, the list can't show. Copy the login from Bramble instead.
+- **Login fields in a frame from another site** show the list inside that frame. If the frame is too small, the list can't show. Copy the login from Bramble instead.
 
 The desktop app's quick panel fills the main page only, not forms inside frames.
 
 ## Clicking a login does nothing
 
-Bramble ignores clicks on the list when it can't be sure you can see it:
-
-- In Chrome, if something covers the list or the page uses a visual filter, such as a dark-mode extension, Bramble shows **Use ↓ and Enter to fill on this page**. Press ↓ to highlight a login, then Enter.
-- A click that lands the instant the list appears or moves is ignored. Wait a moment and click again.
+If Bramble can't confirm its list is visible, it shows **Use ↓ and Enter to fill on this page**. Press ↓ to highlight a login, then Enter. If a click doesn't fill, wait a moment and click again.
 
 ## The form didn't submit
 
