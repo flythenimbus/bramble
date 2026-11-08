@@ -5,7 +5,7 @@ description = "Bramble password manager"
 # Feeds the Maintainer field of the .deb and .rpm (Tauri falls back to `bundle.publisher` only
 # when this is absent, and Debian policy wants a name AND an address). Kept here rather than in
 # publisher so the Windows installer's Manufacturer stays a plain name.
-authors = ["Bramble <flythenimbus@pm.me>"]
+authors = ["Bramble <support@bramble.sh>"]
 license = "GPL-3.0-only"
 edition = "2021"
 publish = false

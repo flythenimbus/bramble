@@ -974,7 +974,7 @@ is switched to if the card is lost. It signs nothing until `BRAMBLE_APT_GPG_KEY`
 # 1. Ed25519, no expiry. An expiry on a repository key breaks apt for anyone who has not
 #    upgraded recently, and revocation is the real mechanism. Prompts for a passphrase: use a
 #    long random one and save it in the password manager, it is a second secret in CI.
-gpg --quick-generate-key "Bramble APT (standby) <flythenimbus@pm.me>" ed25519 sign never
+gpg --quick-generate-key "Bramble APT (standby) <support@bramble.sh>" ed25519 sign never
 FPR=$(gpg --list-keys --with-colons "Bramble APT (standby)" | awk -F: '/^fpr/{print $10; exit}')
 
 # 2. The public half into the keyring the package ships. THIS is the step that has to happen a

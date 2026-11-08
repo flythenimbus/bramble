@@ -5,7 +5,7 @@ export const SITE = {
 	tagline: "A password manager that syncs between your devices",
 	description:
 		"Bramble syncs your passwords between your phone, computer and browser. Everything is end-to-end encrypted. Your passwords are saved only on your devices, not on a server. You do not need an account, and only you can open your vault.",
-	contactEmail: "flythenimbus@pm.me",
+	contactEmail: "support@bramble.sh",
 } as const;
 
 export const LINKS = {

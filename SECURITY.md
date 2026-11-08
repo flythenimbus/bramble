@@ -30,7 +30,7 @@ Use either of these private channels:
   [Security tab](https://github.com/flythenimbus/bramble/security/advisories) and
   click **Report a vulnerability**. This keeps the report private and lets us
   collaborate on a fix in one place.
-- **Email.** flythenimbus@pm.me. For sensitive details, say so and we can arrange
+- **Email.** support@bramble.sh. For sensitive details, say so and we can arrange
   an encrypted channel.
 
 Please include, as far as you can:
