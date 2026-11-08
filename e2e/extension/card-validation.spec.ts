@@ -8,7 +8,7 @@ import { createVault, openPopup } from "./helpers";
 
 async function openCardForm(popup: Page) {
 	await popup.getByRole("button", { name: /Add New/i }).click();
-	await popup.getByRole("button", { name: /Payment card/i }).click();
+	await popup.getByRole("button", { name: /Credit or debit card/i }).click();
 	await popup.getByLabel("Name", { exact: true }).fill("Test card");
 }
 

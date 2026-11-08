@@ -50,7 +50,7 @@ test("omits the rows a card has no value for", async ({ context, extensionId }) 
 
 	// A card with only a number: no expiry, no CVV, so neither may appear.
 	await popup.getByRole("button", { name: /Add New/i }).click();
-	await popup.getByRole("button", { name: /Payment card/i }).click();
+	await popup.getByRole("button", { name: /Credit or debit card/i }).click();
 	await popup.getByLabel("Name", { exact: true }).fill("Number only");
 	await popup.getByLabel("Card number", { exact: true }).fill("4242424242424242");
 	await popup.getByRole("button", { name: /^Save/i }).click();

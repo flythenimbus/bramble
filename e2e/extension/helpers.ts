@@ -140,7 +140,7 @@ export async function seedTotpLogin(popup: Page, name: string, key: string) {
 /** Seed one payment card. Cards are offered on any payment form, so it needs no URL. */
 export async function seedExampleCard(popup: Page) {
 	await popup.getByRole("button", { name: /Add New/i }).click();
-	await popup.getByRole("button", { name: /Payment card/i }).click();
+	await popup.getByRole("button", { name: /Credit or debit card/i }).click();
 	await popup.getByLabel("Name", { exact: true }).fill("Personal Visa");
 	await popup.getByLabel("Cardholder name", { exact: true }).fill("Alice Example");
 	await popup.getByLabel("Card number", { exact: true }).fill("4242424242424242");
@@ -154,7 +154,7 @@ export async function seedExampleCard(popup: Page) {
 /** A second card, so a pick has something to be switched away from (and an order to change). */
 export async function seedSecondCard(popup: Page) {
 	await popup.getByRole("button", { name: /Add New/i }).click();
-	await popup.getByRole("button", { name: /Payment card/i }).click();
+	await popup.getByRole("button", { name: /Credit or debit card/i }).click();
 	await popup.getByLabel("Name", { exact: true }).fill("Travel Mastercard");
 	await popup.getByLabel("Cardholder name", { exact: true }).fill("Alice Example");
 	await popup.getByLabel("Card number", { exact: true }).fill("5555555555554444");
