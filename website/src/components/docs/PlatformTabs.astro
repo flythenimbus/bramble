@@ -84,10 +84,17 @@ const panels = await Promise.all(present.map((p) => Astro.slots.render(p)));
 	const guess = os === "ios" || os === "android" ? [os, "mobile"] : ["computer", "extension"];
 	const preferred = [localStorage.getItem(KEY), ...guess].filter((p): p is string => !!p);
 
-	for (const group of groups) {
+	groups.forEach((group, g) => {
 		preferred.some((p) => show(group, p));
 		const tabs = [...group.querySelectorAll<HTMLButtonElement>("[data-platform]")];
 		tabs.forEach((tab, i) => {
+			const panel = group.querySelector(`[data-platform-panel="${tab.dataset.platform}"]`);
+			tab.id = `platform-${g}-tab-${i}`;
+			if (panel) {
+				panel.id = `platform-${g}-panel-${i}`;
+				panel.setAttribute("aria-labelledby", tab.id);
+				tab.setAttribute("aria-controls", panel.id);
+			}
 			tab.addEventListener("click", () => choose(tab.dataset.platform ?? ""));
 			tab.addEventListener("keydown", (e) => {
 				const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
@@ -98,5 +105,5 @@ const panels = await Promise.all(present.map((p) => Astro.slots.render(p)));
 				next.focus();
 			});
 		});
-	}
+	});
 </script>

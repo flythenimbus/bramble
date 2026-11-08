@@ -173,7 +173,12 @@ const editUrl = `${LINKS.github}/edit/main/website/src/content/docs/${doc.id}.md
 		a.className = "heading-anchor";
 		a.setAttribute("aria-label", `Link to “${h.textContent}”`);
 		a.textContent = "#";
-		h.append(a);
+		// The heading is named by its text alone, or the link would be read as part of it.
+		const title = document.createElement("span");
+		title.id = `${h.id}-title`;
+		title.append(...h.childNodes);
+		h.append(title, a);
+		h.setAttribute("aria-labelledby", title.id);
 	}
 
 	// Close the small-screen menu after picking an article or tapping outside it.
