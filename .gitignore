@@ -48,6 +48,9 @@ docs/private/
 .env.local
 .env*.local
 
+# Local agent scratch: brainstorm server state (incl. its token) and local-only plans.
+.superpowers/
+
 # Playwright E2E artifacts (the browsers live in ~/.cache/ms-playwright, not the repo)
 test-results/
 playwright-report/
