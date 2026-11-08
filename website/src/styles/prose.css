@@ -97,3 +97,7 @@ html.dark .prose .astro-code span {
 	font-weight: var(--shiki-dark-font-weight) !important;
 	text-decoration: var(--shiki-dark-text-decoration) !important;
 }
+/* github-dark's comment gray is only 3:1 on its own background. */
+html.dark .prose .astro-code span[style*="--shiki-dark:#6A737D"] {
+	color: #8b949e !important;
+}

@@ -48,7 +48,6 @@ const editUrl = `${LINKS.github}/edit/main/website/src/content/docs/${doc.id}.md
 				>
 					<SearchIcon class="size-4" aria-hidden="true" />
 					Search
-					<kbd class="kbd ml-auto">/</kbd>
 				</button>
 				<DocsNav docs={docs} currentId={doc.id} />
 			</div>
@@ -81,7 +80,7 @@ const editUrl = `${LINKS.github}/edit/main/website/src/content/docs/${doc.id}.md
 			</button>
 		</div>
 
-		<main class="min-w-0 py-8 lg:py-12">
+		<main id="main" class="min-w-0 py-8 lg:py-12">
 			<nav aria-label="Breadcrumb" class="text-sm text-muted-foreground">
 				<ol class="flex flex-wrap items-center gap-1.5">
 					<li><a href="/docs" class="hover:text-foreground">Docs</a></li>

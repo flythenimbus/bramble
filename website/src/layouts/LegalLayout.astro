@@ -17,7 +17,7 @@ const { title, description, path, meta } = Astro.props;
 
 <Layout title={title} description={description} path={path}>
 	<Header />
-	<main class="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
+	<main id="main" class="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
 		<header class="mb-10">
 			<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
 			{meta && <p class="mt-3 text-sm text-muted-foreground">{meta}</p>}

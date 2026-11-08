@@ -40,32 +40,27 @@ const hero = variant === "hero";
 				hero ? "text-base sm:text-lg" : "text-base",
 			]}
 		/>
-		{
-			hero && (
-				<kbd
-					data-search-shortcut
-					class="hidden rounded border border-border px-1.5 py-0.5 font-sans text-xs text-muted-foreground sm:inline"
-				>
-					/
-				</kbd>
-			)
-		}
 	</div>
 	<p data-search-status class="sr-only" aria-live="polite"></p>
-	<ul
-		id={`${id}-results`}
-		role="listbox"
-		aria-label="Search results"
-		data-search-results
+	<div
+		data-search-panel
 		hidden
-		class:list={[
-			"flex flex-col gap-0.5 overflow-y-auto",
-			hero
-				? "mt-2 max-h-[min(28rem,60vh)] rounded-lg border border-border bg-background p-1.5 shadow-lg"
-				: "mt-2 max-h-[60vh] p-0.5",
-		]}
+		class:list={["mt-2", hero ? "rounded-lg border border-border bg-background p-1.5 shadow-lg" : "p-0.5"]}
 	>
-	</ul>
+		<div
+			id={`${id}-results`}
+			role="listbox"
+			aria-label="Search results"
+			data-search-results
+			hidden
+			class:list={[
+				"flex flex-col gap-0.5 overflow-y-auto",
+				hero ? "max-h-[min(28rem,60vh)]" : "max-h-[60vh]",
+			]}
+		>
+		</div>
+		<p data-search-message hidden class="px-3 py-4 text-sm text-muted-foreground"></p>
+	</div>
 </div>
 
 <script>
@@ -76,7 +71,9 @@ const hero = variant === "hero";
 
 	function mount(root: HTMLElement) {
 		const input = root.querySelector<HTMLInputElement>("[data-search-input]")!;
-		const list = root.querySelector<HTMLUListElement>("[data-search-results]")!;
+		const panel = root.querySelector<HTMLElement>("[data-search-panel]")!;
+		const list = root.querySelector<HTMLElement>("[data-search-results]")!;
+		const message = root.querySelector<HTMLElement>("[data-search-message]")!;
 		const status = root.querySelector<HTMLElement>("[data-search-status]")!;
 		const syncUrl = root.hasAttribute("data-sync-url");
 		let hits: SearchHit[] = [];
@@ -129,11 +126,15 @@ const hero = variant === "hero";
 
 		function render(results: SearchHit[], query: string) {
 			hits = results;
-			list.hidden = !query.trim();
-			input.setAttribute("aria-expanded", String(!list.hidden));
-			status.textContent = query.trim() ? `${results.length} results` : "";
+			const searching = Boolean(query.trim());
+			panel.hidden = !searching;
+			message.hidden = true;
+			showList(results.length > 0);
+			status.textContent = searching
+				? `${results.length} ${results.length === 1 ? "result" : "results"}`
+				: "";
 			if (results.length === 0) {
-				if (query.trim()) {
+				if (searching) {
 					renderMessage(
 						`No results for “${escape(query.trim())}”. Try other words, or <a class="underline underline-offset-2" href="${LINKS.github}/issues">ask on GitHub</a>.`,
 					);
@@ -143,13 +144,11 @@ const hero = variant === "hero";
 			list.innerHTML = results
 				.map(
 					({ doc, terms, excerpt }, i) => `
-					<li role="option" id="${list.id}-${i}" data-index="${i}" aria-selected="false" class="group">
-						<a href="${doc.href}" tabindex="-1" class="block rounded-md px-3 py-2.5 group-aria-selected:bg-muted">
-							<span class="block text-xs text-muted-foreground">${escape(doc.section)} · ${escape(doc.kind)}</span>
+						<a role="option" id="${list.id}-${i}" data-index="${i}" href="${doc.href}" tabindex="-1" aria-selected="false" class="group block rounded-md px-3 py-2.5 aria-selected:bg-muted">
+							<span class="block text-xs text-muted-foreground group-aria-selected:text-foreground">${escape(doc.section)} · ${escape(doc.kind)}</span>
 							<span class="mt-0.5 block font-medium text-foreground">${highlight(doc.title, terms)}</span>
-							<span class="mt-0.5 line-clamp-2 block text-sm text-muted-foreground">${highlight(excerpt ?? doc.description, terms)}</span>
-						</a>
-					</li>`,
+							<span class="mt-0.5 line-clamp-2 block text-sm text-muted-foreground group-aria-selected:text-foreground">${highlight(excerpt ?? doc.description, terms)}</span>
+						</a>`,
 				)
 				.join("");
 			setActive(0);
@@ -157,9 +156,16 @@ const hero = variant === "hero";
 
 		function renderMessage(html: string) {
 			hits = [];
-			list.hidden = false;
-			list.innerHTML = `<li role="presentation" class="px-3 py-4 text-sm text-muted-foreground">${html}</li>`;
+			panel.hidden = false;
+			showList(false);
+			message.innerHTML = html;
+			message.hidden = false;
 			setActive(-1);
+		}
+
+		function showList(open: boolean) {
+			list.hidden = !open;
+			input.setAttribute("aria-expanded", String(open));
 		}
 
 		function setActive(i: number) {
@@ -183,7 +189,7 @@ const hero = variant === "hero";
 		return el.innerHTML;
 	}
 
-	// "/" or Cmd/Ctrl+K: open the search dialog where there is one, else focus the page's box.
+	// Cmd/Ctrl+K: open the search dialog where there is one, else focus the page's box.
 	const dialog = document.querySelector<HTMLDialogElement>("[data-search-dialog]");
 	function openSearch() {
 		const input = (dialog ?? document).querySelector<HTMLInputElement>("[data-search-input]");
@@ -195,9 +201,7 @@ const hero = variant === "hero";
 		button.addEventListener("click", openSearch);
 	}
 	document.addEventListener("keydown", (e) => {
-		const t = e.target as HTMLElement;
-		const typing = t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
-		if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !typing)) {
+		if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault();
 			openSearch();
 		}

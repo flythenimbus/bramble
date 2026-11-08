@@ -212,7 +212,7 @@ const tab =
 
 <div
 	id="download"
-	class="mx-auto w-full max-w-5xl scroll-mt-20 overflow-hidden rounded-xl border border-border/60 bg-card text-left shadow-sm"
+	class="mx-auto w-full max-w-5xl overflow-hidden rounded-xl border border-border/60 bg-card text-left shadow-sm"
 	data-download
 >
 	<div
@@ -238,12 +238,12 @@ const tab =
 							aria-selected={i === 0}
 							tabindex={i === 0 ? 0 : -1}
 							data-category={category.id}
-							class={tab}
+							class:list={[tab, "max-[22.5rem]:flex-col max-[22.5rem]:gap-0.5"]}
 						>
 							<Icon class="size-5 shrink-0" />
 							<span class="min-w-0 md:flex-1">
-								<span class="block truncate">{category.label}</span>
-								<span class="hidden truncate text-xs font-normal opacity-70 md:block">
+								<span class="block">{category.label}</span>
+								<span class="hidden text-xs font-normal md:block">
 									{category.hint}
 								</span>
 							</span>
@@ -285,7 +285,7 @@ const tab =
 										class={tab}
 									>
 										<Icon class="size-4.5 shrink-0" />
-										<span class="min-w-0 truncate md:flex-1">{option.label}</span>
+										<span class="min-w-0 md:flex-1">{option.label}</span>
 									</button>
 								);
 							})}
@@ -318,7 +318,6 @@ const tab =
 						tabindex="0"
 						hidden={i !== 0}
 						data-panel={option.id}
-						class="focus-visible:outline-none"
 					>
 						<p class="font-medium">{option.title}</p>
 						<p class="mt-1.5 text-sm text-muted-foreground text-pretty">{option.body}</p>
@@ -517,6 +516,7 @@ const tab =
 		for (const button of root.querySelectorAll<HTMLButtonElement>("[data-copy]")) {
 			const idle = button.querySelector<HTMLElement>("[data-copy-idle]");
 			const done = button.querySelector<HTMLElement>("[data-copy-done]");
+			const status = button.parentElement?.querySelector<HTMLElement>("[data-copy-status]");
 			let revert: ReturnType<typeof setTimeout>;
 
 			button.addEventListener("click", async () => {
@@ -532,12 +532,12 @@ const tab =
 
 				if (idle) idle.hidden = true;
 				if (done) done.hidden = false;
-				button.setAttribute("aria-label", "Copied");
+				if (status) status.textContent = "Copied";
 				clearTimeout(revert);
 				revert = setTimeout(() => {
 					if (idle) idle.hidden = false;
 					if (done) done.hidden = true;
-					button.setAttribute("aria-label", "Copy to clipboard");
+					if (status) status.textContent = "";
 				}, 1600);
 			});
 		}

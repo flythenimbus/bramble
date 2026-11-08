@@ -66,6 +66,12 @@ const ogImage = new URL("/icon-512.png", SITE.url).href;
 		</script>
 	</head>
 	<body class="min-h-screen antialiased">
+		<a
+			href="#main"
+			class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium"
+		>
+			Skip to content
+		</a>
 		<slot />
 
 		{/* Personalize the "Add to your browser" buttons: point them at the right store

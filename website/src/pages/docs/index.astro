@@ -41,7 +41,7 @@ const questions = docs.filter((d) => d.data.kind === "question");
 	path="/docs"
 >
 	<Header />
-	<main>
+	<main id="main">
 		<section class="border-b border-border/60 bg-muted/30">
 			<div class="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6 sm:py-20">
 				<h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">How can we help?</h1>
@@ -76,7 +76,7 @@ const questions = docs.filter((d) => d.data.kind === "question");
 							<section
 								id={section.id}
 								aria-labelledby={`${section.id}-title`}
-								class="scroll-mt-24 rounded-xl border border-border bg-card p-6"
+								class="scroll-mt-4 rounded-xl border border-border bg-card p-6"
 							>
 								<div class="flex size-10 items-center justify-center rounded-lg bg-muted">
 									<Icon class="size-5" aria-hidden="true" />

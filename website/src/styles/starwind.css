@@ -71,6 +71,8 @@
      hovers, so map it to the muted gray the extension actually renders. */
   --accent: var(--secondary);
   --accent-foreground: var(--secondary-foreground);
+  /* Darker than the shared token: 4.5:1 on the site's tinted surfaces. */
+  --muted-foreground: oklch(52% 0 0);
 }
 
 .dark {
@@ -81,6 +83,7 @@
   --error-foreground: var(--destructive-foreground);
   --accent: var(--secondary);
   --accent-foreground: var(--secondary-foreground);
+  --muted-foreground: oklch(70.8% 0 0);
 }
 
 @layer base {
@@ -104,4 +107,33 @@
   background-color: color-mix(in oklab, var(--foreground) 16%, var(--muted));
   border-color: color-mix(in oklab, var(--foreground) 24%, transparent);
   color: var(--foreground);
+}
+
+/* Keyboard focus at 3:1 on every surface. Rings are box-shadows, which forced
+   colors removes. Unlayered so it wins over the components' outline-none. */
+:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+#ss-lightbox :focus-visible {
+  outline-color: white;
+}
+[data-docs-search] input:focus-visible {
+  outline: none;
+}
+[data-docs-search] div:has(> input:focus-visible) {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+
+/* Collapsed FAQ answers are only zero-height, so links in them took focus and
+   screen readers read them. The transition keeps them visible while closing. */
+.starwind-accordion-content[data-state="closed"] {
+  visibility: hidden;
+  transition: visibility 0.2s;
+}
+
+/* Keeps focused items and anchor targets clear of the sticky header. */
+html {
+  scroll-padding-top: 5rem;
 }

@@ -9,7 +9,7 @@ import { BUTTONDOWN } from "@/consts";
 const action = `https://buttondown.com/api/emails/embed-subscribe/${BUTTONDOWN.username}`;
 ---
 
-<section id="newsletter" class="scroll-mt-20 border-t border-border/60 py-20 sm:py-24">
+<section id="newsletter" class="border-t border-border/60 py-20 sm:py-24">
 	<div class="mx-auto max-w-2xl px-4 text-center sm:px-6">
 		<div
 			class="mx-auto mb-6 flex size-12 items-center justify-center rounded-xl bg-muted text-foreground"
@@ -30,20 +30,22 @@ const action = `https://buttondown.com/api/emails/embed-subscribe/${BUTTONDOWN.u
 			action={action}
 			method="post"
 			target="_blank"
-			class="embeddable-buttondown-form mx-auto mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row"
+			class="embeddable-buttondown-form mx-auto mt-8 w-full max-w-md text-left"
 		>
-			<label for="newsletter-email" class="sr-only">Email address</label>
-			<input
-				id="newsletter-email"
-				type="email"
-				name="email"
-				required
-				autocomplete="email"
-				placeholder="you@example.com"
-				class="h-11 w-full flex-1 rounded-md border bg-background px-4 text-base shadow-xs transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-outline focus-visible:ring-3 focus-visible:ring-outline/50"
-			/>
-			<input type="hidden" name="embed" value="1" />
-			<Button type="submit" class="shrink-0">Subscribe</Button>
+			<label for="newsletter-email" class="mb-1.5 block text-sm font-medium">Email address</label>
+			<div class="flex flex-col gap-3 sm:flex-row">
+				<input
+					id="newsletter-email"
+					type="email"
+					name="email"
+					required
+					autocomplete="email"
+					placeholder="you@example.com"
+					class="h-11 w-full flex-1 rounded-md border bg-background px-4 text-base shadow-xs transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-outline focus-visible:ring-3 focus-visible:ring-outline/50"
+				/>
+				<input type="hidden" name="embed" value="1" />
+				<Button type="submit" class="shrink-0">Subscribe</Button>
+			</div>
 		</form>
 
 		<p class="mt-3 text-sm text-muted-foreground">

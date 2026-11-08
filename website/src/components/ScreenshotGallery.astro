@@ -53,7 +53,7 @@ const shots = await Promise.all(
 );
 ---
 
-<section id="screenshots" class="scroll-mt-20 border-t border-border/60 py-20 sm:py-24">
+<section id="screenshots" class="border-t border-border/60 py-20 sm:py-24">
 	<div class="mx-auto max-w-6xl px-4 sm:px-6">
 		<div class="mx-auto max-w-2xl text-center">
 			<h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">See it in action.</h2>
@@ -63,7 +63,7 @@ const shots = await Promise.all(
 		</div>
 
 		<ul
-			class="mt-12 flex snap-x gap-4 overflow-x-auto pb-4 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]"
+			class="-mx-1 mt-11 flex snap-x scroll-px-1 gap-4 overflow-x-auto px-1 pt-1 pb-4 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]"
 		>
 			{
 				shots.map((s) => (
@@ -108,7 +108,7 @@ const shots = await Promise.all(
 				/>
 				<figcaption class="mt-3 flex items-center gap-3 text-sm text-white/90">
 					<span data-ss-caption></span>
-					<span class="text-white/40" data-ss-counter></span>
+					<span class="text-white/70" data-ss-counter></span>
 				</figcaption>
 			</figure>
 
