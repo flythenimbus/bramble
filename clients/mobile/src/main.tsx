@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "@core/styles/index.css";
 import "./styles/mobile.css";
-import { mobileAutofill } from "./adapters/autofill";
+import { mobileAutofill, startAutofillLockSync } from "./adapters/autofill";
 import { mobileBiometric } from "./adapters/biometric";
 import { mobileClipboard } from "./adapters/clipboard";
 import { mobileCrypto } from "./adapters/crypto";
@@ -43,6 +43,8 @@ installNativeWebRtc();
 // Decrypted attachment copies (opened into another app) are deleted at startup and on every
 // lock, so none outlives the session it was opened in. See ./adapters/file-presenter.ts.
 startOpenedCopySweeps();
+// Every app lock ends autofill's keep-unlocked session too.
+startAutofillLockSync();
 // Plaintext a crash left spooled mid-attach. See ./adapters/file-sealer.ts.
 void sweepSealSpools();
 

@@ -5,17 +5,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Everything setIndex touches: the native bridge, the VEK crypto, and the meta store the
 // QuickType opt-in lives in. sync-manager is stubbed too (importing it would drag in the
 // whole WebRTC/wasm stack for one constant).
-const { bridge, meta } = vi.hoisted(() => ({
+const { bridge, meta, platform } = vi.hoisted(() => ({
 	bridge: {
 		sync: vi.fn(async (_payload: unknown) => {}),
 		clear: vi.fn(),
 		setKeepUnlocked: vi.fn(),
+		lock: vi.fn(async () => {}),
 	},
 	meta: new Map<string, unknown>(),
+	platform: { value: "ios" },
 }));
 
 vi.mock("@capacitor/core", () => ({
-	Capacitor: { getPlatform: () => "ios" },
+	Capacitor: { getPlatform: () => platform.value },
 	registerPlugin: () => bridge,
 }));
 vi.mock("@capacitor/device", () => ({ Device: { getInfo: async () => ({ osVersion: "18.0" }) } }));
@@ -35,7 +37,8 @@ vi.mock("./storage", () => ({
 	},
 }));
 
-const { mobileAutofill } = await import("./autofill");
+const { mobileAutofill, startAutofillLockSync } = await import("./autofill");
+const { markLocked, markUnlocked } = await import("./vault-session");
 
 function login(over: Partial<IndexEntry> = {}): IndexEntry {
 	return {
@@ -144,5 +147,33 @@ describe("setIndex passkey bundle", () => {
 		};
 		expect(JSON.parse(sent.passkeyCiphertext)[0]?.prf).toEqual(prf);
 		expect(JSON.stringify(sent.passkeyIdentities)).not.toContain("S0VZ");
+	});
+});
+
+// The provider keeps its own copy of the VEK for the keep-unlocked window. Locking the app has to
+// end it, or autofill keeps filling without auth after the user locked.
+describe("provider lock", () => {
+	it("locks the provider whenever the app locks", () => {
+		const stop = startAutofillLockSync();
+		markUnlocked();
+		expect(bridge.lock).not.toHaveBeenCalled();
+		markLocked();
+		expect(bridge.lock).toHaveBeenCalledTimes(1);
+		stop();
+		markLocked();
+		expect(bridge.lock).toHaveBeenCalledTimes(1);
+	});
+
+	it("locks the provider on Android when the vault is deleted", async () => {
+		platform.value = "android";
+		vi.resetModules();
+		try {
+			const { mobileAutofill: android } = await import("./autofill");
+			await android.clearProviderData?.();
+			expect(bridge.lock).toHaveBeenCalledTimes(1);
+			expect(bridge.clear).not.toHaveBeenCalled();
+		} finally {
+			platform.value = "ios";
+		}
 	});
 });

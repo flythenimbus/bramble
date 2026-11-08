@@ -231,11 +231,8 @@ A new `VaultRegistryProvider` sits above `VaultProvider` and owns the vault list
   All of it is best-effort (`.catch`): once the blob is erased the delete has to finish,
   so a failing native call can't strand a half-deleted vault. `primaryId` no longer exists.
 
-  Known gap: on Android `KeepUnlockedStore`'s on-disk (Keystore-wrapped) VEK cache survives
-  a delete. There is no `AutofillBridge` plugin on Android to route `clearProviderData` to,
-  and `BiometricVaultPlugin.deleteSecret` clears only that vault's Keystore alias. Smaller
-  than the iOS leak was (Android's service reads the vault file, so the entry data goes with
-  the blob) but it is still key material outliving its vault. Needs a native entry point.
+  On Android `clearProviderData` calls `AutofillBridge.lock`, which deletes the Keystore key
+  wrapping `KeepUnlockedStore`'s VEK cache, so that cache cannot outlive the vault.
 
 ## Restore destination
 

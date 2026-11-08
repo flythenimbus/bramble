@@ -9,8 +9,8 @@ import com.getcapacitor.annotation.CapacitorPlugin
 
 // The app's side of the provider handoffs (EncryptedHandoff): the same drain methods as the iOS
 // AutofillBridge, so encrypted-handoff.ts drives both platforms alike. Draining here rather than
-// through the Filesystem plugin puts it under the provider's own lock. Android has no other
-// AutofillBridge methods: its providers read the vault file directly.
+// through the Filesystem plugin puts it under the provider's own lock. Besides `lock`, Android has
+// no other AutofillBridge methods: its providers read the vault file directly.
 @CapacitorPlugin(name = "AutofillBridge")
 class AutofillBridgePlugin : Plugin() {
     @PluginMethod
@@ -24,6 +24,16 @@ class AutofillBridgePlugin : Plugin() {
 
     @PluginMethod
     fun restorePendingAssociations(call: PluginCall) = restore(call, PendingAssociation.FILE)
+
+    @PluginMethod
+    fun lock(call: PluginCall) {
+        try {
+            KeepUnlockedStore.lock()
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject(e.message ?: e.toString())
+        }
+    }
 
     private fun consume(call: PluginCall, name: String) {
         try {

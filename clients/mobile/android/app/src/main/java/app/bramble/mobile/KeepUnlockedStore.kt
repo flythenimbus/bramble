@@ -75,6 +75,13 @@ object KeepUnlockedStore {
         }
     }
 
+    /** Ends the session in every process: the cached VEK is unreadable without its key. Leaves the
+     * prefs file alone (the app process's copy may be stale). Voids a ceremony handoff too. */
+    fun lock() {
+        KeyStore.getInstance(BrambleAutofill.BIOMETRIC_KEYSTORE).apply { load(null) }
+            .deleteEntry(BrambleAutofill.SESSION_KEY_ALIAS)
+    }
+
     fun clear(context: Context) {
         prefs(context).edit()
             .remove(BrambleAutofill.SESSION_PREF_CT)

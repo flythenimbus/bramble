@@ -19,6 +19,7 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		CAPPluginMethod(name: "sync", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "setKeepUnlocked", returnType: CAPPluginReturnPromise),
+		CAPPluginMethod(name: "lock", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "consumePendingPasskeys", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "restorePendingPasskeys", returnType: CAPPluginReturnPromise),
 		CAPPluginMethod(name: "consumePendingAssociations", returnType: CAPPluginReturnPromise),
@@ -175,11 +176,17 @@ public class AutofillBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 		call.resolve()
 	}
 
+	// The app locked, so the extension must ask for auth again.
+	@objc func lock(_ call: CAPPluginCall) {
+		Self.deleteAllSessions()
+		call.resolve()
+	}
+
 	// Every vault's keep-unlocked session, by omitting the account from the query. Sessions are
-	// keyed `vek:<vaultId>` so one vault's window cannot open another; both callers here mean
-	// "no session may survive this" (the window was switched off, or the vault is gone), so
-	// they clear the lot rather than guess at an id. Also catches the un-suffixed item an
-	// older build wrote.
+	// keyed `vek:<vaultId>` so one vault's window cannot open another; every caller here means
+	// "no session may survive this" (the window was switched off, the app locked, or the vault
+	// is gone), so they clear the lot rather than guess at an id. Also catches the un-suffixed
+	// item an older build wrote.
 	private static func deleteAllSessions() {
 		SecItemDelete(
 			[

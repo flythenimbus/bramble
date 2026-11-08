@@ -8,6 +8,7 @@ import { decodeVaultBlob, findPasswordSlot, verifierPrefix } from "@core/vault-f
 import { ACTIVE_VAULT_KEY } from "../sync/sync-manager";
 import { mobileCrypto } from "./crypto";
 import { mobileStorage } from "./storage";
+import { onVaultStateChange } from "./vault-session";
 
 // System autofill on mobile is the native iOS Credential Provider extension, not the
 // webview. This adapter is the main-app side of that bridge. To keep Bramble's "nothing
@@ -89,6 +90,8 @@ interface AutofillBridgePlugin {
 	}): Promise<void>;
 	clear(): Promise<void>;
 	setKeepUnlocked(o: { minutes: number }): Promise<void>;
+	/** Ends every keep-unlocked session, so the next fill asks for auth. */
+	lock(): Promise<void>;
 }
 
 // Normalize a stored hostname to a bare registrable host for QuickType matching
@@ -225,12 +228,12 @@ export const mobileAutofill: AutofillAdapter = {
 	async clearProviderData() {
 		// The vault is gone, so the mirror clearIndex preserves must go with it: bundle,
 		// slot, passkeys and the OS identities are otherwise an openable copy of a vault
-		// the user deleted. iOS-only: Android's AutofillBridge carries only the handoff drains,
-		// and its service reads the vault file directly, so deleting the blob takes the entry
-		// data with it.
-		// NOT covered on Android: KeepUnlockedStore's on-disk wrapped VEK cache outlives the
-		// delete (BiometricVaultPlugin.deleteSecret only clears that vault's Keystore alias).
-		if (!isIos) return;
+		// the user deleted. Android keeps no mirror (its service reads the vault file), only the
+		// keep-unlocked session.
+		if (!isIos) {
+			await Bridge.lock();
+			return;
+		}
 		await Bridge.clear();
 	},
 	async setKeepUnlocked(minutes) {
@@ -257,3 +260,10 @@ export const mobileAutofill: AutofillAdapter = {
 		throw new Error("system autofill is handled by the native iOS provider, not the webview");
 	},
 };
+
+/** Lock the provider whenever the app locks. Returns an unsubscribe. */
+export function startAutofillLockSync(): () => void {
+	return onVaultStateChange((locked) => {
+		if (locked) void Bridge.lock().catch(() => {});
+	});
+}
