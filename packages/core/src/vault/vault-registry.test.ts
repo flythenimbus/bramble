@@ -4,13 +4,11 @@ import {
 	displayLabel,
 	EMPTY_REGISTRY,
 	findVault,
-	hiddenVaults,
 	hideVault,
 	listedVaults,
 	parseRegistry,
 	removeVault,
 	renameVault,
-	showVault,
 	type VaultRegistry,
 } from "./vault-registry";
 
@@ -109,42 +107,32 @@ describe("a vault hidden after a combine", () => {
 	it("leaves the list, keeping its place in the registry, which storage depends on", () => {
 		const hidden = hideVault(reg, "old", copy);
 		expect(listedVaults(hidden).map((v) => v.id)).toEqual(["new", "other"]);
-		expect(hiddenVaults(hidden).map((v) => v.id)).toEqual(["old"]);
 		expect(hidden.vaults.map((v) => v.id)).toEqual(["old", "new", "other"]);
 		expect(parseRegistry(hidden).vaults[0]?.hidden).toEqual(copy);
-	});
-
-	it("comes back under its own name, unmarked", () => {
-		const shown = showVault(hideVault(reg, "old", copy), "old");
-		expect(listedVaults(shown).map((v) => v.label)).toEqual(["Personal", "Home", "Work"]);
-		expect(shown.vaults[0]).not.toHaveProperty("hidden");
-		expect(hiddenVaults(shown)).toEqual([]);
 	});
 
 	it("is listed rather than stranded when no other vault is left", () => {
 		const alone = { vaults: [{ ...rec("old"), hidden: copy }] };
 		expect(listedVaults(alone).map((v) => v.id)).toEqual(["old"]);
-		expect(hiddenVaults(alone)).toEqual([]);
 	});
 
 	it("becomes an ordinary vault for good when the vault holding its copy goes", () => {
-		// Listing it only while nothing else is would hide it again at the next vault added, and
-		// its Delete would take logins added since, which were never copied.
+		// Listing it only while nothing else is would hide it again at the next vault added, with
+		// logins added since, which were never copied.
 		const hidden = hideVault(reg, "old", copy);
 		const gone = removeVault(hidden, "new");
 		expect(gone.vaults[0]).not.toHaveProperty("hidden");
 		expect(listedVaults(gone).map((v) => v.id)).toEqual(["old", "other"]);
 		const added = addVault(gone, rec("later"));
-		expect(hiddenVaults(added)).toEqual([]);
+		expect(listedVaults(added).map((v) => v.id)).toEqual(["old", "other", "later"]);
 	});
 
 	it("stays hidden when some other vault goes", () => {
 		const gone = removeVault(hideVault(reg, "old", copy), "other");
-		expect(hiddenVaults(gone).map((v) => v.id)).toEqual(["old"]);
+		expect(listedVaults(gone).map((v) => v.id)).toEqual(["new"]);
 	});
 
 	it("touches no other vault", () => {
 		expect(hideVault(reg, "old", copy).vaults[1]).toEqual(reg.vaults[1]);
-		expect(showVault(reg, "missing")).toEqual(reg);
 	});
 });

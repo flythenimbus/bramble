@@ -72,7 +72,7 @@ export function renameVault(reg: VaultRegistry, id: string, label: string): Vaul
 	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, label } : v)) };
 }
 
-/** Mark a vault as the one linking set aside, kept until the user deletes it. */
+/** Take a vault a combine copied out off the lists. It stays on disk: nothing deletes it. */
 export function hideVault(
 	reg: VaultRegistry,
 	id: string,
@@ -81,20 +81,10 @@ export function hideVault(
 	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? { ...v, hidden } : v)) };
 }
 
-/** List a hidden vault again. */
-export function showVault(reg: VaultRegistry, id: string): VaultRegistry {
-	return { ...reg, vaults: reg.vaults.map((v) => (v.id === id ? shown(v) : v)) };
-}
-
 /** The vaults to show. A hidden one is listed if nothing else is, rather than stranded. */
 export function listedVaults(reg: VaultRegistry): VaultRecord[] {
 	const listed = reg.vaults.filter((v) => v.hidden === undefined);
 	return listed.length > 0 ? listed : reg.vaults;
-}
-
-export function hiddenVaults(reg: VaultRegistry): VaultRecord[] {
-	const listed = new Set(listedVaults(reg));
-	return reg.vaults.filter((v) => !listed.has(v));
 }
 
 /** Look up a vault record by id. */

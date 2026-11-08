@@ -12,8 +12,6 @@ import { type Platform, PlatformProvider } from "../context/PlatformContext";
 import type { EntriesPayload } from "../sync";
 import { fileRecord } from "../test/vault-fixtures";
 import { bytesToBase64 } from "../util/bytes";
-import { sha256Hex } from "../util/hash";
-import type { CopiedOut } from "../vault/combine-into";
 import { VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 import { type SyncedSettingsAccess, useSyncedSettings } from "./synced-settings";
 import { useVault, useVaultActions, VaultProvider } from "./useVault";
@@ -43,12 +41,6 @@ vi.mock("../vault-format", async (importOriginal) => ({
 		entriesCiphertext: new Uint8Array([diskVersion.current]),
 	}),
 	encodeVaultBlob: () => new Uint8Array([1, 2, 3]),
-}));
-
-// Past a merge in flight, in real use. No merge runs in these tests.
-vi.mock("../vault/combine-into", async (importOriginal) => ({
-	...(await importOriginal<typeof import("../vault/combine-into")>()),
-	MERGE_SETTLE_MS: 5,
 }));
 
 const at = (wall: number, node: string) => ({ wall, counter: 0, node });
@@ -324,7 +316,7 @@ describe("a view reopened on an unlocked vault", () => {
 	});
 });
 
-describe("removing a vault whose entries were copied out", () => {
+describe("the open vault's disk, and an empty vault beside it", () => {
 	function vaults() {
 		const p = makePlatform({ v1: { entries: [entry("a")], tombstones: [] } }, [
 			{ id: "v1", label: "", createdAt: 1 },
@@ -341,105 +333,6 @@ describe("removing a vault whose entries were copied out", () => {
 		await waitFor(() => expect(seen.state?.entries).toHaveLength(1));
 		return seen;
 	}
-
-	const copied = (over: Partial<CopiedOut> = {}): CopiedOut => ({
-		blob: new Uint8Array([1]),
-		items: [JSON.parse(LOGIN)],
-		fileHashes: [],
-		...over,
-	});
-	const remove = async (seen: Awaited<ReturnType<typeof open>>, id: string, proof = copied()) => {
-		let removed: boolean | undefined;
-		await act(async () => {
-			removed = await seen.actions?.deleteCarriedVault(id, proof);
-		});
-		return removed;
-	};
-
-	it("erases it, its record and its key when all of the copy is on disk", async () => {
-		const p = vaults();
-		const seen = await open(p);
-
-		expect(await remove(seen, "old")).toBe(true);
-
-		expect(p.erased).toEqual(["old"]);
-		expect(seen.registry?.vaults.map((v) => v.id)).toEqual(["v1"]);
-		expect(p.locked).toEqual(["old"]);
-	});
-
-	it("refuses when an item is not on disk, though as many entries are as memory holds", async () => {
-		// A merge overwrote the import, and memory was reloaded from what it left.
-		const p = vaults();
-		const seen = await open(p);
-		const other = LOGIN.replace("Keep me", "Something else");
-		p.setDisk({ entries: [{ ...entry("z"), ciphertext: `ct:${other}` }], tombstones: [] });
-
-		expect(await remove(seen, "old")).toBe(false);
-		expect(p.erased).toEqual([]);
-		expect(seen.registry?.vaults.map((v) => v.id)).toEqual(["v1", "old"]);
-	});
-
-	it("refuses when what was folded into an entry is not on disk", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		const items = [{ ...JSON.parse(LOGIN), tags: ["work"] }];
-
-		expect(await remove(seen, "old", copied({ items }))).toBe(false);
-		expect(p.erased).toEqual([]);
-	});
-
-	it("refuses when the old vault changed after the copy began", async () => {
-		// A login saved from the page into the old vault: it is in no copy.
-		const p = vaults();
-		const seen = await open(p);
-
-		expect(await remove(seen, "old", copied({ blob: new Uint8Array([9]) }))).toBe(false);
-		expect(p.erased).toEqual([]);
-	});
-
-	it("refuses when a file the copy stored is not on disk", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		const held = fileRecord({ id: "f1" });
-		p.setDisk({ entries: [entry("a")], tombstones: [], files: [held] });
-
-		expect(await remove(seen, "old", copied({ fileHashes: [held.hash, "f".repeat(64)] }))).toBe(
-			false,
-		);
-		expect(p.erased).toEqual([]);
-
-		expect(await remove(seen, "old", copied({ fileHashes: [held.hash] }))).toBe(true);
-	});
-
-	it("refuses when memory lost the copy, though the disk still holds it", async () => {
-		// A reload that read the disk before the import finishes after it. The next write from
-		// this page would then take the copy off the disk too.
-		const p = vaults();
-		const seen = await open(p);
-		const onlyOnDisk = copied({ items: [{ ...JSON.parse(LOGIN), name: "Only on disk" }] });
-		p.setDisk({
-			entries: [
-				entry("a"),
-				{ ...entry("b"), ciphertext: `ct:${JSON.stringify(onlyOnDisk.items[0])}` },
-			],
-			tombstones: [],
-		});
-		expect(await remove(seen, "old", onlyOnDisk)).toBe(false);
-		expect(p.erased).toEqual([]);
-	});
-
-	it("compares the old vault's bytes last, closest to the erase", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		const order: string[] = [];
-		const { readVaultBlob } = p.platform.storage;
-		p.platform.storage.readVaultBlob = async (id?: string) => {
-			order.push(id === "old" ? "old" : "open");
-			return readVaultBlob(id);
-		};
-		await remove(seen, "old");
-		expect(order.indexOf("old")).toBeGreaterThan(order.indexOf("open"));
-	});
 
 	it("reads the open vault from its disk, not from what memory holds", async () => {
 		const p = vaults();
@@ -463,50 +356,6 @@ describe("removing a vault whose entries were copied out", () => {
 		expect(seen.state?.entries.map((e) => e.id)).toEqual(["a"]);
 	});
 
-	it("deletes a hidden vault on the user's word, its key and record too", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		await act(async () =>
-			seen.registry?.hide("old", {
-				blobHash: await sha256Hex(new Uint8Array([1])),
-				into: "v1",
-			}),
-		);
-		let removed: boolean | undefined;
-		await act(async () => {
-			removed = await seen.actions?.deleteHiddenVault("old");
-		});
-		expect(removed).toBe(true);
-		expect(p.erased).toEqual(["old"]);
-		expect(p.locked).toEqual(["old"]);
-		expect(seen.registry?.hiddenVaults).toEqual([]);
-	});
-
-	it("refuses that if it changed after the copy, as another window could have saved into it", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		await act(async () => seen.registry?.hide("old", { blobHash: "from before", into: "v1" }));
-		let removed: boolean | undefined;
-		await act(async () => {
-			removed = await seen.actions?.deleteHiddenVault("old");
-		});
-		expect(removed).toBe(false);
-		expect(p.erased).toEqual([]);
-	});
-
-	it("refuses that for a vault that isn't hidden, whichever it is", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		for (const id of ["old", "v1", "missing"]) {
-			let removed: boolean | undefined;
-			await act(async () => {
-				removed = await seen.actions?.deleteHiddenVault(id);
-			});
-			expect(removed).toBe(false);
-		}
-		expect(p.erased).toEqual([]);
-	});
-
 	it("will not delete an empty vault whose bytes changed after they were read", async () => {
 		const p = vaults();
 		const seen = await open(p);
@@ -516,32 +365,6 @@ describe("removing a vault whose entries were copied out", () => {
 		});
 		expect(removed).toBe(false);
 		expect(p.erased).toEqual([]);
-	});
-
-	it("refuses until a setting it was told to look for is on disk", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		const proof = copied({ settings: ["pref.aliasProvider"] });
-
-		expect(await remove(seen, "old", proof)).toBe(false);
-
-		// Turned off counts as not there.
-		const hlc = { wall: 1, counter: 0, node: "n" };
-		p.setDisk({
-			entries: [entry("a")],
-			tombstones: [],
-			settings: { "pref.aliasProvider": { hlc, value: null } },
-		});
-		expect(await remove(seen, "old", proof)).toBe(false);
-		expect(p.erased).toEqual([]);
-
-		p.setDisk({
-			entries: [entry("a")],
-			tombstones: [],
-			settings: { "pref.aliasProvider": { hlc, value: { provider: "addy", options: {} } } },
-		});
-		expect(await remove(seen, "old", proof)).toBe(true);
-		expect(p.erased).toEqual(["old"]);
 	});
 
 	it("reads and writes a setting of the open vault through the one writer, onto its own disk", async () => {
@@ -559,42 +382,6 @@ describe("removing a vault whose entries were copied out", () => {
 		expect(p.writes.at(-1)?.settings?.["pref.aliasProvider"]?.value).toEqual(value);
 		// Beside what it already held, as any other write.
 		expect(p.writes.at(-1)?.entries.map((e) => e.id)).toContain("a");
-	});
-
-	it("reads the disk only after a merge in flight has had time to land", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		let removed: boolean | undefined;
-
-		await act(async () => {
-			const removing = seen.actions?.deleteCarriedVault("old", copied());
-			p.setDisk({ entries: [], tombstones: [] });
-			removed = await removing;
-		});
-
-		expect(removed).toBe(false);
-		expect(p.erased).toEqual([]);
-	});
-
-	it("leaves it whole when its record cannot be removed", async () => {
-		const p = vaults();
-		const seen = await open(p);
-		p.failing.registryWrites = true;
-
-		await act(async () => {
-			await expect(seen.actions?.deleteCarriedVault("old", copied())).rejects.toThrow();
-		});
-
-		expect(p.erased).toEqual([]);
-		expect(p.locked).toEqual([]);
-	});
-
-	it("refuses the vault that is open", async () => {
-		const p = vaults();
-		const seen = await open(p);
-
-		expect(await remove(seen, "v1")).toBe(false);
-		expect(p.erased).toEqual([]);
 	});
 });
 

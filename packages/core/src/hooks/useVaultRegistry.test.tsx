@@ -71,7 +71,6 @@ describe("VaultRegistryProvider", () => {
 			const { get } = mount(stored);
 			await vi.waitFor(() => expect(get().ready).toBe(true));
 			expect(get().vaults.map((v) => v.id)).toEqual(["new"]);
-			expect(get().hiddenVaults.map((v) => v.id)).toEqual(["old"]);
 			expect(get().activeId).toBe("new");
 		});
 

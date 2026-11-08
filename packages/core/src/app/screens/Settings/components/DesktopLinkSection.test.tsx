@@ -15,15 +15,6 @@ const h = vi.hoisted(() => ({
 	entries: [] as Entry[],
 	vaults: [] as { id: string; label: string; createdAt: number }[],
 	groupOf: new Map<string, string>(),
-	/** Deleting a hidden vault finds it changed since the copy. */
-	hiddenChanged: false,
-	/** Vaults hidden after a combine. */
-	hidden: [] as {
-		id: string;
-		label: string;
-		createdAt: number;
-		hidden?: { at: number; blobHash: string; into: string };
-	}[],
 	/** Holds an import open, to look at the screen during it. */
 	importHold: null as Promise<void> | null,
 	/** The app says its vault is empty, so linking combines without asking. */
@@ -101,16 +92,8 @@ vi.mock("../../../../hooks/useVault", async (importOriginal) => ({
 			conflicted: 0,
 			unreadable: 0,
 		}),
-		deleteHiddenVault: async (id: string) => {
-			h.steps.push(`deleteHidden:${id}`);
-			return !h.hiddenChanged;
-		},
 		readSetting: () => undefined,
 		writeSetting: async () => {},
-		deleteCarriedVault: async () => {
-			h.steps.push("removeOld");
-			return true;
-		},
 	}),
 }));
 
@@ -118,10 +101,6 @@ vi.mock("../../../../hooks/useVaultRegistry", () => ({
 	useVaultRegistry: () => ({
 		vaults: h.vaults,
 		activeId: h.vaults.length ? h.activeVault : undefined,
-		hiddenVaults: h.hidden,
-		show: async (id: string) => {
-			h.steps.push(`show:${id}`);
-		},
 		hide: async () => {
 			h.steps.push("hide");
 		},
@@ -233,8 +212,6 @@ afterEach(() => {
 	h.entries = [];
 	h.vaults = [];
 	h.groupOf.clear();
-	h.hidden = [];
-	h.hiddenChanged = false;
 	h.importHold = null;
 	h.desktopEmpty = false;
 	h.steps.length = 0;
@@ -365,17 +342,13 @@ describe("when both sides have entries", () => {
 		expect(screen.queryByRole("checkbox")).toBeNull();
 	});
 
-	it("asks once the copy is done, and deletes the old vault only on the press", async () => {
+	it("hides the old vault once the copy is done, and asks nothing", async () => {
 		twoVaults();
 		await choose(/combine into one/i);
-		await screen.findByRole("heading", { name: /delete the old vault/i });
-		expect(h.steps).toEqual(["join", "attach:joined", "import", "hide"]);
-
-		fireEvent.click(screen.getByRole("button", { name: /^delete old vault$/i }));
-		await waitFor(() => expect(h.steps).toContain("removeOld"));
-		await waitFor(() =>
-			expect(screen.queryByRole("heading", { name: /delete the old vault/i })).toBeNull(),
-		);
+		await waitFor(() => expect(h.steps).toEqual(["join", "attach:joined", "import", "hide"]));
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
+		expect(screen.queryByRole("button", { name: /^keep it$/i })).toBeNull();
 	});
 
 	it("shows that a copy is under way, and that it can't be dismissed", async () => {
@@ -390,8 +363,8 @@ describe("when both sides have entries", () => {
 		expect(screen.getByText(/copying into the desktop's vault/i)).toBeTruthy();
 		release();
 		h.importHold = null;
-		await screen.findByRole("heading", { name: /delete the old vault/i });
-		expect(screen.queryByText(/copying into the desktop's vault/i)).toBeNull();
+		await waitFor(() => expect(h.steps).toContain("hide"));
+		await waitFor(() => expect(screen.queryByText(/copying into the desktop's vault/i)).toBeNull());
 	});
 
 	it("warns about other devices on the automatic combine too", async () => {
@@ -402,24 +375,12 @@ describe("when both sides have entries", () => {
 		await screen.findByText(/also syncs with Phone/i);
 	});
 
-	it("keeps the old vault on Keep it, and does not ask again", async () => {
-		twoVaults();
-		await choose(/combine into one/i);
-		await screen.findByRole("heading", { name: /delete the old vault/i });
-
-		fireEvent.click(screen.getByRole("button", { name: /^keep it$/i }));
-		await waitFor(() =>
-			expect(screen.queryByRole("heading", { name: /delete the old vault/i })).toBeNull(),
-		);
-		expect(h.steps).not.toContain("removeOld");
-	});
-
-	it("asks nothing when the vaults stay separate", async () => {
+	it("hides nothing when the vaults stay separate", async () => {
 		twoVaults();
 		await choose(/keep them separate/i);
 		await waitFor(() => expect(h.steps).toContain("join"));
-		expect(screen.queryByRole("heading", { name: /delete the old vault/i })).toBeNull();
-		expect(h.steps).not.toContain("removeOld");
+		expect(h.steps).not.toContain("hide");
+		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 
 	it("keeps the choice for the retry after a mistyped password", async () => {
@@ -439,9 +400,7 @@ describe("when both sides have entries", () => {
 		fireEvent.change(screen.getByLabelText(/^master password$/i), { target: { value: "pw" } });
 		fireEvent.click(screen.getByRole("button", { name: /^continue$/i }));
 
-		await screen.findByRole("heading", { name: /delete the old vault/i });
-		expect(h.steps).toContain("hide");
-		expect(h.steps).not.toContain("removeOld");
+		await waitFor(() => expect(h.steps).toContain("hide"));
 	});
 
 	it("no longer promises the old vault stays", async () => {
@@ -490,72 +449,6 @@ describe("when both sides have entries", () => {
 		await waitFor(() => expect(screen.getByText(/join failed/i)).toBeTruthy());
 		expect(h.steps).toEqual(["join"]);
 		expect(h.imported).toBeNull();
-	});
-});
-
-describe("a vault left hidden by a closed dialog", () => {
-	const hidden = {
-		id: "old",
-		label: "Personal",
-		createdAt: 1,
-		hidden: { at: 5, blobHash: "abc", into: "v2" },
-	};
-
-	it("is asked about again in Settings, by name, with both answers", async () => {
-		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
-		h.hidden = [hidden];
-		h.entries = [];
-		mount();
-		await screen.findByText(/Personal is hidden on this browser/i);
-		expect(screen.getByRole("button", { name: /^keep it$/i })).toBeTruthy();
-		expect(screen.getByRole("button", { name: /^delete$/i })).toBeTruthy();
-	});
-
-	it("is listed again on Keep it", async () => {
-		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
-		h.hidden = [hidden];
-		h.steps = [];
-		mount();
-		fireEvent.click(await screen.findByRole("button", { name: /^keep it$/i }));
-		await waitFor(() => expect(h.steps).toContain("show:old"));
-		expect(h.steps).not.toContain("deleteHidden:old");
-	});
-
-	it("is deleted only after confirming", async () => {
-		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
-		h.hidden = [hidden];
-		h.steps = [];
-		mount();
-		fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
-		expect(h.steps).not.toContain("deleteHidden:old");
-		fireEvent.click(await screen.findByRole("button", { name: /^delete it$/i }));
-		await waitFor(() => expect(h.steps).toContain("deleteHidden:old"));
-	});
-
-	it("is listed again, and says why, if it changed after the copy", async () => {
-		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
-		h.hidden = [hidden];
-		h.hiddenChanged = true;
-		h.steps = [];
-		mount();
-		fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
-		fireEvent.click(await screen.findByRole("button", { name: /^delete it$/i }));
-		await waitFor(() => expect(h.steps).toContain("show:old"));
-		await screen.findByText(/Personal changed after the copy/i);
-	});
-
-	it("isn't called by a number that could be the open vault's", async () => {
-		h.vaults = [{ id: "v2", label: "", createdAt: 2 }];
-		h.hidden = [{ ...hidden, label: "" }];
-		mount();
-		await screen.findByText(/The old vault is hidden on this browser/i);
-	});
-
-	it("asks nothing with none hidden", async () => {
-		h.vaults = [{ id: "v2", label: "Home", createdAt: 2 }];
-		h.hidden = [];
-		mount();
-		await waitFor(() => expect(screen.queryByText(/is hidden on this browser/i)).toBeNull());
 	});
 });
 

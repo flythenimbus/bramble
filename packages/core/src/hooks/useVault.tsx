@@ -16,9 +16,7 @@ import type { PickedAttachment } from "../adapters/files";
 import { buildBackup } from "../backup/archive";
 import { usePlatform } from "../context/PlatformContext";
 import type { PlacedAttachment } from "../import/types";
-import { sha256Hex } from "../util/hash";
 import { isVaultEmpty, readVaultContents } from "../vault/vault-empty";
-import { parseRegistry, VAULT_REGISTRY_KEY } from "../vault/vault-registry";
 import {
 	decodeVaultBlob,
 	type EncryptedEntry,
@@ -234,7 +232,7 @@ import {
 	wrapRecoverySlot as buildRecoverySlot,
 	buildVaultBytes,
 } from "../vault/build-vault";
-import { type CopiedOut, holdsCarried, MERGE_SETTLE_MS, sameBytes } from "../vault/combine-into";
+import { sameBytes } from "../vault/combine-into";
 import { createEntriesBlobStore } from "../vault/entries-blob";
 import {
 	conflictsOf,
@@ -374,12 +372,6 @@ export interface VaultActions {
 		/** The vault's bytes when it was counted: a save since then keeps it. */
 		unchangedFrom?: Uint8Array,
 	): Promise<boolean>;
-	/** Remove a vault whose entries were copied into the open one, once all of that copy is on disk
-	 * and the vault has not moved on since it began. False otherwise, and the vault stays. */
-	deleteCarriedVault(id: string, copied: CopiedOut): Promise<boolean>;
-	/** Delete a hidden vault on the user's word, once the copy's proof is gone. False if it changed
-	 * since the copy was made, or isn't hidden. */
-	deleteHiddenVault(id: string): Promise<boolean>;
 	/** Save an encrypted `.bramble` backup of the vault. Rejects where the platform can't save files. */
 	/** Save a backup file. Resolves with any attachments it had to leave out. */
 	/** Throws BackupIncompleteError rather than save a backup missing any of the vault. */
@@ -2248,8 +2240,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 	 * verification and deletion are inseparable here, so no caller can delete without re-authing. */
 	/**
 	 * Erase everything keyed to one vault: blob, files, keys and settings. Callers gate it:
-	 * deleteVault on a re-auth, deleteEmptyVault on the vault holding nothing, deleteCarriedVault on
-	 * one whose entries the open vault now holds.
+	 * deleteVault on a re-auth, deleteEmptyVault on the vault holding nothing.
 	 */
 	const eraseVaultData = useCallback(
 		async (id: string) => {
@@ -2376,54 +2367,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		};
 	}, [crypto, storage, readDecodedBlob]);
 
-	/** The record first: a failure here leaves the vault whole, not a name with nothing behind it. */
-	const eraseOtherVault = useCallback(
-		async (id: string) => {
-			await forgetEmptyRecord(id);
-			await eraseVaultData(id);
-			await platformCrypto
-				.withVault?.(id)
-				.lock()
-				.catch(() => {});
-		},
-		[platformCrypto, eraseVaultData, forgetEmptyRecord],
-	);
-
-	const deleteCarriedVault = useCallback(
-		async (id: string, copied: CopiedOut): Promise<boolean> => {
-			if (id === activeId) return false;
-			// A background merge in flight can still overwrite the import: let it land, then read.
-			await new Promise((r) => setTimeout(r, MERGE_SETTLE_MS));
-			const onDisk = await readOpenVaultFromDisk();
-			if (!holdsCarried(onDisk.entries, copied.items)) return false;
-			// Memory too: a reload that read the disk before the import can have replaced it, and this
-			// page's next write would then take the copy off the disk.
-			if (!holdsCarried(latestRef.current.entries, copied.items)) return false;
-			const files = new Set(onDisk.files.map((f) => f.hash));
-			if (!copied.fileHashes.every((h) => files.has(h))) return false;
-			if (copied.settings?.some((k) => onDisk.settings?.[k]?.value == null)) return false;
-			// Last, closest to the erase: a save landed in it after the copy began, which only it holds.
-			if (!sameBytes(await storage.readVaultBlob(id), copied.blob)) return false;
-			await eraseOtherVault(id);
-			return true;
-		},
-		[activeId, storage, readOpenVaultFromDisk, eraseOtherVault],
-	);
-
-	const deleteHiddenVault = useCallback(
-		async (id: string): Promise<boolean> => {
-			if (id === activeId) return false;
-			const registry = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
-			const hidden = registry.vaults.find((v) => v.id === id)?.hidden;
-			if (!hidden) return false;
-			// Another window that still had it open could have saved into it since the copy.
-			if ((await sha256Hex(await storage.readVaultBlob(id))) !== hidden.blobHash) return false;
-			await eraseOtherVault(id);
-			return true;
-		},
-		[activeId, storage, eraseOtherVault],
-	);
-
 	// Every action is referentially stable (state reads route through latestRef), so this
 	// memo builds once: the actions value never changes and useVaultActions never re-renders.
 	const actions = useMemo<VaultActions>(
@@ -2433,8 +2376,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			createVault,
 			deleteVault,
 			deleteEmptyVault,
-			deleteCarriedVault,
-			deleteHiddenVault,
 			readOpenVaultFromDisk,
 			exportVault,
 			exportKdbx,
@@ -2490,8 +2431,6 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			createVault,
 			deleteVault,
 			deleteEmptyVault,
-			deleteCarriedVault,
-			deleteHiddenVault,
 			readOpenVaultFromDisk,
 			exportVault,
 			exportKdbx,

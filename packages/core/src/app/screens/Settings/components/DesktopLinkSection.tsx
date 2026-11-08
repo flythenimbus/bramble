@@ -16,7 +16,6 @@ import { TextField } from "../../../components/ui/text-field";
 import { useDesktopLink } from "../../../hooks/useDesktopLink";
 import { usePopOut } from "../../../hooks/usePopOut";
 import { CombineResult } from "./CombineResult";
-import { HiddenVaultRow } from "./HiddenVaultRow";
 import { Row, Section } from "./primitives";
 import { OtherDevicesWarning, type TwoVaultsChoice, TwoVaultsPrompt } from "./TwoVaultsPrompt";
 
@@ -30,7 +29,7 @@ export function DesktopLinkSection() {
 	const { desktopLink, storage } = usePlatform();
 	const { t } = useLingui();
 	const { entries } = useVault();
-	const { syncKey, vaults, hiddenVaults, activeId } = useVaultRegistry();
+	const { syncKey, vaults, activeId } = useVaultRegistry();
 	// The toolbar popup closes the moment the user switches to the desktop app, which a join asks
 	// them to do, and the vault it was receiving goes with it. So that much runs in a window.
 	const { canPopOut, popOut } = usePopOut();
@@ -346,11 +345,6 @@ export function DesktopLinkSection() {
 					<Trans>Try again</Trans>
 				</Button>
 			)}
-			{hiddenVaults
-				.filter((v) => v.id !== link.combined?.pendingRemoval?.id)
-				.map((v) => (
-					<HiddenVaultRow key={v.id} vault={v} onChangedSince={link.setError} />
-				))}
 			{link.combined && <CombineResult link={link} />}
 			<Modal open={link.copyingOver} onClose={() => {}} dismissable={false} className="max-w-sm">
 				<p className="p-5 text-sm text-muted-foreground">

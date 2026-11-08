@@ -22,20 +22,16 @@ import { syncKeyFor } from "../../sync/sync-keys";
 import { sha256Hex } from "../../util/hash";
 import {
 	type CarriedTarget,
-	type CopiedOut,
 	collectCarry,
 	placeCarry,
 	readCarriedTargets,
 	sameBytes,
 	sealCarriedTargets,
-	withoutHeldBack,
 } from "../../vault/combine-into";
 import { holdsQuarantine, isVaultEmpty, readVaultContents } from "../../vault/vault-empty";
 
 /** What came across besides entries and files, and what stayed behind the desktop's own. */
 interface BroughtSettings {
-	/** The synced settings written, for the removal to find on disk. */
-	settings: string[];
 	leftBehind: { alias: boolean; backupTargets: boolean };
 	failed: boolean;
 }
@@ -62,7 +58,6 @@ async function bringSettings(from: {
 }): Promise<BroughtSettings> {
 	const { alias, targets, desktopHasTargets, opened, actions, storage, crypto } = from;
 	const brought: BroughtSettings = {
-		settings: [],
 		leftBehind: { alias: false, backupTargets: false },
 		failed: false,
 	};
@@ -74,7 +69,6 @@ async function bringSettings(from: {
 			const own = actions.readSetting(PREF_ALIAS_PROVIDER);
 			if (own == null) {
 				await actions.writeSetting(PREF_ALIAS_PROVIDER, alias);
-				brought.settings.push(PREF_ALIAS_PROVIDER);
 			} else if (!sameAlias(alias, own)) {
 				brought.leftBehind.alias = true;
 			}
@@ -169,7 +163,8 @@ export function useDesktopLink({
 	const [joinSas, setJoinSas] = useState<{ digits: string; emoji?: number[] } | null>(null);
 	/** Other devices syncing this browser's vault: combining moves only this browser. */
 	const [otherDevices, setOtherDevices] = useState<string[]>([]);
-	/** What a combine left behind: look-alikes held back, and files it could not carry. */
+	/** What a combine has to say: what it held back or left behind, and whether the old vault stays
+	 * listed. Null when all of it came across, which needs no word. */
 	const [combined, setCombined] = useState<{
 		heldBack: { items: EntryData[]; attachments: PlacedAttachment[] };
 		uncarried: number;
@@ -177,14 +172,12 @@ export function useDesktopLink({
 		quarantined: number;
 		/** Entries in a sync conflict: only the version on show came across. */
 		conflicted: number;
-		/** The old vault has to stay: some of it did not come across. */
-		keptUnasked: boolean;
-		/** Delete was pressed and the check refused: the vault is listed again. */
-		copyUnconfirmed: boolean;
+		/** The old vault is off the list. Nothing deletes it. */
+		hidden: boolean;
+		/** Some of it did not come across, so the old vault stays listed. */
+		copyFailed: boolean;
 		/** Settings that gave way to the desktop vault's own, and backup targets that won't open. */
 		leftBehind: BroughtSettings["leftBehind"] & { unreadableTargets: number };
-		/** Deleting the old vault is on offer, and what doing so checks. */
-		pendingRemoval: { id: string; copied: CopiedOut } | null;
 	} | null>(null);
 	const [finishingCombine, setFinishingCombine] = useState(false);
 	/** The copy is running: the invite's form has gone and the result's dialog isn't up yet. */
@@ -446,13 +439,12 @@ export function useDesktopLink({
 					copying = true;
 					setCopyingOver(true);
 					const placed = placeCarry(now.actions.readEntries(), carry);
-					const fileHashes =
-						placed.items.length || placed.attachments.length || placed.matched.length
-							? await now.actions.importEntries(placed.items, placed.attachments, {
-									ownVault: true,
-									matched: placed.matched,
-								})
-							: [];
+					if (placed.items.length || placed.attachments.length || placed.matched.length) {
+						await now.actions.importEntries(placed.items, placed.attachments, {
+							ownVault: true,
+							matched: placed.matched,
+						});
+					}
 					copying = false;
 					// After the import, which can take a while: is what's open still where this belongs?
 					const afterCopy = latest.current;
@@ -467,14 +459,9 @@ export function useDesktopLink({
 									storage,
 									crypto,
 								})
-							: {
-									settings: [],
-									leftBehind: { alias: false, backupTargets: false },
-									failed: true,
-								};
-					// Deleting it is offered only where that can't lose something by accident: not with
-					// what failed to copy or can't be read, nor a pairing that did not finish. Otherwise
-					// it stays listed, under its own name, since it may hold the only copy.
+							: { leftBehind: { alias: false, backupTargets: false }, failed: true };
+					// Off the list once all of it came across. With what failed to copy or can't be read,
+					// or a pairing that did not finish, it stays listed, since it may hold the only copy.
 					const copyAtRisk =
 						oldBlob === null ||
 						placed.tagsLeftOver > 0 ||
@@ -484,41 +471,32 @@ export function useDesktopLink({
 						// A save during the join isn't in the copy.
 						!sameBytes(await storage.readVaultBlob(oldId), oldBlob) ||
 						holdsQuarantine((await storage.readQuarantine?.(oldId)) ?? null);
-					// Hidden only when deleting it later costs nothing the Settings row can't say. With
-					// something left behind it stays listed, so it can't be deleted unawares.
-					const leavesSomething =
-						placed.heldBack.items.length > 0 ||
-						onDisk.conflicted > 0 ||
-						brought.leftBehind.alias ||
-						brought.leftBehind.backupTargets ||
-						oldTargets.unreadable > 0;
-					if (attached && !copyAtRisk && !leavesSomething) {
+					const hidden = attached && !copyAtRisk;
+					if (hidden) {
 						await afterCopy.registry.hide(oldId, {
 							blobHash: await sha256Hex(oldBlob),
 							into: opened,
 						});
 					}
-					setCombined({
-						heldBack: placed.heldBack,
-						uncarried: carry.uncarried,
-						quarantined: await countQuarantined(storage, oldId),
-						conflicted: onDisk.conflicted,
-						keptUnasked: attached && copyAtRisk,
-						copyUnconfirmed: false,
-						leftBehind: { ...brought.leftBehind, unreadableTargets: oldTargets.unreadable },
-						pendingRemoval:
-							!attached || copyAtRisk
-								? null
-								: {
-										id: oldId,
-										copied: {
-											blob: oldBlob,
-											items: carry.items,
-											fileHashes,
-											settings: brought.settings,
-										},
-									},
-					});
+					const leftBehind = { ...brought.leftBehind, unreadableTargets: oldTargets.unreadable };
+					const toSay =
+						!hidden ||
+						placed.heldBack.items.length > 0 ||
+						onDisk.conflicted > 0 ||
+						leftBehind.alias ||
+						leftBehind.backupTargets ||
+						leftBehind.unreadableTargets > 0;
+					if (toSay) {
+						setCombined({
+							heldBack: placed.heldBack,
+							uncarried: carry.uncarried,
+							quarantined: await countQuarantined(storage, oldId),
+							conflicted: onDisk.conflicted,
+							hidden,
+							copyFailed: attached && copyAtRisk,
+							leftBehind,
+						});
+					}
 				}
 				// After the join, so the copies land in the vault that is now open.
 				if (opts?.carry?.length) await now.actions.importEntries(opts.carry);
@@ -581,26 +559,14 @@ export function useDesktopLink({
 	/** Copy the look-alikes the dedup held back, as import's "Import them anyway" does. */
 	const copyHeldBack = useCallback(async () => {
 		if (!combined?.heldBack.items.length) return;
-		const { heldBack, pendingRemoval } = combined;
+		const { heldBack } = combined;
 		setFinishingCombine(true);
 		setError(null);
 		try {
-			const hashes = await latest.current.actions.importEntries(
-				heldBack.items,
-				heldBack.attachments,
-				{ ownVault: true },
-			);
-			setCombined({
-				...combined,
-				heldBack: { items: [], attachments: [] },
-				pendingRemoval: pendingRemoval && {
-					...pendingRemoval,
-					copied: {
-						...pendingRemoval.copied,
-						fileHashes: [...pendingRemoval.copied.fileHashes, ...hashes],
-					},
-				},
+			await latest.current.actions.importEntries(heldBack.items, heldBack.attachments, {
+				ownVault: true,
 			});
+			setCombined({ ...combined, heldBack: { items: [], attachments: [] } });
 		} catch {
 			setError(
 				t`This vault's entries didn't copy into the desktop's vault. They are still in the old vault.`,
@@ -610,49 +576,6 @@ export function useDesktopLink({
 		}
 	}, [combined, t]);
 
-	/** The user said delete. Look-alikes still held back go with it, as the dialog told them. */
-	const removeOldVault = useCallback(async () => {
-		if (!combined?.pendingRemoval) return;
-		const { id, copied } = combined.pendingRemoval;
-		setFinishingCombine(true);
-		setError(null);
-		try {
-			const { actions, registry: current } = latest.current;
-			const removed = await actions
-				.deleteCarriedVault(id, {
-					...copied,
-					items: withoutHeldBack(copied.items, combined.heldBack.items),
-				})
-				.catch(() => false);
-			if (removed) {
-				setCombined(null);
-				return;
-			}
-			await current.show(id).catch(() => {});
-			setCombined({ ...combined, pendingRemoval: null, copyUnconfirmed: true });
-		} finally {
-			setFinishingCombine(false);
-		}
-	}, [combined]);
-
-	/** The user said keep it: an ordinary vault again, under its own name. */
-	const keepOldVault = useCallback(async () => {
-		if (!combined?.pendingRemoval) return;
-		setFinishingCombine(true);
-		setError(null);
-		try {
-			await latest.current.registry.show(combined.pendingRemoval.id);
-			setCombined(null);
-		} catch (e) {
-			setError(
-				e instanceof Error && e.message ? e.message : t`Something went wrong after linking.`,
-			);
-		} finally {
-			setFinishingCombine(false);
-		}
-	}, [combined, t]);
-
-	/** No answer yet: the vault stays hidden, and Settings asks again. */
 	const closeCombined = useCallback(() => setCombined(null), []);
 
 	return {
@@ -680,8 +603,6 @@ export function useDesktopLink({
 		combined,
 		finishingCombine,
 		copyHeldBack,
-		removeOldVault,
-		keepOldVault,
 		closeCombined,
 		copyingOver,
 		otherDevices,

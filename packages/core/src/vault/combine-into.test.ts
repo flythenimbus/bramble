@@ -5,11 +5,9 @@ import type { FileRecord } from "../sync/entries-payload";
 import {
 	collectCarry,
 	foldCarriedCopy,
-	holdsCarried,
 	placeCarry,
 	readCarriedTargets,
 	sealCarriedTargets,
-	withoutHeldBack,
 } from "./combine-into";
 
 const login = (id: string, site: string, username = "u", password = "p"): Entry =>
@@ -217,49 +215,6 @@ describe("foldCarriedCopy", () => {
 	it("ignores a copy's history on an entry that is not a login", () => {
 		const e = { id: "n", type: "note", name: "n" } as unknown as Entry;
 		expect(foldCarriedCopy(e, { type: "note", name: "n" } as EntryData)).toBe(e);
-	});
-});
-
-describe("holdsCarried", () => {
-	const onDisk = (over: Record<string, unknown> = {}) =>
-		({ ...login("x", "same.com"), ...over }) as unknown as Entry;
-	const item = (over: Record<string, unknown> = {}) => {
-		const { id: _id, ...data } = onDisk(over);
-		return data as EntryData;
-	};
-
-	it("is true when every item is there, with all it held", () => {
-		const d = onDisk({ tags: ["work", "home"], createdAt: 9, updatedAt: 9 });
-		expect(holdsCarried([d], [item({ tags: ["work"] }), item({ tags: ["home"] })])).toBe(true);
-	});
-
-	it("is false when an item is missing, however many others are there", () => {
-		const others = Array.from({ length: 5 }, (_, i) => onDisk({ name: `other${i}` }));
-		expect(holdsCarried(others, [item()])).toBe(false);
-	});
-
-	it("is false when a merge overwrote what was folded in", () => {
-		expect(holdsCarried([onDisk()], [item({ tags: ["work"] })])).toBe(false);
-	});
-
-	it("looks at every copy of the entry, not just the first", () => {
-		const bare = onDisk();
-		const tagged = onDisk({ id: "y", tags: ["work"] });
-		expect(holdsCarried([bare, tagged], [item({ tags: ["work"] })])).toBe(true);
-	});
-});
-
-describe("withoutHeldBack", () => {
-	it("drops a look-alike and any copy of it, whatever tags they carry, and keeps the rest", () => {
-		const alike = { type: "login", name: "A", username: "u", password: "p", notes: "mine" };
-		const fresh = { type: "login", name: "B", username: "u", password: "p" };
-		const items = [alike, { ...alike, tags: ["t"] }, fresh] as EntryData[];
-		const existing = [
-			{ id: "x", type: "login", name: "A", username: "U", password: "p" },
-		] as unknown as Entry[];
-		const { heldBack } = placeCarry(existing, { items, files: [], uncarried: 0 });
-		expect(heldBack.items).toHaveLength(1);
-		expect(withoutHeldBack(items, heldBack.items)).toEqual([fresh]);
 	});
 });
 

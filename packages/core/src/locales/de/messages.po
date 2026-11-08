@@ -167,8 +167,12 @@ msgid "{held, plural, one {# entry looked like one the desktop's vault already h
 msgstr "{held, plural, one {# Eintrag sah wie einer aus, den der Desktop-Tresor bereits enthält, deshalb blieb er im alten Tresor.} other {# Einträge sahen wie solche aus, die der Desktop-Tresor bereits enthält, deshalb blieben sie im alten Tresor.}}"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "{held, plural, one {# entry looks like one the desktop's vault already has, so it wasn't copied. It goes if you delete the old vault.} other {# entries look like ones the desktop's vault already has, so they weren't copied. They go if you delete the old vault.}}"
-msgstr "{held, plural, one {# Eintrag sieht wie einer aus, den der Desktop-Tresor bereits enthält, daher wurde er nicht kopiert. Er wird entfernt, wenn Sie den alten Tresor löschen.} other {# Einträge sehen wie solche aus, die der Desktop-Tresor bereits enthält, daher wurden sie nicht kopiert. Sie werden entfernt, wenn Sie den alten Tresor löschen.}}"
+#~ msgid "{held, plural, one {# entry looks like one the desktop's vault already has, so it wasn't copied. It goes if you delete the old vault.} other {# entries look like ones the desktop's vault already has, so they weren't copied. They go if you delete the old vault.}}"
+#~ msgstr "{held, plural, one {# Eintrag sieht wie einer aus, den der Desktop-Tresor bereits enthält, daher wurde er nicht kopiert. Er wird entfernt, wenn Sie den alten Tresor löschen.} other {# Einträge sehen wie solche aus, die der Desktop-Tresor bereits enthält, daher wurden sie nicht kopiert. Sie werden entfernt, wenn Sie den alten Tresor löschen.}}"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{held, plural, one {# entry looks like one the desktop's vault already has, so it wasn't copied.} other {# entries look like ones the desktop's vault already has, so they weren't copied.}}"
+msgstr "{held, plural, one {# Eintrag sieht so aus wie einer, den der Desktop-Tresor bereits enthält, und wurde daher nicht kopiert.} other {# Einträge sehen so aus wie solche, die der Desktop-Tresor bereits enthält, und wurden daher nicht kopiert.}}"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 #~ msgid "{held} entries look like ones the desktop's vault already has, so they weren't copied. They go if you delete the old vault."
@@ -212,12 +216,12 @@ msgstr "{moving, plural, one {# Eintrag wiederherstellen?} other {# Einträge wi
 #~ msgstr "{name} (vor der Verknüpfung)"
 
 #: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
-msgid "{name} changed after the copy, so it's listed again."
-msgstr "{name} wurde nach dem Kopieren geändert und wird daher erneut aufgeführt."
+#~ msgid "{name} changed after the copy, so it's listed again."
+#~ msgstr "{name} wurde nach dem Kopieren geändert und wird daher erneut aufgeführt."
 
 #: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
-msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
-msgstr "{name} ist in diesem Browser ausgeblendet. Die zugehörigen Einträge wurden in den Desktop-Tresor kopiert."
+#~ msgid "{name} is hidden on this browser. Its entries were copied into the desktop's vault."
+#~ msgstr "{name} ist in diesem Browser ausgeblendet. Die zugehörigen Einträge wurden in den Desktop-Tresor kopiert."
 
 #: packages/core/src/app/bulk-actions/delete.tsx
 msgid "{passkeys, plural, one {# passkey is stored on these entries and is deleted with them.} other {# passkeys are stored on these entries and are deleted with them.}}"
@@ -256,8 +260,12 @@ msgid "{toExisting, plural, one {# attachment will be added to an entry you alre
 msgstr "{toExisting, plural, one {# Anhang wird zu einem bereits vorhandenen Eintrag hinzugefügt.} other {# Anhänge werden zu bereits vorhandenen Einträgen hinzugefügt.}}"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "{uncarried, plural, one {# file didn't copy. It is still in the old vault, which is kept until you delete it.} other {# files didn't copy. They are still in the old vault, which is kept until you delete it.}}"
-msgstr "{uncarried, plural, one {# Datei wurde nicht kopiert. Die Datei befindet sich weiterhin im alten Tresor, der aufbewahrt wird, bis Sie ihn löschen.} other {# Dateien wurden nicht kopiert. Die Dateien befinden sich weiterhin im alten Tresor, der aufbewahrt wird, bis Sie ihn löschen.}}"
+#~ msgid "{uncarried, plural, one {# file didn't copy. It is still in the old vault, which is kept until you delete it.} other {# files didn't copy. They are still in the old vault, which is kept until you delete it.}}"
+#~ msgstr "{uncarried, plural, one {# Datei wurde nicht kopiert. Die Datei befindet sich weiterhin im alten Tresor, der aufbewahrt wird, bis Sie ihn löschen.} other {# Dateien wurden nicht kopiert. Die Dateien befinden sich weiterhin im alten Tresor, der aufbewahrt wird, bis Sie ihn löschen.}}"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{uncarried, plural, one {# file didn't copy. It is still in the old vault.} other {# files didn't copy. They are still in the old vault.}}"
+msgstr "{uncarried, plural, one {# Datei wurde nicht kopiert. Sie befindet sich noch im alten Tresor.} other {# Dateien wurden nicht kopiert. Sie befinden sich noch im alten Tresor.}}"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 #~ msgid "{uncarried} files didn't copy. They are still in the old vault, which is kept until you delete it."
@@ -1383,7 +1391,6 @@ msgstr "Dunkelmodus"
 #: packages/core/src/app/bulk-actions/delete.tsx
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
-#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Delete"
 msgstr "Löschen"
 
@@ -1392,17 +1399,16 @@ msgid "Delete entry"
 msgstr "Eintrag löschen"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
-#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Delete it"
 msgstr "Löschen"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "Delete old vault"
-msgstr "Alten Tresor löschen"
+#~ msgid "Delete old vault"
+#~ msgstr "Alten Tresor löschen"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "Delete the old vault?"
-msgstr "Möchten Sie den alten Tresor löschen?"
+#~ msgid "Delete the old vault?"
+#~ msgstr "Möchten Sie den alten Tresor löschen?"
 
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 msgid "Delete this entry permanently?"
@@ -2111,8 +2117,8 @@ msgid "Its credentials were entered in another vault, so this one cannot open th
 msgstr "Die zugehörigen Zugangsdaten wurden in einem anderen Tresor eingegeben, daher kann dieser sie nicht öffnen. Bearbeiten Sie das Ziel und geben Sie sie erneut ein, um jetzt zu sichern."
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "Its entries and files are in the desktop's vault now."
-msgstr "Seine Einträge und Dateien befinden sich jetzt im Desktop-Tresor."
+#~ msgid "Its entries and files are in the desktop's vault now."
+#~ msgstr "Seine Einträge und Dateien befinden sich jetzt im Desktop-Tresor."
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
 msgid "Its password is different from the version shown."
@@ -2144,8 +2150,6 @@ msgid "Keep everything"
 msgstr "Alles behalten"
 
 #: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
-#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-#: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
 msgid "Keep it"
 msgstr "Behalten"
 
@@ -3789,8 +3793,8 @@ msgid "The browser was not linked."
 msgstr "Der Browser wurde nicht verknüpft."
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
-msgid "The copy couldn't be confirmed, so the old vault is kept."
-msgstr "Die Kopie konnte nicht bestätigt werden, daher wird der alte Tresor beibehalten."
+#~ msgid "The copy couldn't be confirmed, so the old vault is kept."
+#~ msgstr "Die Kopie konnte nicht bestätigt werden, daher wird der alte Tresor beibehalten."
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "The desktop app answered."
@@ -3846,8 +3850,8 @@ msgid "The desktop's vault has its own email alias provider, so this vault's was
 msgstr "Der Desktop-Tresor verfügt über einen eigenen E-Mail-Alias-Anbieter; der dieses Tresors wurde daher nicht übernommen."
 
 #: packages/core/src/app/screens/Settings/components/HiddenVaultRow.tsx
-msgid "The old vault"
-msgstr "Der alte Tresor"
+#~ msgid "The old vault"
+#~ msgstr "Der alte Tresor"
 
 #: packages/core/src/app/screens/Settings/components/CombineResult.tsx
 msgid "The old vault stays"
@@ -4526,6 +4530,10 @@ msgstr "Tresor wiederhergestellt"
 #: packages/core/src/app/OptionsApp.tsx
 msgid "Vault unlocked"
 msgstr "Vault entsperrt"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Vaults combined"
+msgstr "Tresore zusammengeführt"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "verification code"

@@ -157,13 +157,12 @@ mine unless marked otherwise.
 - **The desktop's vault is the one that stays.**
 - **The browser's entries and files are copied into it** through `importEntries` with their
   attachments, using the normal two-tier dedup. Unlike today's checkbox, files must come along. The copy
-  is read from the disk, not from the window's memory: a save in another window never reaches this one,
-  and the check before deleting would otherwise pass without it.
+  is read from the disk, not from the window's memory: a save in another window never reaches this one.
 - **A copy of an entry the desktop's vault holds is folded into that entry,** by the same write. Its
   tags are added, its old passwords joined (newest five), and an entry archived on one side only comes
   back, since hiding a login in use is worse than showing an archived one. The change syncs as an edit
   and leaves `updatedAt` alone. Dates and breach results stay as the desktop has them. Without this,
-  deleting the old vault would lose the browser's tags (the user's decision, 2026-11-06: fold them).
+  the browser's tags would stay behind in the old vault (the user's decision, 2026-11-06: fold them).
 - **Its email alias provider and backup targets come across, each only if the desktop's vault has
   none of its own** (the user's decision, 2026-11-06). The provider is a synced setting: it is read
   before the switch and written after, so it reaches every device in the desktop's group, key
@@ -176,29 +175,21 @@ mine unless marked otherwise.
   under a sibling vault's key and still work there. Any stored alias value counts, shaped like a
   provider this build knows or not: extension and app version independently, so a newer one's is
   neither overwritten nor lost.
-- **Once the copy is done, the user is asked whether to delete the old vault** (the user's decision,
-  2026-11-06, replacing an earlier checkbox and a "(before linking)" label: the choice comes with the
-  result, and no listed vault is marked as the old one). It is never deleted without a press. "Keep it"
-  makes it an ordinary vault again, under its own name. Its key is dropped either way. There is no timer.
-- **It is hidden meanwhile, if nothing stayed behind in it.** Closing the dialog then decides nothing: it
-  stays hidden and Settings > Sync asks again. With look-alikes, conflict versions, or an alias provider or
-  backup targets that didn't come across, it stays listed under its own name, so nothing can be deleted
-  unawares once the dialog that says so is gone (my call). A hidden vault is listed again if the vault
-  holding its copy is deleted, or if no other vault is left, so it can't be stranded.
-- **The dialog says what the press would cost.** Look-alikes the dedup held back go with the vault
-  unless copied ("Copy them anyway"). So do the versions of an entry in a sync conflict other than the
-  one shown, and an alias provider or backup targets that gave way to the desktop's own.
-- **Deleting checks first.** A second's wait for a background merge in flight, then the disk has to
-  agree: every entry and file of the copy there with all it held, the alias provider if one was
-  written, and the old vault's bytes unchanged since the copy began, so a login saved into it meanwhile
-  is not lost. Memory has to hold the copy too, or this page's next write would take it off the disk.
-  If not, the vault is listed again and the dialog says so. Once the dialog is closed that proof is
-  gone, so Delete in Settings is on the user's word, behind a confirm. It still refuses, and lists the
-  vault again, if the vault's bytes changed since the copy: another window may have had it open.
-- **Delete isn't offered where it could lose something by accident:** files that did not copy, entries
-  it could not decrypt, tags past the 32 an entry can carry, an alias provider or backup target that
-  failed to store, or a pairing that did not finish. The vault stays listed under its own name, and
-  the dialog says why.
+- **Once the copy is done, the old vault goes off the list, and nothing is asked** (the user's
+  decision, 2026-11-07, replacing a delete-or-keep question, which replaced a checkbox and a "(before
+  linking)" label). Combine gives a merge; Keep them separate is the way to keep the old vault. Nothing
+  deletes it: it stays on disk, and its key is dropped from memory. Its registry record keeps the hash
+  of its bytes at the copy and which vault holds the copy, for a later "Purge archived vaults" to check
+  (not built). It is listed again if the vault holding its copy is deleted, or if no other vault is
+  left, so it can't be stranded.
+- **A dialog only when there is something to say:** look-alikes the dedup held back, named, with "Copy
+  them anyway"; versions of an entry in a sync conflict other than the one shown; an alias provider or
+  backup targets that gave way to the desktop's own; targets that wouldn't open. Left alone, these stay
+  in the hidden vault. With nothing to say there is no dialog.
+- **It stays listed where hiding it could lose something by accident** (the user's rule, 2026-11-06:
+  a failed copy, damaged entries, an unfinished link): files that did not copy, entries it could not
+  decrypt, tags past the 32 an entry can carry, an alias provider or backup target that failed to
+  store, a save into it during the copy, or a pairing that did not finish. The dialog says why.
 - **The screen says up front that this browser will now unlock with the desktop's master
   password.**
 - **If the old vault also syncs with other devices,** one warning line names them and says only
@@ -457,7 +448,7 @@ to a vault only once the flow ends with that vault holding the desktop's vault:
 | --- | --- |
 | take (X empty) | the vault the copy creates, which replaces X |
 | add (setup's "add a vault") | the vault the copy creates |
-| combine | the desktop's vault, now in the browser; X is hidden until the user deletes or keeps it |
+| combine | the desktop's vault, now in the browser; X is hidden, and nothing deletes it |
 | ask, then combine or keep separate | the vault holding the desktop's vault |
 | switch (another browser vault already holds it) | that vault, replacing its previous link |
 
@@ -608,15 +599,14 @@ Unit tests per side, and in `pnpm test:e2e:desktop-link` (the borrowed-pipe mode
 - Confirming the emoji on both screens, and the desktop refusing link requests with no dialog open.
 - Distinct wording for the link screens.
 - Case 2 combines into the desktop's empty vault without asking.
-- After a combine the old vault is hidden and the user is asked whether to delete it, and it goes
-  only on that press. Keep it lists it under its own name. Closing the dialog leaves it hidden, and
-  Settings asks again.
+- After a combine the old vault is hidden and nothing is asked (2026-11-07). Deleting hidden vaults is
+  for a later "Purge archived vaults".
 - A copy of an entry the desktop's vault holds folds into it: tags, old passwords, and active wins.
 - An alias provider or backup target comes across only where the desktop's vault has none. Where it
   has its own, the dialog says so.
-- Delete isn't offered after a failed copy, with damaged entries, or with an unfinished link.
-- Held-back duplicates are named in the dialog, with "Copy them anyway". They go if the old vault is
-  deleted without copying them.
+- The old vault stays listed after a failed copy, with damaged entries, or with an unfinished link.
+- Held-back duplicates are named in the dialog, with "Copy them anyway". Left out, they stay in the
+  hidden vault.
 - Failure is loud on a partial copy.
 - Piece 3: the extension holds its open vault's link, and a link in progress stays held until it
   attaches or is abandoned.

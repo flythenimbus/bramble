@@ -13,13 +13,11 @@ import { syncKeyFor } from "../sync/sync-keys";
 import {
 	addVault,
 	EMPTY_REGISTRY,
-	hiddenVaults,
 	hideVault,
 	listedVaults,
 	parseRegistry,
 	removeVault,
 	renameVault,
-	showVault,
 	VAULT_REGISTRY_KEY,
 	type VaultRecord,
 	type VaultRegistry,
@@ -28,10 +26,8 @@ import {
 export interface VaultRegistryValue {
 	/** True once the registry has been read from storage. */
 	ready: boolean;
-	/** The vaults to show. Not a hidden one: see `hiddenVaults`. */
+	/** The vaults to show: not one a combine took off the list. */
 	vaults: VaultRecord[];
-	/** Vaults combined into the desktop app's, waiting for the user to delete or keep them. */
-	hiddenVaults: VaultRecord[];
 	/** The first registered vault, hidden or not, as the background reckons it. */
 	defaultVaultId: string | undefined;
 	/** The vault the app currently operates on, or undefined before it resolves (callers that omit an
@@ -64,8 +60,6 @@ export interface VaultRegistryValue {
 	/** Take a vault off the lists (local to this device). Reads storage fresh, since a join has
 	 * usually just added a record this render has not seen. */
 	hide: (id: string, copy: { blobHash: string; into: string }) => Promise<void>;
-	/** List a hidden vault again, under its own name. */
-	show: (id: string) => Promise<void>;
 	/** Forget the record of a vault deleteEmptyVault has erased. Never the active one: that is
 	 * dropActiveRecord's, behind a re-auth. */
 	forgetEmptyRecord: (id: string) => Promise<void>;
@@ -77,7 +71,6 @@ export interface VaultRegistryValue {
 const DEFAULT: VaultRegistryValue = {
 	ready: true,
 	vaults: [],
-	hiddenVaults: [],
 	defaultVaultId: undefined,
 	activeId: undefined,
 	syncKey: (k) => k,
@@ -88,7 +81,6 @@ const DEFAULT: VaultRegistryValue = {
 	dropActiveRecord: async () => {},
 	refresh: async () => {},
 	hide: async () => {},
-	show: async () => {},
 	forgetEmptyRecord: async () => {},
 };
 
@@ -195,14 +187,6 @@ export function VaultRegistryProvider({
 		[storage, persist],
 	);
 
-	const show = useCallback(
-		async (id: string) => {
-			const current = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
-			await persist(showVault(current, id));
-		},
-		[storage, persist],
-	);
-
 	const forgetEmptyRecord = useCallback(
 		async (id: string) => {
 			if (id === activeId) return;
@@ -216,7 +200,6 @@ export function VaultRegistryProvider({
 		() => ({
 			ready,
 			vaults: listedVaults(registry),
-			hiddenVaults: hiddenVaults(registry),
 			defaultVaultId: registry.vaults[0]?.id,
 			activeId,
 			syncKey,
@@ -227,7 +210,6 @@ export function VaultRegistryProvider({
 			dropActiveRecord,
 			refresh,
 			hide,
-			show,
 			forgetEmptyRecord,
 		}),
 		[
@@ -242,7 +224,6 @@ export function VaultRegistryProvider({
 			dropActiveRecord,
 			refresh,
 			hide,
-			show,
 			forgetEmptyRecord,
 		],
 	);

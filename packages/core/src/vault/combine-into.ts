@@ -8,7 +8,7 @@ import { type BackupTargetConfig, credsAreOsHeld } from "../backup/config";
 import type { Entry, EntryData } from "../hooks/useVault";
 import type { PlacedAttachment } from "../import/types";
 import type { FileRecord } from "../sync/entries-payload";
-import { entryContentKey, splitAlreadyImported } from "./entry-identity";
+import { splitAlreadyImported } from "./entry-identity";
 import type { FileSource } from "./file-mutations";
 import { foldedPasswordChangelog } from "./password-changelog";
 import { normalizeTags, tagKey, tagsEqual } from "./tags";
@@ -162,26 +162,6 @@ export function placeCarry(existing: readonly Entry[], carry: Carry): Placed {
 	};
 }
 
-/** The carried items, less the look-alikes left out and any copy of them, which share their content. */
-export function withoutHeldBack(
-	items: readonly EntryData[],
-	heldBack: readonly EntryData[],
-): EntryData[] {
-	const held = new Set(heldBack.map(entryContentKey));
-	return items.filter((item) => !held.has(entryContentKey(item)));
-}
-
-/** What removing a vault needs to know about the copy made of it. */
-export interface CopiedOut {
-	/** The vault's bytes when the copy began. */
-	blob: Uint8Array;
-	items: readonly EntryData[];
-	/** The hash of each file the copy stored. */
-	fileHashes: readonly string[];
-	/** The synced settings the copy wrote. */
-	settings?: readonly string[];
-}
-
 /** A backup target read out of the open vault, its secrets opened to seal under the next key. */
 export interface CarriedTarget {
 	target: Omit<BackupTargetConfig, "creds">;
@@ -232,21 +212,6 @@ export function sealCarriedTargets(
 	);
 }
 
-/** Longer than a background merge takes from reading the disk to writing it back. */
-export const MERGE_SETTLE_MS = 1000;
-
 export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
 	return a.length === b.length && a.every((v, i) => v === b[i]);
-}
-
-/** Whether `entries` hold every carried item, with everything it held. */
-export function holdsCarried(entries: readonly EntryData[], items: readonly EntryData[]): boolean {
-	const byContent = new Map<string, EntryData[]>();
-	for (const e of entries) {
-		const key = entryContentKey(e);
-		byContent.set(key, [...(byContent.get(key) ?? []), e]);
-	}
-	return items.every((item) =>
-		(byContent.get(entryContentKey(item)) ?? []).some((e) => foldCarriedCopy(e, item) === e),
-	);
 }
