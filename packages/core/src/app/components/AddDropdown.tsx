@@ -61,7 +61,7 @@ export function AddDropdown({ onCreate }: AddDropdownProps) {
 								type="button"
 								key={mode.type}
 								onClick={() => handleItemClick(mode.type)}
-								className="w-full flex items-start gap-3 px-4 py-3 hover:bg-primary/5 transition-colors text-left border-b border-border/30 last:border-b-0"
+								className="w-full flex items-start gap-3 px-4 py-3 hover:bg-primary/5 transition-colors text-left border-b border-border/30 last:border-b-0 focus-visible:-outline-offset-2"
 							>
 								<div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 mt-0.5">
 									<Icon className="w-4 h-4 text-primary" />

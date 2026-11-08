@@ -132,7 +132,7 @@ function WalletCard({ wallet }: { wallet: Wallet }) {
 			>
 				{copied ? (
 					<>
-						<Check className="w-3.5 h-3.5 text-emerald-500" />
+						<Check className="w-3.5 h-3.5 text-success" />
 						<Trans>Copied</Trans>
 					</>
 				) : (

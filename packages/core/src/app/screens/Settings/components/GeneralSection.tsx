@@ -173,7 +173,7 @@ export function GeneralSection() {
 							label={t`Toggle start at login`}
 						/>
 						{autostart.error && (
-							<span className="text-xs text-red-500 text-right">{autostart.error}</span>
+							<span className="text-xs text-destructive text-right">{autostart.error}</span>
 						)}
 					</div>
 				</Row>
@@ -267,7 +267,7 @@ export function GeneralSection() {
 							label={t`Toggle Bramble passkey provider`}
 						/>
 						{passkeyProviderError && (
-							<span className="text-xs text-red-500 text-right">{passkeyProviderError}</span>
+							<span className="text-xs text-destructive text-right">{passkeyProviderError}</span>
 						)}
 					</div>
 				</Row>

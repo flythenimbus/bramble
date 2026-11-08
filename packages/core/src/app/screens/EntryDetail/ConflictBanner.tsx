@@ -99,7 +99,7 @@ export function ConflictBanner({
 	return (
 		<div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm">
 			<div className="flex items-start gap-2.5">
-				<GitMerge className="w-4 h-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-500" />
+				<GitMerge className="w-4 h-4 mt-0.5 shrink-0 text-warning" />
 				<div className="min-w-0 flex-1 space-y-1">
 					{conflict.versions > 0 && (
 						<p>
@@ -246,7 +246,7 @@ function VersionCard({
 			</div>
 			<p className="text-base truncate">{entry.name}</p>
 			{notes.map((note) => (
-				<p key={note} className="text-xs text-amber-700 dark:text-amber-500">
+				<p key={note} className="text-xs text-warning">
 					{note}
 				</p>
 			))}

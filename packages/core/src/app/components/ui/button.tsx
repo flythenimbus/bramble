@@ -6,20 +6,20 @@ import { cn } from "./utils";
  * tab, middle-click, copy link address), which rules out the `<button>` below, and hand-rolling
  * the classes next to it is how two button styles start to drift apart. */
 export const buttonClasses = cva(
-	"inline-flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none",
+	"inline-flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
 	{
 		variants: {
 			variant: {
 				primary:
-					"rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring",
+					"rounded-lg bg-primary text-primary-foreground border border-primary/20 hover:bg-primary/90 active:scale-[0.98]",
 				secondary:
-					"rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring",
+					"rounded-lg border border-border hover:bg-primary/5 hover:border-primary/50 active:scale-[0.98]",
 				destructive:
-					"rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring",
+					"rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 active:scale-[0.98]",
 				destructiveOutline:
-					"rounded-lg border border-destructive/50 text-destructive hover:bg-destructive/10 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring",
+					"rounded-lg border border-destructive/50 text-destructive hover:bg-destructive/10 active:scale-[0.98]",
 				ghost:
-					"rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95] focus-visible:ring-2 focus-visible:ring-ring",
+					"rounded-lg border border-transparent hover:bg-primary/10 hover:border-border active:scale-[0.95]",
 				link: "text-muted-foreground hover:text-foreground",
 			},
 			size: {

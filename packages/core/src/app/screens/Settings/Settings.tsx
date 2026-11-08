@@ -65,7 +65,7 @@ export function Settings() {
 							aria-current={tab === id}
 							onClick={() => setTab(id)}
 							className={cn(
-								"flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors",
+								"flex shrink-0 items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors focus-visible:-outline-offset-2",
 								tab === id
 									? "border-primary text-foreground"
 									: "border-transparent text-muted-foreground hover:text-foreground",

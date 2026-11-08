@@ -506,7 +506,7 @@ export function Auth() {
 										spellCheck={false}
 										aria-label={t`Recovery code`}
 										disabled={busy}
-										className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
+										className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-input-border bg-transparent focus:outline-none focus:border-primary"
 									/>
 									{recoveryError && (
 										<p className="text-xs text-destructive">

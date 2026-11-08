@@ -56,7 +56,7 @@ function Hint({ keys, label }: { keys: React.ReactNode; label: string }) {
 	return (
 		<span className="inline-flex items-center gap-1.5">
 			<span className="inline-flex items-center gap-0.5">{keys}</span>
-			<span className="text-foreground/45">{label}</span>
+			<span className="text-foreground/70">{label}</span>
 		</span>
 	);
 }
@@ -225,7 +225,7 @@ function Spotlight() {
 					// prompt rather than as content already entered. Typed text keeps full
 					// foreground, which is the contrast that actually matters on a blurred
 					// backdrop.
-					className="flex-1 bg-transparent border-0 outline-none text-xl font-medium placeholder:text-foreground/40 placeholder:font-medium"
+					className="flex-1 bg-transparent border-0 outline-none text-xl font-medium placeholder:text-foreground/60 placeholder:font-medium"
 				/>
 			</div>
 			{/* Only once there is a query. An empty results area is dead space the user has to
@@ -234,7 +234,7 @@ function Spotlight() {
 			{query.length > 0 && (
 				<div className="border-t border-white/10 py-2">
 					{results.length === 0 ? (
-						<p className="px-5 py-3 text-sm text-foreground/40">No matches</p>
+						<p className="px-5 py-3 text-sm text-foreground/70">No matches</p>
 					) : (
 						<ul className="max-h-80 overflow-y-auto">
 							{results.map((match, i) => (
@@ -249,7 +249,7 @@ function Spotlight() {
 										}`}
 									>
 										<span className="text-sm truncate">{match.name}</span>
-										<span className="text-xs text-foreground/45 truncate">{match.secondary}</span>
+										<span className="text-xs text-foreground/70 truncate">{match.secondary}</span>
 									</button>
 								</li>
 							))}
@@ -275,7 +275,7 @@ function Spotlight() {
 					label="Navigate"
 				/>
 				{outcome && (
-					<p className="border-t border-white/10 px-5 py-2 text-xs text-foreground/60">{outcome}</p>
+					<p className="border-t border-white/10 px-5 py-2 text-xs text-foreground/70">{outcome}</p>
 				)}
 				{/* Names the page a fill would land on, so nobody commits to one blind. Falls back
 				    to the clipboard wording when no browser has reported a page, which is the

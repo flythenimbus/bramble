@@ -509,7 +509,7 @@ function ToggleRow({ title, subtitle, checked, onChange }: ToggleRowProps) {
 				onClick={() => onChange(!checked)}
 				aria-pressed={checked}
 				className={`relative shrink-0 w-11 h-6 rounded-full border transition-all ${
-					checked ? "bg-primary border-primary/20" : "bg-muted border-border"
+					checked ? "bg-primary border-primary/20" : "bg-muted border-input-border"
 				}`}
 			>
 				<span

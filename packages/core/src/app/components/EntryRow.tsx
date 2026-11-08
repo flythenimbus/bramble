@@ -159,7 +159,7 @@ export const EntryRow = memo(function EntryRow({
 			// inherits down to the pressable button inside.
 			data-entry-row=""
 			// select-none: a long press must enter selection mode, not start an OS text selection.
-			className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg border select-none transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/30 ${
+			className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg border select-none transition-all duration-200 has-[[data-row-open]:focus-visible]:outline-2 has-[[data-row-open]:focus-visible]:outline-ring ${
 				selected
 					? "border-primary/60 bg-primary/10"
 					: highlighted
@@ -186,6 +186,7 @@ export const EntryRow = memo(function EntryRow({
 			<button
 				type="button"
 				{...press}
+				data-row-open=""
 				className="flex-1 min-w-0 flex items-center gap-3 text-left rounded-md focus:outline-none cursor-pointer"
 				// In selection mode this duplicates the checkbox beside it (tapping anywhere
 				// on the row toggles, which pointers and thumbs both expect). Hidden from the
@@ -214,7 +215,7 @@ export const EntryRow = memo(function EntryRow({
 						)}
 						{conflict && (
 							<span
-								className="shrink-0 self-center text-[10px] uppercase tracking-wide text-amber-600 border border-amber-500/40 rounded px-1 py-px dark:text-amber-500"
+								className="shrink-0 self-center text-[10px] uppercase tracking-wide text-warning border border-amber-500/40 rounded px-1 py-px"
 								title={t`Changed on two devices before they synced`}
 							>
 								<Trans>Conflict</Trans>
@@ -235,7 +236,7 @@ export const EntryRow = memo(function EntryRow({
 						className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] uppercase tracking-wide bg-destructive/10 text-destructive border border-destructive/20 pointer-events-none ${
 							touch
 								? ""
-								: "row-start-1 col-start-1 justify-self-end self-center opacity-100 group-hover:opacity-0 focus-within:opacity-0 transition-opacity"
+								: "row-start-1 col-start-1 justify-self-end self-center opacity-100 group-hover:opacity-0 group-focus-within:opacity-0 transition-opacity"
 						}`}
 						title={t`Password found in a known data breach`}
 					>
@@ -251,7 +252,7 @@ export const EntryRow = memo(function EntryRow({
 						className={`flex items-center gap-1 ${
 							touch
 								? ""
-								: "row-start-1 col-start-1 justify-self-end self-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+								: "row-start-1 col-start-1 justify-self-end self-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
 						}`}
 					>
 						{launchUrl && (
@@ -357,7 +358,7 @@ function MenuItem({
 		<button
 			type="button"
 			onClick={onClick}
-			className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors border-b border-border/30 last:border-b-0 ${
+			className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors border-b border-border/30 last:border-b-0 focus-visible:-outline-offset-2 ${
 				destructive ? "text-destructive hover:bg-destructive/5" : "hover:bg-primary/5"
 			}`}
 		>

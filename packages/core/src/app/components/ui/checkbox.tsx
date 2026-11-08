@@ -32,8 +32,8 @@ export function Checkbox({ checked, onChange, ariaLabel, children, className }: 
 			<span
 				className={cn(
 					"flex items-center justify-center w-4 h-4 shrink-0 rounded border transition-colors",
-					"peer-focus-visible:ring-2 peer-focus-visible:ring-primary/50",
-					checked ? "bg-primary border-primary" : "border-border bg-transparent",
+					"peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring",
+					checked ? "bg-primary border-primary" : "border-input-border bg-transparent",
 				)}
 			>
 				{checked && <Check className="w-3 h-3 text-primary-foreground" strokeWidth={3} />}

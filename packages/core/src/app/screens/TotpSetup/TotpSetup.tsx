@@ -113,7 +113,7 @@ export function TotpSetup({
 									{/* Named at the point of decision, not after: picking this login overwrites a
 									    key that is presumably working, and the edit form would not say so. */}
 									{target.hasTotp && (
-										<span className="shrink-0 flex items-center gap-1 text-xs text-yellow-500">
+										<span className="shrink-0 flex items-center gap-1 text-xs text-warning">
 											<AlertTriangle className="w-3.5 h-3.5" />
 											<Trans>Replaces code</Trans>
 										</span>

@@ -94,7 +94,7 @@ export function OtherDevicesWarning({
 	if (otherDevices.length === 0) return null;
 	const others = otherDevices.join(", ");
 	return (
-		<p className="text-xs text-amber-600 dark:text-amber-400">
+		<p className="text-xs text-warning">
 			<Trans>
 				{browserName} also syncs with {others}. Combining moves only this browser; they stay on{" "}
 				{browserName}.

@@ -347,7 +347,7 @@ function OneClickPanel({
 				</Trans>
 			</p>
 			{error && (
-				<p className="text-xs text-red-500 break-words" title={error}>
+				<p className="text-xs text-destructive break-words" title={error}>
 					{error}
 				</p>
 			)}
@@ -425,7 +425,7 @@ function TargetCard({
 							// Not red: nothing failed. But it must not read as done either, and the time of
 							// the last complete backup is what the reader actually needs to know.
 							<>
-								<p className="text-xs text-amber-500 break-words">
+								<p className="text-xs text-warning break-words">
 									{/* "Confirmed", not "finished": the upload may have reached storage just as
 									    the app was stopped, and Bramble cannot tell. Retrying is safe either way. */}
 									{target.frequency === "off" ? (
@@ -448,7 +448,7 @@ function TargetCard({
 							</>
 						) : target.lastError ? (
 							<>
-								<p className="text-xs text-red-500 break-words" title={target.lastError}>
+								<p className="text-xs text-destructive break-words" title={target.lastError}>
 									{target.lastError === FOREIGN_CREDS_ERROR ? (
 										<Trans>
 											Its credentials were entered in another vault, so this one cannot open them.
@@ -482,7 +482,7 @@ function TargetCard({
 								{/* Amber, not red: nothing failed, and it resolves on its own. But the last
 								    backup above is now behind the vault, and has to read that way. */}
 								{target.waiting && (
-									<p className="text-xs text-amber-500 break-words">
+									<p className="text-xs text-warning break-words">
 										{blockedMessage(target.waiting)}
 									</p>
 								)}
@@ -538,7 +538,7 @@ function TargetCard({
 							variant="link"
 							size="none"
 							onClick={arm}
-							className="text-xs hover:text-red-500 transition-colors"
+							className="text-xs hover:text-destructive transition-colors"
 						>
 							<Trans>Remove</Trans>
 						</Button>
@@ -724,7 +724,7 @@ export function BackupSection() {
 								<Trans>Not now</Trans>
 							</Button>
 						</div>
-						{autostart.error && <p className="text-xs text-red-500">{autostart.error}</p>}
+						{autostart.error && <p className="text-xs text-destructive">{autostart.error}</p>}
 					</div>
 				)}
 			{/* A remedy, not a warning: this is one package away for almost everyone who sees it, and
@@ -804,7 +804,7 @@ export function BackupSection() {
 						)}
 					</div>
 					{actionError && (
-						<p className="text-xs text-red-500 break-words" title={actionError}>
+						<p className="text-xs text-destructive break-words" title={actionError}>
 							{actionError}
 						</p>
 					)}

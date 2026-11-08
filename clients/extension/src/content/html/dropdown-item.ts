@@ -16,11 +16,11 @@ function initials(name: string): string {
 const AVATAR_COLORS = [
 	"#7C3AED",
 	"#2563EB",
-	"#0891B2",
-	"#059669",
-	"#65A30D",
-	"#CA8A04",
-	"#EA580C",
+	"#0E7490",
+	"#047857",
+	"#4D7C0F",
+	"#A16207",
+	"#C2410C",
 	"#DC2626",
 	"#DB2777",
 ];

@@ -527,7 +527,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							</p>
 						)}
 						{result.warnings.length > 0 && (
-							<ul className="text-xs text-yellow-500 space-y-1 list-disc pl-4">
+							<ul className="text-xs text-warning space-y-1 list-disc pl-4">
 								{result.warnings.slice(0, 8).map((w) => (
 									<li key={w}>{w}</li>
 								))}

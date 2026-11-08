@@ -347,7 +347,7 @@ export function TagsEditor({ suggestions }: TagsEditorProps) {
 									onKeyDown={(e) => onSuggestionKeyDown(e, index)}
 									onFocus={onEnter}
 									onBlur={onLeave}
-									className="flex w-full items-center gap-2 border-b border-border/30 px-3 py-2 text-left text-xs transition-colors last:border-b-0 hover:bg-primary/5 focus-visible:bg-primary/5 focus-visible:outline-none"
+									className="flex w-full items-center gap-2 border-b border-border/30 px-3 py-2 text-left text-xs transition-colors last:border-b-0 hover:bg-primary/5 focus-visible:bg-primary/5 focus-visible:-outline-offset-2"
 								>
 									<Tag className="w-3 h-3 shrink-0 text-muted-foreground" />
 									{tag}

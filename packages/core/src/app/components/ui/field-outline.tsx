@@ -63,7 +63,7 @@ export function FieldOutline({
 		<fieldset
 			aria-hidden
 			className={cn(
-				"pointer-events-none absolute inset-0 rounded-md border border-border/50 px-2 m-0 transition-colors",
+				"pointer-events-none absolute inset-0 rounded-md border border-input-border px-2 m-0 transition-colors",
 				"peer-focus:border-primary",
 				invalid && "border-destructive peer-focus:border-destructive",
 				className,

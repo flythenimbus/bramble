@@ -96,11 +96,11 @@ function initials(name: string): string {
 const AVATAR_COLORS = [
 	"#7C3AED",
 	"#2563EB",
-	"#0891B2",
-	"#059669",
-	"#65A30D",
-	"#CA8A04",
-	"#EA580C",
+	"#0E7490",
+	"#047857",
+	"#4D7C0F",
+	"#A16207",
+	"#C2410C",
 	"#DC2626",
 	"#DB2777",
 ];
@@ -119,7 +119,7 @@ const STYLE = `
 		color-scheme: light dark;
 		--tp-surface: #ffffff; /* --popover */
 		--tp-foreground: oklch(20.5% 0 0); /* --popover-foreground */
-		--tp-muted: oklch(55.6% 0 0); /* --muted-foreground */
+		--tp-muted: oklch(52% 0 0); /* --muted-foreground */
 		--tp-border: oklch(87% 0 0); /* --border */
 		--tp-primary: oklch(20.5% 0 0); /* --primary */
 		--tp-on-primary: #ffffff; /* --primary-foreground */

@@ -27,7 +27,7 @@ export function PasswordStrengthMeter({
 	const barColor =
 		tone === "ok" ? "bg-primary" : tone === "warn" ? "bg-yellow-500" : "bg-destructive";
 	const textColor =
-		tone === "ok" ? "text-primary" : tone === "warn" ? "text-yellow-500" : "text-destructive";
+		tone === "ok" ? "text-primary" : tone === "warn" ? "text-warning" : "text-destructive";
 	// zxcvbn's five tiers, weakest first.
 	const readout = [t`Very weak`, t`Weak`, t`Fair`, t`Strong`, t`Very strong`][score];
 

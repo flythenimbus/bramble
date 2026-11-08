@@ -9,7 +9,7 @@ export function BackButton({ onClick, className }: { onClick: () => void; classN
 		<button
 			type="button"
 			onClick={onClick}
-			className={`flex items-center justify-center w-9 h-9 rounded-full bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.95] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring${
+			className={`flex items-center justify-center w-9 h-9 rounded-full bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.95] transition-all${
 				className ? ` ${className}` : ""
 			}`}
 			aria-label={t`Go back`}

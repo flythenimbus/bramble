@@ -12,7 +12,7 @@ export function WeakPasswordNotice({ message, accepted, onAccept }: WeakPassword
 	return (
 		<div className="rounded-md p-3 bg-yellow-500/5 border border-yellow-500/30 text-xs space-y-2.5">
 			<p className="text-muted-foreground">
-				<span className="text-yellow-500">⚠</span> {message}
+				<span className="text-warning">⚠</span> {message}
 			</p>
 			<Checkbox checked={accepted} onChange={onAccept}>
 				<Trans>Use this password anyway</Trans>

@@ -346,7 +346,7 @@ function StatCard({ label, icon, count, tone, selected, onSelect }: StatCardProp
 			aria-pressed={selected}
 			disabled={count === 0 && !selected && tone !== undefined}
 			className={cn(
-				"relative block w-full overflow-hidden px-4 py-3 rounded-lg border text-left text-foreground bg-linear-to-br from-card to-background backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-ring",
+				"relative block w-full overflow-hidden px-4 py-3 rounded-lg border text-left text-foreground bg-linear-to-br from-card to-background backdrop-blur-sm",
 				selected
 					? tone === "destructive"
 						? "border-destructive/60"

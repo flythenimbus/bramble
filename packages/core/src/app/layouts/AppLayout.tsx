@@ -35,29 +35,36 @@ export function AppLayout() {
 		<div className="h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
 			<header className="shrink-0 backdrop-blur-xl bg-background/80 border-b border-border/50 z-40">
 				<div className="max-w-5xl mx-auto px-4 py-3">
-					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-3">
+					<div className="flex items-center justify-between gap-3">
+						<div className="flex items-center gap-3 min-w-0">
 							{onBack && <BackButton onClick={onBack} />}
 							<Button
 								variant="link"
 								size="none"
 								onClick={() => navigate({ to: "/vault" })}
-								className="flex items-center gap-2.5 rounded-lg active:scale-[0.98]"
+								className="flex items-center gap-2.5 min-w-0 rounded-lg active:scale-[0.98]"
 								aria-label={t`Go to vault`}
 							>
 								<BrambleGlyph className="w-9 h-9 text-foreground shrink-0" />
 								<div className="flex items-center gap-2 min-w-0">
-									<h1 className="text-lg bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+									<h1
+										className={`text-lg whitespace-nowrap bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent ${
+											vaultLabel ? "max-[420px]:sr-only" : ""
+										}`}
+									>
 										{shell.appName}
 									</h1>
 									{vaultLabel && (
 										<>
-											<span aria-hidden="true" className="text-muted-foreground/40">
+											<span
+												aria-hidden="true"
+												className="text-muted-foreground/40 max-[420px]:hidden"
+											>
 												·
 											</span>
 											<span
 												data-testid="active-vault-label"
-												className="max-w-[11rem] truncate text-sm text-foreground/70"
+												className="min-w-0 max-w-[11rem] truncate text-sm text-foreground/70"
 											>
 												{vaultLabel}
 											</span>
@@ -66,7 +73,7 @@ export function AppLayout() {
 								</div>
 							</Button>
 						</div>
-						<div className="flex items-center gap-1.5">
+						<div className="flex items-center gap-1.5 shrink-0">
 							{canPopOut && (
 								<Button
 									variant="ghost"

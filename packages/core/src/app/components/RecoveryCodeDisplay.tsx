@@ -74,7 +74,7 @@ export function RecoveryCodeDisplay({
 			<h2 className="text-xl text-center">{titleText}</h2>
 
 			<div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
-				<TriangleAlert className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+				<TriangleAlert className="w-4 h-4 mt-0.5 shrink-0 text-warning" />
 				<span className="text-muted-foreground">
 					<span className="font-medium text-foreground">
 						<Trans>You won't be able to see this code again.</Trans>
@@ -99,7 +99,7 @@ export function RecoveryCodeDisplay({
 					onClick={copy}
 					className="flex-1 px-4 py-2.5 text-sm"
 				>
-					{copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+					{copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
 					{copied ? <Trans>Copied</Trans> : <Trans>Copy</Trans>}
 				</Button>
 				<Button

@@ -97,7 +97,7 @@ export const cornerStyles = html`
 				height: 18px;
 				margin-left: auto;
 				flex-shrink: 0;
-				color: rgba(235, 235, 245, 0.4);
+				color: rgba(235, 235, 245, 0.7);
 			}
 			.tp-choice:hover .tp-chevron {
 				color: rgba(235, 235, 245, 0.75);
@@ -131,7 +131,7 @@ export const cornerStyles = html`
 			}
 			.tp-choice-sub {
 				font-size: 12px;
-				color: rgba(235, 235, 245, 0.55);
+				color: rgba(235, 235, 245, 0.7);
 				margin-top: 1px;
 				white-space: nowrap;
 				overflow: hidden;
@@ -143,7 +143,7 @@ export const cornerStyles = html`
 				line-height: 1.3;
 			}
 			.tp-host {
-				color: rgba(235, 235, 245, 0.55);
+				color: rgba(235, 235, 245, 0.7);
 				font-size: 12px;
 				margin-top: 4px;
 			}
@@ -156,7 +156,7 @@ export const cornerStyles = html`
 			.tp-close {
 				background: transparent;
 				border: 0;
-				color: rgba(235, 235, 245, 0.55);
+				color: rgba(235, 235, 245, 0.7);
 				cursor: pointer;
 				font-size: 18px;
 				line-height: 1;
@@ -175,7 +175,7 @@ export const cornerStyles = html`
 			}
 			.tp-label {
 				font-size: 11px;
-				color: rgba(235, 235, 245, 0.55);
+				color: rgba(235, 235, 245, 0.7);
 				text-transform: uppercase;
 				letter-spacing: 0.5px;
 				font-weight: 500;
@@ -193,7 +193,7 @@ export const cornerStyles = html`
 				box-sizing: border-box;
 			}
 			input.tp-input:focus {
-				border-color: rgba(255, 255, 255, 0.4);
+				border-color: rgba(255, 255, 255, 0.7);
 			}
 			.tp-password-wrap {
 				position: relative;
@@ -205,7 +205,7 @@ export const cornerStyles = html`
 				transform: translateY(-50%);
 				background: transparent;
 				border: 0;
-				color: rgba(235, 235, 245, 0.55);
+				color: rgba(235, 235, 245, 0.7);
 				cursor: pointer;
 				font-size: 11px;
 				padding: 6px 8px;
@@ -242,7 +242,7 @@ export const cornerStyles = html`
 				font-size: 13px;
 			}
 			.tp-candidate .tp-cand-user {
-				color: rgba(235, 235, 245, 0.55);
+				color: rgba(235, 235, 245, 0.7);
 				font-size: 12px;
 				margin-top: 2px;
 			}
@@ -284,7 +284,7 @@ export const cornerStyles = html`
 				margin-left: auto;
 				background: transparent;
 				border: 1px solid transparent;
-				color: rgba(235, 235, 245, 0.55);
+				color: rgba(235, 235, 245, 0.7);
 				cursor: pointer;
 				font-size: 18px;
 				padding: 6px 10px;

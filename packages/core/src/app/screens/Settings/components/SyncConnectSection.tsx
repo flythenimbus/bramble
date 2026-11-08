@@ -28,7 +28,7 @@ import { useDeviceNames } from "../../../hooks/useDeviceNames";
 import { Row, Section } from "./primitives";
 
 const inputClass =
-	"w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50";
+	"w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-input-border bg-transparent focus:outline-none focus:border-primary";
 const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
 interface SyncGroup {
@@ -435,7 +435,7 @@ export function SyncConnectSection() {
 					)}
 
 					{unsigned.length > 0 && (
-						<p className="-mt-2 text-xs text-amber-600 dark:text-amber-500">
+						<p className="-mt-2 text-xs text-warning">
 							<Plural
 								value={unsigned.length}
 								one="# device has not signed its roster entry yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell it from an impostor."
@@ -476,7 +476,7 @@ export function SyncConnectSection() {
 												</span>
 											)}
 											{!d.sigKey && (
-												<span className="shrink-0 text-[10px] uppercase tracking-wide text-amber-600 border border-amber-500/40 rounded px-1 py-px dark:text-amber-500">
+												<span className="shrink-0 text-[10px] uppercase tracking-wide text-warning border border-amber-500/40 rounded px-1 py-px">
 													<Trans>Unsigned</Trans>
 												</span>
 											)}
@@ -501,7 +501,7 @@ export function SyncConnectSection() {
 												size="none"
 												onClick={arm}
 												aria-label={t`Remove ${nameOf(d) || "device"}`}
-												className="shrink-0 p-1 hover:text-red-500 transition-colors"
+												className="shrink-0 p-1 hover:text-destructive transition-colors"
 											>
 												<Trash2 className="w-4 h-4" />
 											</Button>
@@ -745,7 +745,7 @@ export function SyncConnectSection() {
 								</p>
 								{/* A failed attempt that did NOT spend the code, so it sits alongside rather
 								    than replacing it. */}
-								{attemptNote !== null && <p className="text-xs text-yellow-500">{attemptNote}</p>}
+								{attemptNote !== null && <p className="text-xs text-warning">{attemptNote}</p>}
 								<div className="rounded-xl bg-white p-4">
 									<QRCodeSVG
 										value={pairingCode}

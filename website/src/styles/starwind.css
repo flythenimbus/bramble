@@ -71,8 +71,6 @@
      hovers, so map it to the muted gray the extension actually renders. */
   --accent: var(--secondary);
   --accent-foreground: var(--secondary-foreground);
-  /* Darker than the shared token: 4.5:1 on the site's tinted surfaces. */
-  --muted-foreground: oklch(52% 0 0);
 }
 
 .dark {
@@ -83,7 +81,6 @@
   --error-foreground: var(--destructive-foreground);
   --accent: var(--secondary);
   --accent-foreground: var(--secondary-foreground);
-  --muted-foreground: oklch(70.8% 0 0);
 }
 
 @layer base {

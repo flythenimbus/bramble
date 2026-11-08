@@ -91,7 +91,7 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 									className="flex flex-col gap-1.5 border-2 border-dashed px-4 py-6"
 								>
 									{code ? (
-										<Check className="w-7 h-7 text-emerald-500" />
+										<Check className="w-7 h-7 text-success" />
 									) : (
 										<QrCode className="w-7 h-7 text-primary" />
 									)}
@@ -135,7 +135,7 @@ export function JoinCard({ onJoin, busy, error, mobile }: JoinCardProps) {
 									rows={3}
 									autoComplete="off"
 									spellCheck={false}
-									className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent font-mono break-all resize-none focus:outline-none focus:border-primary/50"
+									className="w-full px-3 py-2 text-sm rounded-lg border border-input-border bg-transparent font-mono break-all resize-none focus:outline-none focus:border-primary"
 								/>
 								{canScan && (
 									<Button

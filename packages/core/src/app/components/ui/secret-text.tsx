@@ -1,8 +1,8 @@
 import { cn } from "./utils";
 
 function colorFor(char: string): string {
-	if (char >= "0" && char <= "9") return "text-sky-500";
-	return /[a-z]/i.test(char) ? "" : "text-amber-500";
+	if (char >= "0" && char <= "9") return "text-sky-700 dark:text-sky-500";
+	return /[a-z]/i.test(char) ? "" : "text-warning";
 }
 
 /**

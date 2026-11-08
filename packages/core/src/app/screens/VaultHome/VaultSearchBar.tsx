@@ -300,7 +300,7 @@ export function VaultSearchBar({
 										role="menuitem"
 										onClick={() => pick(tag)}
 										onKeyDown={(e) => onItemKeyDown(e, index)}
-										className="flex w-full items-center gap-2 border-b border-border/30 px-3 py-2 text-left text-xs transition-colors last:border-b-0 hover:bg-primary/5 focus-visible:bg-primary/5 focus-visible:outline-none"
+										className="flex w-full items-center gap-2 border-b border-border/30 px-3 py-2 text-left text-xs transition-colors last:border-b-0 hover:bg-primary/5 focus-visible:bg-primary/5 focus-visible:-outline-offset-2"
 									>
 										<Tag className="w-3 h-3 shrink-0 text-muted-foreground" />
 										{tag}
@@ -346,7 +346,7 @@ export function VaultSearchBar({
 									data-type={chip.value}
 									onClick={() => onChange({ type: chip.value })}
 									aria-pressed={active}
-									className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-full text-xs border transition-colors ${
+									className={`shrink-0 whitespace-nowrap px-2.5 py-1 rounded-full text-xs border transition-colors focus-visible:-outline-offset-2 ${
 										active
 											? "bg-primary/15 border-primary/40 text-foreground"
 											: "border-border/50 text-muted-foreground hover:text-foreground hover:border-border"

@@ -77,7 +77,7 @@ export function Toggle({ checked, onChange, label, disabled = false }: TogglePro
 			aria-label={label}
 			aria-pressed={checked}
 			className={`relative w-11 h-6 rounded-full border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-				checked ? "bg-primary border-primary/20" : "bg-muted border-border"
+				checked ? "bg-primary border-primary/20" : "bg-muted border-input-border"
 			}`}
 		>
 			<span

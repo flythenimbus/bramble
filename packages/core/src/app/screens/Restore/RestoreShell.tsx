@@ -233,7 +233,7 @@ export function RestoreShell({
 						</p>
 					)}
 					{outcome && outcome.rejected > 0 && (
-						<p className="text-sm text-amber-500">
+						<p className="text-sm text-warning">
 							<Plural
 								value={outcome.rejected}
 								one="# attachment in the backup file was damaged and wasn't restored. The vault still lists it."
@@ -244,7 +244,7 @@ export function RestoreShell({
 					{outcome && outcome.unstorable > 0 && (
 						// The vault still lists them, but their files went nowhere: the backup file is where
 						// they are now, and deleting it would lose them.
-						<p className="text-sm text-amber-500">
+						<p className="text-sm text-warning">
 							<Plural
 								value={outcome.unstorable}
 								one="This backup has # attachment, which Bramble can't store on this device yet. Keep the backup file, which still has it."
@@ -326,7 +326,7 @@ export function RestoreShell({
 									autoComplete="off"
 									value={label}
 									onChange={(e) => setLabel(e.target.value)}
-									className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
+									className="w-full px-3 py-2 text-sm rounded-lg border border-input-border bg-transparent focus:outline-none focus:border-primary"
 								/>
 							</div>
 						</>

@@ -11,7 +11,7 @@ export const dropdownStyles = html`
 				color-scheme: light dark;
 				--tp-surface: #ffffff; /* --popover */
 				--tp-foreground: oklch(20.5% 0 0); /* --popover-foreground */
-				--tp-muted: oklch(55.6% 0 0); /* --muted-foreground */
+				--tp-muted: oklch(52% 0 0); /* --muted-foreground */
 				--tp-border: oklch(87% 0 0); /* --border */
 				--tp-primary: oklch(20.5% 0 0); /* --primary */
 				--tp-on-primary: #ffffff; /* --primary-foreground */

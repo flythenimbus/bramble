@@ -64,7 +64,7 @@ export function PasswordCard({
 								type="text"
 								placeholder={t`Optional (e.g. Work)`}
 								autoComplete="off"
-								className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-transparent focus:outline-none focus:border-primary/50"
+								className="w-full px-3 py-2 text-sm rounded-lg border border-input-border bg-transparent focus:outline-none focus:border-primary"
 								{...register("label")}
 							/>
 						</div>

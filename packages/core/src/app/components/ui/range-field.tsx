@@ -1,5 +1,4 @@
 import { type ComponentProps, useId } from "react";
-import { cn } from "./utils";
 
 interface RangeFieldProps
 	extends Omit<ComponentProps<"input">, "id" | "type" | "value" | "onChange"> {
@@ -36,10 +35,7 @@ export function RangeField({
 				max={max}
 				value={value}
 				onChange={(e) => onChange(Number(e.target.value))}
-				className={cn(
-					"w-full h-5 cursor-pointer accent-primary bg-transparent",
-					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full",
-				)}
+				className="w-full h-5 cursor-pointer accent-primary bg-transparent rounded-full"
 				{...props}
 			/>
 		</div>
