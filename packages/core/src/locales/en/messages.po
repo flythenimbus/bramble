@@ -864,8 +864,8 @@ msgid "Cardholder name"
 msgstr "Cardholder name"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Cards"
-msgstr "Cards"
+#~ msgid "Cards"
+#~ msgstr "Cards"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Cat"
@@ -2202,8 +2202,8 @@ msgid "Keyboard suggestions"
 msgstr "Keyboard suggestions"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Keys"
-msgstr "Keys"
+#~ msgid "Keys"
+#~ msgstr "Keys"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Last 10"
@@ -2354,8 +2354,8 @@ msgid "Login saved for {0}"
 msgstr "Login saved for {0}"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Logins"
-msgstr "Logins"
+#~ msgid "Logins"
+#~ msgstr "Logins"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "Look up a site"
@@ -2576,7 +2576,6 @@ msgstr "Not syncing: your other devices no longer recognize this one. Disconnect
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
-#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Notes"
 msgstr "Notes"
 

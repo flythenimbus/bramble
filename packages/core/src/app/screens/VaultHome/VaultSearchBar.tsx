@@ -22,6 +22,7 @@ import { tagKey } from "../../../vault/tags";
 import { Button } from "../../components/ui/button";
 import { ScrollEdgeFades, useScrollEdges } from "../../components/ui/scroll-edges";
 import { TextField } from "../../components/ui/text-field";
+import { modeList } from "../../entry-modes";
 import {
 	completeTagFragment,
 	type SortKey,
@@ -152,10 +153,8 @@ export function VaultSearchBar({
 	const typeOptions = useMemo<{ value: TypeFilter; label: string }[]>(
 		() => [
 			{ value: "all", label: t`All` },
-			{ value: "login", label: t`Logins` },
-			{ value: "card", label: t`Cards` },
-			{ value: "note", label: t`Notes` },
-			{ value: "ssh-key", label: t`Keys` },
+			// The add menu's names, so the two can't drift apart in translation (#203).
+			...modeList.map((mode) => ({ value: mode.type, label: mode.label })),
 		],
 		[t],
 	);

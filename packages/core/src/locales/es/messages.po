@@ -864,8 +864,8 @@ msgid "Cardholder name"
 msgstr "Nombre del titular de la tarjeta"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Cards"
-msgstr "Tarjetas"
+#~ msgid "Cards"
+#~ msgstr "Tarjetas"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Cat"
@@ -2202,8 +2202,8 @@ msgid "Keyboard suggestions"
 msgstr "Sugerencias del teclado"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Keys"
-msgstr "Claves"
+#~ msgid "Keys"
+#~ msgstr "Claves"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Last 10"
@@ -2354,8 +2354,8 @@ msgid "Login saved for {0}"
 msgstr "Se ha guardado el inicio de sesión para {0}"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Logins"
-msgstr "Credenciales"
+#~ msgid "Logins"
+#~ msgstr "Credenciales"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "Look up a site"
@@ -2576,7 +2576,6 @@ msgstr "No se está sincronizando: sus otros dispositivos ya no reconocen este. 
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
-#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Notes"
 msgstr "Notas"
 
@@ -3573,12 +3572,12 @@ msgstr "Llave inglesa"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key"
-msgstr "SSH key"
+msgstr "Clave SSH"
 
 #. placeholder {0}: key.keyType
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
-msgstr "SSH key · {0}"
+msgstr "Clave SSH · {0}"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Start at login"

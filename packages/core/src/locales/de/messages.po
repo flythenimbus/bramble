@@ -375,7 +375,7 @@ msgstr "Fügen Sie unter „Zum Entsperren tippen“ einen Schlüssel hinzu, bev
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Add a new login"
-msgstr "Hinzufügen eines neuen Logins"
+msgstr "Neues Login erstellen"
 
 #: packages/core/src/app/bulk-actions/tags.tsx
 #: packages/core/src/app/entry-modes/tags.tsx
@@ -864,8 +864,8 @@ msgid "Cardholder name"
 msgstr "Name des Karteninhabers"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Cards"
-msgstr "Karten"
+#~ msgid "Cards"
+#~ msgstr "Karten"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Cat"
@@ -2202,8 +2202,8 @@ msgid "Keyboard suggestions"
 msgstr "Tastaturenvorschläge"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Keys"
-msgstr "Schlüssel"
+#~ msgid "Keys"
+#~ msgstr "Schlüssel"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Last 10"
@@ -2354,8 +2354,8 @@ msgid "Login saved for {0}"
 msgstr "Login für {0} gespeichert"
 
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
-msgid "Logins"
-msgstr "Anmeldedaten"
+#~ msgid "Logins"
+#~ msgstr "Anmeldedaten"
 
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "Look up a site"
@@ -2576,15 +2576,14 @@ msgstr "Synchronisierung nicht möglich: Ihre anderen Geräte erkennen dieses Ge
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
-#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 msgid "Notes"
-msgstr "Anmerkungen"
+msgstr "Notizen"
 
 #: packages/core/src/app/entry-modes/card.tsx
 #: packages/core/src/app/entry-modes/login.tsx
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "Notes (optional)"
-msgstr "Anmerkungen (optional)"
+msgstr "Notizen (optional)"
 
 #: packages/core/src/app/screens/VaultHome/VaultHome.tsx
 msgid "Nothing is archived. Archived items are kept here, out of autofill."
@@ -3573,12 +3572,12 @@ msgstr "Schraubenschlüssel"
 
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key"
-msgstr "SSH key"
+msgstr "SSH-Schlüssel"
 
 #. placeholder {0}: key.keyType
 #: packages/core/src/app/entry-modes/ssh-key.tsx
 msgid "SSH key · {0}"
-msgstr "SSH key · {0}"
+msgstr "SSH-Schlüssel · {0}"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Start at login"
