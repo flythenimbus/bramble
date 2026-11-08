@@ -24,7 +24,7 @@ keywords:
   - Lock vault after inactivity
   - Stays unlocked until you lock it or quit the browser
   - Stays unlocked until you lock it or the app is closed
-updatedDate: 2026-11-07
+updatedDate: 2026-11-08
 ---
 
 ## Check these first
@@ -56,9 +56,9 @@ Time in the background counts toward your timeout. With **Immediate**, leaving t
 
 ## It doesn't lock when it should
 
-### You're using the desktop app
+### You closed the desktop app's window
 
-Closing its window only hides it in the menu bar or tray. Choose the lock button (**Lock vault**) when you step away, or quit Bramble from its menu bar or tray icon.
+Closing the window only hides Bramble in the menu bar or tray. Your vault locks after your timeout. To lock it now, choose the lock button (**Lock vault**).
 
 ### You keep using autofill
 
@@ -70,7 +70,7 @@ A linked browser unlocks through the desktop app, so lock the desktop app when y
 
 ### Autofill on your phone still fills
 
-Phone autofill keeps its own timer. With **Never**, autofill stops asking after you unlock it once. To make autofill ask every time, set **Auto-lock timeout** to **Immediate**.
+Phone autofill keeps its own timer, set by **Auto-lock timeout**. Locking the app locks autofill too. With **Never**, autofill stays unlocked until you lock the app. To make autofill ask every time, choose **Immediate**.
 
 ## Still not right?
 

@@ -32,18 +32,18 @@ keywords:
   - hide app preview
   - multitasking screen
   - asks for password every time
-updatedDate: 2026-11-07
+updatedDate: 2026-11-08
 ---
 
 Auto-lock clears your vault's key from memory after a while, so someone who picks up your device can't open your vault. You set it separately on each device.
 
 ## Choose a timeout
 
-In the browser extension and the phone app, open **Settings → General** and pick an **Auto-lock timeout**:
+Open **Settings → General** and pick an **Auto-lock timeout**:
 
 | Option | When your vault locks |
 | --- | --- |
-| **Immediate** | As soon as you stop using Bramble: when you close the last Bramble popup or window in your browser, or leave the app on your phone. |
+| **Immediate** | As soon as you stop using Bramble: when you close the last Bramble popup or window in your browser, or leave the app on your phone. Not in the desktop app. |
 | **5 minutes**, **15 minutes**, **30 minutes**, **1 hour** | After that long without activity. |
 | **Never** | Only when you lock it, or quit the browser or app. |
 
@@ -72,7 +72,9 @@ Time Bramble spends in the background counts as inactivity. With **5 minutes**, 
 </div>
 <div slot="desktop">
 
-Lock the desktop app with the lock button when you step away, or quit it.
+Typing, clicking or scrolling in Bramble or its quick-access panel restarts the timer, and so does filling a page through a linked browser.
+
+Time your computer spends asleep counts as inactivity.
 
 </div>
 </PlatformTabs>
