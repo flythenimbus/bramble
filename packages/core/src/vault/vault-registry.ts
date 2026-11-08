@@ -13,8 +13,8 @@ const VaultRecordSchema = z.object({
 	/** User-facing label. May be blank; a blank label renders as "Vault N" by position. */
 	label: z.string(),
 	createdAt: z.number(),
-	/** Set while a vault combined into the desktop app's waits for the user to delete or keep it.
-	 * Off every list. Local to this device. */
+	/** Set on a vault combined into the desktop app's: off every list, still on disk. Local to this
+	 * device. */
 	hidden: z
 		.object({
 			at: z.number(),

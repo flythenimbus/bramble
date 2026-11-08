@@ -77,10 +77,8 @@ function makePlatform(
 	});
 	/** Which vault each write went to, in the order of `writes`. */
 	const writtenTo: string[] = [];
-	const locked: string[] = [];
 	const onDisk = new Map(Object.entries(disks));
 	const firstVault = Object.keys(disks)[0] as string;
-	const failing = { registryWrites: false };
 	let onExternalLock: (() => void) | null = null;
 	const heard = new Set<() => void>();
 	/** Runs inside the next entry's encryption, which on the extension is a round trip. */
@@ -138,16 +136,13 @@ function makePlatform(
 				ciphertext: bytesToBase64(new Uint8Array([diskVersion.current])),
 			};
 		},
-		lock: async () => void locked.push(id),
+		lock: async () => {},
 	});
 	const platform = {
 		target: "chromium",
 		storage: {
 			getMeta: async (k: string) => meta.get(k),
-			setMeta: async (k: string, v: unknown) => {
-				if (failing.registryWrites && k === VAULT_REGISTRY_KEY) throw new Error("storage full");
-				meta.set(k, v);
-			},
+			setMeta: async (k: string, v: unknown) => void meta.set(k, v),
 			removeMeta: async (k: string) => void meta.delete(k),
 			hasVaultHandle: async () => true,
 			readVaultBlob: async () => new Uint8Array([1]),
@@ -185,8 +180,6 @@ function makePlatform(
 		writes,
 		writtenTo,
 		erased,
-		locked,
-		failing,
 		/** Let the load that is holding at decrypt finish. */
 		finishLoad: () => {
 			gate = null;

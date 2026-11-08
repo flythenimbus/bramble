@@ -369,10 +369,9 @@ export function useDesktopLink({
 	 *
 	 * Combining reads this vault's entries and files BEFORE the switch, because only one vault's
 	 * key is loaded at a time, then copies them in after it. From the disk, not memory: a login saved
-	 * in another window never reaches this one, and the check before deleting would pass without it.
-	 * `combined` then asks the user whether to delete the old vault, hidden meanwhile unless something
-	 * stayed behind in it. Where deleting could lose something by accident it isn't on offer. Keeping
-	 * them separate copies nothing.
+	 * in another window never reaches this one. The old vault is then hidden, and nothing deletes it.
+	 * Where hiding it could lose something by accident it stays listed, and `combined` says why.
+	 * Keeping them separate copies nothing.
 	 */
 	const accept = useCallback(
 		async (
@@ -607,7 +606,5 @@ export function useDesktopLink({
 		copyingOver,
 		otherDevices,
 		joinSas,
-		/** For the Settings poller-free path: an invite claimed elsewhere. */
-		afterLinked,
 	};
 }

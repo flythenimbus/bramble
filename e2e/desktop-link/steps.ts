@@ -9,7 +9,7 @@ import { DESKTOP_PW, desk, expect, RELAY_URL } from "./fixtures";
  * the characters rather than the lines, since the desktop's text may come without line breaks
  * (see the bridge prelude in fixtures.ts).
  */
-export function symbolsIn(text: string): string {
+function symbolsIn(text: string): string {
 	const m = /Check these match([\s\S]*?)Compare this instead: (\d{4} \d{4} \d{4})/.exec(text);
 	const emoji = m?.[1]?.match(/\p{Extended_Pictographic}/gu);
 	if (!m || !emoji) throw new Error(`no symbols on screen:\n${text.slice(0, 400)}`);
@@ -224,10 +224,6 @@ export async function browserOpenVaultAt(popup: Page, index: number): Promise<vo
 	await popup.locator('input[type="password"]').first().fill(DESKTOP_PW);
 	await popup.getByRole("button", { name: "Unlock Vault" }).click();
 	await expect(popup.getByRole("button", { name: "Lock vault", exact: true })).toBeVisible();
-}
-
-export async function desktopGoToVault(): Promise<void> {
-	await desk("await front(); await click(/^Go to vault$/);");
 }
 
 export async function desktopAddLogin(
