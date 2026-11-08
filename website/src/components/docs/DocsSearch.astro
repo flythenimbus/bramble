@@ -135,7 +135,7 @@ const hero = variant === "hero";
 			if (results.length === 0) {
 				if (query.trim()) {
 					renderMessage(
-						`No results for “${escape(query.trim())}”. Try other words, or <a class="underline underline-offset-2" href="${LINKS.github}/discussions">ask on GitHub</a>.`,
+						`No results for “${escape(query.trim())}”. Try other words, or <a class="underline underline-offset-2" href="${LINKS.github}/issues">ask on GitHub</a>.`,
 					);
 				}
 				return setActive(-1);
