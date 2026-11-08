@@ -984,6 +984,10 @@ msgstr "Choose..."
 msgid "Clear after"
 msgstr "Clear after"
 
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Clear search"
+msgstr "Clear search"
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Clipboard auto-clear"
 msgstr "Clipboard auto-clear"

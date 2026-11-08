@@ -8,6 +8,7 @@ import {
 	Paperclip,
 	Search,
 	Tag,
+	X,
 } from "lucide-react";
 import {
 	type KeyboardEvent,
@@ -254,6 +255,22 @@ export function VaultSearchBar({
 						}}
 						onKeyDown={onSearchKeyDown}
 						startAdornment={<Search className="w-4 h-4" />}
+						endAdornment={
+							search.q ? (
+								<Button
+									variant="ghost"
+									size="none"
+									onClick={() => {
+										onChange({ q: "" });
+										inputRef.current?.focus();
+									}}
+									className="p-1.5 rounded-md"
+									aria-label={t`Clear search`}
+								>
+									<X className="w-4 h-4" />
+								</Button>
+							) : undefined
+						}
 						aria-haspopup="menu"
 						aria-expanded={menuOpen}
 						aria-controls={menuOpen ? menuId : undefined}

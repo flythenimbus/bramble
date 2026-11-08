@@ -185,3 +185,20 @@ describe("VaultSearchBar attachments toggle", () => {
 		expect(onChange).toHaveBeenCalledWith({ attachments: false });
 	});
 });
+
+// #201
+describe("VaultSearchBar clear button", () => {
+	const clear = () => screen.queryByRole("button", { name: "Clear search" });
+
+	it("stays out of an empty search", () => {
+		renderBar();
+		expect(clear()).toBeNull();
+	});
+
+	it("empties the query and keeps focus in the field", () => {
+		const onChange = renderBar({ q: "bank" });
+		fireEvent.click(clear() as HTMLElement);
+		expect(onChange).toHaveBeenCalledWith({ q: "" });
+		expect(document.activeElement).toBe(screen.getByLabelText("Search vault"));
+	});
+});
