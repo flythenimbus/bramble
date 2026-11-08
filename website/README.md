@@ -44,7 +44,8 @@ Components, usable without an import:
   video. Files go in `public/docs/videos/` (Cloudflare Pages caps a file at 25 MiB).
 
 Numbered lists render as steps. Search runs in the browser over `/docs/search.json`, built from
-the articles; the ranking is in `src/scripts/docs-search.ts`.
+the articles, with [MiniSearch](https://lucaong.github.io/minisearch/) (typo tolerant); the
+field weights and ranking are in `src/scripts/docs-search.ts`.
 
 ## Commands
 

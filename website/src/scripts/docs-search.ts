@@ -1,10 +1,12 @@
+import type MiniSearch from "minisearch";
+import type { SearchResult } from "minisearch";
 import { DOC_KINDS } from "@/docs-sections";
 
 /**
  * Docs search, run in the browser over the index the site builds at /docs/search.json, so a
  * query never leaves the device. Each article's `keywords` carry the other ways people phrase it.
  *
- * Keyword matching with prefix and light suffix stripping, weighted by where a word appears.
+ * MiniSearch ranks the matches, weighted by field, with prefix matching and typo tolerance.
  */
 
 export interface SearchDoc {
@@ -22,23 +24,27 @@ export interface SearchHit {
 	doc: SearchDoc;
 	/** Body text around the first match, when the match isn't in the title or description. */
 	excerpt?: string;
+	/** The article's words that matched, to highlight. */
 	terms: string[];
 }
 
-const WEIGHTS = [
-	["title", 10],
-	["keywords", 6],
-	["headings", 4],
-	["description", 3],
-	["section", 2],
-	["body", 1],
-] as const satisfies readonly (readonly [keyof SearchDoc, number])[];
+export interface SearchIndex {
+	mini: MiniSearch<SearchDoc>;
+	docs: Map<string, SearchDoc>;
+}
 
-const WHOLE_FIELDS = ["title", "keywords", "headings", "description"] as const;
+const BOOST = {
+	title: 10,
+	keywords: 6,
+	headings: 4,
+	description: 3,
+	section: 2,
+	body: 1,
+} satisfies Partial<Record<keyof SearchDoc, number>>;
 
-/** A query that describes a problem wants the Q&A articles, not the how-to. */
-const PROBLEM =
-	/\b(not|no|never|won'?t|can'?t|cannot|doesn'?t|didn'?t|isn'?t|broken|fail\w*|error|stuck|problem|issue|wrong)\b/;
+/** A query that asks why or describes a problem wants the Q&A articles; anything else, the guide. */
+const WANTS_ANSWER =
+	/\b(why|not|no|never|won'?t|can'?t|cannot|doesn'?t|didn'?t|isn'?t|broken|fail\w*|error|stuck|problem|issue|wrong)\b/;
 
 const STOPWORDS = new Set(
 	"a an and are as at be but by can do does for from how i if in into is it its me my not of on or so that the their them then there this to was what when where which who why will with you your".split(
@@ -46,17 +52,15 @@ const STOPWORDS = new Set(
 	),
 );
 
-type Prepared = { doc: SearchDoc; lower: Record<keyof SearchDoc, string> };
+let loading: Promise<SearchIndex> | undefined;
 
-let loading: Promise<Prepared[]> | undefined;
-
-export function loadIndex(): Promise<Prepared[]> {
+export function loadIndex(): Promise<SearchIndex> {
 	loading ??= fetch("/docs/search.json")
 		.then((res) => {
 			if (!res.ok) throw new Error(`search index: HTTP ${res.status}`);
 			return res.json() as Promise<SearchDoc[]>;
 		})
-		.then(prepare)
+		.then(createIndex)
 		.catch((err) => {
 			loading = undefined;
 			throw err;
@@ -64,17 +68,47 @@ export function loadIndex(): Promise<Prepared[]> {
 	return loading;
 }
 
-export function prepare(docs: SearchDoc[]): Prepared[] {
-	return docs.map((doc) => ({
-		doc,
-		lower: Object.fromEntries(
-			Object.entries(doc).map(([k, v]) => [k, fold(v)]),
-		) as Prepared["lower"],
-	}));
+/** MiniSearch is loaded here, the first time someone searches, so docs pages don't carry it. */
+export async function createIndex(docs: SearchDoc[]): Promise<SearchIndex> {
+	const { default: MiniSearch } = await import("minisearch");
+	const fields = Object.keys(BOOST) as (keyof typeof BOOST)[];
+	const vocabulary = [...new Set(docs.flatMap((doc) => fields.flatMap((f) => tokenize(doc[f]))))];
+	const inDocs = (term: string) => vocabulary.some((word) => word.startsWith(term));
+	const mini = new MiniSearch<SearchDoc>({
+		idField: "href",
+		fields,
+		tokenize,
+		processTerm: (term) => (isWord(term) ? term : null),
+		searchOptions: {
+			boost: BOOST,
+			processTerm: (term) => (isWord(term) ? stem(term) : null),
+			prefix: true,
+			// Only a word found nowhere in the docs is taken as a typo.
+			fuzzy: (term) => (inDocs(term) ? false : typosAllowed(term)),
+			weights: { prefix: 0.8, fuzzy: 0.45 },
+		},
+	});
+	mini.addAll(docs);
+	return { mini, docs: new Map(docs.map((doc) => [doc.href, doc])) };
 }
 
 function fold(text: string) {
 	return text.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+}
+
+function tokenize(text: string) {
+	return fold(text).split(/[^a-z0-9]+/);
+}
+
+function isWord(term: string) {
+	return term.length > 1 && !STOPWORDS.has(term);
+}
+
+/** One wrong letter from 4 letters, two from 7. Shorter words must be spelled right. */
+function typosAllowed(term: string) {
+	if (term.length >= 7) return 2;
+	if (term.length >= 4) return 1;
+	return false;
 }
 
 /** "pairing" finds "pair", "devices" finds "device": strip a common suffix off longer words. */
@@ -83,65 +117,50 @@ function stem(word: string) {
 	return word.replace(/(ing|ed|es|s)$/, "");
 }
 
-export function terms(query: string) {
-	const words = fold(query)
-		.split(/[^a-z0-9]+/)
-		.filter((w) => w.length > 1 && !STOPWORDS.has(w));
-	return [...new Set(words.map(stem))];
-}
+export function search(index: SearchIndex, query: string, limit = 8): SearchHit[] {
+	const wantsAnswer = WANTS_ANSWER.test(fold(query));
+	const boostDocument = (href: string) => {
+		const question = index.docs.get(href)?.kind === DOC_KINDS.question;
+		if (wantsAnswer) return question ? 2 : 1;
+		return question ? 1 : 1.25;
+	};
 
-function escapeRe(s: string) {
-	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+	// Articles with every word, else the ones with the most words.
+	let results = index.mini.search(query, { combineWith: "AND", boostDocument });
+	if (results.length === 0) {
+		results = index.mini
+			.search(query, { boostDocument })
+			.sort((a, b) => b.queryTerms.length - a.queryTerms.length || b.score - a.score);
+	}
 
-function wordStart(term: string) {
-	return new RegExp(`(?:^|[^a-z0-9])${escapeRe(term)}`);
-}
-
-export function search(index: Prepared[], query: string, limit = 8): SearchHit[] {
-	const qs = terms(query);
-	if (qs.length === 0) return [];
-	const phrase = fold(query).trim();
-	const problem = PROBLEM.test(phrase);
-	const res = qs.map(wordStart);
-
-	const scored = index.flatMap(({ doc, lower }) => {
-		let matched = 0;
-		let score = 0;
-		for (const re of res) {
-			const best = Math.max(0, ...WEIGHTS.map(([field, w]) => (re.test(lower[field]) ? w : 0)));
-			if (best > 0) matched++;
-			score += best;
-		}
-		if (matched === 0) return [];
-		if (lower.title.includes(phrase)) score += 8;
-		if (lower.keywords.includes(phrase)) score += 10;
-		// Every word in one place (a keyword like an error message, a heading) beats scattered hits.
-		if (WHOLE_FIELDS.some((field) => res.every((re) => re.test(lower[field])))) score += 12;
-		if (problem && doc.kind === DOC_KINDS.question) score += 20;
-		return [{ doc, lower, matched, score }];
+	return results.slice(0, limit).map((result) => {
+		const doc = index.docs.get(result.id) as SearchDoc;
+		return { doc, terms: result.terms, excerpt: excerptFor(doc, result) };
 	});
-
-	scored.sort((a, b) => b.matched - a.matched || b.score - a.score);
-	// Drop weak partial matches once a result matches every word.
-	const top = scored[0]?.matched ?? 0;
-	return scored
-		.filter((s) => s.matched === top || top < qs.length)
-		.slice(0, limit)
-		.map(({ doc, lower }) => ({ doc, terms: qs, excerpt: excerptFor(doc, lower, res) }));
 }
 
-function excerptFor(doc: SearchDoc, lower: Prepared["lower"], res: RegExp[]) {
-	if (res.some((re) => re.test(lower.title) || re.test(lower.description))) return undefined;
+function excerptFor(doc: SearchDoc, { match }: SearchResult) {
+	const fields = Object.values(match).flat();
+	if (fields.includes("title") || fields.includes("description")) return undefined;
+	const body = fold(doc.body);
 	let at = -1;
-	for (const re of res) {
-		const m = re.exec(lower.body);
+	for (const [term, where] of Object.entries(match)) {
+		if (!where.includes("body")) continue;
+		const m = wholeWord(term).exec(body);
 		if (m && (at === -1 || m.index < at)) at = m.index;
 	}
 	if (at === -1) return undefined;
 	const start = Math.max(0, doc.body.lastIndexOf(" ", Math.max(0, at - 60)) + 1);
 	const end = Math.min(doc.body.length, start + 160);
 	return `${start > 0 ? "…" : ""}${doc.body.slice(start, end).trim()}${end < doc.body.length ? "…" : ""}`;
+}
+
+function escapeRe(s: string) {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function wholeWord(term: string) {
+	return new RegExp(`(?:^|[^a-z0-9])${escapeRe(term)}(?![a-z0-9])`);
 }
 
 function escapeHtml(s: string) {
@@ -151,12 +170,12 @@ function escapeHtml(s: string) {
 	);
 }
 
-/** Escaped HTML with each word that starts with a search term wrapped in <mark>. */
-export function highlight(text: string, qs: string[]) {
+/** Escaped HTML with each matched word wrapped in <mark>. */
+export function highlight(text: string, terms: string[]) {
 	const html = escapeHtml(text);
-	if (qs.length === 0) return html;
+	if (terms.length === 0) return html;
 	const re = new RegExp(
-		`(^|[^\\p{L}\\p{N}])((?:${qs.map(escapeRe).join("|")})[\\p{L}\\p{N}]*)`,
+		`(^|[^\\p{L}\\p{N}])(${terms.map(escapeRe).join("|")})(?![\\p{L}\\p{N}])`,
 		"giu",
 	);
 	return html.replace(re, "$1<mark>$2</mark>");

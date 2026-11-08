@@ -20,6 +20,7 @@
 		"@vault/theme": "workspace:*",
 		"astro": "^7.4.2",
 		"clsx": "^2.1.1",
+		"minisearch": "^7.2.0",
 		"tailwind-merge": "^3.6.0",
 		"tailwind-variants": "^3.3.1"
 	},
