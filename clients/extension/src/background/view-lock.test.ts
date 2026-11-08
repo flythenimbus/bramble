@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadBackground, TEST_VEK_KEY } from "../test/test-harness";
+import { loadBackground, setAutofillIndex, TEST_VEK_KEY } from "../test/test-harness";
 
 // "Immediate" auto-lock (pref.autoLockMinutes < 0): the vault locks when the last extension
 // view (popup / pop-out / options) closes. Views are modeled by fireConnect(); the debounce
@@ -96,5 +96,46 @@ describe("view-lock: Immediate mode locks when the last view closes", () => {
 		detached.disconnect();
 		await vi.advanceTimersByTimeAsync(300);
 		expect(bg.state.session[VEK_KEY]).toBeUndefined(); // now the vault locks
+	});
+});
+
+describe("view-lock: a launch holds Immediate open while the page loads", () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+	});
+
+	const LOGIN = {
+		type: "login",
+		id: "login1",
+		hostnames: ["example.com"],
+		name: "Example",
+		username: "alice",
+		password: "pw1",
+	};
+	const launch = (bg: Awaited<ReturnType<typeof unlocked>>, url: string) =>
+		bg.send({ type: "AUTOFILL_LAUNCH", payload: { entryId: "login1", url } });
+
+	it("holds for 15 seconds after a qualifying launch, then locks", async () => {
+		const bg = await unlocked(-1);
+		await setAutofillIndex(bg, [LOGIN]);
+		const view = bg.fireConnect();
+		await launch(bg, "https://example.com/login");
+		view.disconnect();
+		await vi.advanceTimersByTimeAsync(14_000);
+		expect(bg.state.session[VEK_KEY]).toBe("VEK_GENERATED");
+		await vi.advanceTimersByTimeAsync(1_500);
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
+	});
+
+	it("doesn't hold for a launch that won't fill", async () => {
+		const bg = await unlocked(-1);
+		await setAutofillIndex(bg, [LOGIN]);
+		const view = bg.fireConnect();
+		await launch(bg, "https://other.test/");
+		view.disconnect();
+		await vi.advanceTimersByTimeAsync(300);
+		expect(bg.state.session[VEK_KEY]).toBeUndefined();
 	});
 });

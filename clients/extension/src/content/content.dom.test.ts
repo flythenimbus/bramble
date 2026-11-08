@@ -90,6 +90,7 @@ let generateResponse: unknown = { ok: true, data: { password: "from-the-backgrou
 let aliasResponse: unknown = { ok: true, data: { address: "w40myp02@anonaddy.com" } };
 const pendingQueryResponses: Array<(response: unknown) => void> = [];
 const pendingSelectResponses: Array<(response: unknown) => void> = [];
+const pendingClaimResponses: Array<(response: unknown) => void> = [];
 let submitRevalidationResponder:
 	| ((message: { sessionGeneration: number }) => Promise<unknown>)
 	| null = null;
@@ -114,6 +115,7 @@ vi.mock("./lifecycle", () => ({
 			then: (cb: (response: unknown) => void) => {
 				if (m.type === "AUTOFILL_QUERY") pendingQueryResponses.push(cb);
 				if (m.type === "AUTOFILL_SELECT") pendingSelectResponses.push(cb);
+				if (m.type === "AUTOFILL_LAUNCH_CLAIM") pendingClaimResponses.push(cb);
 				return Promise.resolve();
 			},
 		};
@@ -122,6 +124,8 @@ vi.mock("./lifecycle", () => ({
 		teardownCallback = cb;
 	},
 }));
+let frameIsLegible = true;
+vi.mock("./legibility", () => ({ isLegible: () => frameIsLegible, EARLY_CLICK_MS: 500 }));
 vi.mock("./corner-prompt", () => ({ handleCornerPromptShow: vi.fn(), queryCornerPrompt: vi.fn() }));
 vi.mock("./capture", () => ({ maybeCommitCapture: vi.fn(), onPasswordEnter: vi.fn() }));
 const fillTextField = vi.fn(() => true);
@@ -1679,5 +1683,176 @@ describe("content: locked vault on a signup form's email field", () => {
 	it("still offers nothing when no provider is configured", () => {
 		focusEmailLocked(false);
 		expect(showLocked).not.toHaveBeenCalled();
+	});
+});
+
+describe("content: launch and fill", () => {
+	const FILL = {
+		ok: true,
+		data: {
+			payload: { kind: "login", username: "alice", password: "pw1" },
+			isAuto: true,
+			otpOnly: false,
+			sessionGeneration: 3,
+		},
+	};
+	const LOGIN_FORM = `<form action="/login"><input id="user" name="username" autocomplete="username" />
+		<input id="pass" type="password" name="password" autocomplete="current-password" /></form>`;
+	const LOGIN_ROW = { id: "login1", name: "Example", secondary: "alice" };
+
+	const field = (id: string) => document.getElementById(id) as HTMLInputElement;
+	const claims = () =>
+		safeRequest.mock.calls.filter(([m]) => m.type === "AUTOFILL_LAUNCH_CLAIM").map(([m]) => m);
+
+	/** Give an element a layout box, which jsdom never does. */
+	function render(el: Element, width = 200, height = 30): void {
+		el.getBoundingClientRect = () => ({ width, height }) as DOMRect;
+	}
+
+	function page(html = LOGIN_FORM): void {
+		document.body.innerHTML = html;
+		for (const el of document.querySelectorAll("input")) render(el);
+		invalidatePageFields();
+	}
+
+	function answerQuery(over: Record<string, unknown>): void {
+		field("user").focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		pendingQueryResponses.pop()?.({ ok: true, data: result({ logins: [LOGIN_ROW], ...over }) });
+	}
+
+	beforeEach(() => {
+		showMatches.mockClear();
+		fillForm.mockClear();
+		safeRequest.mockClear();
+		pendingQueryResponses.length = 0;
+		pendingClaimResponses.length = 0;
+		frameIsLegible = true;
+		vi.spyOn(document, "hasFocus").mockReturnValue(true);
+		// Drops the previous test's cached query result and any claim still in flight.
+		send({ type: "AUTOFILL_ENABLED", payload: { enabled: false } });
+		send({ type: "AUTOFILL_ENABLED", payload: { enabled: true } });
+		page();
+	});
+	afterEach(() => vi.restoreAllMocks());
+
+	it("claims when the query says this tab was launched, and fills as an auto fill", () => {
+		answerQuery({ launch: true });
+		expect(claims()).toHaveLength(1);
+		pendingClaimResponses.pop()?.(FILL);
+		expect(fillForm).toHaveBeenCalledWith("alice", "pw1", true, field("pass"));
+	});
+
+	it("shows no dropdown while it claims", () => {
+		answerQuery({ launch: true });
+		expect(showMatches).not.toHaveBeenCalled();
+	});
+
+	it("doesn't claim without the flag", () => {
+		answerQuery({});
+		expect(claims()).toEqual([]);
+	});
+
+	it("doesn't claim on a password field that already has a value", () => {
+		field("pass").value = "typed";
+		answerQuery({ launch: true });
+		expect(claims()).toEqual([]);
+	});
+
+	it("doesn't claim on a password field that isn't rendered", () => {
+		render(field("pass"), 0, 0);
+		answerQuery({ launch: true });
+		expect(claims()).toEqual([]);
+	});
+
+	it("doesn't claim on a form that sets a password", () => {
+		page(`<form action="/signup"><input id="user" name="email" autocomplete="email" />
+			<input id="pass" type="password" name="new" autocomplete="new-password" />
+			<input id="again" type="password" name="confirm" autocomplete="new-password" /></form>`);
+		answerQuery({ launch: true });
+		expect(claims()).toEqual([]);
+	});
+
+	it("doesn't claim on an email page with no password field", () => {
+		page(`<form><input id="user" name="email" type="email" autocomplete="username" /></form>`);
+		answerQuery({ launch: true });
+		expect(claims()).toEqual([]);
+	});
+
+	it("shows the dropdown when the claim is refused", () => {
+		answerQuery({ launch: true });
+		pendingClaimResponses.pop()?.({ ok: false, error: "unavailable" });
+		expect(fillForm).not.toHaveBeenCalled();
+		expect(showMatches).toHaveBeenCalledTimes(1);
+	});
+
+	it("fills in a visible page that doesn't have focus, as a frame never does", () => {
+		vi.mocked(document.hasFocus).mockReturnValue(false);
+		answerQuery({ launch: true });
+		pendingClaimResponses.pop()?.(FILL);
+		expect(fillForm).toHaveBeenCalledTimes(1);
+	});
+
+	it("claims on focus when CSS showed the form after the query", () => {
+		render(field("pass"), 0, 0);
+		answerQuery({ launch: true });
+		expect(claims()).toEqual([]);
+		render(field("pass"));
+		field("pass").focus();
+		expect(claims()).toHaveLength(1);
+	});
+
+	it("doesn't claim again after filling", () => {
+		answerQuery({ launch: true });
+		pendingClaimResponses.pop()?.(FILL);
+		field("pass").focus();
+		expect(claims()).toHaveLength(1);
+	});
+
+	describe("the top frame's answer to a frame's claim", () => {
+		const SIZE = { frameWidth: 400, frameHeight: 300 };
+
+		function ask(): unknown {
+			let reply: unknown;
+			onMessage?.({ type: "AUTOFILL_LAUNCH_TOP_CHECK", payload: SIZE }, {}, (v) => {
+				reply = v;
+			});
+			return reply;
+		}
+
+		function withFrame(width: number, height: number, html = ""): void {
+			page(`${html}<iframe id="f"></iframe>`);
+			const frame = document.getElementById("f") as HTMLIFrameElement;
+			Object.defineProperty(frame, "clientWidth", { value: width });
+			Object.defineProperty(frame, "clientHeight", { value: height });
+		}
+
+		it("yields to a visible frame of that size when it has no password field", () => {
+			withFrame(400, 300);
+			expect(ask()).toEqual({ hasPassword: false, frameVisible: true });
+		});
+
+		it("keeps the grant for its own rendered password field", () => {
+			withFrame(400, 300, LOGIN_FORM);
+			expect(ask()).toMatchObject({ hasPassword: true });
+		});
+
+		it("ignores a password field that isn't rendered", () => {
+			withFrame(400, 300, LOGIN_FORM);
+			render(field("pass"), 0, 0);
+			invalidatePageFields();
+			expect(ask()).toMatchObject({ hasPassword: false });
+		});
+
+		it("says no for a frame of that size the user can't see", () => {
+			withFrame(400, 300);
+			frameIsLegible = false;
+			expect(ask()).toMatchObject({ frameVisible: false });
+		});
+
+		it("says no when no frame here is that size", () => {
+			withFrame(640, 480);
+			expect(ask()).toMatchObject({ frameVisible: false });
+		});
 	});
 });

@@ -160,6 +160,9 @@ export interface ShellAdapter {
 	 * capability). Persisting the pref is the caller's job; the background reads it per query anyway,
 	 * so this only exists to drop a dropdown that is already on screen. */
 	setAutofillEnabled?(enabled: boolean): Promise<void>;
+	/** Open a login's website in a new tab and fill it there once (extension only). See
+	 * docs/launch-and-fill.md. */
+	launchLogin?(entryId: string, url: string): Promise<void>;
 	/** Whether the browser's own password manager is switched off for Bramble (extension only; #135). */
 	getDefaultPasswordManager?(): Promise<DefaultPasswordManager>;
 	/** Switch the browser's own password saving and card autofill off (true) or hand them back.

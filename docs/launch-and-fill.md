@@ -1,6 +1,6 @@
 # Launch and fill (extension)
 
-Status: plan, 2026-11-07, revised 2026-11-08 for same-site frames. Builds on #141 (open a login's
+Status: built 2026-11-08, Chromium e2e only; not tried on Firefox. Builds on #141 (open a login's
 website from the vault) and answers #156 (autofill on page load) with a narrower rule.
 
 ## What it does
@@ -50,16 +50,23 @@ A login form in an iframe on the site's own domain fills too, like `accounts.exa
 - the tab's top page matches the login, by the same host rule;
 - the frame is same-site as the top page (`sameSiteAsTop`, from the browser's account of the
   sender);
-- the frame is visible on the page. A field can be rendered inside a frame that is zero-size,
-  offscreen or covered, so each parent's content script checks the iframe element, over the
-  relay's per-hop frame binding (see "Relayed placement" in [autofill.md](autofill.md)). Unlike
-  the picker's checks, this one fails closed;
-- the top frame has queried and reported no login field.
+- the frame is visible on the page;
+- the top frame has no rendered password field of its own.
 
-The last rule stops a same-site widget with its own password field from spending the grant ahead
-of the real form. A frame that asks before the top frame has queried doesn't get `launch: true`.
-It shows the dropdown, unless a later re-check, such as the one on focus, finds the top frame has
-answered.
+The last two are the top frame's to answer, so the background asks it at claim time
+(`AUTOFILL_LAUNCH_TOP_CHECK`, `frameId` 0). It can't wait for the top frame's query: a page with
+no fields of its own never sends one, and that is the usual page around a login frame.
+
+A field can be rendered inside a frame that is zero-size, offscreen or covered, so the frame's own
+view isn't enough. The claim carries the frame's size, and the top frame looks for an iframe of
+that size that passes `isLegible`: on screen, opaque and not covered at its centre. No answer is
+a no, so a top frame still loading, or a frame it can't find, leaves the dropdown, and the frame
+can claim again on focus.
+
+The password-field rule stops a same-site widget with its own password field from spending the
+grant ahead of the real form.
+
+A launch needs the page to be visible, not focused: a frame doesn't have focus on load.
 
 ## How it flows
 
@@ -71,11 +78,11 @@ answered.
    qualifies. The tab opens either way.
 3. **Background, `AUTOFILL_QUERY`.** The page's query answer carries `launch: true` when a live
    grant matches it. Never the login's id.
-4. **Content script.** Sends `AUTOFILL_LAUNCH_CLAIM` once per page when the password field
-   qualifies and, in a frame, the frame is visible. The answer has the same shape as
-   `AUTOFILL_SELECT`'s.
-5. **Background, `AUTOFILL_LAUNCH_CLAIM`.** Re-checks every rule against the verified sender,
-   spends the grant and returns the fill.
+4. **Content script.** Sends `AUTOFILL_LAUNCH_CLAIM` when the password field qualifies, with its
+   size if it is a frame. The answer has the same shape as `AUTOFILL_SELECT`'s. A refused claim
+   shows the dropdown and can be tried again on focus; the grant still limits it to one fill.
+5. **Background, `AUTOFILL_LAUNCH_CLAIM`.** Re-checks every rule against the verified sender, asks
+   the top frame if the sender is a frame, spends the grant and returns the fill.
 
 ## Immediate auto-lock
 
@@ -96,7 +103,9 @@ A page slower than that finds the vault locked and shows the locked dropdown, as
   attacker can't read a cross-origin frame, but could log the user in and frame the session for
   clickjacking. Requiring the top page to match the login stops this.
 - **Hidden frames.** Silently filling a hidden frame is the classic password manager attack, which
-  is why a frame has to be visible on the page and why that check fails closed.
+  is why a frame has to be visible on the page and why that check fails closed. The size match
+  doesn't prove which iframe asked, so a same-site page could pair a hidden frame with a visible
+  one of the same size. That falls under the next item.
 - **A script on the right site.** It can read what was filled, without the pick a normal fill
   waits for. That is the cost of the feature, bounded to the site the user chose to open, once,
   within 60 seconds. #156 asked for the same risk on every page load; here it applies to one page
@@ -108,6 +117,7 @@ A page slower than that finds the vault locked and shows the locked dropdown, as
 
 - Forms inside cross-site iframes, such as a login frame hosted on a vendor's domain. They keep the
   dropdown, because the page can't vouch for them.
+- Frames nested inside another frame. The top frame can't see them, so they keep the dropdown.
 - The email step of a two-step login.
 - The desktop and mobile apps.
 
@@ -115,12 +125,12 @@ A page slower than that finds the vault locked and shows the locked dropdown, as
 
 - `clients/extension/src/background/launch-fill.test.ts`: opening the tab, arming only for a
   qualifying login, the query flag, the claim's checks, one fill per grant, expiry, tab close,
-  lock, and the frame rules (top page match, same-site, the top frame reporting a login field).
+  lock, and the frame rules (top page match, same-site, the top frame's answer).
 - `clients/extension/src/background/view-lock.test.ts`: the Immediate-mode hold.
 - `clients/extension/src/content/content.dom.test.ts`: when the page claims, when it doesn't, and
-  a frame that isn't visible not claiming.
+  the top frame's answer.
 - `packages/core/src/app/components/OpenWebsiteLink.test.tsx` and
   `clients/extension/src/shell.test.ts`: the click.
 - `e2e/extension/launch-fill.spec.ts`: a real launch fills; a reload doesn't; another site doesn't;
   a same-site frame fills; a cross-site frame doesn't; a matching frame under a mismatched top page
-  doesn't; a hidden frame doesn't.
+  doesn't; a hidden frame doesn't; a frame yields to the top page's password field.

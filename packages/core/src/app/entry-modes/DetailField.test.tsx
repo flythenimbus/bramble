@@ -3,6 +3,7 @@ import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { type Platform, PlatformProvider } from "../../context/PlatformContext";
 import { cardMode } from "./card";
 import { loginMode } from "./login";
 import { noteMode } from "./note";
@@ -47,7 +48,9 @@ function show(mode: EntryMode, value: EntryDetailBodyProps["entry"], copied: str
 	const Detail = mode.Detail;
 	render(
 		<I18nProvider i18n={i18n}>
-			<Detail entry={entry({ ...value, notes: NOTES })} copied={copied} copy={copy} />
+			<PlatformProvider platform={{ target: "chromium", shell: {} } as unknown as Platform}>
+				<Detail entry={entry({ ...value, notes: NOTES })} copied={copied} copy={copy} />
+			</PlatformProvider>
 		</I18nProvider>,
 	);
 	return copy;

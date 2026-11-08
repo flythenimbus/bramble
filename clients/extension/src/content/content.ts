@@ -16,6 +16,7 @@ import {
 	deepActiveElement,
 	hasInteractiveCaptcha,
 	isCandidate,
+	isRendered,
 	kindOf,
 	pageUsesShadowDom,
 } from "./detection";
@@ -33,6 +34,7 @@ import {
 } from "./fill";
 import { installFrameRelay, type RelayRect } from "./frame-relay";
 import type { AliasRowState } from "./html/dropdown-alias";
+import { isLegible } from "./legibility";
 import { onTeardown, safeRequest, safeSendMessage } from "./lifecycle";
 import {
 	holdGeneratedPassword,
@@ -121,6 +123,11 @@ function cancelOperations(): void {
 
 function documentIsActive(): boolean {
 	return document.visibilityState === "visible" && document.hasFocus();
+}
+
+/** For a launch, which nobody clicked in this document: a frame doesn't have focus on load. */
+function documentIsVisible(): boolean {
+	return document.visibilityState === "visible";
 }
 
 // --- Picker placement -------------------------------------------------------
@@ -400,11 +407,15 @@ function payloadMatchesTarget(
 	return payload.kind === "login" && !otpOnly;
 }
 
-function delayedSubmitIsEligible(passwordField: HTMLInputElement, generation: number): boolean {
+function delayedSubmitIsEligible(
+	passwordField: HTMLInputElement,
+	generation: number,
+	pageIsLive: () => boolean,
+): boolean {
 	invalidatePageFields();
 	return (
 		generation === submitGeneration &&
-		documentIsActive() &&
+		pageIsLive() &&
 		passwordField.isConnected &&
 		passwordField.ownerDocument === document &&
 		!passwordField.disabled &&
@@ -418,8 +429,9 @@ async function continueAutoSubmit(
 	passwordField: HTMLInputElement,
 	generation: number,
 	sessionGeneration: number,
+	pageIsLive: () => boolean,
 ): Promise<void> {
-	if (!delayedSubmitIsEligible(passwordField, generation)) return;
+	if (!delayedSubmitIsEligible(passwordField, generation, pageIsLive)) return;
 	const response = await safeRequest<AutofillSubmitRevalidationResponse>({
 		type: "AUTOFILL_REVALIDATE_SUBMIT",
 		sessionGeneration,
@@ -427,7 +439,7 @@ async function continueAutoSubmit(
 	if (
 		!response?.ok ||
 		response.data.sessionGeneration !== sessionGeneration ||
-		!delayedSubmitIsEligible(passwordField, generation)
+		!delayedSubmitIsEligible(passwordField, generation, pageIsLive)
 	) {
 		return;
 	}
@@ -437,14 +449,14 @@ async function continueAutoSubmit(
 function applySelectResponse(
 	intent: ActiveFill,
 	response: AutofillSelectResponse | undefined,
+	pageIsLive: () => boolean = documentIsActive,
 ): void {
 	// Consume before validating or filling: a response can never be replayed locally.
 	if (activeFill !== intent) return;
 	activeFill = null;
 	if (!response?.ok) return;
 	const data = responsePayload(response.data);
-	if (!data || !documentIsActive() || currentTargetKind(intent.target) !== intent.targetKind)
-		return;
+	if (!data || !pageIsLive() || currentTargetKind(intent.target) !== intent.targetKind) return;
 	if (!payloadMatchesTarget(intent.targetKind, data.payload, data.otpOnly)) return;
 
 	picker.removeDropdown();
@@ -468,7 +480,7 @@ function applySelectResponse(
 	if (!filled || !data.payload.autoSubmit || !passwordField) return;
 	const generation = ++submitGeneration;
 	setTimeout(() => {
-		void continueAutoSubmit(passwordField, generation, data.sessionGeneration);
+		void continueAutoSubmit(passwordField, generation, data.sessionGeneration, pageIsLive);
 	}, 50);
 }
 
@@ -682,6 +694,59 @@ function selectMatch(
 	}).then((response) => applySelectResponse(intent, response));
 }
 
+/** The password field a launch may fill: rendered, empty, and not on a form setting a password. */
+function launchField(): HTMLInputElement | null {
+	invalidatePageFields();
+	const field = getPageFields().login.password;
+	if (!field || field.value || field.disabled || field.readOnly || !isRendered(field)) return null;
+	return shouldSuggestPassword(field, { hasExistingLogins: true }) ? null : field;
+}
+
+/** Spend this tab's launch grant if this page qualifies. True when a claim went out. */
+function claimLaunch(): boolean {
+	if (!cachedResult?.launch || activeFill || !documentIsVisible()) return false;
+	const target = launchField();
+	const targetKind = target ? currentTargetKind(target) : null;
+	if (!target || targetKind !== "login") return false;
+	const intent: ActiveFill = { target, targetKind };
+	activeFill = intent;
+	const size =
+		window === window.top
+			? undefined
+			: { frameWidth: window.innerWidth, frameHeight: window.innerHeight };
+	void safeRequest<AutofillSelectResponse>({ type: "AUTOFILL_LAUNCH_CLAIM", payload: size }).then(
+		(response) => {
+			applySelectResponse(intent, response, documentIsVisible);
+			if (response?.ok) {
+				if (cachedResult) cachedResult.launch = false;
+				silenceAutoOpen = true;
+				return;
+			}
+			const field = focusedCandidate();
+			if (field) showFor(field);
+		},
+	);
+	return true;
+}
+
+/** The top frame's half of a frame's claim. See docs/launch-and-fill.md. */
+function launchTopCheck(size: { frameWidth: number; frameHeight: number }): {
+	hasPassword: boolean;
+	frameVisible: boolean;
+} {
+	invalidatePageFields();
+	const password = getPageFields().login.password;
+	return {
+		hasPassword: !!password && isRendered(password),
+		frameVisible: Array.from(document.querySelectorAll("iframe")).some(
+			(frame) =>
+				Math.abs(frame.clientWidth - size.frameWidth) <= 2 &&
+				Math.abs(frame.clientHeight - size.frameHeight) <= 2 &&
+				isLegible(frame),
+		),
+	};
+}
+
 function focusedCandidate(): HTMLInputElement | null {
 	const focused = deepActiveElement();
 	return focused instanceof HTMLInputElement && isCandidate(getPageFields(), focused)
@@ -701,8 +766,8 @@ function isQueryResult(v: unknown): v is QueryResult {
 
 /**
  * Caches the query result and surfaces the picker if a candidate field is focused.
- * SECURITY: never fills without an explicit user gesture; secrets are fetched only
- * on AUTOFILL_SELECT, so a password is never injected into the DOM on load.
+ * SECURITY: never fills without an explicit user gesture; secrets are fetched only on
+ * AUTOFILL_SELECT, or AUTOFILL_LAUNCH_CLAIM after the user chose "Open website" for this login.
  */
 function handleResult(result: QueryResult | undefined): void {
 	// Background forwards `undefined` when offscreen erred; keep the last good
@@ -715,6 +780,7 @@ function handleResult(result: QueryResult | undefined): void {
 	cachedResult = result;
 	// Rides on the query so the suggestion below has a settings-shaped password to draw at once.
 	holdGeneratedPassword(result.generated);
+	if (claimLaunch()) return;
 
 	// User dismissed/selected: don't resurrect the dropdown from a re-query until
 	// they re-engage. cachedResult is still updated so the next focus sees fresh data.
@@ -1132,6 +1198,11 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		return false;
 	}
 
+	if (message?.type === "AUTOFILL_LAUNCH_TOP_CHECK") {
+		sendResponse(launchTopCheck(message.payload));
+		return false;
+	}
+
 	if (message?.type === "AUTOFILL_ENABLED") {
 		// The Settings toggle, applied to a page that is already open.
 		const enabled = (message.payload as { enabled?: boolean } | undefined)?.enabled !== false;
@@ -1214,6 +1285,7 @@ function bootstrap(): void {
 			if (!couldBeCandidate(target) || !isKnownCandidate(target)) return;
 			// Explicit focus re-arms auto-display after any prior silence.
 			silenceAutoOpen = false;
+			if (claimLaunch()) return;
 			showFor(target);
 		},
 		true,

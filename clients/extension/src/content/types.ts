@@ -39,6 +39,8 @@ export interface QueryResult {
 	// This frame is the same site as the tab's top page, so the top page may host its login
 	// picker. Absent from an older background, which reads as no.
 	sameSiteAsTop?: boolean;
+	/** This tab holds a launch grant this frame could spend. */
+	launch?: boolean;
 }
 
 /** Fill instruction from the background, discriminated by `kind`. `isAuto` echoes whether the fill was user-initiated. */

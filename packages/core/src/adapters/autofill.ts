@@ -103,6 +103,9 @@ export interface QueryResult {
 	 * picker (hosted there, the top page can read the picker's presence and height). Extension
 	 * only; absent from an older background, which reads as no. */
 	sameSiteAsTop?: boolean;
+	/** This tab holds a launch grant this frame could spend. Extension only. Says nothing about
+	 * which login. See docs/launch-and-fill.md. */
+	launch?: boolean;
 }
 
 /** What to fill for a chosen entry, discriminated by kind. */

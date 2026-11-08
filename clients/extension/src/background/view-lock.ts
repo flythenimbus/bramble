@@ -48,10 +48,10 @@ async function runCheck(): Promise<void> {
 	await lockVault();
 }
 
-/** Keep the vault unlocked across the popup -> pop-out handoff, where the popup closes a
- * beat before the detached window connects. Called when a pop-out is requested. */
-export function armViewGrace(): void {
-	graceUntil = Date.now() + POPOUT_GRACE_MS;
+/** Keep the vault unlocked across a handoff that closes the popup: to a pop-out, whose window
+ * connects a beat later, or to a launched tab (`ms`). */
+export function armViewGrace(ms = POPOUT_GRACE_MS): void {
+	graceUntil = Date.now() + ms;
 	// If the popup already closed (its disconnect scheduled a short lock), extend that
 	// pending timer over the handoff window.
 	if (openViews.size === 0 && timer) scheduleCheck();

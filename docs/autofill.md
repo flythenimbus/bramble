@@ -191,7 +191,9 @@ could read it. Instead:
 3. Only then does the page-bound `AUTOFILL_SELECT` response return the actual
    secrets for that entry.
 
-Cards always used this safer pattern; logins and OTP codes follow it too.
+Cards always used this safer pattern; logins and OTP codes follow it too. The one exception is
+"Open website" in the vault, where choosing the login is the pick: see
+[launch-and-fill.md](launch-and-fill.md).
 
 The pick must be a **trusted gesture**: the dropdown's `mousedown` handler bails
 on `event.isTrusted === false`. Without this, page script could dispatch a

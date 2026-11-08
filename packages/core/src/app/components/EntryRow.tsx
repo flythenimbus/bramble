@@ -254,7 +254,9 @@ export const EntryRow = memo(function EntryRow({
 								: "row-start-1 col-start-1 justify-self-end self-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
 						}`}
 					>
-						{launchUrl && <OpenWebsiteLink href={launchUrl} onOpen={() => onUse?.(id)} />}
+						{launchUrl && (
+							<OpenWebsiteLink href={launchUrl} entryId={id} onOpen={() => onUse?.(id)} />
+						)}
 						{copyItems.length > 0 && (
 							<div className="relative" ref={copyRef}>
 								<Button

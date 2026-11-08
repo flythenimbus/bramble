@@ -42,6 +42,8 @@ export async function launchExtensionContext(
 			`--disable-extensions-except=${extensionPath}`,
 			`--load-extension=${extensionPath}`,
 			"--no-sandbox",
+			// For launch-fill.spec.ts, which needs real navigations to several sites.
+			"--host-resolver-rules=MAP launch.test 127.0.0.1, MAP *.launch.test 127.0.0.1, MAP other-site.test 127.0.0.1",
 		],
 	});
 	let [sw] = context.serviceWorkers();

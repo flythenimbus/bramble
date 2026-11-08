@@ -215,6 +215,12 @@ export const extensionShell: ShellAdapter = {
 	async setAutofillEnabled(enabled: boolean) {
 		await api.runtime.sendMessage({ type: "AUTOFILL_SET_ENABLED", payload: { enabled } });
 	},
+	async launchLogin(entryId: string, url: string) {
+		const res = (await api.runtime
+			.sendMessage({ type: "AUTOFILL_LAUNCH", payload: { entryId, url } })
+			.catch(() => undefined)) as { ok?: boolean } | undefined;
+		if (!res?.ok) window.open(url, "_blank", "noopener,noreferrer");
+	},
 	// Reports failure, unlike setAutofillEnabled above: turning this on can genuinely fail
 	// (another extension holds the WebAuthn proxy), and a switch that says "on" while nothing is
 	// attached is worse than an error.

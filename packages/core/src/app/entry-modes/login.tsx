@@ -754,7 +754,7 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 								copied={copied}
 								copyName={copyName}
 								onCopy={() => copy(copyName, url)}
-								extraAction={href && <OpenWebsiteLink href={href} />}
+								extraAction={href && <OpenWebsiteLink href={href} entryId={entry.id} />}
 							>
 								<div className="flex items-center gap-2 text-sm">
 									<Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />

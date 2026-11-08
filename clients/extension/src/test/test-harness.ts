@@ -45,6 +45,8 @@ export interface ChromeMockOptions {
 	lastFocusedWindow?: { id?: number };
 	/** Expose chrome.action.openPopup (Chrome 127+). */
 	hasOpenPopup?: boolean;
+	/** What a content script answers chrome.tabs.sendMessage with. Throw for no receiver. */
+	tabReply?: (tabId: number, message: AnyMsg, options?: AnyMsg) => unknown;
 	/** Tabs chrome.tabs.query({}) resolves to (lock-state broadcast fan-out). */
 	openTabs?: Array<{ id?: number; url?: string }>;
 	/** Model Chrome delivering session onChanged after set/remove has already resolved. */
@@ -112,6 +114,7 @@ interface HarnessState {
 	local: Record<string, unknown>;
 	alarms: Record<string, unknown>;
 	tabMessages: Array<{ tabId: number; message: AnyMsg; options?: AnyMsg }>;
+	tabsCreated: AnyMsg[];
 	broadcasts: AnyMsg[];
 	offscreenCalls: AnyMsg[];
 	windowsCreated: AnyMsg[];
@@ -139,6 +142,8 @@ const EXT_ORIGIN = "https://extension.example";
 
 /** A MessageSender on the extension origin (popup/options/offscreen). */
 export const extensionSender = { origin: EXT_ORIGIN };
+/** The id chrome.tabs.create hands back. */
+export const LAUNCHED_TAB_ID = 42;
 /** A MessageSender for a content script on `https://<host>` with an optional tab.
  * A real content-script sender always carries a frameId (0 = top frame), so set one
  * whenever a tab is present. */
@@ -229,6 +234,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		local,
 		alarms: {},
 		tabMessages: [],
+		tabsCreated: [],
 		broadcasts: [],
 		offscreenCalls: [],
 		windowsCreated: [],
@@ -356,6 +362,11 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 			query: vi.fn(async () => opts.openTabs ?? []),
 			sendMessage: vi.fn(async (tabId: number, message: AnyMsg, options?: AnyMsg) => {
 				state.tabMessages.push({ tabId, message, options });
+				return opts.tabReply?.(tabId, message, options);
+			}),
+			create: vi.fn(async (createOpts: AnyMsg) => {
+				state.tabsCreated.push(createOpts);
+				return { id: LAUNCHED_TAB_ID };
 			}),
 			captureVisibleTab: vi.fn(async () => "data:image/png;base64,AAAA"),
 			onUpdated: {
