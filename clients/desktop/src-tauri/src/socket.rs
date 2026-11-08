@@ -865,12 +865,15 @@ fn answer_for(request: Request, peer_id: &str) -> Answer {
             ..Answer::ok()
         },
         Request::Fetch { id } => match index_store::secret_for(&id) {
-            Some(entry) => Answer {
-                username: Some(entry.username),
-                password: Some(entry.password),
-                totp: entry.totp,
-                ..Answer::ok()
-            },
+            Some(entry) => {
+                crate::autolock::touch();
+                Answer {
+                    username: Some(entry.username),
+                    password: Some(entry.password),
+                    totp: entry.totp,
+                    ..Answer::ok()
+                }
+            }
             None => Answer::error("unknown entry"),
         },
         // Both handled before this, in read_loop: relayed or recorded, not answered.
@@ -1974,6 +1977,37 @@ mod tests {
             !answer.to_string().contains("hunter2"),
             "a query put a password on the wire: {answer}"
         );
+        index_store::clear();
+        vault_crypto::lock();
+    }
+
+    #[test]
+    fn a_fill_over_the_link_counts_as_activity_and_a_query_does_not() {
+        let _g = pairing::test_lock();
+        vault_crypto::unlock_with_vek(vault_crypto::generate_vek().unwrap()).unwrap();
+        index_store::set(vec![index_store::IndexEntry {
+            id: "a".into(),
+            kind: "login".into(),
+            name: "GitHub".into(),
+            hostnames: vec!["github.com".into()],
+            username: "octocat".into(),
+            password: "hunter2".into(),
+            totp: None,
+        }]);
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let before = crate::autolock::now_ms();
+        answer_for(
+            Request::Query {
+                hostname: "github.com".into(),
+            },
+            "peer",
+        );
+        // A page can ask on its own, so a query is not the user doing anything.
+        assert!(crate::autolock::last_activity_ms() < before);
+
+        answer_for(Request::Fetch { id: "a".into() }, "peer");
+        assert!(crate::autolock::last_activity_ms() >= before);
         index_store::clear();
         vault_crypto::lock();
     }

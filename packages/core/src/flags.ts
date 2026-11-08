@@ -162,6 +162,9 @@ export const CAPABILITIES = {
 		ios: true,
 		desktop: true,
 	},
+	// The "Immediate" auto-lock: lock when the last popup closes (extension) or on backgrounding
+	// (mobile). Desktop has no such moment: it lives in the tray, and its panel only works unlocked.
+	immediateAutoLock: { extension: true, mobile: true, desktop: false },
 	// Separate "lock when the OS screen locks" toggle. Chromium only: Firefox's idle API never
 	// reports "locked", and mobile locks on app backgrounding via the auto-lock setting. See issue #6.
 	// Desktop OSes emit a real screen-lock signal, but nothing subscribes to it yet.

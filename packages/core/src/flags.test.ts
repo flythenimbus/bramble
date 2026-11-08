@@ -62,6 +62,14 @@ describe("can()", () => {
 		expect(can("lockOnScreenLock", "desktop")).toBe(false);
 	});
 
+	it("offers the Immediate auto-lock everywhere but desktop", () => {
+		expect(can("immediateAutoLock", "chromium")).toBe(true);
+		expect(can("immediateAutoLock", "firefox")).toBe(true);
+		expect(can("immediateAutoLock", "android")).toBe(true);
+		expect(can("immediateAutoLock", "ios")).toBe(true);
+		expect(can("immediateAutoLock", "desktop")).toBe(false);
+	});
+
 	it("returns a boolean for every capability on every target", () => {
 		for (const cap of Object.keys(CAPABILITIES) as (keyof typeof CAPABILITIES)[])
 			for (const t of TARGETS) expect(typeof can(cap, t)).toBe("boolean");

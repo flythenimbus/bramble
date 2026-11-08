@@ -68,9 +68,8 @@ export const desktopCrypto: CryptoAdapter = {
 	},
 	isLocked: () => invoke<boolean>("crypto_is_locked"),
 
-	// Sync merges write entries out of band, so the open list has to be told. A lock from
-	// outside this webview (the spotlight window, an idle timeout in the shell) does not exist
-	// yet; when it does it will emit a Tauri event that calls markLocked.
+	// Sync merges write entries out of band, so the open list has to be told. The shell's
+	// auto-lock arrives as a Tauri event that calls markLocked (../auto-lock.ts).
 	onExternalLock,
 	onExternalChange,
 

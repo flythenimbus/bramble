@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ArrowDown, ArrowUp, CornerDownLeft, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { reportActivity } from "./auto-lock";
 import "./styles/index.css";
 import "./styles/spotlight.css";
 
@@ -90,6 +91,8 @@ function Spotlight() {
 	selectedRef.current = selected;
 
 	useWindowTracksContent(panel);
+	// Using the panel is using the vault, so it holds off the auto-lock.
+	useEffect(() => reportActivity(), []);
 
 	// Search on every keystroke. The index lives in the Rust process and is metadata only, so
 	// this is a lookup over a few hundred rows rather than anything the vault has to unlock.

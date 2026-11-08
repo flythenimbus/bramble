@@ -15,6 +15,7 @@ import { desktopPairing } from "./adapters/pairing";
 import { desktopShell, registerOpenSetup, resolveAppVersion } from "./adapters/shell";
 import { desktopStorage } from "./adapters/storage";
 import { onVaultStateChange } from "./adapters/vault-session";
+import { startAutoLock } from "./auto-lock";
 import { startBackupSchedule } from "./backup";
 import { forwardConsoleToLog } from "./log-forward";
 import { initRosterSync } from "./sync/roster";
@@ -64,6 +65,9 @@ function Root() {
 	// a sealed blob needs no key to copy and the credentials are the OS's, so a vault's schedule
 	// is kept whether or not it is unlocked. See ./backup.
 	useEffect(() => startBackupSchedule(), []);
+
+	// The auto-lock clock runs in the shell; this window reports input and follows its lock.
+	useEffect(() => startAutoLock(), []);
 
 	// The one nudge about a new version. Nothing else tells anyone: this app is distributed as a
 	// GitHub release, so without it a fix reaches only the people who open Settings and look.

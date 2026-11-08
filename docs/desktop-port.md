@@ -305,6 +305,17 @@ inline). This makes spotlight the *primary* unlock surface, ahead of the main wi
 One wrinkle where this meets single-vault search: with several vaults and none unlocked, the prompt
 must pick one. Default to the last-unlocked vault, with a small switcher.
 
+### Auto-lock
+
+The "Auto-lock timeout" clock runs in the shell (`src-tauri/src/autolock.rs`), not the webview,
+for the same reason as the backup tick: the main window is usually hidden and a hidden webview's
+timers are throttled. It counts wall-clock time, so time asleep counts as inactivity. Activity is
+input in the main window or the panel (`src/auto-lock.ts`, reported at most every 10 s) and a fill
+the browser link serves; a link `query` does not count, since a page can send one on its own. On
+timeout the shell locks the VEK, clears the index and emits `vault://auto-locked`, which the main
+window turns into `markLocked`. Desktop offers no "Immediate": it has no moment the app stops being
+used, and the panel only works unlocked. A stored `-1` becomes 5 minutes at startup.
+
 ### The macOS activation trap
 
 If the spotlight window activates the app, Bramble becomes the frontmost application and the

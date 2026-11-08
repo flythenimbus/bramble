@@ -42,6 +42,7 @@ export function GeneralSection() {
 	const hasAutofillToggle = useCan("autofillToggle");
 	const hasPasskeyProviderToggle = useCan("passkeyProviderToggle");
 	const hasLockOnScreenLock = useCan("lockOnScreenLock");
+	const hasImmediateAutoLock = useCan("immediateAutoLock");
 	const canSaveCapture = useCan("saveCapture");
 	const defaultManager = useDefaultPasswordManager();
 	const { entries } = useVault();
@@ -128,7 +129,7 @@ export function GeneralSection() {
 						{/* Most secure: lock the instant the UI is no longer in use. On mobile that's
 						    the moment the app is backgrounded (require auth on every fill); on the
 						    extension it's when the last popup/window closes. */}
-						<option value="-1">{t`Immediate`}</option>
+						{hasImmediateAutoLock && <option value="-1">{t`Immediate`}</option>}
 						<option value="5">{t`5 minutes`}</option>
 						<option value="15">{t`15 minutes`}</option>
 						<option value="30">{t`30 minutes`}</option>

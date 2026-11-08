@@ -4,6 +4,7 @@
 //! the VEK (see `crypto`), the vault files (see `storage`), and later the sync hub, the
 //! spotlight window, auto-type, and the browser IPC. See docs/desktop-port.md.
 
+mod autolock;
 mod autostart;
 mod backup;
 mod biometric;
@@ -185,6 +186,7 @@ pub fn run() {
             // The backup schedule. Runs from here, not from a JS timer, because the main window
             // is usually hidden and a hidden webview's timers are throttled. See `backup`.
             backup::start_ticker(app.handle().clone());
+            autolock::start(app.handle().clone());
 
             // The browser proxy's end of the pipe. Bound at startup rather than on first
             // pairing: an extension that is already paired reconnects whenever its browser
@@ -319,6 +321,7 @@ pub fn run() {
             index_store::spotlight_copy_password,
             index_store::link_set_index,
             index_store::link_clear_index,
+            autolock::autolock_touch,
             socket::link_sync_send,
             socket::link_sync_peers,
             socket::link_blob_send,
