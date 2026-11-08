@@ -782,6 +782,10 @@ async function autofillSelect(
 		authorizeFill(message.payload.entryId, page.hostname, effectivePort(page));
 		const payload = fetchFill(message.payload.entryId);
 		rememberCardCarry(payload.kind, message.payload.entryId, sender.tab?.id);
+		// The user chose for this tab, so a launch must not fill over it later.
+		if (payload.kind === "login" && !message.payload.otpOnly && sender.tab?.id !== undefined) {
+			spendLaunchGrant(sender.tab.id);
+		}
 		return {
 			ok: true,
 			data: {
@@ -847,7 +851,9 @@ async function autofillLaunch(message: any): Promise<MessageEnvelope> {
 	// Opening a tab closes the popup, which "Immediate" would take for the last view going away.
 	if (qualifies) armViewGrace(LAUNCH_VIEW_GRACE_MS);
 	const tabId = await openInNormalWindow(launch.url.href);
-	if (owner && qualifies && tabId !== undefined) armLaunchGrant(tabId, launch.entryId, owner);
+	if (owner && qualifies && tabId !== undefined) {
+		armLaunchGrant(tabId, launch.entryId, owner, launch.url.protocol);
+	}
 	return { ok: true, data: null };
 }
 
@@ -868,6 +874,8 @@ function launchGrantFor(sender: chrome.runtime.MessageSender, page: URL): Launch
 	if (tabId === undefined) return null;
 	const grant = liveLaunchGrant(tabId);
 	if (!grant) return null;
+	// Hostname matching ignores the scheme, and a password must not go out over a downgrade.
+	if (page.protocol === "http:" && grant.protocol !== "http:") return null;
 	const entry = currentIndex()?.get(grant.entryId);
 	if (entry?.type !== "login" || entry.autofillEnabled === false) return null;
 	if (!hostnameMatches(entry, page.hostname, effectivePort(page))) return null;
@@ -928,6 +936,28 @@ async function autofillLaunchClaim(
 	} catch {
 		return { ok: false, error: "unavailable" };
 	}
+}
+
+/** The user clicked or typed in the tab: whatever comes next isn't the page they launched. */
+async function autofillLaunchEnd(
+	_message: unknown,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	if (!pageSenderUrl(sender) || sender.tab?.id === undefined) {
+		return { ok: false, error: "forbidden" };
+	}
+	spendLaunchGrant(sender.tab.id);
+	return { ok: true, data: null };
+}
+
+async function autofillLaunchLive(
+	_message: unknown,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	if (!pageSenderUrl(sender) || sender.tab?.id === undefined) {
+		return { ok: false, error: "forbidden" };
+	}
+	return { ok: true, data: { live: liveLaunchGrant(sender.tab.id) !== null } };
 }
 
 async function autofillRevalidateSubmit(
@@ -1081,4 +1111,6 @@ on("AUTOFILL_QUERY", autofillQuery);
 on("AUTOFILL_SELECT", autofillSelect);
 on("AUTOFILL_LAUNCH", extensionOnly(autofillLaunch));
 on("AUTOFILL_LAUNCH_CLAIM", autofillLaunchClaim);
+on("AUTOFILL_LAUNCH_END", autofillLaunchEnd);
+on("AUTOFILL_LAUNCH_LIVE", autofillLaunchLive);
 on("AUTOFILL_REVALIDATE_SUBMIT", autofillRevalidateSubmit);

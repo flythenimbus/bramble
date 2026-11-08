@@ -162,6 +162,49 @@ test("a frame yields to a password field on the top page", async ({ context, ext
 	await expect(tab.frameLocator("#f").locator("#pass")).toHaveValue("");
 });
 
+test("a password prompt the user clicked through to doesn't fill", async ({
+	context,
+	extensionId,
+}) => {
+	pages = {
+		[`${site()}/`]: `<!doctype html><body><a id="go" href="/confirm">Delete account</a></body>`,
+		[`${site()}/confirm`]: LOGIN,
+	};
+	const tab = await launch(context, extensionId);
+	await tab.locator("#go").click();
+	await tab.waitForURL(`${site()}/confirm`);
+	await tab.waitForTimeout(SETTLE_MS);
+	await expect(tab.locator("#pass")).toHaveValue("");
+});
+
+test("a frame nested inside another site's frame doesn't fill", async ({
+	context,
+	extensionId,
+}) => {
+	const inner = `<!doctype html><body style="margin:0"><iframe id="inner" src="${sameSite()}/signin"
+		frameborder="0" style="height:400px;width:432px;border:0;display:block"></iframe></body>`;
+	pages = {
+		[`${site()}/`]: framed(`${other()}/partner`),
+		[`${other()}/partner`]: inner,
+		[`${sameSite()}/signin`]: LOGIN,
+	};
+	const tab = await launch(context, extensionId);
+	await tab.waitForTimeout(SETTLE_MS);
+	await expect(tab.frameLocator("#f").frameLocator("#inner").locator("#pass")).toHaveValue("");
+});
+
+test("a change-password form doesn't fill", async ({ context, extensionId }) => {
+	pages = {
+		[`${site()}/`]: `<!doctype html><body><form action="/account">
+			<input id="pass" name="old" type="password" autocomplete="current-password" />
+			<input name="new" type="password" autocomplete="new-password" />
+			<input name="confirm" type="password" autocomplete="new-password" /></form></body>`,
+	};
+	const tab = await launch(context, extensionId);
+	await tab.waitForTimeout(SETTLE_MS);
+	await expect(tab.locator("#pass")).toHaveValue("");
+});
+
 test("the top page's form wins over a frame's", async ({ context, extensionId }) => {
 	const topForm = `<form action="/login">
 		<input id="user" name="username" autocomplete="username" />

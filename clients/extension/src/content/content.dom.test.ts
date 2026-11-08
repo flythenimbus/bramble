@@ -91,6 +91,7 @@ let aliasResponse: unknown = { ok: true, data: { address: "w40myp02@anonaddy.com
 const pendingQueryResponses: Array<(response: unknown) => void> = [];
 const pendingSelectResponses: Array<(response: unknown) => void> = [];
 const pendingClaimResponses: Array<(response: unknown) => void> = [];
+const pendingLiveResponses: Array<(response: unknown) => void> = [];
 let submitRevalidationResponder:
 	| ((message: { sessionGeneration: number }) => Promise<unknown>)
 	| null = null;
@@ -116,6 +117,7 @@ vi.mock("./lifecycle", () => ({
 				if (m.type === "AUTOFILL_QUERY") pendingQueryResponses.push(cb);
 				if (m.type === "AUTOFILL_SELECT") pendingSelectResponses.push(cb);
 				if (m.type === "AUTOFILL_LAUNCH_CLAIM") pendingClaimResponses.push(cb);
+				if (m.type === "AUTOFILL_LAUNCH_LIVE") pendingLiveResponses.push(cb);
 				return Promise.resolve();
 			},
 		};
@@ -179,7 +181,11 @@ document.addEventListener = ((
 	options?: boolean | AddEventListenerOptions,
 ) => {
 	if (
-		(type === "pointerdown" || type === "mousedown" || type === "input") &&
+		(type === "pointerdown" ||
+			type === "mousedown" ||
+			type === "input" ||
+			type === "keydown" ||
+			type === "focusin") &&
 		typeof listener === "function"
 	) {
 		trustedInteractionListeners.set(type, listener);
@@ -188,9 +194,12 @@ document.addEventListener = ((
 }) as typeof document.addEventListener;
 await import("./content");
 document.addEventListener = nativeAddEventListener;
+const askedLiveAtLoad = safeRequest.mock.calls.some(
+	([m]) => (m as { type?: string }).type === "AUTOFILL_LAUNCH_LIVE",
+);
 
 function dispatchTrustedInteraction(
-	type: "pointerdown" | "mousedown" | "input",
+	type: "pointerdown" | "mousedown" | "input" | "keydown" | "focusin",
 	target: HTMLElement,
 ): void {
 	const nativeEvent = new MouseEvent(type, { bubbles: true, composed: true });
@@ -1728,6 +1737,8 @@ describe("content: launch and fill", () => {
 		pendingQueryResponses.length = 0;
 		pendingClaimResponses.length = 0;
 		frameIsLegible = true;
+		removePicker.mockClear();
+		safeSendMessage.mockClear();
 		vi.spyOn(document, "hasFocus").mockReturnValue(true);
 		// Drops the previous test's cached query result and any claim still in flight.
 		send({ type: "AUTOFILL_ENABLED", payload: { enabled: false } });
@@ -1800,6 +1811,101 @@ describe("content: launch and fill", () => {
 		render(field("pass"));
 		field("pass").focus();
 		expect(claims()).toHaveLength(1);
+	});
+
+	it("doesn't claim on a change-password form's current password box", () => {
+		page(`<form action="/account"><input id="user" name="username" autocomplete="username" />
+			<input id="pass" type="password" name="old" autocomplete="current-password" />
+			<input id="new" type="password" name="new" autocomplete="new-password" />
+			<input id="again" type="password" name="confirm" autocomplete="new-password" /></form>`);
+		answerQuery({ launch: true });
+		expect(claims()).toEqual([]);
+	});
+
+	it("takes down an open dropdown when it claims", () => {
+		render(field("pass"), 0, 0);
+		answerQuery({ launch: true });
+		removePicker.mockClear();
+		render(field("pass"));
+		// The same field again, so focus leaving it can't be what closed the dropdown.
+		dispatchTrustedInteraction("focusin", field("user"));
+		expect(claims()).toHaveLength(1);
+		expect(removePicker).toHaveBeenCalled();
+	});
+
+	it("isn't cancelled by a page script moving focus, and shows no dropdown meanwhile", () => {
+		answerQuery({ launch: true });
+		expect(claims()).toHaveLength(1);
+		dispatchTrustedInteraction("focusin", field("user"));
+		expect(claims()).toHaveLength(1);
+		expect(showMatches).not.toHaveBeenCalled();
+		pendingClaimResponses.pop()?.(FILL);
+		expect(fillForm).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows the dropdown when a granted claim can't be applied", () => {
+		answerQuery({ launch: true });
+		const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+		pendingClaimResponses.pop()?.(FILL);
+		visibility.mockRestore();
+		expect(fillForm).not.toHaveBeenCalled();
+		expect(showMatches).toHaveBeenCalledTimes(1);
+	});
+
+	describe("the user taking over", () => {
+		const ended = () =>
+			safeSendMessage.mock.calls.filter(
+				([m]) => (m as { type?: string }).type === "AUTOFILL_LAUNCH_END",
+			);
+
+		/** A grant is live but this page hasn't claimed it. */
+		function watching(): void {
+			page(`${LOGIN_FORM}<a id="next">Next</a>`);
+			render(field("pass"), 0, 0);
+			answerQuery({ launch: true });
+			expect(claims()).toEqual([]);
+		}
+
+		it("ends the grant at the first click, once", () => {
+			watching();
+			const link = document.getElementById("next") as HTMLElement;
+			dispatchTrustedInteraction("pointerdown", link);
+			dispatchTrustedInteraction("pointerdown", link);
+			expect(ended()).toHaveLength(1);
+		});
+
+		it("ends the grant at a key press", () => {
+			watching();
+			dispatchTrustedInteraction("keydown", document.body);
+			expect(ended()).toHaveLength(1);
+		});
+
+		it("doesn't count a click into a login field", () => {
+			watching();
+			dispatchTrustedInteraction("pointerdown", field("user"));
+			expect(ended()).toEqual([]);
+		});
+
+		it("doesn't claim after the user took over", () => {
+			watching();
+			dispatchTrustedInteraction("pointerdown", document.getElementById("next") as HTMLElement);
+			render(field("pass"));
+			field("pass").focus();
+			expect(claims()).toEqual([]);
+		});
+
+		it("says nothing when no grant is live", () => {
+			answerQuery({});
+			dispatchTrustedInteraction("pointerdown", document.body);
+			expect(ended()).toEqual([]);
+		});
+
+		it("learns of a grant at load on a page with no fields, which never queries", () => {
+			expect(askedLiveAtLoad).toBe(true);
+			pendingLiveResponses.pop()?.({ ok: true, data: { live: true } });
+			dispatchTrustedInteraction("pointerdown", document.body);
+			expect(ended()).toHaveLength(1);
+		});
 	});
 
 	it("doesn't claim again after filling", () => {

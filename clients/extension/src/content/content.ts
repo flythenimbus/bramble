@@ -103,9 +103,13 @@ type TargetKind = "login" | "card" | "otp";
 type ActiveFill = {
 	target: HTMLInputElement;
 	targetKind: TargetKind;
+	/** A launch claim, which nobody clicked for, so a page script moving focus doesn't cancel it. */
+	launch?: boolean;
 };
 
 let activeFill: ActiveFill | null = null;
+/** This tab holds a launch grant the user hasn't taken over from yet. */
+let launchWatch = false;
 
 function cancelFill(): void {
 	activeFill = null;
@@ -450,24 +454,26 @@ function applySelectResponse(
 	intent: ActiveFill,
 	response: AutofillSelectResponse | undefined,
 	pageIsLive: () => boolean = documentIsActive,
-): void {
+): boolean {
 	// Consume before validating or filling: a response can never be replayed locally.
-	if (activeFill !== intent) return;
+	if (activeFill !== intent) return false;
 	activeFill = null;
-	if (!response?.ok) return;
+	if (!response?.ok) return false;
 	const data = responsePayload(response.data);
-	if (!data || !pageIsLive() || currentTargetKind(intent.target) !== intent.targetKind) return;
-	if (!payloadMatchesTarget(intent.targetKind, data.payload, data.otpOnly)) return;
+	if (!data || !pageIsLive() || currentTargetKind(intent.target) !== intent.targetKind) {
+		return false;
+	}
+	if (!payloadMatchesTarget(intent.targetKind, data.payload, data.otpOnly)) return false;
 
 	picker.removeDropdown();
 	if (data.payload.kind === "card") {
 		fillCard(data.payload, data.isAuto);
 		fillCustomFields(data.payload.customFields, data.isAuto);
-		return;
+		return true;
 	}
 	if (data.otpOnly) {
 		fillOtp(data.payload.totp);
-		return;
+		return true;
 	}
 	const { filled, passwordField } = fillForm(
 		data.payload.username,
@@ -477,11 +483,12 @@ function applySelectResponse(
 	);
 	fillCustomFields(data.payload.customFields, data.isAuto);
 	fillOtp(data.payload.totp);
-	if (!filled || !data.payload.autoSubmit || !passwordField) return;
+	if (!filled || !data.payload.autoSubmit || !passwordField) return true;
 	const generation = ++submitGeneration;
 	setTimeout(() => {
 		void continueAutoSubmit(passwordField, generation, data.sessionGeneration, pageIsLive);
 	}, 50);
+	return true;
 }
 
 /**
@@ -699,26 +706,53 @@ function launchField(): HTMLInputElement | null {
 	invalidatePageFields();
 	const field = getPageFields().login.password;
 	if (!field || field.value || field.disabled || field.readOnly || !isRendered(field)) return null;
+	// A change form's first box is the current password, which alone reads as a login.
+	if (signupPasswordFields(field).some((other) => other !== field)) return null;
 	return shouldSuggestPassword(field, { hasExistingLogins: true }) ? null : field;
 }
 
-/** Spend this tab's launch grant if this page qualifies. True when a claim went out. */
+/** Stop a live grant from filling anything after the user has moved on. */
+function endLaunch(): void {
+	if (!launchWatch) return;
+	launchWatch = false;
+	if (cachedResult) cachedResult.launch = false;
+	safeSendMessage({ type: "AUTOFILL_LAUNCH_END" });
+}
+
+/** A page with no fields never queries, so the top frame asks once whether to watch. */
+function watchForLaunch(): void {
+	if (window !== window.top) return;
+	void safeRequest<{ ok: boolean; data?: { live?: boolean } }>({
+		type: "AUTOFILL_LAUNCH_LIVE",
+	}).then((response) => {
+		if (response?.ok && response.data?.live) launchWatch = true;
+	});
+}
+
+/** Spend this tab's launch grant if this page qualifies. True while a claim is out. */
 function claimLaunch(): boolean {
+	if (activeFill?.launch) return true;
 	if (!cachedResult?.launch || activeFill || !documentIsVisible()) return false;
+	const inFrame = window !== window.top;
+	// The top frame can only vouch for its own children.
+	if (inFrame && window.parent !== window.top) return false;
 	const target = launchField();
 	const targetKind = target ? currentTargetKind(target) : null;
 	if (!target || targetKind !== "login") return false;
-	const intent: ActiveFill = { target, targetKind };
+	const intent: ActiveFill = { target, targetKind, launch: true };
 	activeFill = intent;
-	const size =
-		window === window.top
-			? undefined
-			: { frameWidth: window.innerWidth, frameHeight: window.innerHeight };
+	removePicker();
+	const size = inFrame
+		? { frameWidth: window.innerWidth, frameHeight: window.innerHeight }
+		: undefined;
 	void safeRequest<AutofillSelectResponse>({ type: "AUTOFILL_LAUNCH_CLAIM", payload: size }).then(
 		(response) => {
-			applySelectResponse(intent, response, documentIsVisible);
+			const filled = applySelectResponse(intent, response, documentIsVisible);
 			if (response?.ok) {
+				launchWatch = false;
 				if (cachedResult) cachedResult.launch = false;
+			}
+			if (filled) {
 				silenceAutoOpen = true;
 				return;
 			}
@@ -780,6 +814,7 @@ function handleResult(result: QueryResult | undefined): void {
 	cachedResult = result;
 	// Rides on the query so the suggestion below has a settings-shaped password to draw at once.
 	holdGeneratedPassword(result.generated);
+	if (result.launch) launchWatch = true;
 	if (claimLaunch()) return;
 
 	// User dismissed/selected: don't resurrect the dropdown from a re-query until
@@ -1152,6 +1187,7 @@ document.addEventListener(
 	(e) => {
 		if (!e.isTrusted) return;
 		cancelOperations();
+		endLaunch();
 		// Drive the open iframe dropdown with the keyboard first.
 		if (picker.handleKey(e)) return;
 		if (handleRelayedKey(e)) return;
@@ -1256,6 +1292,7 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 function bootstrap(): void {
 	queryAutofill();
 	queryCornerPrompt();
+	watchForLaunch();
 
 	mutationObserver = new MutationObserver((records) => onDomChange(records));
 	// Observe the stable document node so a page replacing body or documentElement
@@ -1277,6 +1314,7 @@ function bootstrap(): void {
 			if (
 				e.isTrusted &&
 				activeFill &&
+				!activeFill.launch &&
 				target !== activeFill.target &&
 				!isPickerInteractionTarget(target)
 			) {
@@ -1369,6 +1407,8 @@ function bootstrap(): void {
 			if (e.isTrusted && activeFill && !isPickerInteractionTarget(target)) {
 				cancelOperations();
 			}
+			// A click into a login field is the form being used, not the user moving on.
+			if (e.isTrusted && !couldBeCandidate(target)) endLaunch();
 		},
 		true,
 	);

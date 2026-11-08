@@ -13,13 +13,19 @@ export const LAUNCH_VIEW_GRACE_MS = 15_000;
 export type LaunchGrant = Readonly<{
 	entryId: string;
 	owner: AutofillSessionOwner;
+	protocol: string;
 	expiresAt: number;
 }>;
 
 const grants = new Map<number, LaunchGrant>();
 
-export function armLaunchGrant(tabId: number, entryId: string, owner: AutofillSessionOwner): void {
-	grants.set(tabId, { entryId, owner, expiresAt: Date.now() + LAUNCH_FILL_TTL_MS });
+export function armLaunchGrant(
+	tabId: number,
+	entryId: string,
+	owner: AutofillSessionOwner,
+	protocol: string,
+): void {
+	grants.set(tabId, { entryId, owner, protocol, expiresAt: Date.now() + LAUNCH_FILL_TTL_MS });
 }
 
 /** The tab's grant, dropping one that has expired or outlived its session. */

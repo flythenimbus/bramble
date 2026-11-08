@@ -288,3 +288,101 @@ describe("AUTOFILL_LAUNCH_CLAIM from a frame", () => {
 		).toEqual([]);
 	});
 });
+
+describe("a launch's scheme", () => {
+	const http = (host = "example.com") => ({
+		origin: `http://${host}`,
+		url: `http://${host}/login`,
+		frameId: 0,
+		tab: { id: TAB, windowId: 1, url: `http://${host}/login` },
+	});
+
+	it("gives an http page nothing after an https launch, and keeps the grant", async () => {
+		const bg = await unlocked();
+		await launch(bg);
+		expect((await query(bg, http())).data.launch).toBeUndefined();
+		expect((await claim(bg, http())).ok).toBe(false);
+		expect((await claim(bg, pageSender("example.com", TAB))).ok).toBe(true);
+	});
+
+	it("fills an http page when the launch itself was http", async () => {
+		const bg = await unlocked();
+		await launch(bg, "login1", "http://example.com/login");
+		expect((await claim(bg, http())).ok).toBe(true);
+	});
+
+	it("fills an https page after an http launch, the usual upgrade", async () => {
+		const bg = await unlocked();
+		await launch(bg, "login1", "http://example.com/login");
+		expect((await claim(bg, pageSender("example.com", TAB))).ok).toBe(true);
+	});
+});
+
+describe("the user taking over the tab", () => {
+	const end = (bg: Bg, sender: unknown) => bg.send({ type: "AUTOFILL_LAUNCH_END" }, sender);
+	const live = async (bg: Bg, sender: unknown) =>
+		(await bg.send({ type: "AUTOFILL_LAUNCH_LIVE" }, sender)).resp;
+
+	it("ends the grant", async () => {
+		const bg = await unlocked();
+		await launch(bg);
+		await end(bg, pageSender("example.com", TAB));
+		expect((await claim(bg, pageSender("example.com", TAB))).ok).toBe(false);
+	});
+
+	it("only ends the sender's own tab", async () => {
+		const bg = await unlocked();
+		await launch(bg);
+		await end(bg, pageSender("example.com", 11));
+		expect((await claim(bg, pageSender("example.com", TAB))).ok).toBe(true);
+	});
+
+	it("tells the launched tab's page a grant is live, even another site's", async () => {
+		const bg = await unlocked();
+		await launch(bg);
+		expect((await live(bg, pageSender("other.test", TAB))).data).toEqual({ live: true });
+		expect((await live(bg, pageSender("example.com", 11))).data).toEqual({ live: false });
+	});
+
+	it("says no once the grant is spent", async () => {
+		const bg = await unlocked();
+		await launch(bg);
+		await claim(bg, pageSender("example.com", TAB));
+		expect((await live(bg, pageSender("example.com", TAB))).data).toEqual({ live: false });
+	});
+});
+
+describe("a manual fill", () => {
+	const TOTP = { ...LOGIN, id: "login2", username: "bob", totp: "JBSWY3DPEHPK3PXP" };
+	const CARD = {
+		type: "card",
+		id: "card1",
+		name: "Visa",
+		brand: "Visa",
+		cardholderName: "A",
+		number: "4111111111111111",
+		expMonth: "01",
+		expYear: "2030",
+		cvv: "123",
+	};
+	const pick = (bg: Bg, entryId: string, otpOnly = false) =>
+		bg.send(
+			{ type: "AUTOFILL_SELECT", payload: { entryId, otpOnly } },
+			pageSender("example.com", TAB),
+		);
+
+	it("spends the grant when the user picks a login", async () => {
+		const bg = await unlocked({}, [LOGIN, TOTP]);
+		await launch(bg);
+		expect((await pick(bg, "login2")).resp.ok).toBe(true);
+		expect((await claim(bg, pageSender("example.com", TAB))).ok).toBe(false);
+	});
+
+	it("leaves it alone for a one-time code or a card, which aren't the login's fill", async () => {
+		const bg = await unlocked({}, [LOGIN, TOTP, CARD]);
+		await launch(bg);
+		expect((await pick(bg, "login2", true)).resp.ok).toBe(true);
+		expect((await pick(bg, "card1")).resp.ok).toBe(true);
+		expect((await claim(bg, pageSender("example.com", TAB))).ok).toBe(true);
+	});
+});
