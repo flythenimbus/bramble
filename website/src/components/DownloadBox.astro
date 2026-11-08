@@ -191,7 +191,7 @@ const categories: Category[] = [
 				icon: BrandAndroid,
 				title: "Android",
 				body: "A native autofill service, biometric unlock and passkeys, with no Google Play Services required.",
-				action: { href: LINKS.android, label: "Get the APK", external: true },
+				action: { href: "/latest/android", label: "Get the APK", external: true },
 				note: "Released as signed APKs on GitHub, so you always know exactly what you are installing.",
 			},
 		],
@@ -211,7 +211,8 @@ const tab =
 ---
 
 <div
-	class="mx-auto w-full max-w-5xl overflow-hidden rounded-xl border border-border/60 bg-card text-left shadow-sm"
+	id="download"
+	class="mx-auto w-full max-w-5xl scroll-mt-20 overflow-hidden rounded-xl border border-border/60 bg-card text-left shadow-sm"
 	data-download
 >
 	<div
@@ -466,6 +467,17 @@ const tab =
 
 		const firstCategory = categoryTabs()[0]?.dataset.category;
 		if (firstCategory) selectCategory(firstCategory);
+
+		// The box is usually already on screen, so the link needs a visible response.
+		for (const link of document.querySelectorAll('a[href="/#download"]')) {
+			link.addEventListener("click", () => {
+				if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+				root.animate(
+					{ boxShadow: ["0 0 0 0 transparent", "0 0 0 4px var(--outline)", "0 0 0 0 transparent"] },
+					900,
+				);
+			});
+		}
 
 		root.addEventListener("click", (event) => {
 			const target = (event.target as HTMLElement).closest<HTMLElement>(
