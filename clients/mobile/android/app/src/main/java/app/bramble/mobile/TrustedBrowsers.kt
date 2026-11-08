@@ -55,6 +55,13 @@ object TrustedBrowsers {
             setOf("E8:A7:85:44:65:5B:A8:C0:98:17:F7:32:76:8F:56:89:B1:66:2E:C4:B2:BC:5A:0B:C0:EC:13:8D:33:CA:3D:1E"),
         "com.vivaldi.browser.sopranos" to
             setOf("E8:A7:85:44:65:5B:A8:C0:98:17:F7:32:76:8F:56:89:B1:66:2E:C4:B2:BC:5A:0B:C0:EC:13:8D:33:CA:3D:1E"),
+        // Waterfox (#202): GPM's key, plus the key its GitHub APKs are signed with (read from the
+        // 1.2.11 release APK), since the two differ.
+        "net.waterfox.android.release" to
+            setOf(
+                "29:39:99:7A:2D:8F:07:30:3C:EB:37:AD:68:10:AF:EF:0B:DA:71:0B:E2:11:64:76:E3:52:5A:73:79:EC:2E:1A",
+                "F0:91:CA:39:98:B4:9E:15:9D:23:EE:95:58:69:99:C7:5D:0B:70:23:FC:F9:C5:41:92:A8:13:00:AC:16:6E:17",
+            ),
         // Privacy browsers NOT in Google's GPM list, so permanent MANUAL entries. Fingerprints are read
         // on-device (never guessed), not from GPM. Vanadium (GrapheneOS Chromium, shipped as Trichrome)
         // is signed with the GrapheneOS release key; GPM has since listed it with this same key.

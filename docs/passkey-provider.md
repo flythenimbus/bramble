@@ -248,11 +248,11 @@ render as timeout/cancelled copy ("The request either timed out, was canceled or
 already registered"). `warnUnverifiedBrowserHash` logs the caller's package **and its signing
 fingerprints** precisely so the fix is a copy-paste into `BROWSERS`.
 
-`BROWSERS` is a hand-curated subset of 14 packages: 8 from Google's GPM privileged-apps list
-(Samsung Internet stable + beta added for #70, release key only), Vivaldi's 3 channels, Vanadium
-(read on-device, since listed in GPM with the same key), and 2 privacy browsers absent from GPM
-(IronFox, Fennec F-Droid) read on-device. As of 2026-10-16 the GPM list carries 73 packages, so 61
-remain unlisted and each would fail at stage 2 once it cleared stage 1. No Xiaomi browser is in it
+`BROWSERS` is a hand-curated subset of 15 packages: 9 from Google's GPM privileged-apps list
+(Samsung Internet stable + beta added for #70, release key only; Waterfox for #202, plus the
+different key its GitHub APKs carry), Vivaldi's 3 channels, Vanadium (read on-device, since listed
+in GPM with the same key), and 2 privacy browsers absent from GPM (IronFox, Fennec F-Droid) read
+on-device. As of 2026-10-16 the GPM list carries 73 packages, so 60 remain unlisted and each would fail at stage 2 once it cleared stage 1. No Xiaomi browser is in it
 (`com.mi.globalbrowser` is absent, and the list's generic `com.android.browser` entry names no
 vendor). Syncing the full list would close that class, at the cost of extending the
 autofill `webDomain` trust to those packages, so it is a deliberate decision rather than a
