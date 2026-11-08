@@ -35,7 +35,7 @@
 		"webAuthenticationProxy",
 		"identity"
 	],
-	"optional_permissions": ["nativeMessaging"],
+	"optional_permissions": ["nativeMessaging", "privacy"],
 	"host_permissions": ["<all_urls>"],
 	"content_scripts": [
 		{

@@ -10,6 +10,7 @@ import { onBlobArrived } from "@core/sync/blob-arrivals";
 import { api } from "../platform-api";
 import { BACKUP_ALARM, runDueBackups, scheduleBackups } from "./backup";
 import "./backup-connect";
+import "./browser-saving";
 import "./corner-prompt";
 import "./password-gen";
 import "./popout";

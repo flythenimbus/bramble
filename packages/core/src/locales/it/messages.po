@@ -1392,6 +1392,10 @@ msgstr "Giornaliero"
 msgid "Dark"
 msgstr "Modalità scura"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Default password manager"
+msgstr "Gestore di password predefinito"
+
 #: packages/core/src/app/bulk-actions/delete.tsx
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -1496,6 +1500,7 @@ msgstr "Disconnettere questo browser"
 msgid "Disconnect this device from sync before turning off the master password."
 msgstr "Disconnetta questo dispositivo dalla sincronizzazione prima di disattivare la password principale."
 
+#: packages/core/src/app/components/DefaultManagerCard.tsx
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
 msgid "Dismiss"
 msgstr "Ignorare"
@@ -2364,6 +2369,14 @@ msgstr "Login salvato per {0}"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "Look up a site"
 #~ msgstr "Cercare un sito"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+msgid "Make Bramble your default password manager?"
+msgstr "Vuole impostare Bramble come gestore di password predefinito?"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+msgid "Make default"
+msgstr "Impostare come predefinito"
 
 #: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -3423,6 +3436,10 @@ msgstr "URL del server"
 #~ msgid "Server URL (self-hosted only)"
 #~ msgstr "URL del server (solo self-hosted)"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Set by a policy or another extension"
+msgstr "Impostato da un criterio o da un'altra estensione"
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Set password"
 msgstr "Imposta password"
@@ -4156,6 +4173,10 @@ msgid "Toggle breach checks"
 msgstr "Attiva controlli delle violazioni"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle default password manager"
+msgstr "Attivare/disattivare il gestore di password predefinito"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle keyboard suggestions"
 msgstr "Attiva suggerimenti della tastiera"
 
@@ -4237,6 +4258,11 @@ msgstr "URL dei server TURN / ICE"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Turn on master password"
 msgstr "Attivare password principale"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Turns off the browser's own password manager"
+msgstr "Disattiva il gestore di password del browser"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Turtle"

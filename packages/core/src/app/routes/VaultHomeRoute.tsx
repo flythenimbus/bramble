@@ -6,7 +6,9 @@ import { usePlatform } from "../../context/PlatformContext";
 import { usePrefs } from "../../hooks/usePrefs";
 import { isLogin, useVault } from "../../hooks/useVault";
 import { allTags } from "../../vault/tags";
+import { DefaultManagerCard } from "../components/DefaultManagerCard";
 import { ReviewNudgeCard } from "../components/ReviewNudgeCard";
+import { useDefaultPasswordManager } from "../hooks/useDefaultPasswordManager";
 import { useReviewNudge } from "../hooks/useReviewNudge";
 import { toListItem } from "../screens/VaultHome/list-item";
 import { VaultHome, type VaultListItem } from "../screens/VaultHome/VaultHome";
@@ -30,7 +32,7 @@ export function VaultHomeRoute() {
 	);
 	const { entries, files, conflicts, ready, deleteEntry, touchEntry } = useVault();
 	const { shell } = usePlatform();
-	const { prefs, update } = usePrefs();
+	const { prefs, loaded: prefsLoaded, update } = usePrefs();
 	// Hide stored breach flags when breach checking is off.
 	const showBreaches = prefs.breachCheckEnabled;
 
@@ -67,6 +69,9 @@ export function VaultHomeRoute() {
 	// asks) and usually null. Entries are the whole vault, archived included: an archived entry
 	// is still one this person put there, which is all the signal is measuring.
 	const reviewNudge = useReviewNudge(entries.length);
+	const defaultManager = useDefaultPasswordManager();
+	const offerDefaultManager =
+		prefsLoaded && !prefs.defaultManagerPromptDismissed && defaultManager?.state === "browser";
 
 	// The vault's tag vocabulary, for the search bar's `#` suggestions. Taken from ALL
 	// entries, archived included: an archived entry is still tagged, and the archive view
@@ -123,7 +128,16 @@ export function VaultHomeRoute() {
 			tags={tags}
 			statsCollapsed={prefs.statsCollapsed}
 			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}
-			reviewNudge={reviewNudge ? <ReviewNudgeCard nudge={reviewNudge} /> : undefined}
+			nudge={
+				reviewNudge ? (
+					<ReviewNudgeCard nudge={reviewNudge} />
+				) : offerDefaultManager ? (
+					<DefaultManagerCard
+						onAccept={() => defaultManager?.set(true)}
+						onDismiss={() => void update("defaultManagerPromptDismissed", true)}
+					/>
+				) : undefined
+			}
 		/>
 	);
 }

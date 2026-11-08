@@ -69,9 +69,9 @@ interface VaultHomeProps {
 	/** Home stats row: collapsed state + toggle, both persisted in prefs. */
 	statsCollapsed: boolean;
 	onToggleStats: () => void;
-	/** The store-review ask, on the rare turn there is one. A slot rather than a component so the
-	 * list screen keeps knowing nothing about stores; see app/review-nudge.ts. */
-	reviewNudge?: ReactNode;
+	/** A card under the list: the store-review ask or the default-password-manager offer. A slot
+	 * rather than a component so the list screen keeps knowing nothing about either. */
+	nudge?: ReactNode;
 }
 
 /** Vault list screen with search, password-health stats, and the entry rows. */
@@ -89,7 +89,7 @@ export function VaultHome({
 	tags,
 	statsCollapsed,
 	onToggleStats,
-	reviewNudge,
+	nudge,
 }: VaultHomeProps) {
 	const { t } = useLingui();
 	// A collapsed Overview hides the cards, so it lifts their filter too: the list is never
@@ -318,7 +318,7 @@ export function VaultHome({
 
 			{/* Below the list, and never during a bulk selection: mid-cleanup is not the moment, and
 			    the card would push the selection bar's targets around under the cursor. */}
-			{!selectMode && reviewNudge}
+			{!selectMode && nudge}
 		</main>
 	);
 }

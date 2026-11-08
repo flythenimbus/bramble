@@ -57,6 +57,9 @@ const PREF_STATS_COLLAPSED = "pref.statsCollapsed";
 // a backup. Someone who leaves the machine on has a perfectly good reason to decline, and a
 // suggestion that cannot be silenced is a nag. See BackupSection.
 const PREF_AUTOSTART_PROMPT_DISMISSED = "pref.autostartPromptDismissed";
+// Extension only: the vault list's "make Bramble your default password manager" card was
+// waved away (#135). Settings still offers the switch.
+const PREF_DEFAULT_MANAGER_PROMPT_DISMISSED = "pref.defaultManagerPromptDismissed";
 // The password generator's last-used settings, so the field's one-tap regenerate produces what
 // the user picked in the panel rather than a fixed house style.
 const PREF_GENERATOR = "pref.generator";
@@ -83,6 +86,7 @@ export const DEFAULT_PASSKEY_PROVIDER = false;
 export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
 const DEFAULT_STATS_COLLAPSED = false;
 const DEFAULT_AUTOSTART_PROMPT_DISMISSED = false;
+const DEFAULT_DEFAULT_MANAGER_PROMPT_DISMISSED = false;
 
 /** Resolved user preferences with their defaults. */
 export interface Prefs {
@@ -107,6 +111,8 @@ export interface Prefs {
 	statsCollapsed: boolean;
 	// Desktop: the backup section's "start at login" suggestion has been declined.
 	autostartPromptDismissed: boolean;
+	// Extension: the vault list's default-password-manager card has been declined.
+	defaultManagerPromptDismissed: boolean;
 	// Password generator: the settings last used in the generator panel.
 	generator: GeneratorSettings;
 	// The email alias provider for this vault, or null when none is set up.
@@ -131,6 +137,7 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	lockOnScreenLock: PREF_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: PREF_STATS_COLLAPSED,
 	autostartPromptDismissed: PREF_AUTOSTART_PROMPT_DISMISSED,
+	defaultManagerPromptDismissed: PREF_DEFAULT_MANAGER_PROMPT_DISMISSED,
 	generator: PREF_GENERATOR,
 	aliasProvider: PREF_ALIAS_PROVIDER,
 	reviewNudge: PREF_REVIEW_NUDGE,
@@ -172,6 +179,7 @@ const PREF_SCOPE: Record<keyof Prefs, PrefScope> = {
 	lockOnScreenLock: "device",
 	statsCollapsed: "device",
 	autostartPromptDismissed: "device",
+	defaultManagerPromptDismissed: "device",
 	biometricPasscodeFallback: "vault",
 	generator: "device",
 	// Not device-local: an alias provider is an account-level fact about the person, not about
@@ -233,6 +241,7 @@ const DEFAULT_PREFS: Prefs = {
 	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: DEFAULT_STATS_COLLAPSED,
 	autostartPromptDismissed: DEFAULT_AUTOSTART_PROMPT_DISMISSED,
+	defaultManagerPromptDismissed: DEFAULT_DEFAULT_MANAGER_PROMPT_DISMISSED,
 	generator: DEFAULT_GENERATOR_SETTINGS,
 	aliasProvider: null,
 	// Evaluated at module load, so the placeholder shown for the few ms before the read lands
@@ -337,7 +346,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		}));
 		void (async () => {
 			if (retireLegacy) await retireLegacyFlatPrefs(storage);
-			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -363,6 +372,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				),
 				storage.getMeta<unknown>(PREF_GENERATOR),
 				storage.getMeta<unknown>(PREF_REVIEW_NUDGE),
+				storage.getMeta<boolean>(PREF_DEFAULT_MANAGER_PROMPT_DISMISSED),
 			]);
 			if (cancelled) return;
 			// One `now` for the read: a fresh install's clock starts here rather than at whichever
@@ -392,6 +402,8 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				// Same treatment, and for a sharper reason: a junk `installedAt` here is the
 				// difference between asking after a fortnight and asking on day one.
 				reviewNudge: normalizeReviewNudgeState(o, now),
+				defaultManagerPromptDismissed:
+					typeof p === "boolean" ? p : DEFAULT_DEFAULT_MANAGER_PROMPT_DISMISSED,
 			}));
 			setLoaded(true);
 		})();

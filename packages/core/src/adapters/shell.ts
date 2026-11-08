@@ -36,6 +36,9 @@ export interface PopOutHandoff {
 /** Full-tab screens the options page can boot into, via `?screen=`. Default (omitted) is the vault setup flow. */
 export type OptionsScreen = "import" | "restore";
 
+/** Who saves passwords in this browser. "locked": a policy or another extension holds the setting. */
+export type DefaultPasswordManager = "bramble" | "browser" | "locked";
+
 /** A passkey the provider just stored, for a confirmation toast. */
 interface PasskeySavedInfo {
 	rpId: string;
@@ -157,6 +160,11 @@ export interface ShellAdapter {
 	 * capability). Persisting the pref is the caller's job; the background reads it per query anyway,
 	 * so this only exists to drop a dropdown that is already on screen. */
 	setAutofillEnabled?(enabled: boolean): Promise<void>;
+	/** Whether the browser's own password manager is switched off for Bramble (extension only; #135). */
+	getDefaultPasswordManager?(): Promise<DefaultPasswordManager>;
+	/** Switch the browser's own password saving and card autofill off (true) or hand them back.
+	 * Asks for a permission first, so call it straight from the click with nothing awaited before. */
+	setDefaultPasswordManager?(bramble: boolean): Promise<DefaultPasswordManager>;
 	/** Attach/detach the passkey provider at runtime (extension only; paired with the passkeyProvider capability). Persisting the pref is the caller's job; this just applies it now. */
 	setPasskeyProviderEnabled?(enabled: boolean): Promise<void>;
 	/** Subscribe to passkey-provider saves so the UI can confirm them (extension only). Returns an unsubscribe. */

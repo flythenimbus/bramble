@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import {
+	BadgeCheck,
 	Clock,
 	Keyboard,
 	KeyRound,
@@ -20,6 +21,7 @@ import { toAutofillIndex } from "../../../../vault/autofill-index";
 import { Button } from "../../../components/ui/button";
 import { SelectField } from "../../../components/ui/select-field";
 import { TextField } from "../../../components/ui/text-field";
+import { useDefaultPasswordManager } from "../../../hooks/useDefaultPasswordManager";
 import { useRenameVault } from "../../../hooks/useVaultName";
 import { Row, Section, Toggle } from "./primitives";
 
@@ -41,6 +43,7 @@ export function GeneralSection() {
 	const hasPasskeyProviderToggle = useCan("passkeyProviderToggle");
 	const hasLockOnScreenLock = useCan("lockOnScreenLock");
 	const canSaveCapture = useCan("saveCapture");
+	const defaultManager = useDefaultPasswordManager();
 	const { entries } = useVault();
 	const { t } = useLingui();
 	// Turning the passkey provider on can fail in the background (another extension already holds
@@ -287,6 +290,25 @@ export function GeneralSection() {
 							})()
 						}
 						label={t`Toggle autofill on web pages`}
+					/>
+				</Row>
+			)}
+
+			{defaultManager?.state && (
+				<Row
+					icon={<BadgeCheck className="w-4 h-4 text-primary" />}
+					title={t`Default password manager`}
+					subtitle={
+						defaultManager.state === "locked"
+							? t`Set by a policy or another extension`
+							: t`Turns off the browser's own password manager`
+					}
+				>
+					<Toggle
+						checked={defaultManager.state === "bramble"}
+						disabled={defaultManager.state === "locked"}
+						onChange={defaultManager.set}
+						label={t`Toggle default password manager`}
 					/>
 				</Row>
 			)}

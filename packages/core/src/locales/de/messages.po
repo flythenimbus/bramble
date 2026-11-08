@@ -1392,6 +1392,10 @@ msgstr "Täglich"
 msgid "Dark"
 msgstr "Dunkelmodus"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Default password manager"
+msgstr "Standard-Passwortmanager"
+
 #: packages/core/src/app/bulk-actions/delete.tsx
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
@@ -1496,6 +1500,7 @@ msgstr "Diesen Browser trennen"
 msgid "Disconnect this device from sync before turning off the master password."
 msgstr "Trennen Sie dieses Gerät von der Synchronisierung, bevor Sie das Master-Passwort deaktivieren."
 
+#: packages/core/src/app/components/DefaultManagerCard.tsx
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
 msgid "Dismiss"
 msgstr "Schließen"
@@ -2364,6 +2369,14 @@ msgstr "Login für {0} gespeichert"
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 #~ msgid "Look up a site"
 #~ msgstr "Website suchen"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+msgid "Make Bramble your default password manager?"
+msgstr "Möchten Sie Bramble als Standard-Passwortmanager festlegen?"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+msgid "Make default"
+msgstr "Als Standard festlegen"
 
 #: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
@@ -3423,6 +3436,10 @@ msgstr "Server-URL"
 #~ msgid "Server URL (self-hosted only)"
 #~ msgstr "Server-URL (nur selbst gehostet)"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Set by a policy or another extension"
+msgstr "Durch eine Richtlinie oder eine andere Erweiterung festgelegt"
+
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Set password"
 msgstr "Passwort festlegen"
@@ -4156,6 +4173,10 @@ msgid "Toggle breach checks"
 msgstr "Überprüfung auf Datenlecks umschalten"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle default password manager"
+msgstr "Standard-Passwortmanager umschalten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle keyboard suggestions"
 msgstr "Tastaturvorschläge umschalten"
 
@@ -4237,6 +4258,11 @@ msgstr "TURN/ICE-Server-URL"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Turn on master password"
 msgstr "Master-Passwort aktivieren"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Turns off the browser's own password manager"
+msgstr "Deaktiviert den browsereigenen Passwortmanager"
 
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Turtle"

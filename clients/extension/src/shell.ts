@@ -5,6 +5,7 @@ import type { OptionsScreen, PopOutHandoff, ShellAdapter } from "@core/adapters/
 import type { Target } from "@core/flags";
 import { loginHosts } from "@core/vault/autofill-index";
 import { setWebauthnInterceptionPauser, setWebauthnRpId } from "@core/vault/webauthn-ceremony";
+import { reconcileDefaultPasswordManager, setDefaultPasswordManager } from "./browser-saving";
 import { effectivePort, hostnameMatches } from "./dedupe";
 import { api } from "./platform-api";
 import { ACTIVE_VAULT_SESSION_KEY } from "./session-keys";
@@ -209,6 +210,8 @@ export const extensionShell: ShellAdapter = {
 		if (!res) throw new Error("No response from Bramble's background (reload the extension?).");
 		if (!res.ok) throw new Error(res.error ?? "Sign-in failed.");
 	},
+	getDefaultPasswordManager: reconcileDefaultPasswordManager,
+	setDefaultPasswordManager,
 	async setAutofillEnabled(enabled: boolean) {
 		await api.runtime.sendMessage({ type: "AUTOFILL_SET_ENABLED", payload: { enabled } });
 	},
