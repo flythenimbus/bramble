@@ -63,6 +63,36 @@ describe("connectSignaling", () => {
 		expect(JSON.parse(f.sent[1]!)).toEqual(["EVENT", event("a")]);
 	});
 
+	it("reports a relay refusing a published event", () => {
+		const f = fakeSocket();
+		const reasons: string[] = [];
+		connectSignaling(
+			f.sock,
+			"room",
+			() => {},
+			undefined,
+			(reason) => reasons.push(reason),
+		);
+		f.open();
+		f.deliver(["OK", "id", false, "invalid: bad signature"]);
+		expect(reasons).toEqual(["invalid: bad signature"]);
+	});
+
+	it("says nothing about an accepted event", () => {
+		const f = fakeSocket();
+		const reasons: string[] = [];
+		connectSignaling(
+			f.sock,
+			"room",
+			() => {},
+			undefined,
+			(reason) => reasons.push(reason),
+		);
+		f.open();
+		f.deliver(["OK", "id", true, ""]);
+		expect(reasons).toEqual([]);
+	});
+
 	it("dispatches incoming events for our subscription", () => {
 		const f = fakeSocket();
 		const got: NostrEvent[] = [];

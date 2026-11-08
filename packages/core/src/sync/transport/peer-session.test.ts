@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { hexToBase64, hexToBytes } from "../../util/bytes";
+import { sha256Hex } from "../../util/hash";
 import type { Channel } from "./channel";
 import type { MeshOptions, PeerSession } from "./mesh";
 import type { NostrWasm } from "./nostr-signer";
@@ -40,6 +42,26 @@ const base = {
 };
 
 describe("startMeshSession", () => {
+	it("signs the way the relay it joins expects", async () => {
+		const signed: string[] = [];
+		const j = fakeJoin();
+		await startMeshSession({
+			...base,
+			relayUrl: "wss://bramble-relay.flythenimbus.workers.dev",
+			wasm: {
+				...fakeWasm,
+				nostr_sign: (_secret, hash) => {
+					signed.push(hash);
+					return "AA==";
+				},
+			},
+			join: j.join,
+		});
+		const id = "ab".repeat(32);
+		await j.opts()?.signer.signer.sign(id);
+		expect(signed).toEqual([hexToBase64(await sha256Hex(hexToBytes(id)))]);
+	});
+
 	it("joins with the decoded group key, the room label, and a signer", async () => {
 		const j = fakeJoin();
 		await startMeshSession({ ...base, join: j.join });

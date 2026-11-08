@@ -69,7 +69,10 @@ async function tick(ms: number): Promise<void> {
 
 const started: { stop: () => void }[] = [];
 
-async function mesh(onPeer: (p: PeerSession) => void = () => {}) {
+async function mesh(
+	onPeer: (p: PeerSession) => void = () => {},
+	onStatus: (status: string) => void = () => {},
+) {
 	const m = await joinMesh({
 		relayUrl: "wss://relay.invalid",
 		groupKey: GROUP_KEY,
@@ -79,7 +82,7 @@ async function mesh(onPeer: (p: PeerSession) => void = () => {}) {
 			signer: { pubkeyHex: "ab".repeat(32), sign: async () => "cd".repeat(32) },
 			verifier: { verify: async () => true },
 		},
-		onStatus: () => {},
+		onStatus,
 		onPeer,
 	});
 	started.push(m);
@@ -111,6 +114,21 @@ afterEach(async () => {
 	await tick(0);
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
+});
+
+describe("relay rejections", () => {
+	it("reports the relay's reason once, however many events it refuses", async () => {
+		const status: string[] = [];
+		await mesh(undefined, (s) => status.push(s));
+		sockets[0]?.open();
+		const refuse = () =>
+			sockets[0]?.onmessage?.({
+				data: JSON.stringify(["OK", "id", false, "invalid: Event invalid signature"]),
+			});
+		refuse();
+		refuse();
+		expect(status.filter((s) => s.includes("invalid: Event invalid signature"))).toHaveLength(1);
+	});
 });
 
 describe("peer announcements", () => {

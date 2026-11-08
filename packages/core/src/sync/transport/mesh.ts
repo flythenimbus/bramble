@@ -145,6 +145,7 @@ class Mesh {
 	private rollTimer: ReturnType<typeof setInterval> | undefined;
 	private announceTimer: ReturnType<typeof setInterval> | undefined;
 	private clockWarned = false;
+	private rejectionWarned = false;
 	/** Set by stop(), so a socket closing during teardown is not treated as a drop. */
 	private stopped = false;
 	private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -216,6 +217,11 @@ class Mesh {
 				this.attempts = 0; // a connection that opens clears the backoff
 				clearTimeout(timer);
 				this.opts.onStatus(`relay connected (${host})`);
+			},
+			(reason) => {
+				if (this.rejectionWarned) return;
+				this.rejectionWarned = true;
+				this.opts.onStatus(`relay refused an event: ${reason.slice(0, 200)}`);
 			},
 		);
 		this.sendHello();

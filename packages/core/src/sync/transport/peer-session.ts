@@ -94,7 +94,7 @@ export async function startMeshSession(opts: MeshSessionOptions): Promise<MeshSe
 		relayUrl: opts.relayUrl,
 		groupKey: base64ToBytes(opts.groupKeyB64),
 		roomLabel: opts.roomLabel,
-		signer: await makeNostr(opts.wasm),
+		signer: await makeNostr(opts.wasm, opts.relayUrl),
 		// Mint at peer creation, including reconnects: the inviter may wait longer than
 		// a credential's lifetime, and an ongoing mesh can outlive many TURN TTLs.
 		getIceServers: async (ticket) => {

@@ -241,7 +241,9 @@ relay  -> client  ["OK", id, accepted, msg]
 - `content` is the SDP/ICE payload, encrypted under the group key. The relay sees
   ciphertext only.
 - Events are BIP340-signed (the client uses the wasm `nostr_*` exports), so public
-  Nostr relays accept them too.
+  Nostr relays accept them too. Apps older than this change sign in a form those
+  relays refuse, so every device needs a current build to use one. See "Signature
+  forms" in [p2p-sync.md](../../docs/p2p-sync.md).
 
 This is a relay for development and self-hosting; it is intentionally tiny. Any
 real Nostr relay also works.

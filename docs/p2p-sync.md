@@ -263,6 +263,15 @@ servers built for the social firehose, far more than signaling needs, and a down
 burden we avoid. The client must produce properly signed Nostr events so public relays accept
 them.
 
+**Signature forms:** Bramble's own relays forward signatures unread, which hid a bug: earlier
+builds signed `sha256(id)` instead of the event id NIP-01 requires, so any relay that checks
+signatures refused every event. Those builds also reject a correct signature, so the switch is
+staged. Every build now accepts both forms. On the hosted relay it still signs `sha256(id)` so
+released apps keep syncing, and on every other relay it signs the id. `nostr_sign` and
+`nostr_verify` are plain BIP340; the older form is `makeNostr` hashing the id before calling them.
+Once older apps have aged out, delete `isHostedRelay` and the second form. A relay's `OK false` is
+written to the sync status log, once per session.
+
 **Multi-relay + QR floor:** the client hits several relays at once and needs only one to
 deliver a small message once, which makes a flaky public commons reliable enough for a
 seconds-long handshake (the actual vault transfer is LAN-direct and touches no relay). If no

@@ -10,10 +10,7 @@
 //! exports are thin base64 wrappers.
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use k256::schnorr::{
-    signature::{Signer, Verifier},
-    Signature, SigningKey, VerifyingKey,
-};
+use k256::schnorr::{Signature, SigningKey, VerifyingKey};
 use serde::Serialize;
 
 use crate::CryptoError;
@@ -37,7 +34,13 @@ fn public_from_secret(secret: &[u8]) -> Result<[u8; 32], String> {
 
 fn sign(secret: &[u8], msg: &[u8]) -> Result<[u8; 64], String> {
     let sk = SigningKey::from_bytes(secret).map_err(|e| format!("key: {e}"))?;
-    let sig: Signature = sk.try_sign(msg).map_err(|e| format!("sign: {e}"))?;
+    let id: &[u8; 32] = msg
+        .try_into()
+        .map_err(|_| "sign: message must be 32 bytes".to_string())?;
+    // Not `Signer::try_sign`, which hashes first: NIP-01 signs the event id itself.
+    let sig = sk
+        .sign_prehash_with_aux_rand(id, &[0u8; 32])
+        .map_err(|e| format!("sign: {e}"))?;
     Ok(sig.to_bytes())
 }
 
@@ -51,7 +54,7 @@ fn verify(pubkey: &[u8], msg: &[u8], sig: &[u8]) -> Result<bool, String> {
         Ok(s) => s,
         Err(_) => return Ok(false),
     };
-    Ok(vk.verify(msg, &sig).is_ok())
+    Ok(vk.verify_raw(msg, &sig).is_ok())
 }
 
 // ---- binding layers: serde -> JsValue under wasm, uniffi under ffi ----
@@ -122,6 +125,52 @@ pub fn nostr_generate_key() -> Result<NostrKey, CryptoError> {
 #[cfg(test)]
 mod tests {
     use super::{generate, public_from_secret, sign, verify};
+
+    fn hex(s: &str) -> Vec<u8> {
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    // BIP340 test vector 0.
+    const VECTOR_SECRET: &str = "0000000000000000000000000000000000000000000000000000000000000003";
+    const VECTOR_PUBLIC: &str = "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9";
+    const VECTOR_SIG: &str = "e907831f80848d1069a5371b402410364bdf1c5f8307b0084c55f1ce2dca821525f66a4a85ea8b71e482a74f382d2ce5ebeee8fdb2172f477df4900d310536c0";
+
+    // Captured from a build that hashed the id before signing: key, sha256(id), signature.
+    const LEGACY_SECRET: &str = "d075a09531cefe499d7389a35cd25705dd38b850821f23d5562bec79aca47da1";
+    const LEGACY_PUBLIC: &str = "5e0514afa09210abb68a3204a0595eb8ec58e9af65598ab45a5af1eeebc155bf";
+    const LEGACY_DIGEST: &str = "d60bcfea59063305ab91f3eb54a9d277f927f4059fc08b4fa65281ce7e86927d";
+    const LEGACY_SIG: &str = "3303c2f3a8a8b58eddec3f6c5f8289bc397afd91ee3989d0510f9fde96ef88c6e2ddcdcbafa409e97c056086bdc59fd77daa90888e173f3de477ec3aeaa31fb3";
+
+    #[test]
+    fn signs_the_bip340_test_vector() {
+        let sig = sign(&hex(VECTOR_SECRET), &[0u8; 32]).unwrap();
+        assert_eq!(sig.to_vec(), hex(VECTOR_SIG));
+    }
+
+    #[test]
+    fn verifies_the_bip340_test_vector() {
+        assert!(verify(&hex(VECTOR_PUBLIC), &[0u8; 32], &hex(VECTOR_SIG)).unwrap());
+    }
+
+    #[test]
+    fn reproduces_a_released_clients_signature_from_the_hashed_id() {
+        let sig = sign(&hex(LEGACY_SECRET), &hex(LEGACY_DIGEST)).unwrap();
+        assert_eq!(sig.to_vec(), hex(LEGACY_SIG));
+    }
+
+    #[test]
+    fn verifies_a_released_clients_signature_over_the_hashed_id() {
+        assert!(verify(&hex(LEGACY_PUBLIC), &hex(LEGACY_DIGEST), &hex(LEGACY_SIG)).unwrap());
+    }
+
+    #[test]
+    fn refuses_to_sign_anything_but_a_32_byte_id() {
+        let (secret, _public) = generate().unwrap();
+        assert!(sign(&secret, &[1u8; 31]).is_err());
+    }
 
     #[test]
     fn sign_then_verify_round_trip() {

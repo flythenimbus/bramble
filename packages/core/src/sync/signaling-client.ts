@@ -69,6 +69,7 @@ export function connectSignaling(
 	rooms: string | string[],
 	onEvent: (event: NostrEvent) => void,
 	onOpen?: () => void,
+	onRejected?: (reason: string) => void,
 ): SignalingClient {
 	const subId = `s${subCounter++}`;
 	let open = false;
@@ -130,6 +131,10 @@ export function connectSignaling(
 		if (msg[0] === RELAY_TICKET) {
 			// Null from a relay of ours that has none for this socket: no need to wait it out.
 			settleTicket(typeof msg[1] === "string" && msg[1] ? msg[1] : null);
+			return;
+		}
+		if (msg[0] === "OK" && msg[2] === false) {
+			onRejected?.(String(msg[3] ?? ""));
 			return;
 		}
 		// ["EVENT", subId, event] addressed to our subscription.
