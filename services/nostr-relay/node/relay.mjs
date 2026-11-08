@@ -31,6 +31,24 @@ const MAX_MSG_BYTES = 64 * 1024;
 const MAX_SUBS_PER_CONN = 8;
 const MAX_MSGS_PER_MINUTE = 6000;
 
+// NIP-11 relay information, in parity with cf-worker/src/relay-info.ts.
+const RELAY_INFO_TYPE = "application/nostr+json";
+const RELAY_INFO = JSON.stringify({
+	name: "Bramble signaling relay",
+	description:
+		"Forwards ephemeral events (kinds 20000-29999) to current subscribers. Stores nothing and does not verify signatures.",
+	software: "https://github.com/flythenimbus/bramble",
+	supported_nips: [1, 11],
+	limitation: {
+		max_message_length: MAX_MSG_BYTES,
+		max_subscriptions: MAX_SUBS_PER_CONN,
+		max_subid_length: 64,
+		auth_required: false,
+		payment_required: false,
+		restricted_writes: true,
+	},
+});
+
 // Keepalive, in parity with cf-worker (where it is a hibernation auto-response) and
 // @core/sync/signaling-client. Clients ping a quiet socket so an intermediary doesn't drop it, and
 // read the answer as proof the relay is still there.
@@ -348,6 +366,16 @@ const httpServer = createServer((req, res) => {
 			"access-control-allow-headers": "Content-Type",
 		});
 		res.end(req.method === "OPTIONS" ? undefined : "method not allowed");
+		return;
+	}
+	if (req.method === "GET" && (req.headers.accept ?? "").includes(RELAY_INFO_TYPE)) {
+		res.writeHead(200, {
+			"content-type": RELAY_INFO_TYPE,
+			"access-control-allow-origin": "*",
+			"access-control-allow-headers": "*",
+			"access-control-allow-methods": "GET",
+		});
+		res.end(RELAY_INFO);
 		return;
 	}
 	res.writeHead(200, { "content-type": "text/plain" });

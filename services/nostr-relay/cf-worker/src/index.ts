@@ -22,6 +22,7 @@ import {
 	validEventFields,
 	validReq,
 } from "./nostr-filter";
+import { relayInfoResponse, wantsRelayInfo } from "./relay-info";
 
 export { IceGuard } from "./ice-guard";
 
@@ -278,6 +279,12 @@ export default {
 				default:
 					return new Response("method not allowed", { status: 405, headers: CORS });
 			}
+		}
+		if (wantsRelayInfo(req)) {
+			return relayInfoResponse({
+				maxMessageLength: MAX_MSG_BYTES,
+				maxSubscriptions: MAX_SUBS_PER_CONN,
+			});
 		}
 		return env.RELAY.getByName("relay").fetch(req);
 	},

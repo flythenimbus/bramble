@@ -212,6 +212,48 @@ describe("tickets", () => {
 	});
 });
 
+describe("relay information (NIP-11)", () => {
+	const askInfo = (url) => fetch(url, { headers: { accept: "application/nostr+json" } });
+
+	it("describes the relay and its real limits to a client that asks", async () => {
+		const relay = await start({});
+		try {
+			const res = await askInfo(relay.http);
+			assert.equal(res.status, 200);
+			assert.equal(res.headers.get("content-type"), "application/nostr+json");
+			assert.equal(res.headers.get("access-control-allow-origin"), "*");
+			const info = await res.json();
+			assert.deepEqual(info.supported_nips, [1, 11]);
+			assert.equal(info.limitation.max_message_length, 64 * 1024);
+			assert.equal(info.limitation.max_subscriptions, 8);
+			assert.equal(info.limitation.max_subid_length, 64);
+			assert.match(info.description, /does not verify signatures/);
+		} finally {
+			await relay.stop();
+		}
+	});
+
+	it("still answers a plain request with the banner", async () => {
+		const relay = await start({});
+		try {
+			const res = await fetch(relay.http);
+			assert.equal(res.headers.get("content-type"), "text/plain");
+			assert.equal(await res.text(), "bramble signaling relay");
+		} finally {
+			await relay.stop();
+		}
+	});
+
+	it("is open on a private relay, like the banner", async () => {
+		const relay = await start({ RELAY_TOKEN: "abcdefghijklmnop1234" });
+		try {
+			assert.deepEqual((await (await askInfo(relay.http)).json()).supported_nips, [1, 11]);
+		} finally {
+			await relay.stop();
+		}
+	});
+});
+
 describe("private mode", () => {
 	const TOKEN = "abcdefghijklmnop1234";
 

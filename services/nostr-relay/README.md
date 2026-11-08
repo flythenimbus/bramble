@@ -248,6 +248,10 @@ relay  -> client  ["OK", id, accepted, msg]
 This is a relay for development and self-hosting; it is intentionally tiny. Any
 real Nostr relay also works.
 
+Both relays answer an HTTP request with `Accept: application/nostr+json` with a
+NIP-11 information document, so tools like `nak relay` can read their limits. It
+stays open on a private relay, like the health probe.
+
 The Node relay rejects malformed filters and events, and limits WebSocket
 messages to 64 KiB before buffering a complete message. Invalid UTF-8 or an
 oversized message closes the offending socket without stopping other peers.
