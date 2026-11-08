@@ -9,6 +9,7 @@ import HelpCircle from "@tabler/icons/outline/help-circle.svg";
 import Key from "@tabler/icons/outline/key.svg";
 import LockOpen from "@tabler/icons/outline/lock-open.svg";
 import Rocket from "@tabler/icons/outline/rocket.svg";
+import Server from "@tabler/icons/outline/server.svg";
 import ShieldLock from "@tabler/icons/outline/shield-lock.svg";
 import DocsHelp from "@/components/docs/DocsHelp.astro";
 import DocsSearch from "@/components/docs/DocsSearch.astro";
@@ -28,6 +29,7 @@ const ICONS: Record<DocSection["id"], typeof Devices> = {
 	backups: CloudUpload,
 	desktop: DeviceDesktop,
 	privacy: ShieldLock,
+	"self-hosting": Server,
 };
 
 const docs = await getDocs();

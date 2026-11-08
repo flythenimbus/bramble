@@ -46,6 +46,11 @@ export const DOC_SECTIONS = [
 		title: "Security and privacy",
 		description: "How your vault is protected, and what Bramble can and can't see.",
 	},
+	{
+		id: "self-hosting",
+		title: "Self hosting",
+		description: "Run the servers Bramble uses yourself.",
+	},
 ] as const;
 
 export type DocSection = (typeof DOC_SECTIONS)[number];

@@ -1,0 +1,110 @@
+---
+title: Self-host the Nostr relay
+description: Run your own relay so your devices find each other through a server you control.
+section: self-hosting
+kind: guide
+order: 1
+keywords:
+  - self-host
+  - self hosted
+  - host my own relay
+  - run my own server
+  - own server
+  - nostr
+  - nostr-rs-relay
+  - strfry
+  - docker
+  - reverse proxy
+  - caddy
+  - wss
+  - websocket
+  - turn server
+  - stun
+  - ice servers
+  - cloudflare worker
+  - change relay
+  - sync stopped after changing relay
+  - devices can't find each other
+updatedDate: 2026-11-08
+---
+
+The relay introduces your devices to each other. It only ever sees encrypted messages and stores nothing, so you don't need your own for security. Hosting one means your devices' IP addresses and sync timing reach your server instead of ours. See [how sync works](/docs/how-sync-works) for the full picture.
+
+## What you need
+
+- A server all your devices can reach.
+- A domain name with a TLS certificate your devices trust. The apps connect over `wss://`.
+- Docker, or a Cloudflare account if you'd rather run it as a Worker.
+
+## Run the relay
+
+Build the image from Bramble's source and start it:
+
+```sh
+git clone https://github.com/flythenimbus/bramble.git
+cd bramble
+docker build -t bramble-relay services/nostr-relay/node
+docker run -d --name bramble-relay -p 127.0.0.1:7400:7400 \
+  --restart unless-stopped --log-opt max-size=10m --log-opt max-file=3 bramble-relay
+```
+
+Then put a reverse proxy in front of it for TLS. It must forward WebSocket upgrades and `POST /ice-servers` to port 7400. With [Caddy](https://caddyserver.com), this is the whole config:
+
+```text
+relay.example.com {
+	reverse_proxy 127.0.0.1:7400
+}
+```
+
+To check it, open `https://relay.example.com`. You should see `bramble signaling relay`.
+
+Prefer not to run a server? The same relay also runs as a Cloudflare Worker. The [relay's README](https://github.com/flythenimbus/bramble/blob/main/services/nostr-relay/README.md#deploy-to-cloudflare-workers) has the steps.
+
+## Point your devices at it
+
+1. Open **Settings → Sync** and expand **Advanced**.
+2. Set **Nostr relay URL** to `wss://relay.example.com`.
+3. Clear **TURN / ICE servers URL**, so it uses your relay too. Left as it is, your devices keep asking Bramble's server for connection help.
+4. Lock Bramble and unlock it again. The new relay is only used after that.
+
+**Setting up sync for the first time?** Do this on the device that creates the pairing code, before you create it. A device that joins with that code picks up the same settings.
+
+**Already syncing?** Do this on every device. The setting doesn't sync, and devices on different relays can't find each other.
+
+## Sync across different networks
+
+Out of the box your relay hands out no STUN or TURN servers, so your devices connect only when they can reach each other directly, usually on the same network.
+
+To connect from anywhere, add STUN by setting `ICE_SERVERS` when you start the container:
+
+```sh
+-e ICE_SERVERS='[{"urls":"stun:stun.example.com:3478"}]'
+```
+
+Some networks block direct connections even with STUN, and those need a TURN server you run yourself. The [relay's README](https://github.com/flythenimbus/bramble/blob/main/services/nostr-relay/README.md#configure-stun-and-turn) covers TURN, including a starting config for coturn.
+
+## Keep it to your own devices
+
+Set `RELAY_TOKEN` to a random value of at least 16 letters and numbers, and the relay refuses anyone without it:
+
+```sh
+-e RELAY_TOKEN=your-long-random-token
+```
+
+Then use `wss://relay.example.com/?token=your-long-random-token` as the **Nostr relay URL**, and keep **TURN / ICE servers URL** clear.
+
+Pairing codes carry the token, so anyone who sees a code learns it. Change the token if one leaks.
+
+## Use a standard Nostr relay instead
+
+You can use another Nostr relay, such as nostr-rs-relay, instead of Bramble's.
+
+Update Bramble on every device first. Older versions sign messages in a way standard relays refuse: the app shows as connected, but your devices never find each other.
+
+Standard relays can't give your devices STUN or TURN servers. Clear **TURN / ICE servers URL** to connect directly only, or point it at an endpoint of your own that returns them as JSON. Public relays may also limit or drop this kind of traffic, so a relay you run yourself is more reliable.
+
+## If your devices can't find each other
+
+- Check that every device shows the same **Nostr relay URL**, then lock and unlock each one.
+- Check that the address starts with `wss://`, and that the device trusts your certificate.
+- Check that your proxy forwards WebSocket connections.
