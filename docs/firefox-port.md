@@ -139,7 +139,9 @@ Note: the code references the `browser`-incompatible `chrome.*` namespace throug
   fallback at `corner-prompt.ts:350`.
 - **`chrome.idle` / `chrome.commands`**: optional-chained in `background.ts`. The idle `"locked"`
   state used to lock on OS screen-lock is Chrome-only; on Firefox that listener just never fires
-  and the sliding auto-lock alarm remains the safety net.
+  and the sliding auto-lock alarm remains the safety net. Firefox's `ext-idle.js` emits only
+  `"idle"` and `"active"`, so the "Lock when the screen locks" switch is hidden there
+  (`lockOnScreenLock` in `packages/core/src/flags.ts`).
 - **CSP** `script-src 'self' 'wasm-unsafe-eval'`: supported by Firefox MV3.
 
 ## The offscreen document (core change)

@@ -53,6 +53,15 @@ describe("can()", () => {
 		expect(can("credentialExchange", "firefox")).toBe(false);
 	});
 
+	it("offers 'Lock when the screen locks' only where the browser reports a screen lock", () => {
+		// Firefox's idle API never reports "locked", so the switch would do nothing there.
+		expect(can("lockOnScreenLock", "chromium")).toBe(true);
+		expect(can("lockOnScreenLock", "firefox")).toBe(false);
+		expect(can("lockOnScreenLock", "android")).toBe(false);
+		expect(can("lockOnScreenLock", "ios")).toBe(false);
+		expect(can("lockOnScreenLock", "desktop")).toBe(false);
+	});
+
 	it("returns a boolean for every capability on every target", () => {
 		for (const cap of Object.keys(CAPABILITIES) as (keyof typeof CAPABILITIES)[])
 			for (const t of TARGETS) expect(typeof can(cap, t)).toBe("boolean");

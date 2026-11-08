@@ -27,8 +27,8 @@ import { Row, Section, Toggle } from "./primitives";
 
 // Auto-lock timeout values: -1 = Immediate, >0 = minutes, 0 = Never. "Immediate" locks the
 // moment the app/UI is no longer in use (mobile: on backgrounding; extension: when the last
-// popup/window closes); "Never" holds the vault open until a manual lock or restart. On the
-// extension, OS screen-lock is governed separately by the "Lock when the screen locks" toggle
+// popup/window closes); "Never" holds the vault open until a manual lock or restart. On
+// Chromium, OS screen-lock is governed separately by the "Lock when the screen locks" toggle
 // below (default on), so "Never + toggle off" stays unlocked on a trusted device. On mobile
 // this one setting also drives the autofill provider's keep-unlocked window: Immediate -> 0
 // (require auth every fill), N minutes -> N, Never -> -1 (never expire).
@@ -140,7 +140,7 @@ export function GeneralSection() {
 				</div>
 			</Row>
 
-			{/* Extension only: lock on OS screen-lock, independent of the timeout. On by default;
+			{/* Chromium only: lock on OS screen-lock, independent of the timeout. On by default;
 			    turning it off is what makes "Never" truly stay unlocked on a trusted device. */}
 			{hasLockOnScreenLock && (
 				<Row

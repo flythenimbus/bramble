@@ -46,7 +46,7 @@ export const PREF_AUTOFILL_QUICKTYPE = "pref.autofillQuickType";
 // Extension only: act as a WebAuthn passkey provider for other sites. Off by default
 // (attaching the proxy intercepts all browser WebAuthn). See docs/passkey-provider.md.
 export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
-// Extension only: also lock the vault when the OS screen locks, independent of the timeout.
+// Chromium only: also lock the vault when the OS screen locks, independent of the timeout.
 // On by default (a screen-lock is a reasonable security floor); turned off to stay unlocked
 // on a trusted device even under "Never". See issue #6.
 export const PREF_LOCK_ON_SCREEN_LOCK = "pref.lockOnScreenLock";
