@@ -1,0 +1,94 @@
+---
+title: Why isn't a field or 2FA code filled in my browser?
+description: What to do when the extension shows no list, misses a 2FA code field, skips a card, or won't fill inside a frame.
+section: autofill
+kind: question
+order: 2
+keywords:
+  - autofill not working
+  - not filling
+  - no dropdown
+  - dropdown missing
+  - field not detected
+  - TOTP field not detected
+  - 2FA code not filled
+  - verification code
+  - one-time code
+  - authenticator code
+  - Google 2-Step Verification
+  - accounts.google.com
+  - iframe
+  - embedded sign-in
+  - frame
+  - wrong site
+  - subdomain
+  - Subdomain match
+  - eTLD+1
+  - Exact hostname
+  - port
+  - card not filled
+  - checkout
+  - Use ↓ and Enter to fill on this page
+  - click doesn't fill
+  - Dark Reader
+  - Vault locked
+  - Autofill on web pages
+  - auto-submit not working
+updatedDate: 2026-11-07
+draft: true
+---
+
+## Check these first
+
+- Bramble is unlocked. If the list shows **Vault locked**, click it and unlock.
+- **Settings → General → Autofill on web pages** is on.
+- The login's **Websites** include this site.
+- The extension is up to date. New versions recognize more fields.
+
+## The login doesn't show up
+
+- **The site doesn't match.** By default, a login is offered on its whole domain: one saved for `accounts.example.com` also shows on `www.example.com`. A different domain needs its own entry: open the login, choose **Add URL** under **Websites**, and add it.
+- **Subdomain match is narrower.** In the login's editor, under **Advanced**, **Subdomain match** sets where it's offered:
+
+  | Setting | Offered on |
+  | --- | --- |
+  | **eTLD+1 (default, matches all subdomains)** | The whole domain and all its subdomains |
+  | **Exact hostname (and port, if the URL has one)** | Only that address, and only that port if the URL has one |
+  | **This domain and its subdomains** | That address and the addresses under it |
+
+- **It's a sign-up form.** On sign-up and change-password forms, Bramble offers a new password instead of your saved logins.
+- **You typed in the username field.** The list narrows to logins whose username matches. Clear the field to see them all.
+- **The login is archived.** Archived entries are never offered.
+- **The browser blocks extensions on this page.** Browsers don't let extensions run on their own pages, such as settings and extension stores. If you limited Bramble's site access in your browser's extension settings, allow it on this site.
+
+## The 2FA code isn't offered
+
+- **The login has no authenticator key.** Bramble fills codes only from logins with an **Authenticator key (TOTP)**.
+- **The 2FA page is on another domain.** Bramble offers codes from logins that match the page. If a site asks for the code on a different domain than the sign-in page, add that domain to the login's **Websites**.
+- **Bramble didn't recognize the field.** Bramble finds code fields from how the page describes them. Recent versions recognize more, including the code field on Google's 2-Step Verification page, so update the extension first. Until a field is recognized, open the login in Bramble and copy the code under **Verification code (TOTP)**.
+
+## A card isn't offered
+
+- Bramble offers cards when it sees two of card number, expiry and security code together, or a field the site marks as a card field. A lone "Card number" or "Expiry" field doesn't get the list.
+- Bramble never fills a card field the page hides.
+
+## Forms inside frames
+
+Many sign-in and payment forms sit in a frame from another site.
+
+- **Card fields** work in any frame. The list shows over the page.
+- **Login fields** in a frame from the same site work the same way.
+- **Login fields in a frame from another site** keep the list inside that frame, so the page can't tell whether you have a login for that site. If the frame is too small, the list can't show. Copy the login from Bramble instead.
+
+The desktop app's quick panel fills the main page only, not forms inside frames.
+
+## Clicking a login does nothing
+
+Bramble ignores clicks on the list when it can't be sure you can see it:
+
+- In Chrome, if something covers the list or the page uses a visual filter, such as a dark-mode extension, Bramble shows **Use ↓ and Enter to fill on this page**. Press ↓ to highlight a login, then Enter.
+- A click that lands the instant the list appears or moves is ignored. Wait a moment and click again.
+
+## The form didn't submit
+
+**Auto-submit after fill** skips pages that show a CAPTCHA. Solve it and submit the form yourself.

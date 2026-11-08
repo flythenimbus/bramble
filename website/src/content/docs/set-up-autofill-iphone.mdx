@@ -1,0 +1,104 @@
+---
+title: Set up AutoFill on iPhone
+description: Turn on Bramble in iOS Settings, fill logins and 2FA codes in Safari and apps, and use passkeys.
+section: autofill
+kind: guide
+order: 3
+keywords:
+  - iOS
+  - iPhone
+  - autofill
+  - auto-fill
+  - AutoFill & Passwords
+  - Password Options
+  - QuickType
+  - key icon
+  - Safari
+  - Keyboard suggestions
+  - keyboard suggestion bar
+  - verification code
+  - one-time code
+  - 2FA
+  - TOTP
+  - passkey
+  - Face ID
+  - Touch ID
+  - Fill and save
+  - Just fill
+  - Save to Bramble?
+  - Show all items
+  - Unlock Vault
+  - AutoFill not working iPhone
+  - Bramble not in AutoFill list
+  - This vault has no master password, or it hasn't synced
+  - Your biometric enrolment changed
+  - This device's saved key is out of date
+  - No logins saved yet
+  - No passkey found
+  - Bramble has no passkey for this site.
+updatedDate: 2026-11-07
+draft: true
+---
+
+Bramble fills logins in Safari and in apps through iOS AutoFill. On iOS 18 and later it fills 2FA codes too, and on iOS 17 and later it can save and use passkeys.
+
+## Turn on AutoFill
+
+1. Open the iOS Settings app and go to General, then AutoFill & Passwords. On iOS 17 and earlier, go to Passwords, then Password Options.
+2. Turn on **Bramble**.
+
+## Fill a login
+
+1. Tap a username or password field, then tap the key icon above the keyboard and choose Bramble.
+2. Unlock with Face ID, Touch ID or your passcode if you've set it up, or enter your master password and choose **Unlock Vault**.
+3. Bramble lists this site's logins under the site's name, such as **For example.com**. A row like **Show all items (12 more)** opens the rest of your vault, and the search field finds any login.
+4. Tap a login. Bramble fills the username and password.
+
+Bramble offers a login when one of its websites is the same site, its parent domain or a subdomain. A login for `example.com` shows on `shop.example.com`, but a login for `accounts.example.com` doesn't. Only logins with a password are offered.
+
+### Fill and save
+
+If you pick a login that isn't saved for this site, Bramble asks **Save to Bramble?**. Choose **Fill and save** to add the site to the login, so Bramble offers it here next time. **Just fill** fills without saving.
+
+## Stay unlocked between fills
+
+After you unlock in AutoFill, Bramble stays unlocked there for as long as your **Auto-lock timeout** in **Settings → General**. Within that time, Bramble fills without asking again.
+
+With **Immediate**, you unlock every time.
+
+## Show logins above the keyboard
+
+1. Open **Settings → General** in Bramble.
+2. Turn on **Keyboard suggestions**.
+
+iOS then suggests your matching logins above the keyboard. Tap one to fill it.
+
+<Callout type="note" title="Off by default">
+To make these suggestions, iOS keeps a list of your usernames and the sites they're for. That list is readable before you unlock Bramble. Passwords are never in it.
+</Callout>
+
+## Fill a 2FA code
+
+On iOS 18 and later, Bramble fills the current code from a login's **Authenticator key (TOTP)**. With **Keyboard suggestions** on, the code shows above the keyboard on the site's code field. Only logins with an authenticator key are offered for a code.
+
+## Passkeys
+
+On iOS 17 and later, when a site offers to create a passkey, you can save it in Bramble. When you sign in, iOS offers Bramble's passkey for that site. If you have several, Bramble asks **Choose a passkey**.
+
+## Keep AutoFill up to date
+
+AutoFill uses the vault you last opened in Bramble, as it was when Bramble was last open and unlocked. If a login you added on another device is missing, open Bramble, unlock it, and let it sync.
+
+iPhone doesn't let other apps save logins as you sign in, so add new logins in Bramble.
+
+## Messages
+
+| Message | What to do |
+| --- | --- |
+| This vault has no master password, or it hasn't synced. Open Bramble, unlock it once, then retry. | Open Bramble and unlock it, then try AutoFill again. |
+| Your biometric enrolment changed. Open Bramble and turn on biometric unlock again. | Enter your master password for now. Then turn biometric unlock back on in **Settings → Security**. |
+| This device's saved key is out of date. Enter your master password. | Unlock with your master password. |
+| No logins saved yet. Add one in Bramble. | Open Bramble and add a login, or check you're in the right vault. |
+| No passkey found. Bramble has no passkey for this site. | Sign in another way. Bramble has only the passkeys you saved in it or imported. |
+
+See [Ways to unlock your vault](/docs/unlock-methods) for Face ID and Touch ID.

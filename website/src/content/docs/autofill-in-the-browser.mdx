@@ -1,0 +1,135 @@
+---
+title: Autofill in your browser
+description: Fill logins, 2FA codes and cards from the Bramble extension, save new logins, and turn off the browser's own password manager.
+section: autofill
+kind: guide
+order: 1
+keywords:
+  - autofill
+  - auto-fill
+  - auto fill
+  - fill password
+  - fill username
+  - dropdown
+  - fill form
+  - one-time code
+  - 2FA
+  - TOTP
+  - verification code
+  - authenticator code
+  - credit card
+  - payment card
+  - checkout
+  - save password
+  - save login
+  - update password
+  - Save New Login
+  - Update saved login?
+  - Never for this site
+  - Sites you've muted
+  - Offer to save logins
+  - Autofill on web pages
+  - Default password manager
+  - default password manager
+  - Make Bramble your default password manager?
+  - Make default
+  - turn off Chrome password manager
+  - turn off Firefox password manager
+  - browser keeps asking to save passwords
+  - Google Password Manager
+  - Set by a policy or another extension
+  - Use suggested password
+  - generate password
+  - Use a new email alias
+  - Vault locked
+  - Auto-submit after fill
+  - Subdomain match
+  - custom fields
+updatedDate: 2026-11-07
+draft: true
+---
+
+The Bramble browser extension fills logins, 2FA codes and payment cards on web pages. Nothing goes into a page until you pick an entry.
+
+## Fill a login
+
+1. Click the username or password field on a sign-in page. Bramble lists the logins saved for this site.
+2. Click a login, or press ↓ and Enter. Bramble fills the username and password.
+
+- Type in the username field to narrow the list to matching usernames.
+- Bramble lists a login when one of its **Websites** matches the site. A login for `accounts.example.com` also shows on `www.example.com`.
+- If your vault is locked, the list shows **Vault locked**. Click it, unlock in the window that opens, then pick a login.
+
+## Fill a 2FA code
+
+Click the code field on a site's 2FA page. Bramble lists this site's logins that have an **Authenticator key (TOTP)**. Pick one to fill the current code.
+
+This works on single code boxes and on forms with one box per digit.
+
+## Fill a card
+
+Click a card field at checkout. Bramble lists all your cards, on any site.
+
+- Bramble offers cards when it sees two of card number, expiry and security code together, or a field the site marks as a card field.
+- Some checkouts put each box in its own frame. After you fill one box, the card you used is marked **Used here** at the top of the list in the next box.
+- Bramble never fills a card field the page hides.
+
+## Custom fields
+
+When you fill a login or card, its **Custom fields** go into page fields with a matching name, such as "Postal code". Bramble never puts a custom field into a password or email field.
+
+## Create a password on a sign-up form
+
+On a sign-up or change-password form, click the new password field. Choose **Use suggested password** to fill a strong generated password, or use the regenerate button for another one. Bramble then offers to save the login.
+
+On sign-up forms, Bramble doesn't list your saved logins.
+
+If you've set up an alias provider in **Settings → Aliases**, the email field on a sign-up form offers **Use a new email alias**.
+
+## Save new logins
+
+After you sign in with a username and password Bramble doesn't have, a **Save New Login** card appears in the top-right corner of the page.
+
+- Check the username, then choose **Save**.
+- **Not now** closes the card.
+- To stop asking on this site, choose **⋯** and then **Never for this site**. To undo it, remove the site under **Settings → General → Sites you've muted**.
+
+If you sign in with a new password for a saved login, the card asks **Update saved login?**. Choose **Update**, or **Save as new** to keep both.
+
+If your vault is locked, the buttons read **Unlock & Save** and **Unlock & Update**.
+
+To turn the card off, open **Settings → General** and turn off **Offer to save logins**.
+
+## Make Bramble your default password manager
+
+Your browser has its own password manager, which offers to save passwords too. To leave that to Bramble:
+
+1. On your vault list, choose **Make default** on the **Make Bramble your default password manager?** card. Or open **Settings → General** and turn on **Default password manager**.
+2. Allow the permission your browser asks for.
+
+Bramble turns off the browser's offer to save passwords. In Chrome and other Chromium browsers, it also turns off the browser's card autofill. Addresses stay as they are.
+
+Turn **Default password manager** off to hand these settings back to the browser.
+
+If the switch shows **Set by a policy or another extension**, your organization or another extension controls the browser's password setting, and Bramble can't change it.
+
+<Callout type="tip" title="Bring your passwords over">
+Passwords your browser already saved stay in the browser. To move them to Bramble, see [Import from another password manager](/docs/import-passwords).
+</Callout>
+
+## Settings that change autofill
+
+- **Settings → General → Autofill on web pages** turns the list on pages on or off. When it's off, copy from your vault instead.
+- In a login's editor, under **Advanced**:
+  - **Auto-submit after fill** submits the form right after Bramble fills it. Bramble skips this when the page shows a CAPTCHA.
+  - **Subdomain match** sets which addresses the login is offered on. See [Why isn't a field filled?](/docs/browser-field-not-filled#the-login-doesnt-show-up)
+
+Archived entries are never offered.
+
+## Fill from the desktop app
+
+If you've linked the extension to the desktop app, its quick panel can fill the page too. See [Link the browser extension to the desktop app](/docs/link-desktop-app#fill-from-the-desktop-app).
+
+## Something not filling?
+
+See [Why isn't a field or 2FA code filled in my browser?](/docs/browser-field-not-filled)

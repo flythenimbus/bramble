@@ -1,0 +1,77 @@
+---
+title: Which browsers and apps can use Bramble passkeys?
+description: Bramble passkeys work in Chrome, Firefox, iPhone and Android 14 and later, with a few limits. Safari on a Mac and the desktop app can't use them.
+section: passkeys
+kind: question
+order: 2
+draft: true
+keywords:
+  - Safari
+  - Safari on Mac
+  - Safari extension
+  - macOS Safari
+  - Edge
+  - Brave
+  - Vivaldi
+  - GrapheneOS
+  - Vanadium
+  - LibreWolf
+  - Firefox fork
+  - Google Play services
+  - passkey not offered
+  - Bramble doesn't show up for passkeys
+  - passkey option missing
+  - security key stopped working
+  - YubiKey not working in Chrome
+  - The request either timed out, was canceled or the device is already registered
+  - Touch ID registration fails
+  - Registration was cancelled or timed out. Please try again.
+updatedDate: 2026-11-07
+---
+
+| Where | Bramble passkeys |
+| --- | --- |
+| Chrome, Brave and other Chromium browsers, with the extension | Yes |
+| Firefox, with the extension | Yes |
+| Safari and apps on iPhone | iOS 17 and later |
+| Browsers and apps on Android | Android 14 and later, in most browsers |
+| Safari on a Mac | No |
+| The desktop app | No |
+
+To turn passkeys on, see [Save and use passkeys](/docs/passkeys).
+
+## In the browser extension
+
+While **Use Bramble for passkeys** is on, Bramble answers every passkey prompt in that browser. Your browser doesn't offer security keys, passkeys saved in the browser, or signing in with your phone. Turn it off to use those.
+
+In Chrome and other Chromium browsers, only one extension can handle passkeys. If another one already does, **Use Bramble for passkeys** turns itself back off and shows an error. Turn off passkeys in the other extension, then try again.
+
+In Firefox, passkey suggestions in a site's username field come from Firefox, not Bramble. Use the site's passkey sign-in button instead.
+
+## Safari on a Mac
+
+Bramble has no Safari extension, so Safari on a Mac can't use Bramble passkeys. Use Chrome, Firefox or another Chromium browser with the Bramble extension instead.
+
+On iPhone, Safari works through iOS AutoFill. See [Set up AutoFill on iPhone](/docs/set-up-autofill-iphone).
+
+## The desktop app
+
+The desktop app can't create passkeys or sign in with them. Passkeys you save elsewhere still sync to it and show on your logins.
+
+## Android
+
+Passkeys need Android 14 or later, and Bramble turned on as a passkey provider. Two things can still stop them.
+
+### The browser never asks Bramble
+
+On phones without Google Play services, such as GrapheneOS, some Chromium-based browsers, including Brave and Vivaldi, don't pass passkey requests to Android's passkey managers. Bramble never sees the request. Vanadium works.
+
+### The site says the request timed out or was cancelled
+
+Bramble reads the site's address only from browsers on its built-in list. It's the same list autofill uses: see [Browsers that match the site](/docs/set-up-autofill-android#browsers-that-match-the-site). To ask for another browser, email support@bramble.sh.
+
+## Touch ID in LibreWolf
+
+If adding Touch ID under **Tap to unlock** in LibreWolf on a Mac fails with "Registration was cancelled or timed out. Please try again.", the problem is LibreWolf. macOS lets a browser use Touch ID only with a permission from Apple. Firefox has it, and LibreWolf doesn't.
+
+This is about unlocking Bramble, not your website passkeys. In LibreWolf, unlock with your master password, or use Touch ID in Firefox or a Chromium browser. See [Ways to unlock your vault](/docs/unlock-methods).

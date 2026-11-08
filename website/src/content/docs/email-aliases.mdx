@@ -1,0 +1,89 @@
+---
+title: Create email aliases
+description: Give every site its own email address from Addy.io, SimpleLogin, Fastmail, DuckDuckGo or your own domain.
+section: start
+kind: guide
+order: 5
+draft: true
+keywords:
+  - alias
+  - aliases
+  - email alias
+  - masked email
+  - hide my email
+  - burner email
+  - forwarding address
+  - catch-all
+  - catchall
+  - custom domain
+  - anonaddy
+  - addy
+  - Addy.io
+  - SimpleLogin
+  - Proton
+  - Fastmail
+  - Masked Email
+  - DuckDuckGo
+  - Duck Address
+  - duck.com
+  - Email Protection
+  - Your own domain
+  - API key
+  - API token
+  - self-hosted
+  - Alias provider
+  - Check key
+  - Generate email alias
+  - Use a new email alias
+  - Could not create an alias
+  - Addy needs a domain before it can create an alias.
+  - Check the key first, to load the choices this provider needs.
+updatedDate: 2026-11-07
+---
+
+Bramble can make a new email address for each site you sign up to, using an alias service you already have. Bramble only asks your provider for the address. Your mail never goes through Bramble.
+
+## Supported services
+
+- **Addy.io**
+- **SimpleLogin**
+- **Fastmail** (Masked Email)
+- **DuckDuckGo** (Duck Addresses)
+- **Your own domain**, if your mail host delivers every address at that domain to your inbox (a catch-all)
+
+## Connect a service
+
+1. Open **Settings → Aliases**.
+2. Under **Alias provider**, choose your service in **Provider**.
+3. Get an API key with the link under **API key**, then paste it in.
+4. Choose **Check key**. Bramble shows **Connected.**, and for some services how many aliases you've used.
+
+Your connection syncs to every device in the vault's sync group, and the key is encrypted with your vault.
+
+### Notes for each service
+
+- **Addy.io:** after **Check key**, choose an **Alias domain**. Addy can't create an alias without one. **Alias format** is optional.
+- **SimpleLogin:** **Alias domain** and **Alias style** are optional. Word aliases include the site's name, so anyone who sees the address can tell where you used it.
+- **Fastmail:** under Connected apps & API tokens, create a token with only Masked Email ticked, so it can't read your mail. Name it Bramble: Fastmail shows the name on every address it makes.
+- **DuckDuckGo:** there's no API key page. Choose **Open Email Protection settings**, open the Autofill tab and your browser's developer tools, then click Generate Private Duck Address. Copy the token after `authorization: Bearer` in the Network tab. **Check key** can't test this token. Creating your first alias is what shows it works.
+- **Your own domain:** enter **Your domain**, like `example.com`. Bramble can't test it, so check the spelling: a wrong domain gives addresses that go nowhere. **Alias style** picks words or characters.
+- **Self-hosted Addy.io or SimpleLogin:** open **Advanced** and enter your **Server URL**.
+
+## Create an alias when you save a login
+
+1. Add or edit a login, and enter its website first.
+2. Choose the @ button in **Username or email**.
+
+Bramble fills in the new address. It tells your provider which site the alias is for, so you can find it later in your provider's dashboard. DuckDuckGo doesn't keep this.
+
+With an alias service, each alias is a real address on your account, and it counts towards your allowance there.
+
+## On sign-up pages (browser extension)
+
+Click the email box on a sign-up form and choose **Use a new email alias**. Bramble creates the alias and fills it in. If it fails, the row shows **Could not create an alias**, your provider's reason if it gave one, and **Try again**.
+
+## Turn off or delete an alias
+
+Bramble creates aliases but doesn't manage them. To turn one off or delete it, use your provider's own app or website.
+
+To stop using a service in Bramble, open **Settings → Aliases** and choose **Disconnect**.

@@ -1,0 +1,59 @@
+---
+title: Why won't the desktop app start on Linux?
+description: What to do when Bramble doesn't open a second time, or freezes when you create a vault.
+section: desktop
+kind: question
+order: 3
+keywords:
+  - doesn't start
+  - doesn't open
+  - not launching
+  - nothing happens
+  - no window
+  - does not run a second time
+  - second instance
+  - crash
+  - crashes
+  - panic
+  - freezes
+  - frozen
+  - not responding
+  - white window
+  - blank window
+  - white screen
+  - stack smashing detected
+  - HotKey already registered
+  - failed to initialize plugin `global-shortcut`
+  - WebKitWebProcess
+  - Fedora
+  - Bazzite
+  - Arch
+  - AppImage
+  - Wayland
+  - KDE
+  - GNOME
+updatedDate: 2026-11-07
+draft: true
+---
+
+## It's already running
+
+Closing Bramble's window doesn't quit it: it keeps running in the system tray. If you start it again while it's running, no window opens. Run from a terminal, it prints `HotKey already registered`.
+
+- To get the window back, click the Bramble icon in the tray and choose **Open Bramble**.
+- To quit, choose **Quit Bramble** from the same menu, or press <kbd>Ctrl</kbd> <kbd>Q</kbd> in Bramble's window.
+- Can't see a tray icon? Quit Bramble from a terminal with `pkill bramble-desktop`, then start it again.
+
+The same thing happens if another app already uses <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Space</kbd> as a shortcut. Remove that shortcut from the other app, then start Bramble.
+
+## The AppImage freezes when you create a vault
+
+On Fedora and other recent distributions, AppImages older than version 0.16.0 freeze or turn white as soon as they draw an emoji, which first happens on the screen where you create your vault. Run from a terminal, they print `stack smashing detected`.
+
+Version 0.16.0 fixes this. Download the latest AppImage from [bramble.sh](/).
+
+## Still not working?
+
+- Make sure the AppImage is executable: `chmod +x Bramble_*.AppImage`.
+- On Fedora, try the `.rpm` instead, and on Debian or Ubuntu the APT package. They use your system's own web engine rather than the one the AppImage carries. See [Install the desktop app](/docs/install-desktop-app).
+- On a laptop with two graphics cards, the first click can freeze the screen for a few seconds while the second card wakes up. It happens once. Starting Bramble with `WEBKIT_DISABLE_DMABUF_RENDERER=1` avoids it.

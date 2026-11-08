@@ -1,0 +1,127 @@
+---
+title: Set up autofill on Android
+description: Make Bramble your autofill service, fill logins and 2FA codes in apps and browsers, and show logins above the keyboard.
+section: autofill
+kind: guide
+order: 2
+keywords:
+  - Android
+  - autofill service
+  - autofill provider
+  - autofill not working Android
+  - Samsung
+  - Pixel
+  - Gboard
+  - keyboard suggestions
+  - inline suggestions
+  - suggestion bar
+  - Keyboard suggestions
+  - Unlock to autofill
+  - Show all logins
+  - Search your vault
+  - Fill and save
+  - Just fill
+  - Save to Bramble?
+  - Offer to save logins
+  - supported browsers
+  - browser allowlist
+  - whitelist browser
+  - add my browser
+  - doesn't match the current URL
+  - have to search for the site every time
+  - Chrome
+  - Firefox
+  - Waterfox
+  - IronFox
+  - Vanadium
+  - Brave
+  - Samsung Internet
+  - Vivaldi
+  - DuckDuckGo
+  - Edge
+  - Opera
+  - Fennec
+  - 2FA code
+  - one-time code
+  - TOTP
+updatedDate: 2026-11-07
+draft: true
+---
+
+Bramble fills logins and 2FA codes in apps and browsers on Android 8 and later.
+
+## Turn on autofill
+
+1. Open your phone's Settings app and search for "autofill".
+2. Open the autofill service setting and choose **Bramble**.
+
+The name and place of this setting differ between phone makers and Android versions.
+
+## Fill a login
+
+1. Tap a username or password field. Android shows Bramble's suggestions.
+2. If your vault is locked, the suggestion reads **Unlock to autofill**. Tap it, then choose **Unlock with biometrics**, or enter your master password and choose **Unlock Vault**.
+3. Bramble lists this site's logins first, under the site's name, such as **For shop.example.com**, then **Other logins**. Type in **Search logins** to find another one.
+4. Tap a login. Bramble fills the username and password.
+
+Bramble always lets you pick, even when only one login matches.
+
+### Stay unlocked between fills
+
+After you unlock, Bramble stays unlocked for autofill for as long as your **Auto-lock timeout** in **Settings → General**. While it's unlocked, the suggestions list the matching logins directly, plus **Show all logins** to search your whole vault.
+
+With **Immediate**, Bramble asks you to unlock every time. With **Never**, it stays unlocked.
+
+### Which logins match
+
+- In a browser, Bramble offers logins saved for the same site, its parent domain or its subdomains. A login for `example.com` shows on `shop.example.com`, but a login for `accounts.example.com` doesn't.
+- In an app, Bramble offers a login only once you've linked it to the app (see below), or when the app's website confirms the app belongs to it.
+- Bramble offers only logins that have a password. Archived logins are never offered.
+- Autofill uses the vault you last opened in Bramble.
+
+### Fill and save
+
+If you pick a login that isn't linked to this app or site, Bramble asks **Save to Bramble?**. Choose **Fill and save** to add the app or site to the login, so Bramble offers it here next time. **Just fill** fills without saving.
+
+## Fill a 2FA code
+
+Tap the code field and pick the login. Bramble fills the current code from the login's **Authenticator key (TOTP)**. Logins without one aren't offered on a code field.
+
+## Show logins above the keyboard
+
+On Android 11 and later, Bramble can show logins in your keyboard's suggestion bar.
+
+1. Open **Settings → General** in Bramble.
+2. Turn on **Keyboard suggestions**. It's off by default.
+
+Your keyboard has to support autofill suggestions. Gboard does.
+
+<Callout type="tip" title="Suggestions don't appear?">
+In Android's settings, switch the autofill service to another option and back to Bramble. Android may keep old settings until you do.
+</Callout>
+
+## Save new logins
+
+With **Offer to save logins** on in **Settings → General**, Android offers to save a new sign-in to Bramble. Accept, and Bramble opens with a new login filled in. Unlock and save it.
+
+## Browsers that match the site
+
+A browser tells Bramble which site you're on. Bramble trusts that only from browsers on a built-in list, and checks each browser's signature so another app can't pretend to be one:
+
+- Chrome
+- Firefox, and Firefox from F-Droid
+- Microsoft Edge
+- Brave
+- DuckDuckGo
+- Opera Mini
+- Samsung Internet and Samsung Internet Beta
+- Vivaldi
+- Waterfox
+- Vanadium
+- IronFox
+
+In any other browser, including most beta and nightly versions, Bramble still opens, but it can't tell which site you're on. Tap **Unlock to autofill** or **Show all logins** and search for the login. You can't add browsers to the list yourself. To ask for one, email support@bramble.sh.
+
+## Something not working?
+
+See [Why doesn't Android suggest my logins?](/docs/android-autofill-not-showing-logins)

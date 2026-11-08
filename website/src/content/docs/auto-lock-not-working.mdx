@@ -1,0 +1,83 @@
+---
+title: Why does my vault lock too soon, or not at all?
+description: What locks your vault even with Never, and what keeps it unlocked past your timeout.
+section: unlock
+kind: question
+order: 2
+draft: true
+keywords:
+  - auto-lock not working
+  - autolock not working
+  - auto-lock doesn't work
+  - vault timeout does not work
+  - doesn't auto-lock
+  - does not lock after 5 minutes
+  - stays unlocked overnight
+  - never locks
+  - Never still locks
+  - keeps locking
+  - locks too often
+  - asks for master password every time
+  - asks for password on every launch
+  - asks for password after closing the app
+  - logged out
+  - vault locked
+  - Lock vault after inactivity
+  - Stays unlocked until you lock it or quit the browser
+  - Stays unlocked until you lock it or the app is closed
+updatedDate: 2026-11-07
+---
+
+## Check these first
+
+- Open **Settings → General** on the device that misbehaves and check **Auto-lock timeout**. Each device has its own setting.
+- In the browser extension, check **Lock when the screen locks** in the same place.
+- On the desktop app, auto-lock isn't available: the app stays unlocked until you lock it or quit it.
+
+## It locks when I don't expect it to
+
+### Bramble asks once after a restart, even with Never
+
+Bramble keeps your vault's key only in memory. Quitting the browser, quitting the desktop app or swiping the app away from your recent apps ends that, and so does your phone closing Bramble in the background. **Never** only means no timer. To make this quicker, turn on Face ID, a fingerprint, Touch ID or Windows Hello with **Unlock on open**. See [Ways to unlock your vault](/docs/unlock-methods).
+
+### Your computer's screen locked
+
+In the browser extension, **Lock when the screen locks** is on by default. Turn it off to stay unlocked through screen locks.
+
+### You were reading in the extension
+
+The extension's timer restarts when you open Bramble, save a change or use autofill on a page. Reading or scrolling in an open Bramble window doesn't count. Choose a longer timeout.
+
+### You switched away on your phone
+
+Time in the background counts toward your timeout. With **Immediate**, leaving the app locks it.
+
+### You closed the popup with Immediate on
+
+**Immediate** locks the extension when you close the last Bramble popup or window. Pick a timeout if you'd rather fill pages without unlocking each time.
+
+## It doesn't lock when it should
+
+### You're using the desktop app
+
+It doesn't lock on a timer or when your screen locks, whatever **Auto-lock timeout** says. Closing its window only hides it in the menu bar or tray. Choose the lock button (**Lock vault**) when you step away, or quit Bramble from its menu bar or tray icon.
+
+### You're using Firefox
+
+Firefox doesn't tell extensions when the screen locks, so **Lock when the screen locks** does nothing there. Your timeout still works.
+
+### You keep using autofill
+
+In the extension, each autofill on a page restarts the timer, even when the Bramble popup is closed.
+
+### Your browser is linked to the desktop app
+
+The browser can fill through the desktop app while the extension is locked, as long as the desktop app is unlocked. Lock the desktop app too. See [Link the browser extension to the desktop app](/docs/link-desktop-app).
+
+### Autofill on your phone still fills
+
+Phone autofill keeps its own timer, and locking the Bramble app doesn't end it. With **Never**, autofill stops asking after you unlock it once. To make autofill ask again right away, set **Auto-lock timeout** to **Immediate**.
+
+## Still not right?
+
+Note your Bramble version (**Settings → About**), the timeout you chose and what you did before it locked or didn't, and [contact us](mailto:support@bramble.sh).

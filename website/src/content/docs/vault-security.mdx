@@ -1,0 +1,104 @@
+---
+title: How Bramble protects your vault
+description: Your vault is encrypted on your devices, and only your devices can open it. Here's what that means, and what the servers Bramble uses can see.
+section: privacy
+kind: guide
+order: 1
+keywords:
+  - security
+  - encryption
+  - encrypted
+  - end-to-end
+  - E2EE
+  - zero knowledge
+  - zero-knowledge
+  - AES
+  - AES-256
+  - AES-GCM
+  - Argon2
+  - Argon2id
+  - KDF
+  - key derivation
+  - cipher
+  - algorithm
+  - is Bramble safe
+  - can you see my passwords
+  - where are my passwords stored
+  - cloud
+  - server
+  - relay
+  - TURN
+  - Cloudflare
+  - Nostr
+  - metadata
+  - IP address
+  - telemetry
+  - analytics
+  - tracking
+  - data collection
+  - privacy
+  - open source
+  - source code
+  - GPL
+  - audit
+  - report a vulnerability
+  - Have I Been Pwned
+  - breach check
+updatedDate: 2026-11-07
+draft: true
+---
+
+Bramble encrypts your vault on your device, and only your devices hold the key to open it. There's no Bramble account, and no Bramble server stores your vault.
+
+## How your vault is encrypted
+
+- **One random key per vault.** Each vault has its own random 256-bit key, made on your device when you create the vault. Everything in the vault is encrypted with AES-256-GCM. Each entry has its own key, and the vault key protects them all.
+- **Your master password unlocks that key.** Bramble runs your master password through Argon2id (64 MiB of memory, 3 passes) to make the key that unlocks your vault's key. That makes every guess slow and expensive for anyone trying to crack it.
+- **Other ways in work the same way.** Your recovery code goes through Argon2id too. Security keys, and Touch ID or Windows Hello in the browser extension, unlock with a secret that only your key or passkey can produce.
+- **Quick unlock in the apps stays on the device.** In the phone and desktop apps, Face ID, fingerprint, Touch ID and Windows Hello keep your vault's key behind your device's own lock, on that device only.
+
+Your master password is never stored and never sent anywhere. That's why nobody can reset it for you: see [I forgot my master password](/docs/forgot-master-password).
+
+While your vault is unlocked, its key is held in memory. Locking clears it. To lock sooner, set **Auto-lock timeout** in **Settings → General**.
+
+## Where your data is stored
+
+| What | Where |
+| --- | --- |
+| Your encrypted vault | On your devices only: in the browser's extension storage, the phone app's private storage, or the desktop app's data folder. |
+| Face ID, fingerprint, Touch ID and Windows Hello unlock | Your device's secure storage, like the Keychain on Apple devices. |
+| The desktop app's sync identity and cloud backup sign-ins | Your computer's credential store, like the macOS Keychain. |
+| Backups | Where you put them. A cloud backup is your encrypted vault, so the storage provider can't read it. See [Back up your vault](/docs/back-up-your-vault). |
+| Your master password | Nowhere. |
+
+## What the servers can see
+
+Sync is end-to-end encrypted. Your devices connect to each other directly where they can, and check each other's identity before they exchange anything. Two kinds of server help them connect:
+
+| Server | Can see | Can't see |
+| --- | --- | --- |
+| Signaling relay, which introduces your devices | Encrypted messages, your IP addresses, and when your devices connect | Your vault, your passwords, your master password, or any key that decrypts them |
+| TURN relay (Cloudflare by default), used when your devices can't connect directly | Your IP addresses, how much data passes, and roughly how big each attached file is | The same: everything passing through is encrypted |
+
+You can use your own servers. Open **Settings → Sync**, expand **Advanced**, and set **Nostr relay URL** and **TURN / ICE servers URL**.
+
+See [How sync works](/docs/how-sync-works).
+
+## No tracking
+
+Bramble has no analytics, telemetry or ads, and collects nothing about you. It only goes online for features you turn on yourself:
+
+- **Sync**, after you [add a device](/docs/add-a-device).
+- **Cloud backups**, to the storage you choose.
+- **Email aliases**, to the alias provider you set up.
+- **Check passwords for breaches** in **Settings → General**. It's off by default. It sends only the first 5 characters of each password's SHA-1 hash to Have I Been Pwned, never the password.
+
+The desktop app also checks bramble.sh for a new version when it opens. The request contains nothing from your vault. Turn it off with **Check for updates when Bramble opens** in **Settings → About**.
+
+Read the full [privacy policy](/privacy).
+
+## Open source
+
+Bramble's apps are open source. Their code is on [GitHub](https://github.com/flythenimbus/bramble) under the GNU General Public License v3.0, so anyone can check how they work.
+
+Found a security problem? Report it privately to support@bramble.sh, or through the [Security tab](https://github.com/flythenimbus/bramble/security/advisories) on GitHub. Please don't open a public issue.

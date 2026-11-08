@@ -1,0 +1,97 @@
+---
+title: What you can store, and how to find it
+description: Logins, cards, notes and SSH keys, plus tags, custom fields, the archive and breach warnings.
+section: start
+kind: guide
+order: 2
+draft: true
+keywords:
+  - item types
+  - entry types
+  - add item
+  - new entry
+  - credit card
+  - debit card
+  - secure note
+  - SSH key
+  - two-factor
+  - 2FA
+  - TOTP
+  - authenticator
+  - one-time code
+  - security questions
+  - folders
+  - groups
+  - organize
+  - organise
+  - categories
+  - labels
+  - tags
+  - tag browser
+  - favourites
+  - favorites
+  - archive
+  - hide entry
+  - search
+  - sort
+  - filter
+  - breach
+  - pwned
+  - Have I Been Pwned
+  - compromised password
+  - weak password
+  - This password appeared in a known data breach.
+  - Add New
+  - At Risk
+  - Archived items
+updatedDate: 2026-11-07
+---
+
+## Kinds of item
+
+Choose **Add New** above your list, then pick one:
+
+| Item | What it holds |
+| --- | --- |
+| **Login** | Websites, a username or email, a password, an **Authenticator key (TOTP)** for two-factor codes, passkeys and notes. |
+| **Payment card** | Cardholder name, card number, expiry date, CVV and notes. |
+| **Secure note** | A title and any text. |
+| **SSH key** | A public key, a private key, its passphrase and notes. |
+
+Any item can also hold:
+
+- **Custom fields**: choose **Add field** for things like security questions or account numbers. Make a field **Hidden** to mask its value.
+- **Tags**: see below.
+- Files: see [Attach files to an entry](/docs/file-attachments).
+
+## Organise with tags
+
+Bramble has no folders. Use tags instead.
+
+1. Edit an item and type a tag under **Tags**. Press Enter or a comma to add it.
+2. To see everything with a tag, type `#` and the tag in the search box, like `#work`. Bramble suggests your tags as you type.
+3. Combine terms to narrow the list: `#work github` shows items tagged work that match github.
+
+On an item, choose one of its tags to list everything with that tag. An item can have up to 32 tags.
+
+## Search, filter and sort
+
+- The search box matches names, usernames, websites, the text of secure notes, custom fields and tags.
+- Filter by kind of item with the buttons above the list. On a narrow screen, use **Filter by type**.
+- **Sort** offers **Name A-Z**, **Name Z-A**, **Recently used**, **Recently added** and **Recently updated**.
+
+## Archive
+
+Archive an item to keep it without seeing it every day. Archived items stay in your vault, but they leave your main list and aren't offered for autofill.
+
+- Open the item and choose **Archive**.
+- To find archived items, choose the archive button next to **Sort**. It appears once something is archived.
+- To bring an item back, open it and choose **Restore**.
+
+## Breach warnings
+
+The **Overview** above your list counts **Total Items**, **At Risk** and **Strong**. Choose a count to list those items.
+
+**At Risk** shows logins whose password is in a known data breach. To turn this on, open **Settings → General** and turn on **Check passwords for breaches**. It's off by default. Bramble sends only the first 5 characters of a hash of each password to haveibeenpwned.com, never the password itself.
+
+A breached login shows **This password appeared in a known data breach.** Change the password on that site, then update it in Bramble. The [password generator](/docs/password-generator) can make a new one.

@@ -1,0 +1,42 @@
+---
+title: Why is there no PIN unlock?
+description: A 4-digit PIN would protect your whole vault with only 10,000 combinations. Face ID, fingerprint, Touch ID, Windows Hello and security keys are faster and safer.
+section: privacy
+kind: question
+order: 3
+keywords:
+  - PIN
+  - 4 digit PIN
+  - 4-digit PIN
+  - PIN code
+  - PIN unlock option
+  - passcode
+  - short password
+  - quick unlock
+  - unlock faster
+  - type my password every time
+  - convenience
+  - Allow passcode fallback
+  - Windows Hello PIN
+updatedDate: 2026-11-07
+draft: true
+---
+
+A 4-digit PIN has only 10,000 combinations. To unlock with one, Bramble would have to keep a key on your device that the PIN opens. Anyone who copied that key could try every PIN in less than a day, and the PIN would then be all that protects your whole vault.
+
+## Unlock without typing your password
+
+Each of these skips your master password, and your device or security key guards it:
+
+| Where | Use |
+| --- | --- |
+| Phone | Face ID or a fingerprint |
+| Desktop app on a Mac | Touch ID |
+| Browser extension on a Mac or Windows PC | Touch ID or Windows Hello |
+| Browser extension in Chrome or Brave | A security key, like a YubiKey |
+
+Windows Hello accepts your Windows Hello PIN. On an iPhone, **Allow passcode fallback** lets your phone's passcode unlock your vault too. Your device checks these, not Bramble.
+
+To type your master password less often, set a longer **Auto-lock timeout** in **Settings → General**.
+
+See [Ways to unlock your vault](/docs/unlock-methods).

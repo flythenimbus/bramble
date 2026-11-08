@@ -1,0 +1,74 @@
+---
+title: Does sync run all the time?
+description: When each app syncs, why a phone catches up when you open it, and how an always-on computer keeps your devices current.
+section: sync
+kind: question
+order: 5
+keywords:
+  - always on
+  - always-on sync
+  - background sync
+  - sync in the background
+  - sync when closed
+  - sync when locked
+  - sync while app is closed
+  - phone doesn't sync in the background
+  - changes don't show up
+  - out of date
+  - not up to date
+  - only syncs when I open the app
+  - sync delay
+  - sync server
+  - central device
+  - main device
+  - hub
+  - mesh
+  - what if one device is off
+  - push
+  - Auto-lock timeout
+  - Never
+  - Immediate
+  - Start Bramble at login
+  - Lock when the screen locks
+updatedDate: 2026-11-07
+draft: true
+---
+
+No. A device syncs only while Bramble is unlocked on it, and a change moves only between devices that are unlocked and online at the same time.
+
+## When each app syncs
+
+| App | Syncs while |
+| --- | --- |
+| Desktop app | Bramble is running and your vault is unlocked |
+| Browser extension | Your browser is open and your vault is unlocked |
+| Phone | Bramble is open and unlocked |
+
+- Locking stops sync, and so does quitting Bramble or the browser.
+- With **Auto-lock timeout** set to **Immediate**, the extension locks when you close Bramble's popup or window, and a phone locks as soon as you leave Bramble.
+- In the browser extension, **Lock when the screen locks** also locks your vault when your computer's screen locks.
+- With more than one vault, the phone and desktop apps sync only the vault you have open. The browser extension syncs every vault you have unlocked.
+
+## Phones sync when you open Bramble
+
+Your phone pauses Bramble soon after you switch to another app, and Bramble doesn't wake up in the background. To bring your phone up to date, open Bramble and unlock it while another of your devices is on.
+
+## No device is in charge
+
+Every device syncs with whichever of your devices are on. If one is off, the rest keep syncing without it, and it catches up the next time it's unlocked alongside another.
+
+## Keep one computer on
+
+A computer that's always on and unlocked can carry changes between devices that are rarely on together, like two phones. It's just one more device in the group.
+
+1. Install the desktop app on a computer that stays on and awake.
+2. Open **Settings → General**. Turn on **Start Bramble at login**, and set **Auto-lock timeout** to **Never**.
+3. Unlock Bramble after each restart. The key is kept only in memory, so it asks once each time Bramble starts.
+
+<Callout type="warning" title="Never keeps your vault open">
+Anyone who can use that computer can open your vault. Only do this on a computer that you alone use, behind a screen lock.
+</Callout>
+
+## Check when a device last synced
+
+Open **Settings → Sync** and look at **Last synced**. See [See and remove devices](/docs/manage-devices).

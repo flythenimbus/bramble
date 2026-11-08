@@ -1,0 +1,158 @@
+---
+title: How auto-lock works
+description: Choose how long Bramble stays unlocked, what keeps it unlocked, and what locks it on each device.
+section: unlock
+kind: guide
+order: 2
+draft: true
+keywords:
+  - autolock
+  - auto lock
+  - lock timeout
+  - inactivity timeout
+  - idle timeout
+  - lock after inactivity
+  - stay unlocked
+  - keep me logged in
+  - stay logged in
+  - never lock
+  - lock on sleep
+  - lock when computer locks
+  - lock shortcut
+  - lock hotkey
+  - Lock Bramble
+  - Lock vault
+  - Lock vault after inactivity
+  - Lock the vault and require autofill auth after inactivity
+  - Stays unlocked until you lock it or quit the browser
+  - Stays unlocked until you lock it or quit Bramble
+  - Stays unlocked until you lock it or the app is closed
+  - app switcher
+  - recent apps
+  - recents preview
+  - hide app preview
+  - multitasking screen
+  - asks for password every time
+updatedDate: 2026-11-07
+---
+
+Auto-lock clears your vault's key from memory after a while, so someone who picks up your device can't open your vault. You set it separately on each device.
+
+## Choose a timeout
+
+Open **Settings → General** and pick an **Auto-lock timeout**:
+
+| Option | When your vault locks |
+| --- | --- |
+| **Immediate** | As soon as you stop using Bramble: when you close the last Bramble popup or window in your browser, or leave the app on your phone. |
+| **5 minutes**, **15 minutes**, **30 minutes**, **1 hour** | After that long without activity. |
+| **Never** | Only when you lock it, or quit the browser or app. |
+
+The default is **15 minutes**.
+
+<Callout type="warning" title="The desktop app doesn't auto-lock">
+The desktop app shows the same setting, but it doesn't lock on a timer or when your screen locks. It stays unlocked until you lock it or quit it.
+</Callout>
+
+## What counts as activity
+
+<PlatformTabs>
+<div slot="extension">
+
+The timer starts when you unlock. It starts again each time you:
+
+- open Bramble,
+- save a change,
+- use autofill on a web page.
+
+Reading or scrolling in an open Bramble window doesn't restart it.
+
+</div>
+<div slot="mobile">
+
+Tapping or typing in Bramble restarts the timer.
+
+Time Bramble spends in the background counts as inactivity. With **5 minutes**, your vault locks 5 minutes after you last used it, whether you stayed in Bramble or switched away.
+
+</div>
+<div slot="desktop">
+
+The desktop app doesn't lock on a timer, so activity doesn't matter. Lock it with the lock button, or quit it.
+
+</div>
+</PlatformTabs>
+
+## When your screen locks
+
+<PlatformTabs>
+<div slot="extension">
+
+**Lock when the screen locks** is in **Settings → General** and is on by default. It locks your vault when your computer's screen locks, whatever the timeout.
+
+To stay unlocked through screen locks, choose **Never** and turn this off.
+
+Firefox doesn't tell extensions when the screen locks, so in Firefox this switch has no effect. Use a timeout instead.
+
+</div>
+<div slot="mobile">
+
+Locking your phone counts as leaving Bramble. With **Immediate**, your vault locks. With a timeout, the time keeps counting.
+
+</div>
+<div slot="desktop">
+
+The desktop app stays unlocked when your screen locks.
+
+</div>
+</PlatformTabs>
+
+## When you close Bramble
+
+Bramble keeps your vault's key only in memory. Whenever Bramble starts again, it asks you to unlock once, even with **Never**.
+
+<PlatformTabs>
+<div slot="extension">
+
+- Closing the popup keeps your vault unlocked, unless you chose **Immediate**.
+- Quitting the browser locks it.
+
+</div>
+<div slot="mobile">
+
+- Switching to another app keeps your vault unlocked, unless you chose **Immediate**.
+- Swiping Bramble away from your recent apps locks it. So does your phone closing Bramble in the background.
+- Choosing a file, scanning a QR code or opening an attachment doesn't count as leaving Bramble, even with **Immediate**.
+
+</div>
+<div slot="desktop">
+
+- Closing the window hides Bramble in the menu bar or system tray. Your vault stays unlocked.
+- Quitting locks it. Choose **Quit Bramble** from Bramble's icon in the menu bar or tray, or press Cmd+Q on a Mac or Ctrl+Q on Windows and Linux.
+
+</div>
+</PlatformTabs>
+
+To unlock with a glance or a touch after a restart, turn on Face ID, a fingerprint, Touch ID or Windows Hello, then **Unlock on open**. See [Ways to unlock your vault](/docs/unlock-methods).
+
+## Autofill on your phone
+
+Autofill on your phone follows the same setting, with its own timer:
+
+- **Immediate**: you unlock for every fill.
+- A timeout: after you unlock once, autofill fills without asking until that long passes without a fill.
+- **Never**: after you unlock once, autofill stops asking.
+
+Locking the Bramble app doesn't lock autofill. To make autofill ask again right away, choose **Immediate**.
+
+Some sites ask Bramble to confirm it's you before a passkey sign-in. Those still ask, whatever the timeout.
+
+## The app switcher
+
+Your phone's app switcher doesn't show your vault. On iPhone, Bramble covers its screen with its launch screen when you leave it. On Android, the preview is blank. Screenshots inside Bramble still work.
+
+Hiding the preview doesn't lock your vault. Only your timeout does.
+
+## Lock it yourself
+
+- Choose the lock button (**Lock vault**) at the top of Bramble.
+- In the browser extension, you can add a keyboard shortcut for **Lock Bramble** on your browser's extension shortcuts page. It has no shortcut until you set one.

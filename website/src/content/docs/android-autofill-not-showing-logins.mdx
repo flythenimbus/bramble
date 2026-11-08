@@ -1,0 +1,76 @@
+---
+title: Why doesn't Android suggest my logins?
+description: What to do when Android says "No sign-in info", shows no suggestions, or shows only one of your accounts.
+section: autofill
+kind: question
+order: 1
+keywords:
+  - No sign-in info
+  - No sign in info
+  - no suggestions
+  - autofill not working
+  - autofill not showing
+  - only one account
+  - only one suggestion
+  - Only one autofill suggestion when multiple accounts are saved
+  - multiple accounts
+  - missing login
+  - wrong login
+  - doesn't find my login
+  - always asks to unlock
+  - Unlock to autofill
+  - Show all logins
+  - keyboard suggestions never appear
+  - inline suggestions not showing
+  - Gboard
+  - doesn't match the current URL
+  - have to search manually
+  - unsupported browser
+  - subdomain
+  - Credential Manager
+updatedDate: 2026-11-07
+draft: true
+---
+
+## Check these first
+
+- Bramble is your autofill service in Android's settings. See [Set up autofill on Android](/docs/set-up-autofill-android).
+- The login's **Websites** include this site, or the login is linked to this app.
+- The login has a password. Bramble on Android doesn't offer logins without one.
+- You're in the right vault. Autofill uses the vault you last opened in Bramble.
+- Your browser is on [the list Bramble trusts](/docs/set-up-autofill-android#browsers-that-match-the-site).
+
+## "No sign-in info"
+
+This message comes from Android's own sign-in sheet, not from Bramble. Some sites ask Android for a saved sign-in as the page opens. Bramble answers that sheet with passkeys only, so when it has no passkey for the site, Android says there's no sign-in info.
+
+Close the sheet and tap the username or password field. Bramble's suggestions appear there.
+
+## Only "Unlock to autofill"
+
+When your vault is locked for autofill, Android shows one suggestion: **Bramble**, **Unlock to autofill**. That's not one of your accounts. Tap it, unlock, and Bramble lists every login for the site.
+
+After that, Bramble stays unlocked for autofill for your **Auto-lock timeout** (**Settings → General**), and the suggestions list your logins directly. With **Immediate**, Bramble asks you to unlock every time.
+
+Bramble always lets you pick a login, even when only one matches.
+
+## Only one of your accounts shows
+
+- **The other logins are saved for a different subdomain.** Android matches the same site, its parent domain and its subdomains, but not sibling subdomains. A login for `accounts.example.com` doesn't show on `shop.example.com`. Add the site under the login's **Websites**, or save the parent domain, such as `example.com`.
+- **They have no password**, or they're archived.
+- **They're in another vault.** Open that vault in Bramble, then try again.
+- **Your keyboard shows a limited number.** With **Keyboard suggestions** on, the keyboard decides how many suggestions fit. Turn **Keyboard suggestions** off in **Settings → General** to get the full list in a dropdown.
+
+Tap **Show all logins** to search your whole vault from any field.
+
+## No suggestions at all
+
+- **Bramble isn't the autofill service.** Choose it again in Android's settings. Android lets only one autofill service fill at a time.
+- **Keyboard suggestions don't appear.** They need Android 11 or later and a keyboard that supports them, such as Gboard. In Android's settings, switch the autofill service to another option and back to Bramble.
+- **The field isn't a sign-in field to Android.** Some apps and sites don't mark their fields for autofill. Copy the password from Bramble instead.
+
+## Bramble opens, but finds nothing for the site
+
+The browser isn't on Bramble's built-in list, so Bramble can't tell which site you're on. Search for the login each time. You can't add browsers yourself; email support@bramble.sh to ask for one.
+
+In an app, Bramble matches a login only once you've linked it. Pick the login from the list and choose **Fill and save** when Bramble asks **Save to Bramble?**. Next time, Bramble offers it in that app.

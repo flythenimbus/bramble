@@ -1,0 +1,137 @@
+---
+title: Why did my cloud backup fail?
+description: What a failed cloud backup means for Dropbox, WebDAV and S3 providers, and how to fix it.
+section: backups
+kind: question
+order: 1
+keywords:
+  - backup failed
+  - backup error
+  - backup not working
+  - cloud backup not working
+  - upload failed
+  - unauthorized
+  - forbidden
+  - not found
+  - "401"
+  - "403"
+  - "404"
+  - "429"
+  - "507"
+  - wrong password
+  - app password
+  - storage full
+  - Nextcloud
+  - pCloud
+  - Fastmail
+  - ownCloud
+  - Koofr
+  - WebDAV
+  - Dropbox
+  - Backblaze
+  - B2
+  - Cloudflare R2
+  - Storj
+  - Wasabi
+  - MinIO
+  - S3
+  - ewebdav.pcloud.com
+  - Failed
+  - "WebDAV PUT failed (401)"
+  - "WebDAV PUT failed (404)"
+  - WebDAV stored
+  - rate-limited by the server
+  - S3 PUT failed
+  - S3 POST failed
+  - S3 failed to complete the upload
+  - Dropbox upload failed
+  - insufficient_space
+  - This app has reached its user limit
+  - Couldn't refresh access
+  - Reconnect the account
+  - Sign-in was cancelled or failed
+  - Unlock Bramble first, then connect
+  - No response from Bramble's background
+  - One-click sign-in for Dropbox is coming in a future update
+  - Coming soon
+  - Interrupted
+  - Not backed up
+  - Next attempt
+  - Its credentials were entered in another vault
+  - no stored credentials for this backup target
+  - refusing to authenticate a request
+  - Failed to fetch
+  - NetworkError when attempting to fetch resource
+  - request failed
+updatedDate: 2026-11-07
+draft: true
+---
+
+A failed backup shows **Failed** on its card under **Settings → Backups → Cloud backups**, followed by the reason. Most reasons quote your provider, with its status code in brackets.
+
+## Check these first
+
+- Your device is online, and no VPN or firewall blocks your provider.
+- The address and credentials are right. Choose **Edit** on the card to change them. Leave the credential fields blank to keep the saved ones.
+- Once you've fixed something, choose **Back up now** to try again straight away.
+
+## Retries after a failure
+
+Bramble waits before it tries again on its own, so a wrong password isn't sent over and over. The wait starts at 15 minutes and doubles after each failure, up to your **Frequency**. The card says when the next attempt is.
+
+**Back up now** skips the wait. Editing the target or changing its **Frequency** clears it.
+
+## Nextcloud, pCloud, Fastmail and other WebDAV
+
+| Message | What to do |
+| --- | --- |
+| WebDAV PUT failed (401) | The username or password is wrong. Nextcloud and Fastmail need an app password, not the one you sign in with. On pCloud, accounts stored in the EU use `https://ewebdav.pcloud.com` as the **Server URL**. |
+| WebDAV PUT failed (404) or (405) | That isn't your WebDAV address. For Nextcloud, **WebDAV URL** takes the WebDAV address from Files settings in Nextcloud, not the address you sign in at. It looks like `https://cloud.example.com/remote.php/dav/files/USERNAME/`. |
+| WebDAV PUT failed (403) | This account can't write there. Try another **Backup folder (optional)**, or check the folder's permissions on your server. |
+| WebDAV PUT failed (409) | A folder in your backup path couldn't be made. Under **Advanced**, write **Backup folder (optional)** as a path, like `/Bramble`, or create the folder on your server first. |
+| WebDAV PUT failed (507) | Your storage is full. Free up space, or keep fewer copies with **Backups to keep** under **Advanced**. |
+| …rate-limited by the server, which throttles after failed sign-ins… | Nextcloud blocks sign-ins for a while after several wrong ones. Fix the address and credentials, wait a few minutes, then choose **Back up now**. |
+| WebDAV stored … bytes of a …-byte backup | The server kept only part of the file, so Bramble didn't count it as a backup. Check your free space and any upload size limit on your server. |
+
+## Backblaze B2, Cloudflare R2, Storj, Wasabi and other S3
+
+Large backups go up in parts, so the message may say POST instead of PUT.
+
+| Message | What to do |
+| --- | --- |
+| S3 PUT failed (403) | The **Access key ID** or **Secret access key** is wrong, or the key can't write to this bucket. Also check the date and time on your device: providers turn down requests from a clock that's far off. |
+| S3 PUT failed (404) | The **Bucket** name is wrong, or the bucket isn't at this **Endpoint**. |
+| S3 PUT failed (400) or (301) | The **Endpoint** or **Region** doesn't match the bucket. Check both under **Advanced**. |
+| S3 failed to complete the upload | Your provider didn't finish storing a large backup. Choose **Back up now** to try again. |
+
+A key that can upload but can't list or delete still backs up. Bramble just can't remove old copies with it, so **Backups to keep** has no effect.
+
+## Dropbox
+
+Dropbox works only in the browser extension.
+
+| Message | What to do |
+| --- | --- |
+| One-click sign-in for Dropbox is coming in a future update. | You're in the phone or desktop app. Connect Dropbox from the browser extension, or pick another provider here. |
+| Unlock Bramble first, then connect. | Unlock your vault, then choose **Connect Dropbox** again. |
+| Sign-in was cancelled or failed | The Dropbox window closed before you finished. Choose **Connect Dropbox** and finish signing in. |
+| Dropbox's page says "This app has reached its user limit." | Dropbox isn't accepting new connections to Bramble right now. Pick another provider for now. |
+| Couldn't refresh access (…). Reconnect the account. | Bramble lost access to your Dropbox, for example after you removed it from Dropbox's connected apps. Choose **Reconnect** on the card. |
+| Dropbox upload failed (…) | The text in brackets is Dropbox's reason. `insufficient_space` means your Dropbox is full. |
+| No response from Bramble's background (reload the extension?). | Turn the extension off and on again in your browser's extensions page, or restart the browser. |
+
+## Any provider
+
+| Message | What to do |
+| --- | --- |
+| Failed to fetch, NetworkError when attempting to fetch resource (browser extension) or request failed (desktop app) | Bramble couldn't reach your provider. Check the address, your connection, and any VPN or firewall. |
+| Interrupted: Bramble was closed before this backup was confirmed. | Nothing failed. Bramble tries again the next time it runs, or choose **Back up now**. |
+| Its credentials were entered in another vault, so this one cannot open them. | Choose **Edit** and enter the credentials again. |
+| no stored credentials for this backup target (desktop app) | Choose **Edit** and enter the credentials again. |
+| refusing to authenticate a request to … (desktop app) | You changed the address but kept the saved credentials. Choose **Edit** and enter them again. |
+| Not backed up: … attachment isn't on this device yet. | An attachment hasn't synced to this device yet. Bramble never uploads a backup with part of your vault missing, and backs up once it arrives. |
+| Not backed up: this vault's attachments can't be listed while it's locked. | Unlock the vault once. |
+
+## No error, but no new backups?
+
+Check [when cloud backups run](/docs/back-up-your-vault#when-cloud-backups-run) on each app. An unchanged vault isn't uploaded again.

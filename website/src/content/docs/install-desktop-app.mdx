@@ -1,0 +1,147 @@
+---
+title: Install the desktop app
+description: Get Bramble on your Mac or Linux computer, keep it up to date, and start it when you log in.
+section: desktop
+kind: guide
+order: 0
+keywords:
+  - download
+  - setup
+  - Mac
+  - macOS
+  - Apple silicon
+  - Intel
+  - dmg
+  - Homebrew
+  - brew
+  - cask
+  - Linux
+  - Debian
+  - Ubuntu
+  - apt
+  - deb
+  - Fedora
+  - rpm
+  - AppImage
+  - Nix
+  - NixOS
+  - flake
+  - Windows
+  - windows support
+  - Windows version
+  - update
+  - upgrade
+  - new version
+  - Check for Updates
+  - Update Bramble
+  - auto update
+  - start at login
+  - launch at login
+  - open at login
+  - autostart
+  - login items
+  - Login Items & Extensions
+  - background item
+  - menu bar
+  - system tray
+updatedDate: 2026-11-07
+draft: true
+---
+
+The desktop app runs on macOS and Linux. There's no Windows version yet.
+
+Download it from [bramble.sh](/), or install it with one of the commands below.
+
+## macOS
+
+Download the `.dmg` from [bramble.sh](/), open it and move Bramble to your Applications folder. It's one app for both Apple silicon and Intel Macs.
+
+Or install it with Homebrew:
+
+```bash
+brew install --cask bramble
+```
+
+## Linux
+
+### Debian and Ubuntu
+
+Add Bramble's APT repository and install it:
+
+```bash
+curl -fsSL https://apt.bramble.sh/keys.asc | sudo tee /usr/share/keyrings/bramble-keyring.asc > /dev/null
+curl -fsSL https://apt.bramble.sh/bramble.sources | sudo tee /etc/apt/sources.list.d/bramble.sources > /dev/null
+sudo apt update && sudo apt install bramble
+```
+
+It's available for 64-bit x86 (Intel and AMD) and ARM computers.
+
+### AppImage
+
+One file that runs on most distributions. Download it from [bramble.sh](/), then make it executable and run it:
+
+```bash
+chmod +x Bramble_*.AppImage
+./Bramble_*.AppImage
+```
+
+### Fedora and other RPM-based distributions
+
+Download the `.rpm` for your computer from the [releases page](https://github.com/flythenimbus/bramble/releases?q=desktop&expanded=true) and install it:
+
+```bash
+sudo dnf install ./Bramble-*.rpm
+```
+
+### Nix and NixOS
+
+Bramble builds from source with its Nix flake:
+
+```bash
+nix profile install github:flythenimbus/bramble
+```
+
+To try it without installing, run `nix run github:flythenimbus/bramble`.
+
+<Callout type="note" title="Quick access on Wayland">
+On a Wayland desktop, the quick-access shortcut doesn't work. Open the panel from the tray icon instead: choose **Quick Access**.
+</Callout>
+
+## Keep it up to date
+
+How Bramble updates depends on how you installed it:
+
+| Installed with | How it updates |
+| --- | --- |
+| `.dmg` or Homebrew | Bramble updates itself. |
+| AppImage | Bramble updates itself. |
+| APT | Your system updates it with everything else, for example with `sudo apt upgrade`. |
+| Nix | It updates when you upgrade your Nix profile or system. |
+| `.rpm` | It doesn't update itself. Install the new `.rpm` from the releases page. |
+
+When Bramble updates itself, it checks for a new version a few seconds after it opens. If there is one, it asks first: choose **Update now** to download it and restart. Your vault isn't touched.
+
+To check yourself, open **Settings → About** and choose **Check** under **Check for updates**. On a Mac, you can also choose **Bramble → Check for Updates…** in the menu bar.
+
+To stop the automatic check, turn off **Check for updates when Bramble opens** in **Settings → About**.
+
+## Start Bramble when you log in
+
+Open **Settings → General** and turn on **Start Bramble at login**.
+
+Bramble then starts in the menu bar (or the system tray on Linux) without opening a window. Keep it on if you use [scheduled backups](/docs/back-up-your-vault): they only run while Bramble is running.
+
+On a Mac, it shows up as Bramble in the Login Items list in System Settings.
+
+## Closing and quitting
+
+Closing the window doesn't quit Bramble. It keeps running in the menu bar or system tray, so the quick-access panel and backups keep working.
+
+- To open the window again, click the Bramble icon and choose **Open Bramble**.
+- To quit, choose **Quit Bramble** from the same menu.
+
+## Next steps
+
+- [Link the browser extension to the desktop app](/docs/link-desktop-app)
+- [Ways to unlock your vault](/docs/unlock-methods)
+- [Add a device](/docs/add-a-device)

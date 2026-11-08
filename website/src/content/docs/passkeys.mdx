@@ -1,0 +1,145 @@
+---
+title: Save and use passkeys
+description: Bramble creates passkeys for websites, keeps them in your vault, and signs you in with them in your browser and on your phone.
+section: passkeys
+kind: guide
+order: 1
+draft: true
+keywords:
+  - passkey
+  - passkeys
+  - passwordless sign-in
+  - FIDO
+  - WebAuthn
+  - passkey provider
+  - passkey manager
+  - create a passkey
+  - store passkeys
+  - sign in with a passkey
+  - log in without a password
+  - delete a passkey
+  - Use Bramble for passkeys
+  - Save a passkey?
+  - Add a passkey?
+  - Use your passkey?
+  - Sign in with which passkey?
+  - Unlock Bramble to use your passkeys for this site.
+  - Unlock Bramble to save a passkey for this site.
+  - Holds a passkey
+  - This login has a passkey
+updatedDate: 2026-11-07
+---
+
+A passkey signs you in to a website without a password. Bramble can create passkeys, keep them in your vault next to your logins, and sync them to your other devices.
+
+## Where it works
+
+|  | Passkeys |
+| --- | --- |
+| Browser extension in Chrome, Brave and other Chromium browsers | Yes |
+| Browser extension in Firefox | Yes |
+| iPhone | iOS 17 and later |
+| Android | Android 14 and later |
+| Desktop app | No |
+| Safari on a Mac | No |
+
+Some browsers and phones have limits. See [Which browsers and apps can use Bramble passkeys?](/docs/passkey-browsers)
+
+## Turn it on
+
+<PlatformTabs>
+<div slot="extension">
+
+1. Open **Settings → General**.
+2. Turn on **Use Bramble for passkeys**. It's off by default.
+
+While it's on, Bramble handles every passkey prompt in that browser. To use a security key or a passkey saved somewhere else, turn it off first.
+
+</div>
+<div slot="ios">
+
+Turn on Bramble in iOS AutoFill. The same switch fills your passwords. See [Set up AutoFill on iPhone](/docs/set-up-autofill-iphone).
+
+</div>
+<div slot="android">
+
+Open your phone's Settings, search for "passkeys" and turn on Bramble as a passkey provider. This is separate from the autofill service in [Set up autofill on Android](/docs/set-up-autofill-android).
+
+</div>
+</PlatformTabs>
+
+## Save a passkey
+
+Start creating a passkey on the site, usually in its account or security settings.
+
+<PlatformTabs>
+<div slot="extension">
+
+A card opens in the top right corner of the page:
+
+- **Save a passkey?** saves it as a new login. Choose **Save passkey**.
+- **Add a passkey?** adds it to the login you already have for the site, shown under **Adds to**. Choose **Add passkey**.
+- **Add this passkey to…** lists your logins for the site. Pick one, or choose **Create a new login**.
+
+If your vault is locked, choose **Unlock & Save** or **Unlock & Add**, then unlock in the window that opens.
+
+</div>
+<div slot="mobile">
+
+1. When your phone asks where to save the passkey, choose Bramble.
+2. Unlock with Face ID, a fingerprint or your master password.
+
+The passkey works right away. The next time you open and unlock Bramble, it adds the passkey to your vault and shows **Passkey saved as** or **Passkey added to** with the login's name. From then on, it syncs to your other devices.
+
+</div>
+</PlatformTabs>
+
+## Sign in with a passkey
+
+Choose to sign in with a passkey on the site.
+
+<PlatformTabs>
+<div slot="extension">
+
+1. A card opens in the top right corner: **Use your passkey?**, or **Sign in with which passkey?** if you have more than one for this site.
+2. Choose your account.
+
+If your vault is locked, the card says "Unlock Bramble to use your passkeys for this site." Choose **Unlock & Use** and unlock in the window that opens.
+
+Some sites ask Bramble to check it's really you. A **Confirm it's you** window opens: enter your master password and choose **Confirm**. If your vault has no master password, choose **Use security key**.
+
+</div>
+<div slot="ios">
+
+1. Choose Bramble's passkey when iOS offers it.
+2. Unlock with Face ID, Touch ID or your master password.
+3. If you have several passkeys for the site, pick one under **Choose a passkey**.
+
+</div>
+<div slot="android">
+
+1. Choose Bramble in the sign-in sheet.
+2. Unlock with your fingerprint, your face or your master password.
+3. Pick the passkey to sign in with.
+
+</div>
+</PlatformTabs>
+
+## Find your passkeys
+
+A passkey lives on a login.
+
+- In your vault list, a key icon next to a login's name means it holds a passkey.
+- Open the login to see **Passkeys**, with the account each one signs in to.
+- To delete one, edit the login and choose the X next to the passkey under **Passkeys**, then save.
+
+Deleting a login deletes its passkeys too.
+
+## Bring passkeys from another app
+
+You can import passkeys from some password managers. See [Import from another password manager](/docs/import-passwords#passkeys).
+
+## Something went wrong?
+
+- [Why does a passkey keep asking for my password?](/docs/passkey-keeps-asking)
+- [Which browsers and apps can use Bramble passkeys?](/docs/passkey-browsers)

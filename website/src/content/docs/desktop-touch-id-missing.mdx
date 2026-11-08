@@ -1,0 +1,46 @@
+---
+title: Why can't I find Touch ID in the desktop app?
+description: Touch ID unlock needs version 0.16.0 or later and a fingerprint set up on your Mac.
+section: desktop
+kind: question
+order: 4
+keywords:
+  - Touch ID missing
+  - no Touch ID option
+  - Touch ID toggle
+  - fingerprint
+  - biometric unlock
+  - biometrics on Mac
+  - unlock with fingerprint
+  - Windows Hello
+  - Set up Touch ID on this device to use this.
+  - Accessibility permission
+  - quick-access panel
+  - white text
+  - unreadable
+  - contrast
+  - light mode
+  - theme
+updatedDate: 2026-11-07
+draft: true
+---
+
+Touch ID unlock came to the desktop app in version 0.16.0. On an older version, there's no setting for it.
+
+## Turn it on
+
+1. Update Bramble: choose **Bramble → Check for Updates…** in the menu bar.
+2. Unlock with your master password.
+3. Open **Settings → Security** and turn on **Touch ID**.
+
+It works on that Mac only. Your master password keeps working too. See [Ways to unlock your vault](/docs/unlock-methods#touch-id-or-windows-hello-computer) for the other options.
+
+## The switch is greyed out
+
+If it says **Set up Touch ID on this device to use this.**, your Mac has no fingerprint set up, or no Touch ID sensor. Add a fingerprint in your Mac's System Settings, under Touch ID & Password, then open **Settings → Security** in Bramble again.
+
+Granting Bramble Accessibility access in your Mac's Privacy & Security settings doesn't change this. Touch ID doesn't use it.
+
+## The quick-access panel is hard to read
+
+In older versions, the quick-access panel showed white text on a pale background when your Mac was in Light mode. Version 0.14.0 fixed this. Update Bramble to get the fix.

@@ -1,0 +1,80 @@
+---
+title: Use more than one vault
+description: Keep separate vaults on one device, each with its own master password, and switch between them.
+section: start
+kind: guide
+order: 6
+draft: true
+keywords:
+  - several vaults
+  - second vault
+  - another vault
+  - work and personal
+  - separate vaults
+  - share a device
+  - family
+  - switch vault
+  - change vault
+  - rename vault
+  - delete vault
+  - remove vault
+  - Create another vault
+  - Create new vault
+  - Add a vault
+  - Vault name
+  - Choose a vault to unlock
+  - Choose a different vault
+  - Delete this vault
+  - Vault 1
+  - Vault 2
+updatedDate: 2026-11-07
+---
+
+One device can hold several vaults, for example one for work and one for personal use. Each vault has its own master password, recovery code, entries, synced devices and backups.
+
+## Create another vault
+
+1. Lock your vault with the lock button at the top of Bramble.
+2. On the unlock screen, choose **Create another vault**. If you already have several vaults, choose **Choose a different vault**, then **Create new vault** at the end of the list.
+3. On **Add a vault**, give it a **Vault name** if you like, then set its master password.
+4. Choose **Create vault** and save the new vault's recovery code.
+
+The other tabs work here too:
+
+- **Restore from backup** adds the backup as a new, locked vault. It never replaces a vault you already have. Unlock it with the backup's master password.
+- **Join a device** adds a vault from another device. If this device already has that vault, Bramble opens it instead of adding a copy.
+
+## Switch vaults
+
+The open vault's name is shown next to Bramble at the top. To switch:
+
+1. Lock your vault with the lock button.
+2. Choose **Choose a different vault**.
+3. Under **Choose a vault to unlock**, pick a vault and unlock it.
+
+## Rename a vault
+
+Open **Settings → General** and change **Vault name**. The new name shows on every device in the vault's sync group.
+
+A vault without a name shows as **Vault 1**, **Vault 2** and so on, by its place in the list.
+
+## Delete a vault
+
+1. Open the vault you want to delete.
+2. Open **Settings → General** and choose **Delete this vault**.
+3. Enter the vault's master password, or confirm with your security key if the vault has no master password.
+4. Choose **Delete this vault**.
+
+This deletes the vault and its files from this device only. Your other devices keep their copy. If it was your only vault, Bramble goes back to the welcome screen.
+
+<Callout type="warning" title="Back up first">
+Deleting can't be undone on this device. If no other device has the vault, [back it up](/docs/back-up-your-vault) before you delete it.
+</Callout>
+
+## Vaults and sync
+
+Each vault syncs on its own, with its own devices. Adding a device to one vault doesn't add it to the others.
+
+- To add a device to a vault, open that vault, then go to **Settings → Sync**. See [Add a device](/docs/add-a-device).
+- A vault syncs only while it's unlocked. A vault you haven't opened for a while catches up the next time you unlock it.
+- Face ID, Touch ID, fingerprint and security keys are set up for each vault separately, in **Settings → Security**.

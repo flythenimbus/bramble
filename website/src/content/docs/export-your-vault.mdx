@@ -1,0 +1,131 @@
+---
+title: Export your vault
+description: Save your entries as a KeePass file, a Bramble file or a transfer to another app, and see what each one carries.
+section: backups
+kind: guide
+order: 2
+keywords:
+  - export
+  - export passwords
+  - download passwords
+  - download my vault
+  - leave Bramble
+  - switch password manager
+  - move to another password manager
+  - move to Bitwarden
+  - move to 1Password
+  - KeePass
+  - KeePassXC
+  - kdbx
+  - .kdbx
+  - .bramble
+  - csv
+  - csv export
+  - json export
+  - plain text
+  - unencrypted export
+  - is the export encrypted
+  - export passkeys
+  - export 2FA codes
+  - export TOTP
+  - export attachments
+  - export some entries
+  - bulk export
+  - Export as KeePass (.kdbx)
+  - Export selection (.bramble)
+  - Select items
+  - Password for the file
+  - KDBX export isn't available here.
+  - Export isn't available here.
+  - An attachment hasn't reached this device yet
+  - Those passwords don't match.
+  - Couldn't write the file.
+updatedDate: 2026-11-07
+draft: true
+---
+
+Every export Bramble makes is encrypted. A backup opens with your master password, and every other file with a password you pick for it. Bramble doesn't export plain-text CSV or JSON.
+
+## At a glance
+
+|  | Browser extension | Phone | Desktop app |
+| --- | --- | --- | --- |
+| Export a backup (.bramble) | Yes | Yes | Yes |
+| Export as KeePass (.kdbx) | Yes | Yes | Yes |
+| Export selection (.bramble) | Yes | Yes | Yes |
+| Send to another app | No | iPhone, iOS 26 or later | No |
+
+## What each file carries
+
+|  | Backup | KeePass | Selection |
+| --- | --- | --- | --- |
+| Logins, cards, notes and SSH keys | Yes | Yes | Yes |
+| 2FA codes | Yes | Yes | Yes |
+| Passkeys | Yes | No | Yes |
+| Attachments | Yes | Yes | No |
+| Password history | Yes | No | Yes |
+| Opens with | Your master password | A password you pick | A password you pick |
+| Opens in | Bramble | KeePassXC or any KeePass app | Bramble |
+
+If an entry has a sync conflict, the KeePass and selection exports carry only the version you see.
+
+## Where the file goes
+
+- **Browser extension**: your browser's downloads folder.
+- **Phone**: the share sheet opens. Pick where to save it.
+- **Desktop app**: you choose where to save it.
+
+## Export a backup
+
+This is the copy to keep for yourself. See [Save a backup file](/docs/back-up-your-vault#save-a-backup-file).
+
+## Export as KeePass
+
+Use this to move to another password manager, or to read your vault without Bramble.
+
+1. Open **Settings → Backups**. Next to **Export as KeePass**, choose **Export**.
+2. Type a **Password for the file** and **Confirm password**, then choose **Export**.
+3. Save the file.
+
+The file's password is separate from your master password. Bramble doesn't keep a copy, so without it nobody can open the file.
+
+KeePass has only one kind of entry, so a few things change on the way:
+
+- Cards, notes and SSH keys become entries, with their details in extra fields.
+- A login with several websites keeps the first under URL, and the rest as URL 2, URL 3 and so on.
+- Archived entries are included, marked with an Archived field.
+- Passkeys and password history are left out. Keep a backup for those.
+
+### Need a CSV file?
+
+Open the KeePass file in KeePassXC and export a CSV from there. A CSV holds your passwords in plain text, so delete it once the other app has imported it.
+
+### No Export as KeePass button?
+
+Older versions of the phone and desktop apps couldn't export KeePass files, and showed "KDBX export isn't available here." Update Bramble and try again.
+
+## Export selection
+
+Use this to move some entries to another vault.
+
+1. In your vault list, choose the **Select items** button next to the item count. On a phone, you can also press and hold an entry.
+2. Tick the entries you want, or choose **Select all**.
+3. Open **Actions** and choose **Export selection**.
+4. Pick a password for the file and choose **Export**.
+
+To bring the entries into another vault, [import the file](/docs/import-passwords) and choose **Bramble (.bramble)**.
+
+## Send to another app (iPhone)
+
+On iOS 26 or later, Bramble can hand your logins, codes and passkeys straight to another password app on your iPhone. Nothing is written to a file. Attachments aren't sent.
+
+1. Open **Settings → Backups**. Next to **Send to another app**, choose **Send**.
+2. Pick the app and confirm.
+
+## If an export fails
+
+| Message | What to do |
+| --- | --- |
+| An attachment hasn't reached this device yet, so the export would be missing it. | Keep Bramble unlocked alongside another of your devices until your attachments sync, then try again. |
+| Not backed up: … attachment isn't on this device yet. | Same as above: the backup waits for every attachment, so it's never missing part of your vault. |
+| Transferring between apps needs iOS 26. | Update your iPhone, or export a KeePass file instead. |

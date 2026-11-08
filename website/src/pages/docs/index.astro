@@ -4,8 +4,12 @@ import CloudUpload from "@tabler/icons/outline/cloud-upload.svg";
 import DeviceDesktop from "@tabler/icons/outline/device-desktop.svg";
 import Devices from "@tabler/icons/outline/devices.svg";
 import FileImport from "@tabler/icons/outline/file-import.svg";
+import Forms from "@tabler/icons/outline/forms.svg";
 import HelpCircle from "@tabler/icons/outline/help-circle.svg";
+import Key from "@tabler/icons/outline/key.svg";
 import LockOpen from "@tabler/icons/outline/lock-open.svg";
+import Rocket from "@tabler/icons/outline/rocket.svg";
+import ShieldLock from "@tabler/icons/outline/shield-lock.svg";
 import DocsHelp from "@/components/docs/DocsHelp.astro";
 import DocsSearch from "@/components/docs/DocsSearch.astro";
 import Footer from "@/components/Footer.astro";
@@ -15,11 +19,15 @@ import Layout from "@/layouts/Layout.astro";
 import "@/styles/docs.css";
 
 const ICONS: Record<DocSection["id"], typeof Devices> = {
+	start: Rocket,
 	import: FileImport,
 	unlock: LockOpen,
+	autofill: Forms,
+	passkeys: Key,
 	sync: Devices,
 	backups: CloudUpload,
 	desktop: DeviceDesktop,
+	privacy: ShieldLock,
 };
 
 const docs = await getDocs();
