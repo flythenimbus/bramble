@@ -1,14 +1,18 @@
 What's new in this release:
 
-- Passkeys saved in Bramble now work on sites that use them to protect your data, like Bitwarden and AliasVault.
-- Importing from Proton Pass now brings your passkeys, files and every website across, and importing from 1Password brings your files. The import preview counts attachments before you start.
-- Create email aliases with Fastmail Masked Email.
-- A login's websites are now listed together under one label.
-- Logins whose website was saved without "https://", like nas.local:5000, now autofill and find their passkeys.
-- When a site asks you to confirm it's you, Bramble now always asks, and an app can only use a site's passkey when that site vouches for the app.
-- On Android 14 and older, the app now fills the screen behind the status and navigation bars, and their icons follow the app's theme.
-- If saving ever takes too long, the app now says so instead of waiting silently.
-- A file you were attaching when the app closed no longer lingers in your backups.
-- Security improvements to sync.
+- Open a login's website straight from the list or from the login.
+- Name your devices. Device names and your vault's name now show on every device in the sync group.
+- Filter the list to items with attachments, or tap an Overview card to show only those items.
+- Clear the search box with one tap.
+- Open the password generator from the header.
+- AutoFill now handles very large vaults, and offers the login for the site's own subdomain first.
+- Logins now show above the keyboard, on keyboards that support it.
+- Autofill in Waterfox now matches the site you're on.
+- Your vault no longer shows in the app switcher's preview.
+- Backups can now keep only the latest copy.
+- Adding a device to sync now needs a master password, and a vault that syncs keeps it.
+- Going back from editing an item no longer opens the editor again.
+- Settings now says what "Never" auto-lock means: the vault stays unlocked until you lock it or close the app.
+- The type filter uses the same names as the Add menu, and the German and Spanish translations are clearer.
 
 No account, no cloud. Everything stays on your devices.
