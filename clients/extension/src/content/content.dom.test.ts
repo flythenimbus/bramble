@@ -231,6 +231,31 @@ const result = (over: Partial<Record<string, unknown>>) => ({
 	...over,
 });
 
+describe("content: a code widget whose boxes have wrappers of their own", () => {
+	const CODE = { id: "1", name: "Example", secondary: "123 456" };
+
+	beforeEach(() => {
+		showMatches.mockClear();
+		pendingQueryResponses.length = 0;
+		document.body.innerHTML = `<div>${Array.from(
+			{ length: 6 },
+			(_, i) =>
+				`<div class="cell"><div><input id="d${i}" type="text" inputmode="numeric" maxlength="1" autocomplete="new-password" /></div></div>`,
+		).join("")}</div>`;
+		invalidatePageFields();
+	});
+
+	it("offers the code on any box", () => {
+		for (const id of ["d0", "d3"]) {
+			showMatches.mockClear();
+			(document.getElementById(id) as HTMLInputElement).focus();
+			send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+			pendingQueryResponses.pop()?.({ ok: true, data: result({ otps: [CODE] }) });
+			expect(showMatches.mock.calls.at(-1)?.[0]).toEqual([CODE]);
+		}
+	});
+});
+
 describe("content: the tab's last-filled card leads the card list", () => {
 	const VISA = { id: "visa", name: "My Visa", secondary: "•••• 1234" };
 	const MC = { id: "mc", name: "My Mastercard", secondary: "•••• 4444" };

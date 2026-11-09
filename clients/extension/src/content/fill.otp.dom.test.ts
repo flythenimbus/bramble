@@ -192,6 +192,19 @@ describe("fillOtp: single field", () => {
 	});
 });
 
+describe("fillOtp: boxes with wrappers of their own", () => {
+	it("puts one digit in each box", () => {
+		document.body.innerHTML = Array.from(
+			{ length: 6 },
+			() =>
+				'<div class="cell"><div><input type="text" inputmode="numeric" maxlength="1" autocomplete="new-password" value=""></div></div>',
+		).join("");
+		expect(fillOtp("123456")).toBe(true);
+		const values = Array.from(document.querySelectorAll("input")).map((el) => el.value);
+		expect(values).toEqual(["1", "2", "3", "4", "5", "6"]);
+	});
+});
+
 describe("fillOtp: cloudflare fixture", () => {
 	it("puts one digit in each box and the whole code in the mirror", () => {
 		loadFixture("cloudflare-2fa");

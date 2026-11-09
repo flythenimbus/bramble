@@ -823,6 +823,7 @@ const SEGMENT_TYPES = new Set(["text", "tel", "number", ""]);
 // split date and product-key inputs use wider fields. Deliberately structural,
 // so it works on pages whose prose we can't read.
 const SEGMENTED_MIN_BOXES = 4;
+const VISIBLE_TYPE_INPUT = 'input:not([type="hidden"])';
 // A pattern admitting exactly one character: `\d{1}`, `[0-9]`, `.` and friends,
 // with optional anchors. Some widgets declare a box's width this way and never
 // set maxlength (Cloudflare's 2FA form even puts maxlength=6 on the FIRST box,
@@ -862,27 +863,35 @@ export function isSingleCharBox(el: HTMLInputElement): boolean {
 	return ONE_CHAR_PATTERN_RE.test(el.getAttribute("pattern") ?? "");
 }
 
+/** The element a box's widget is laid out in: its parent, or past any wrappers holding only this box. */
+function boxRow(el: HTMLInputElement): Element | null {
+	let row = el.parentElement;
+	while (row?.parentElement && row.querySelectorAll(VISIBLE_TYPE_INPUT).length === 1) {
+		row = row.parentElement;
+	}
+	return row;
+}
+
 /**
  * A segmented code widget found purely by shape: SEGMENTED_MIN_BOXES or more
- * single-character inputs sharing a parent. Language-independent, and the only
- * thing that finds these widgets when the site tags no box with a hint or an
- * autocomplete token.
+ * consecutive single-character inputs in one row. Language-independent, and the
+ * only thing that finds these widgets when the site tags no box with a hint or
+ * an autocomplete token.
  */
 function segmentedRun(scan: PageScan): HTMLInputElement[] {
-	const byParent = new Map<Element, HTMLInputElement[]>();
+	let run: HTMLInputElement[] = [];
+	let runRow: Element | null = null;
 	for (const el of scan.editable) {
-		if (!isSingleCharBox(el)) continue;
-		if (OTP_NEGATIVE_RE.test(attrHint(el))) continue;
-		const parent = el.parentElement;
-		if (!parent) continue;
-		const run = byParent.get(parent);
-		if (run) run.push(el);
-		else byParent.set(parent, [el]);
+		if (el.type === "hidden") continue;
+		const row = isSingleCharBox(el) && !OTP_NEGATIVE_RE.test(attrHint(el)) ? boxRow(el) : null;
+		if (row !== runRow) {
+			if (run.length >= SEGMENTED_MIN_BOXES) return run;
+			run = [];
+			runRow = row;
+		}
+		if (row) run.push(el);
 	}
-	for (const run of byParent.values()) {
-		if (run.length >= SEGMENTED_MIN_BOXES) return run;
-	}
-	return [];
+	return run.length >= SEGMENTED_MIN_BOXES ? run : [];
 }
 
 /**
@@ -904,9 +913,9 @@ function loneNumericCode(scan: PageScan, card: CardFields): HTMLInputElement[] {
 
 /** Contiguous DOM run of single-char text-like inputs that `seed` belongs to (segmented OTP widget). */
 export function segmentedSiblings(seed: HTMLInputElement): HTMLInputElement[] {
-	const parent = seed.parentElement;
-	if (!parent) return [seed];
-	const siblings = Array.from(parent.querySelectorAll<HTMLInputElement>("input")).filter(
+	const row = boxRow(seed);
+	if (!row) return [seed];
+	const siblings = Array.from(row.querySelectorAll<HTMLInputElement>("input")).filter(
 		(el) => !el.readOnly && !el.disabled && isSingleCharBox(el),
 	);
 	return siblings.length >= 2 ? siblings : [seed];

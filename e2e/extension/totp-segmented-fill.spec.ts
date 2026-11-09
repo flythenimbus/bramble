@@ -74,6 +74,14 @@ const CLOUDFLARE_2FA = `<!doctype html><html><head><title>Two-factor</title></he
 	</form>
 </body></html>`;
 
+// Verbatim from an "Activate MFA" modal, which opens after the page has loaded. Each box sits in
+// two wrappers of its own and nothing on it names a code.
+const WRAPPED_BOXES = `<div class="text__web-code codefield">${Array.from(
+	{ length: 6 },
+	(_, i) =>
+		`<div class="codefield__code codefield__code--empty"><div class="codefield__wrapper"><input id="w${i + 1}" minlength="1" maxlength="1" lang="en" inputmode="numeric" pattern="[0-9]" data-testid="input-mfa" autocomplete="new-password" type="text" class="text__web-code codefield__input" value=""></div></div>`,
+).join("")}</div>`;
+
 async function serve(page: Page, html: string): Promise<void> {
 	await page
 		.context()
@@ -144,4 +152,34 @@ test("fills Cloudflare's six-box widget without blanking it on the hidden mirror
 	// not answer its own fill by reopening on the box it just wrote to.
 	await page.waitForTimeout(1000);
 	expect(await hostDisplay(page)).toMatch(/none|gone/);
+});
+
+test("offers and fills a code in a modal whose boxes each have their own wrappers", async ({
+	context,
+	extensionId,
+}) => {
+	const popup = await context.newPage();
+	await createVault(popup, extensionId);
+	await openPopup(popup, extensionId);
+	await seedTotpLogin(popup, "Acme", SEED);
+
+	const page = await context.newPage();
+	await serve(page, '<!doctype html><html><body><div id="modal"></div></body></html>');
+	await page.goto("https://example.com/settings");
+	await page.evaluate((html) => {
+		document.getElementById("modal")!.innerHTML = html;
+	}, WRAPPED_BOXES);
+
+	const frame = await openPicker(page, "#w1");
+	const row = frame.locator("[data-entry-id]");
+	await expect(row).toBeVisible({ timeout: 10_000 });
+	await waitOutPickerClickGuard(page);
+	await row.click();
+
+	await expect
+		.poll(() => boxValues(page, ".codefield input"), { timeout: 10_000 })
+		.not.toEqual(["", "", "", "", "", ""]);
+	const boxes = await boxValues(page, ".codefield input");
+	expect(acceptable()).toContain(boxes.join(""));
+	expect(boxes.every((v) => v.length === 1)).toBe(true);
 });

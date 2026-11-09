@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { otpInputs, splitOtpFields } from "./detection";
+import { candidateKind, otpInputs, splitOtpFields } from "./detection";
 
 // Corpus for issue #47. Before the structural rungs landed, only 4 of these
 // detected: the two autocomplete="one-time-code" shapes, GitHub's name="otp",
@@ -207,6 +207,57 @@ describe("otp: structural rungs (no readable hint at all)", () => {
 	it("ignores a run shorter than the minimum", () => {
 		// Two or three single-char boxes are more likely a split date or initials.
 		expect(ids(boxes(3, 'type="text" maxlength="1"'))).toEqual([]);
+	});
+
+	describe("boxes with wrappers of their own", () => {
+		const ALL = ["d1", "d2", "d3", "d4", "d5", "d6"];
+		// Verbatim from an "Activate MFA" modal. No two boxes share a parent and nothing on
+		// them names a code; new-password is only there to turn browser autofill off.
+		const CODEFIELD =
+			'minlength="1" maxlength="1" lang="en" inputmode="numeric" pattern="[0-9]"' +
+			' data-testid="input-mfa" autocomplete="new-password" type="text"' +
+			' class="text__web-code codefield__input" value=""';
+
+		function codefield(n: number, attrs = CODEFIELD, extra = ""): string {
+			const box = (i: number) =>
+				'<div class="codefield__code codefield__code--empty"><div class="codefield__wrapper">' +
+				`<input id="d${i + 1}" ${attrs}>${extra}</div></div>`;
+			return `<div class="text__web-code codefield">${Array.from({ length: n }, (_, i) => box(i)).join("")}</div>`;
+		}
+
+		it("finds every box of the widget", () => {
+			expect(ids(codefield(6))).toEqual(ALL);
+		});
+
+		it("classifies a box as a code field, not a login", () => {
+			document.body.innerHTML = codefield(6);
+			expect(candidateKind(document.getElementById("d1"))).toBe("otp");
+		});
+
+		it("is not put off by what else a wrapper holds", () => {
+			const extra = '<span class="caret"></span><input type="hidden" name="digit">';
+			expect(ids(codefield(6, CODEFIELD, extra))).toEqual(ALL);
+		});
+
+		it("finds the boxes when other fields share their form", () => {
+			const wrapped = (i: number) => `<div><input id="d${i + 1}" ${CODEFIELD}></div>`;
+			const html = `<form><div><input id="e" type="email"></div>${Array.from({ length: 6 }, (_, i) => wrapped(i)).join("")}</form>`;
+			expect(ids(html)).toEqual(ALL);
+		});
+
+		it("gathers the whole widget from one hinted box", () => {
+			expect(ids(codefield(6, 'name="otp" type="text" maxlength="1"'))).toEqual(ALL);
+		});
+
+		it("ignores a run shorter than the minimum", () => {
+			expect(ids(codefield(3))).toEqual([]);
+		});
+
+		it("does not read scattered one-letter fields as a code", () => {
+			const row = (i: number) =>
+				`<div><input id="n${i}" type="text"></div><div><input id="m${i}" type="text" maxlength="1"></div>`;
+			expect(ids(`<form>${[1, 2, 3, 4].map(row).join("")}</form>`)).toEqual([]);
+		});
 	});
 
 	it("finds a lone digits-only field of code length", () => {

@@ -177,8 +177,9 @@ the same phrase (see below). Before the gate, a lone "Security code" box on a
    "code" on its own (`WEAK_CODE_RE`) is too common to trust, so it only counts
    when the field is also length-bounded like a code.
 3. **Structural:** an untagged run of `SEGMENTED_MIN_BOXES` (4) or more
-   single-character inputs sharing a parent. Nothing else on the web is shaped
-   like that, and it needs no readable text.
+   consecutive single-character inputs in one row. A row is the boxes' parent, or
+   further out when each box has wrappers of its own (`boxRow`). Nothing else on
+   the web is shaped like that, and it needs no readable text.
 4. **Structural:** a lone digits-only field of code length (`maxlength` 4-8 plus
    `inputmode`/`type`/`pattern` evidence). The weakest rung, so it fires only
    when exactly one field qualifies; more than one and we'd be guessing which box
