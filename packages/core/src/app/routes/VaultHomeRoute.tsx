@@ -1,5 +1,5 @@
 import { Trans } from "@lingui/react/macro";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useElementScrollRestoration, useNavigate, useSearch } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
@@ -11,12 +11,17 @@ import { ReviewNudgeCard } from "../components/ReviewNudgeCard";
 import { useDefaultPasswordManager } from "../hooks/useDefaultPasswordManager";
 import { useReviewNudge } from "../hooks/useReviewNudge";
 import { toListItem } from "../screens/VaultHome/list-item";
-import { VaultHome, type VaultListItem } from "../screens/VaultHome/VaultHome";
+import {
+	VAULT_LIST_SCROLL_ID,
+	VaultHome,
+	type VaultListItem,
+} from "../screens/VaultHome/VaultHome";
 import { DEFAULT_SEARCH, type VaultSearch } from "../screens/VaultHome/vault-search";
 
 /** Vault list route: projects entries into rows via their entry-mode descriptors. */
 export function VaultHomeRoute() {
 	const navigate = useNavigate();
+	const scrollEntry = useElementScrollRestoration({ id: VAULT_LIST_SCROLL_ID });
 	// Per-field `??` (not spread): a `.catch`ed param can be present-but-undefined.
 	const raw = useSearch({ from: "/_app/vault" });
 	const search = useMemo<VaultSearch>(
@@ -128,6 +133,7 @@ export function VaultHomeRoute() {
 			tags={tags}
 			statsCollapsed={prefs.statsCollapsed}
 			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}
+			initialScrollOffset={scrollEntry?.scrollY}
 			nudge={
 				reviewNudge ? (
 					<ReviewNudgeCard nudge={reviewNudge} />

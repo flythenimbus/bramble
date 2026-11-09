@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { usePrefs } from "../../hooks/usePrefs";
 import { useVault } from "../../hooks/useVault";
 import { checkPasswordBreach } from "../../util/pwned";
+import { useRouteBack } from "../hooks/useRouteBack";
 import { EntryDetail } from "../screens/EntryDetail/EntryDetail";
 
 const BREACH_STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -10,6 +11,7 @@ const BREACH_STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 /** Route for a single entry's detail view; lazily refreshes login breach status. */
 export function EntryDetailRoute() {
 	const navigate = useNavigate();
+	const back = useRouteBack();
 	const { entryId } = useParams({ from: "/_app/vault/$entryId" });
 	const {
 		entries,
@@ -55,7 +57,9 @@ export function EntryDetailRoute() {
 				onEdit={() => navigate({ to: "/vault/$entryId/edit", params: { entryId } })}
 				onDelete={async () => {
 					await deleteEntry(entryId);
-					navigate({ to: "/vault" });
+					// Back, not a push: the list reopens where it was.
+					if (back) back();
+					else navigate({ to: "/vault" });
 				}}
 				onSetArchived={(archived) => setEntriesArchived([entryId], archived)}
 				// The tag filter lives in `q`, so picking a tag is just a search: one source of

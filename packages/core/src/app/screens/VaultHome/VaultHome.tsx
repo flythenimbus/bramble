@@ -21,6 +21,9 @@ import {
 import { VaultSearchBar } from "./VaultSearchBar";
 import { filterAndSortEntries, type HealthFilter, type VaultSearch } from "./vault-search";
 
+/** Ties the list's scroller to the router's saved position for it. */
+export const VAULT_LIST_SCROLL_ID = "vault-list";
+
 /** List-ready projection of an entry: shared id/name plus mode-contributed display fields. */
 export interface VaultListItem {
 	id: string;
@@ -72,6 +75,8 @@ interface VaultHomeProps {
 	/** A card under the list: the store-review ask or the default-password-manager offer. A slot
 	 * rather than a component so the list screen keeps knowing nothing about either. */
 	nudge?: ReactNode;
+	/** Where to open the list: the offset it had when this history entry was left (#200). */
+	initialScrollOffset?: number;
 }
 
 /** Vault list screen with search, password-health stats, and the entry rows. */
@@ -90,6 +95,7 @@ export function VaultHome({
 	statsCollapsed,
 	onToggleStats,
 	nudge,
+	initialScrollOffset,
 }: VaultHomeProps) {
 	const { t } = useLingui();
 	// A collapsed Overview hides the cards, so it lifts their filter too: the list is never
@@ -159,10 +165,11 @@ export function VaultHome({
 	const rowVirtualizer = useVirtualizer({
 		count: filtered.length,
 		getScrollElement: () => scrollRef.current,
-		// Rows are a uniform ~56px; +4 folds in the gap that was `space-y-1`.
-		// measureElement corrects any drift from the real rendered height.
-		estimateSize: () => 60,
+		// Rows are a uniform 60px; +4 folds in the gap that was `space-y-1`. Must be the real
+		// height: a remount forgets measurements, so a restored offset is read through this.
+		estimateSize: () => 64,
 		overscan: 8,
+		initialOffset: initialScrollOffset,
 		getItemKey: (index) => filtered[index]?.id ?? index,
 	});
 
@@ -254,7 +261,11 @@ export function VaultHome({
 						</Button>
 					</div>
 				)}
-				<div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-2">
+				<div
+					ref={scrollRef}
+					data-scroll-restoration-id={VAULT_LIST_SCROLL_ID}
+					className="flex-1 min-h-0 overflow-y-auto p-2"
+				>
 					{filtered.length > 0 ? (
 						<div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
 							{rowVirtualizer.getVirtualItems().map((row) => {

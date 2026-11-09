@@ -36,6 +36,8 @@ interface EntryFormProps {
 	registerDraft?: (getter: (() => EntryFormDraft) | null) => void;
 	submitLabel?: string;
 	onBack: () => void;
+	/** Where a successful save leaves to; onBack when absent. */
+	onSaved?: () => void;
 	onSave: (data: EntryData) => Promise<void>;
 }
 
@@ -49,6 +51,7 @@ export function EntryForm({
 	registerDraft,
 	submitLabel,
 	onBack,
+	onSaved = onBack,
 	onSave,
 }: EntryFormProps) {
 	const { t } = useLingui();
@@ -94,7 +97,7 @@ export function EntryForm({
 				customFields: formToCustomFields(values[CUSTOM_FIELDS_NAME]),
 				tags: formToTags(values[TAGS_NAME]),
 			});
-			onBack();
+			onSaved();
 		} catch (e) {
 			setSaveError((e as Error).message);
 		} finally {

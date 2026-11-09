@@ -6,12 +6,14 @@ import { type EntryData, useVaultActions } from "../../hooks/useVault";
 import { checkPasswordBreach } from "../../util/pwned";
 import { getEntryMode } from "../entry-modes";
 import { usePopOut } from "../hooks/usePopOut";
+import { useRouteBack } from "../hooks/useRouteBack";
 import { takePendingCreateEntry } from "../pending-create-entry";
 import { EntryForm, type EntryFormDraft } from "../screens/CreateEntry/EntryForm";
 
 /** Route for creating a new entry, seeding logins from the active tab origin or a pop-out draft. */
 export function CreateEntryRoute() {
 	const navigate = useNavigate();
+	const back = useRouteBack();
 	const { type } = useParams({ from: "/_app/vault/new/$type" });
 	// Normalise the route param against the registry so an unknown value falls
 	// back to a real mode rather than rendering a broken form.
@@ -57,6 +59,8 @@ export function CreateEntryRoute() {
 		await addEntry(data);
 	};
 
+	const toVault = () => navigate({ to: "/vault" });
+
 	// pb-3 balances EntryForm's pt-3: the card is height-capped here and scrolls internally.
 	return (
 		<div className="flex-1 min-h-0 flex flex-col pb-3">
@@ -67,7 +71,9 @@ export function CreateEntryRoute() {
 				initialEntry={pendingInitial}
 				draftValues={draft}
 				registerDraft={registerDraftGetter}
-				onBack={() => navigate({ to: "/vault" })}
+				// Cancel reopens the list where it was; a save starts it fresh, to find the new item.
+				onBack={back ?? toVault}
+				onSaved={toVault}
 				onSave={handleSave}
 			/>
 		</div>

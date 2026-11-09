@@ -235,6 +235,9 @@ export function createAppRouter(initialPath = "/") {
 		history: createMemoryHistory({ initialEntries: [initialPath] }),
 		context: { vault: undefined, registry: undefined },
 		defaultPendingComponent: RoutePending,
+		// The list only. Unrestricted, the router carries offsets between screens whose
+		// scrollers share a DOM path (record, Settings, Generator).
+		scrollRestoration: ({ location }) => location.pathname === "/vault",
 	});
 }
 
