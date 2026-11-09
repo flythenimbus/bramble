@@ -29,4 +29,11 @@ describe("persistableHref", () => {
 		expect(router.state.location.pathname).toBe("/passkey-verify");
 		expect(persistableHref(router)).toBeNull();
 	});
+
+	// App persists at mount, while the router has a location but no matches yet.
+	it("never keeps the passkey confirm before the first load finishes", () => {
+		const router = createAppRouter("/passkey-verify?id=req-1&rp=github.com");
+		expect(router.state.matches).toEqual([]);
+		expect(persistableHref(router)).toBeNull();
+	});
 });

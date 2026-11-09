@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { actOnPasskeyCard, createVault, STRONG_PW } from "./helpers";
+import { actOnPasskeyCard, createVault, expectUnlocked, openPopup, STRONG_PW } from "./helpers";
 
 // PRF through Chrome's real webAuthenticationProxy: the request Chrome hands us carries the site's
 // inputs, and Chrome accepts what we answer (enabled on create, 32-byte results) and passes it to
@@ -119,4 +119,32 @@ test("PRF round-trips through Chrome's webAuthenticationProxy", async ({
 
 	// The credential's own evalByCredential entry wins over eval.
 	expect(await signIn("salt-a", "salt-b")).toBe(saltB);
+});
+
+// #187: the sign-in worked, but the confirm window left its route behind, so the toolbar popup
+// reopened on a confirm whose request was already gone.
+test("the toolbar popup doesn't reopen a finished confirm", async ({ context, extensionId }) => {
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+	await setup.evaluate(() =>
+		chrome.runtime.sendMessage({
+			type: "PASSKEY_PROVIDER_SET_ENABLED",
+			payload: { enabled: true },
+		}),
+	);
+	await context.route(/^http:\/\/localhost:4719\//, (route) =>
+		route.fulfill({
+			body: "<!doctype html><title>PRF</title><p>PRF test</p>",
+			headers: { "content-type": "text/html" },
+		}),
+	);
+	const page = await context.newPage();
+	await page.goto("http://localhost:4719/");
+	await page.bringToFront();
+	await verifiedCeremony(context, page, "passkey-approve", () => create(page, "salt"));
+
+	const popup = await context.newPage();
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+	await expect(popup.getByText("Confirm it's you")).toHaveCount(0);
 });

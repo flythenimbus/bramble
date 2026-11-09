@@ -242,9 +242,10 @@ export type AppRouter = ReturnType<typeof createAppRouter>;
 
 /** The href a later view should reopen on: null for the unlock screen and one-shot routes. */
 export function persistableHref(router: AppRouter): string | null {
-	const { location, matches } = router.state;
+	const { location } = router.state;
 	if (!location.href || location.href === "/") return null;
-	if (matches.some((m) => m.staticData?.persistRoute === false)) return null;
+	// Not state.matches: App persists at mount, before the first load fills it (#187).
+	if (router.matchRoutes(location).some((m) => m.staticData?.persistRoute === false)) return null;
 	return location.href;
 }
 
