@@ -100,12 +100,30 @@ async function applyEnvelope(
 		return false;
 	}
 	if (env.resend === true) return true;
-	if (env.roster && opts.pushRemoteRoster) {
-		const verified = await verifyRosterEnvelope(opts, env.roster, local);
-		if (verified !== null) await opts.pushRemoteRoster(verified);
-	}
+	if (env.roster && opts.pushRemoteRoster) await applyRoster(opts, env.roster, local);
 	if (env.entries) await opts.pushRemotePayload(env.entries);
 	return false;
+}
+
+/** Merge a peer's roster, looking again while a pass lets more devices in: one envelope can carry
+ * an admission key and the device it admitted. Each pass applies the rules a later envelope would. */
+async function applyRoster(
+	opts: RosterSyncOptions,
+	rosterJson: string,
+	local: RosterPayload,
+): Promise<void> {
+	let judgedAgainst = local;
+	let admitted = -1;
+	for (;;) {
+		const verified = await verifyRosterEnvelope(opts, rosterJson, judgedAgainst);
+		if (verified === null) return;
+		const kept = decodeRoster(verified).devices.length;
+		if (kept <= admitted) return;
+		await opts.pushRemoteRoster?.(verified);
+		if (kept === decodeRoster(rosterJson).devices.length) return;
+		admitted = kept;
+		judgedAgainst = await currentRoster(opts);
+	}
 }
 
 /** Verify a gossiped roster before it is pushed to merge (Item A): drop entries that fail Ed25519

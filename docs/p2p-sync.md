@@ -546,6 +546,12 @@ Source of truth is the persisted `sync.group` roster.
   hooks). So a removal (or an enrollment) fans out to peers and converges; the receiver merges +
   persists and nudges the popup (`SYNC_EVENT {kind: "roster"}`). Bridged on both hosts: extension
   offscreen↔background (`SYNC_LOCAL_ROSTER` / `SYNC_APPLY_ROSTER`), mobile sync-manager direct.
+- **A new device reaches the group through a device both sides trust.** Gossip runs after
+  roster-auth, so a device whose key isn't in a peer's roster can't tell that peer about itself: the
+  peer closes, and the newcomer logs `handshake timed out` 15s later. It stays shut out until a
+  device in both rosters is online at the same moment as that peer. One envelope from it is enough:
+  `applyRoster` looks again when the envelope carried the inviter's first admission key alongside the
+  device it admitted, because the sender won't resend for 10 minutes. Issue #205.
 - **No re-auth on remove (by choice).** The panel is already behind an unlocked vault (the actor
   can read every secret), revoke is not a wipe, and it's reversible by re-pairing, so a
   *confirmation* is the right bar, not a master-password/biometric step-up. Add the step-up when

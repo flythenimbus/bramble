@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { identityWasm, peerPipe, rosterOf } from "../../test/transport-fakes";
-import { decodeRoster, encodeRoster, type RosterEntry, type RosterPayload } from "..";
+import {
+	decodeRoster,
+	encodeRoster,
+	mergeRemoteRoster,
+	type RosterEntry,
+	type RosterPayload,
+} from "..";
 import type { Channel } from "./channel";
 import type { PeerSession } from "./mesh";
 import { currentRoster } from "./peer-auth";
@@ -287,6 +293,151 @@ describe("verifyRosterEnvelope (the local roster it judges admissions against)",
 			revokedAdmitter,
 		);
 		expect(idsOf(out)).not.toContain("phone");
+	});
+});
+
+describe("one envelope that carries both a voucher and who it vouches for", () => {
+	// An inviter publishes its admission key when it invites, so a device that was away meets that
+	// key and the new device in the same envelope, and the sender then has no reason to send it again
+	// for 10 minutes. A phone isn't open that long, so the new device stayed shut out (issue #205).
+	const sessions: MeshSession[] = [];
+	afterEach(() => {
+		for (const s of sessions.splice(0)) s.stop();
+	});
+
+	/** Signatures that verify only under the key that made them. */
+	const verifyingWasm = () => ({
+		...identityWasm(),
+		roster_verify: vi.fn(async (key: string, _message: string, sig: string) => sig === `by:${key}`),
+	});
+	const device = (
+		id: string,
+		publicKey: string,
+		wall: number,
+		extra: Partial<RosterEntry> = {},
+	): RosterEntry => ({
+		id,
+		publicKey,
+		label: id,
+		addedAt: 0,
+		hlc: { wall, counter: 0, node: id },
+		sigKey: `sk-${id}`,
+		sig: `by:sk-${id}`,
+		...extra,
+	});
+	const self = device("me", "aaaa", 1);
+	const inviterBefore = device("inviter", "bbbb", 1);
+	const inviter = device("inviter", "bbbb", 2, { admissionKey: "adm-inviter" });
+	const admittedBy = (by: string, key: string) => ({ admission: { by, sig: `by:${key}` } });
+
+	/** A device holding `local` receives `gossip` once from a real session. Returns what it stored. */
+	async function receive(local: RosterPayload, gossip: RosterPayload) {
+		let stored = local;
+		const wasm = verifyingWasm();
+		const { a, b } = peerPipe();
+		const base = {
+			relayUrl: "wss://relay.invalid",
+			groupKeyB64: "unused",
+			report: () => {},
+			fetchLocalPayload: async () => "",
+			pushRemotePayload: async () => {},
+		};
+		sessions.push(
+			await startRosterSync({
+				...base,
+				devicePrivB64: "priv-aaaa",
+				devicePubB64: "aaaa",
+				roster: local,
+				wasm: wasm as unknown as RosterSyncWasm,
+				fetchLocalRoster: async () => encodeRoster(stored),
+				pushRemoteRoster: async (json) => {
+					stored = mergeRemoteRoster(stored, decodeRoster(json));
+				},
+				peerSource: async ({ onPeer }) => {
+					onPeer(a);
+					return { stop() {} };
+				},
+			}),
+			await startRosterSync({
+				...base,
+				devicePrivB64: "priv-bbbb",
+				devicePubB64: "bbbb",
+				roster: gossip,
+				wasm: identityWasm(),
+				fetchLocalRoster: async () => encodeRoster(gossip),
+				peerSource: async ({ onPeer }) => {
+					onPeer(b);
+					return { stop() {} };
+				},
+			}),
+		);
+		return { ids: () => stored.devices.map((d) => d.id), wasm, stored: () => stored };
+	}
+
+	it("lets a new device in on the admission key that arrived with it", async () => {
+		const phone = device("phone", "cccc", 3, admittedBy("inviter", "adm-inviter"));
+
+		const { ids } = await receive(
+			{ devices: [self, inviterBefore], revoked: [] },
+			{ devices: [self, inviter, phone], revoked: [] },
+		);
+
+		await vi.waitFor(() => expect(ids()).toContain("phone"));
+	});
+
+	it("follows a chain of devices that each admitted the next", async () => {
+		const tablet = device("tablet", "dddd", 3, {
+			admissionKey: "adm-tablet",
+			...admittedBy("inviter", "adm-inviter"),
+		});
+		const phone = device("phone", "cccc", 4, admittedBy("tablet", "adm-tablet"));
+
+		const { ids } = await receive(
+			{ devices: [self, inviterBefore], revoked: [] },
+			{ devices: [self, inviter, tablet, phone], revoked: [] },
+		);
+
+		await vi.waitFor(() => expect(ids()).toEqual(expect.arrayContaining(["tablet", "phone"])));
+	});
+
+	it("won't take an admission key from an update that fails its own signature", async () => {
+		const forged = { ...inviter, sig: "by:someone-else" };
+		const phone = device("phone", "cccc", 3, admittedBy("inviter", "adm-inviter"));
+
+		const { ids, stored, wasm } = await receive(
+			{ devices: [self, inviterBefore], revoked: [] },
+			{ devices: [self, forged, phone], revoked: [] },
+		);
+
+		await vi.waitFor(() => expect(wasm.roster_verify).toHaveBeenCalled());
+		await new Promise((r) => setTimeout(r, 30));
+		expect(ids()).not.toContain("phone");
+		expect(stored().devices.find((d) => d.id === "inviter")?.admissionKey).toBeUndefined();
+	});
+
+	it("stops looking again once a pass lets nobody new in", async () => {
+		const stranger = device("stranger", "eeee", 3, admittedBy("nobody", "adm-nobody"));
+		const roster = { devices: [self, inviter, stranger], revoked: [] };
+
+		const { ids, wasm } = await receive({ devices: [self, inviter], revoked: [] }, roster);
+
+		await vi.waitFor(() => expect(wasm.roster_verify).toHaveBeenCalled());
+		await new Promise((r) => setTimeout(r, 30));
+		expect(ids()).not.toContain("stranger");
+		// Two passes over three self-signatures: the one that was refused, and the look that found
+		// nothing had changed.
+		expect(wasm.roster_verify.mock.calls.length).toBeLessThanOrEqual(6);
+	});
+
+	it("looks once when nothing was refused", async () => {
+		const { wasm } = await receive(
+			{ devices: [self, inviter], revoked: [] },
+			{ devices: [self, inviter], revoked: [] },
+		);
+
+		await vi.waitFor(() => expect(wasm.roster_verify).toHaveBeenCalled());
+		await new Promise((r) => setTimeout(r, 30));
+		expect(wasm.roster_verify).toHaveBeenCalledTimes(2);
 	});
 });
 
