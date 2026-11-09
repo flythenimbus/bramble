@@ -1,0 +1,7 @@
+What's new in this release:
+
+- Locking the app now locks AutoFill too, so it asks again before filling.
+- Sync now works with more self-hosted relays.
+- Better text contrast and clearer focus outlines.
+
+No account, no cloud. Everything stays on your devices.
