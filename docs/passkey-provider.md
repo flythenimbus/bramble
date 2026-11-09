@@ -408,6 +408,11 @@ error instead of the user watching it silently reroute. Both, ideally.
 Note this hole is not unique to Bramble: any provider on this API that authenticates its own unlock
 with WebAuthn has it. It is the price of all-or-nothing interception.
 
+**What we do about it.** A verified ceremony whose request a pause ended leaves a retry grant in the
+service worker's memory: one use, 60 seconds, same origin and rpID. The site's next try still shows
+the card but skips the confirm-it's-you window and reports UV. The master password never pauses, so
+it completes the original request. Firefox has no proxy, so a tap there does too.
+
 **Not covered, still manual:** whether Chrome destroys the toolbar popup when its own WebAuthn
 dialog takes focus. Device testing (2026-08-29) found the toolbar popup **survives** the dialog and
 in fact cannot be dismissed during the ceremony, and Vivaldi's dialog forces cancel-or-proceed, so

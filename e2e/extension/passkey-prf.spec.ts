@@ -1,6 +1,14 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { actOnPasskeyCard, createVault, expectUnlocked, openPopup, STRONG_PW } from "./helpers";
+import {
+	actOnPasskeyCard,
+	addTapToUnlockKey,
+	addVirtualAuthenticator,
+	createVault,
+	expectUnlocked,
+	openPopup,
+	STRONG_PW,
+} from "./helpers";
 
 // PRF through Chrome's real webAuthenticationProxy: the request Chrome hands us carries the site's
 // inputs, and Chrome accepts what we answer (enabled on create, 32-byte results) and passes it to
@@ -73,7 +81,7 @@ async function verifiedCeremony<T>(
 	const result = actOnPasskeyCard(page, action, run);
 	const verify = await verifyWindow;
 	await verify.getByLabel("Master password").fill(STRONG_PW);
-	await verify.getByRole("button", { name: "Confirm" }).click();
+	await verify.getByRole("button", { name: "Confirm", exact: true }).click();
 	return result;
 }
 
@@ -147,4 +155,70 @@ test("the toolbar popup doesn't reopen a finished confirm", async ({ context, ex
 	await openPopup(popup, extensionId);
 	await expectUnlocked(popup);
 	await expect(popup.getByText("Confirm it's you")).toHaveCount(0);
+});
+
+// Confirming with a key detaches Chrome's proxy, which ends the site's request, so the tap has to
+// carry over to the site's next try. A virtual authenticator is per tab and can't take a key's PRF
+// secret to another one, so the window's browser API stands in for the tap. The detach, the site's
+// failure and the retry are real.
+test("a key tap in the confirm window lets the site's retry through", async ({
+	context,
+	extensionId,
+}) => {
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+	const popup = await context.newPage();
+	const { authenticatorId, cdp } = await addVirtualAuthenticator(popup, { hasPrf: true });
+	await openPopup(popup, extensionId);
+	await expectUnlocked(popup);
+	await addTapToUnlockKey(popup, "This device", "Test Touch ID");
+	await expect(popup.getByText("Test Touch ID")).toBeVisible();
+	const { credentials } = await cdp.send("WebAuthn.getCredentials", { authenticatorId });
+	const keyId = credentials[0]?.credentialId ?? "";
+	expect(keyId).not.toBe("");
+
+	await setup.evaluate(() =>
+		chrome.runtime.sendMessage({
+			type: "PASSKEY_PROVIDER_SET_ENABLED",
+			payload: { enabled: true },
+		}),
+	);
+	await context.route(/^http:\/\/localhost:4719\//, (route) =>
+		route.fulfill({
+			body: "<!doctype html><title>PRF</title><p>PRF test</p>",
+			headers: { "content-type": "text/html" },
+		}),
+	);
+	const page = await context.newPage();
+	await page.goto("http://localhost:4719/");
+	await page.bringToFront();
+	const created = await verifiedCeremony(context, page, "passkey-approve", () =>
+		create(page, "salt"),
+	);
+
+	const verifyWindow = context.waitForEvent("page");
+	const ended = actOnPasskeyCard(page, "passkey-pick", () =>
+		get(page, created.id, "salt").catch((e: Error) => e.message),
+	);
+	const verify = await verifyWindow;
+	const tap = verify.getByRole("button", { name: "Tap to confirm" });
+	await expect(tap).toBeVisible();
+	await verify.evaluate((id) => {
+		const rawId = Uint8Array.from(atob(id), (c) => c.charCodeAt(0)).buffer;
+		const first = new Uint8Array(32).buffer;
+		navigator.credentials.get = async () =>
+			({ rawId, getClientExtensionResults: () => ({ prf: { results: { first } } }) }) as never;
+	}, keyId);
+	await tap.click();
+
+	expect(await ended).toContain("paused passkey handling");
+	await expect(verify.getByText("Sign in again on localhost")).toBeVisible();
+	await verify.getByRole("button", { name: "Close" }).click();
+
+	await page.bringToFront();
+	const windows = context.pages().length;
+	expect(await actOnPasskeyCard(page, "passkey-pick", () => get(page, created.id, "salt"))).toBe(
+		created.first,
+	);
+	expect(context.pages()).toHaveLength(windows);
 });

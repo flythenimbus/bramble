@@ -178,7 +178,11 @@ export const extensionShell: ShellAdapter = {
 		return res?.data ?? null;
 	},
 	async reportPasskeyVerification(id: string, verified: boolean) {
-		await api.runtime.sendMessage({ type: "PASSKEY_VERIFY_RESULT", payload: { id, verified } });
+		const res = (await api.runtime.sendMessage({
+			type: "PASSKEY_VERIFY_RESULT",
+			payload: { id, verified },
+		})) as { data?: { signInAgain?: boolean } } | undefined;
+		return { signInAgain: res?.data?.signInAgain === true };
 	},
 	persistRoute(path: string) {
 		// Direct session-storage write from the popup context (no gesture, no background

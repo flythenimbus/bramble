@@ -997,6 +997,7 @@ msgid "Clock"
 msgstr "Reloj"
 
 #: packages/core/src/app/components/ui/modal.tsx
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
@@ -1098,6 +1099,10 @@ msgstr "Confirme su contraseña maestra para restablecer el código de recuperac
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Confirm your new password"
 msgstr "Confirmar nueva contraseña"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "Confirmed. Sign in again on {rp}."
+msgstr "Confirmado. Inicie sesión de nuevo en {rp}."
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Conflict"
@@ -3711,6 +3716,10 @@ msgstr "Realice primero una copia de seguridad, desde Backups, para tener una co
 #~ msgid "Tap a security key to unlock instead of typing the master password."
 #~ msgstr "Toque una llave de seguridad para desbloquear en lugar de escribir la contraseña maestra."
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "Tap to confirm"
+msgstr "Tocar para confirmar"
+
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Tap to scan again"
 msgstr "Toque para escanear de nuevo"
@@ -4481,8 +4490,8 @@ msgid "Use password"
 msgstr "Usar contraseña"
 
 #: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
-msgid "Use security key"
-msgstr "Usar llave de seguridad"
+#~ msgid "Use security key"
+#~ msgstr "Usar llave de seguridad"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Use the vault from the Bramble desktop app on this computer."
@@ -4615,6 +4624,7 @@ msgstr "Esperando que un dispositivo se una..."
 msgid "Waiting for the desktop app…"
 msgstr "Esperando la aplicación de escritorio…"
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Waiting for your key…"

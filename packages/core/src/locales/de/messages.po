@@ -997,6 +997,7 @@ msgid "Clock"
 msgstr "Uhr"
 
 #: packages/core/src/app/components/ui/modal.tsx
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Restore/RestoreShell.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
@@ -1098,6 +1099,10 @@ msgstr "Bestätigen Sie Ihr Master-Passwort, um den Wiederherstellungscode zurü
 #: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
 msgid "Confirm your new password"
 msgstr "Neues Passwort bestätigen"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "Confirmed. Sign in again on {rp}."
+msgstr "Bestätigt. Melden Sie sich erneut bei {rp} an."
 
 #: packages/core/src/app/components/EntryRow.tsx
 msgid "Conflict"
@@ -3711,6 +3716,10 @@ msgstr "Erstellen Sie zuerst ein Backup unter Backups, damit Sie eine Kopie habe
 #~ msgid "Tap a security key to unlock instead of typing the master password."
 #~ msgstr "Entsperren Sie mit einem Sicherheitsschlüssel, anstatt das Master-Passwort einzugeben."
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "Tap to confirm"
+msgstr "Zum Bestätigen tippen"
+
 #: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
 msgid "Tap to scan again"
 msgstr "Tippen Sie, um erneut zu scannen"
@@ -4481,8 +4490,8 @@ msgid "Use password"
 msgstr "Passwort verwenden"
 
 #: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
-msgid "Use security key"
-msgstr "Sicherheitsschlüssel verwenden"
+#~ msgid "Use security key"
+#~ msgstr "Sicherheitsschlüssel verwenden"
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Use the vault from the Bramble desktop app on this computer."
@@ -4615,6 +4624,7 @@ msgstr "Wartet darauf, dass ein Gerät beitritt…"
 msgid "Waiting for the desktop app…"
 msgstr "Warten auf die Desktop-App…"
 
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
 msgid "Waiting for your key…"

@@ -10,13 +10,19 @@ import { PasskeyVerify } from "./PasskeyVerifyRoute";
 
 const h = vi.hoisted(() => ({
 	hasPasswordSlot: true,
+	hasWebauthnSlot: false,
+	canTap: true,
 	keyOk: false,
+	signInAgain: false,
 	answers: [] as [string, boolean][],
 }));
+
+vi.mock("../hooks/useWebauthnUnlock", () => ({ useWebauthnUnlock: () => h.canTap }));
 
 vi.mock("../../hooks/useVault", () => ({
 	useVault: () => ({
 		hasPasswordSlot: h.hasPasswordSlot,
+		hasWebauthnSlot: h.hasWebauthnSlot,
 		verifyMasterPassword: async (p: string) => p === "right-password",
 		verifyWithWebauthnKey: async () => h.keyOk,
 	}),
@@ -27,6 +33,7 @@ vi.mock("../../context/PlatformContext", () => ({
 		shell: {
 			reportPasskeyVerification: async (id: string, verified: boolean) => {
 				h.answers.push([id, verified]);
+				return { signInAgain: h.signInAgain };
 			},
 		},
 	}),
@@ -47,7 +54,10 @@ beforeAll(() => {
 
 beforeEach(() => {
 	h.hasPasswordSlot = true;
+	h.hasWebauthnSlot = false;
+	h.canTap = true;
 	h.keyOk = false;
+	h.signInAgain = false;
 	h.answers = [];
 	vi.spyOn(window, "close").mockImplementation(() => {});
 });
@@ -76,13 +86,57 @@ describe("PasskeyVerify", () => {
 		expect(h.answers).toEqual([]);
 	});
 
-	it("uses the security key on a vault with no master password", async () => {
+	it("uses a key on a vault with no master password", async () => {
 		h.hasPasswordSlot = false;
+		h.hasWebauthnSlot = true;
 		h.keyOk = true;
 		mount();
 		expect(screen.queryByLabelText("Master password")).toBeNull();
-		fireEvent.click(screen.getByRole("button", { name: "Use security key" }));
+		fireEvent.click(screen.getByRole("button", { name: "Tap to confirm" }));
 		await waitFor(() => expect(h.answers).toEqual([["req-1", true]]));
+	});
+
+	it("offers a key next to the master password", async () => {
+		h.hasWebauthnSlot = true;
+		h.keyOk = true;
+		mount();
+		expect(screen.getByLabelText("Master password")).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: "Tap to confirm" }));
+		await waitFor(() => expect(h.answers).toEqual([["req-1", true]]));
+	});
+
+	it("doesn't offer a tap without a registered key", () => {
+		mount();
+		expect(screen.queryByRole("button", { name: "Tap to confirm" })).toBeNull();
+	});
+
+	it("doesn't offer a tap where this browser can't do one", () => {
+		h.hasWebauthnSlot = true;
+		h.canTap = false;
+		mount();
+		expect(screen.queryByRole("button", { name: "Tap to confirm" })).toBeNull();
+	});
+
+	it("says nothing to the site when the key fails, and shows why", async () => {
+		h.hasWebauthnSlot = true;
+		mount();
+		fireEvent.click(screen.getByRole("button", { name: "Tap to confirm" }));
+		await waitFor(() =>
+			expect(screen.getByText("Couldn't verify your key. Try again.")).toBeTruthy(),
+		);
+		expect(h.answers).toEqual([]);
+	});
+
+	it("stays open to send the user back when the site's request has ended", async () => {
+		h.hasWebauthnSlot = true;
+		h.keyOk = true;
+		h.signInAgain = true;
+		mount();
+		fireEvent.click(screen.getByRole("button", { name: "Tap to confirm" }));
+		await waitFor(() => expect(screen.getByText(/Sign in again on example\.com/)).toBeTruthy());
+		expect(window.close).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole("button", { name: "Close" }));
+		expect(window.close).toHaveBeenCalled();
 	});
 
 	it("answers no when the user cancels", async () => {

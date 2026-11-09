@@ -50,9 +50,10 @@ Not yet run on a device: Android, iPhone, Firefox.
   call `get()` after an `await`. The card is the consent.
 - **The clickjacking guard covers passkey consent only** (approve and pick), not save-login, whose
   worst case is an unwanted entry.
-- **Passwordless vaults on Chrome.** Confirming with a security key inside an in-flight request ends
-  that request; it is the proxy pause window described in
+- **Confirming with a key on Chrome.** A key tap inside an in-flight request ends that request; it
+  is the proxy pause window described in
   [passkey-provider.md](passkey-provider.md#the-pause-window-is-a-hole-in-the-provider-and-it-is-structural).
+  The tap carries over to the site's next try.
 - **Android's list hop filters by caller only when the begin request carries it.** The framework sends
   `callingAppInfo` there only when the caller asked (`alwaysSendAppInfoToProvider`). The sign hop
   always has it and enforces the check, so nothing is released without it.

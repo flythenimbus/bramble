@@ -90,23 +90,52 @@ function cardPayload(
 	};
 }
 
+type VerifyOutcome = { verified: boolean; keepWindow: boolean };
 // Confirm-it's-you windows awaiting an answer, keyed by a per-request id; PASSKEY_VERIFY_RESULT
-// resolves them.
-const pendingVerifications = new Map<string, (verified: boolean) => void>();
+// settles them.
+const pendingVerifications = new Map<
+	string,
+	{ settle: (outcome: VerifyOutcome) => void; requestGone: () => boolean }
+>();
 
-// Ask the user to confirm it's them in a detached window (master password or security key), for a
-// request that needs verification while the vault is already unlocked. Timeout counts as no.
-async function verifyUser(rpId: string, timeoutMs: number): Promise<boolean> {
+// A key tap detaches Chrome's proxy, ending the site's request (docs/passkey-provider.md). The tap
+// still verified the user, so that site's next try uses it: once, and only briefly.
+const RETRY_GRANT_MS = 60_000;
+let retryGrant: { origin: string; rpId: string; until: number } | null = null;
+
+function takeRetryGrant(req: CeremonyRequest): boolean {
+	if (
+		!retryGrant ||
+		retryGrant.origin !== req.origin ||
+		retryGrant.rpId !== req.rpId ||
+		Date.now() >= retryGrant.until
+	) {
+		return false;
+	}
+	retryGrant = null;
+	return true;
+}
+
+// Ask the user to confirm it's them in a detached window (master password or a key), for a request
+// that needs verification while the vault is already unlocked. Timeout counts as no.
+async function verifyUser(
+	req: CeremonyRequest,
+	timeoutMs: number,
+	requestGone: () => boolean,
+): Promise<boolean> {
+	if (takeRetryGrant(req)) return true;
 	const id = globalThis.crypto.randomUUID();
-	const answer = new Promise<boolean>((resolve) => {
-		pendingVerifications.set(id, resolve);
+	const answer = new Promise<VerifyOutcome>((resolve) => {
+		pendingVerifications.set(id, { settle: resolve, requestGone });
 		setTimeout(() => {
-			if (pendingVerifications.delete(id)) resolve(false);
+			if (pendingVerifications.delete(id)) resolve({ verified: false, keepWindow: false });
 		}, timeoutMs);
 	});
-	const windowId = await openPopoutAt(`/passkey-verify?${new URLSearchParams({ id, rp: rpId })}`);
-	const verified = await answer;
-	if (windowId !== undefined) await api.windows.remove(windowId).catch(() => {});
+	const windowId = await openPopoutAt(
+		`/passkey-verify?${new URLSearchParams({ id, rp: req.rpId })}`,
+	);
+	const { verified, keepWindow } = await answer;
+	if (windowId !== undefined && !keepWindow) await api.windows.remove(windowId).catch(() => {});
 	return verified;
 }
 
@@ -115,12 +144,14 @@ on(
 	"PASSKEY_VERIFY_RESULT",
 	extensionOnly(async (message) => {
 		const { id, verified } = (message.payload ?? {}) as { id?: string; verified?: boolean };
-		const resolve = id ? pendingVerifications.get(id) : undefined;
-		if (id && resolve) {
+		const pending = id ? pendingVerifications.get(id) : undefined;
+		let signInAgain = false;
+		if (id && pending) {
 			pendingVerifications.delete(id);
-			resolve(verified === true);
+			signInAgain = verified === true && pending.requestGone();
+			pending.settle({ verified: verified === true, keepWindow: signInAgain });
 		}
-		return { ok: true, data: null };
+		return { ok: true, data: { signInAgain } };
 	}),
 );
 
@@ -142,7 +173,7 @@ async function ensureUnlocked(timeoutMs: number): Promise<boolean> {
 let ceremonyInProgress = false;
 
 /** The corner-card ceremony, shown in `tabId`: the tab its transport bound the request to. */
-function cornerCeremonyForTab(tabId: number): CeremonyFn {
+function cornerCeremonyForTab(tabId: number, requestGone: () => boolean): CeremonyFn {
 	return async (req) => {
 		if (ceremonyInProgress) return { approved: false };
 		ceremonyInProgress = true;
@@ -155,13 +186,17 @@ function cornerCeremonyForTab(tabId: number): CeremonyFn {
 			const host: CeremonyHost = {
 				isLocked: () => startedLocked,
 				ensureUnlocked: () => ensureUnlocked(remaining()),
-				verifyUser: () => verifyUser(req.rpId, remaining()),
+				verifyUser: () => verifyUser(req, remaining(), requestGone),
 				loadEntries: loadDecryptedEntries,
 				showCard: (opts) => showCard(tabId, cardPayload(req, opts), remaining()),
 			};
-			return await (req.kind === "create"
+			const decision = await (req.kind === "create"
 				? runCreateCeremony(req, host)
 				: runGetCeremony(req, host));
+			if (decision.approved && decision.userVerified && requestGone()) {
+				retryGrant = { origin: req.origin, rpId: req.rpId, until: Date.now() + RETRY_GRANT_MS };
+			}
+			return decision;
 		} finally {
 			ceremonyInProgress = false;
 		}
@@ -174,13 +209,16 @@ async function sha256Base64(bytes: Uint8Array): Promise<string> {
 	return bytesToBase64(new Uint8Array(digest));
 }
 
-/** Deps for the pure handlers, with the ceremony's card bound to `tabId`. */
-export function depsForTab(tabId: number): PasskeyProxyDeps {
+/** Deps for the pure handlers, with the ceremony's card bound to `tabId`. `requestGone`: the site's request has already ended. */
+export function depsForTab(
+	tabId: number,
+	requestGone: () => boolean = () => false,
+): PasskeyProxyDeps {
 	return {
 		crypto: { passkeyMakeCredential, passkeyGetAssertion, passkeyPrfEval },
 		loadEntries: loadDecryptedEntries,
 		savePlacement,
-		ceremony: cornerCeremonyForTab(tabId),
+		ceremony: cornerCeremonyForTab(tabId, requestGone),
 		sha256: sha256Base64,
 		now: () => Date.now(),
 		// Confirm the save in any open extension page (the popup is open during Unlock & Save).

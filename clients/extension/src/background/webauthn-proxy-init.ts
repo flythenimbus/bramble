@@ -95,7 +95,7 @@ function serve(kind: Kind, req: { requestId: number; requestDetailsJson: string 
 		const bound = await bindRequest(req.requestDetailsJson);
 		const details = bound
 			? await HANDLERS[kind](
-					depsForTab(bound.tabId),
+					depsForTab(bound.tabId, () => !inFlight.has(req.requestId)),
 					req.requestId,
 					req.requestDetailsJson,
 					bound.caller,
