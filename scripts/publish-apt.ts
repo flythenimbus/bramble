@@ -24,7 +24,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-	chmodSync,
 	copyFileSync,
 	existsSync,
 	mkdirSync,
@@ -38,6 +37,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { indexHashes, packageFiles, publishArgs, REPO, SUITE } from "./apt-index.ts";
+import { importEnvGpgKey } from "./gpg-env-key.ts";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -99,50 +99,9 @@ const arches = (text: string, label: string) =>
 		.sort() ?? fail(`no Architectures line in ${label}`);
 const claimed = arches(readFileSync(sources, "utf8"), sources);
 
-// The key from the environment instead of the card, which is how CI signs (.github/workflows/
-// apt-release.yml): imported into a gpg home that exists for this run only and unlocked from a
-// passphrase file, since a runner has no pinentry to ask. Locally neither variable is set and the
-// YubiKey signs as before.
-let passphraseFile: string | undefined;
-const envKey = process.env.APT_GPG_PRIVATE_KEY;
-if (envKey) {
-	const passphrase =
-		process.env.APT_GPG_PASSPHRASE ??
-		fail("APT_GPG_PRIVATE_KEY is set but APT_GPG_PASSPHRASE is not.");
-	const home = mkdtempSync(join(tmpdir(), "bramble-apt-gpg-"));
-	chmodSync(home, 0o700);
-	process.env.GNUPGHOME = home;
-	process.on("exit", () => {
-		try {
-			execFileSync("gpgconf", ["--kill", "gpg-agent"], { stdio: "ignore" });
-		} catch {}
-		rmSync(home, { recursive: true, force: true });
-	});
-	writeFileSync(join(home, "gpg.conf"), "pinentry-mode loopback\n");
-	writeFileSync(join(home, "gpg-agent.conf"), "allow-loopback-pinentry\n");
-	const truncated =
-		`APT_GPG_PRIVATE_KEY holds no secret key for ${gpgKey}.\n` +
-		"A multi-line secret typed at gh's interactive prompt keeps only its first line; set it from\n" +
-		"the clipboard instead:  pbpaste | gh secret set APT_GPG_PRIVATE_KEY --env apt-release";
-	try {
-		execFileSync("gpg", ["--batch", "--import"], {
-			input: envKey,
-			stdio: ["pipe", "ignore", "pipe"],
-		});
-	} catch {
-		fail(truncated);
-	}
-	const secret = execFileSync("gpg", ["--batch", "--list-secret-keys", "--with-colons"], {
-		encoding: "utf8",
-	});
-	const held = secret
-		.split("\n")
-		.filter((line) => line.startsWith("fpr:"))
-		.map((line) => line.split(":")[9] ?? "");
-	if (!held.some((fpr) => fpr.endsWith(signer))) fail(truncated);
-	passphraseFile = join(home, "passphrase");
-	writeFileSync(passphraseFile, passphrase, { mode: 0o600 });
-}
+// The key from the environment instead of the card is how CI signs (.github/workflows/
+// apt-release.yml). Locally the variable is not set and the YubiKey signs as before.
+const passphraseFile = importEnvGpgKey(gpgKey);
 
 // Exactly that release's packages: the directory is cleared first, so a .deb left over from a
 // local build of some other version cannot ride along into the index.

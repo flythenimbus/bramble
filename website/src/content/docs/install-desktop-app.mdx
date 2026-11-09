@@ -21,7 +21,10 @@ keywords:
   - apt
   - deb
   - Fedora
+  - openSUSE
+  - zypper
   - rpm
+  - signing key
   - AppImage
   - Nix
   - NixOS
@@ -44,7 +47,7 @@ keywords:
   - background item
   - menu bar
   - system tray
-updatedDate: 2026-11-07
+updatedDate: 2026-11-08
 ---
 
 The desktop app runs on macOS and Linux. There's no Windows version yet.
@@ -84,13 +87,16 @@ chmod +x Bramble_*.AppImage
 ./Bramble_*.AppImage
 ```
 
-### Fedora and other RPM-based distributions
+### Fedora, openSUSE and other RPM-based distributions
 
-Download the `.rpm` for your computer from the [releases page](https://github.com/flythenimbus/bramble/releases?q=desktop&expanded=true) and install it:
+Download the `.rpm` for your computer from the [releases page](https://github.com/flythenimbus/bramble/releases?q=desktop&expanded=true). Import Bramble's signing key once, then install it:
 
 ```bash
+sudo rpm --import https://apt.bramble.sh/keys.asc
 sudo dnf install ./Bramble-*.rpm
 ```
+
+On openSUSE, install it with `sudo zypper install ./Bramble-*.rpm` instead.
 
 ### Nix and NixOS
 

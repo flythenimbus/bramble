@@ -53,6 +53,33 @@ That split is forced rather than chosen. Everything that must be Linux is in the
 everything that must be near a key is on the host. aptly and rclone are cross-platform, and aptly
 builds a Debian index without dpkg, so nothing in the publishing half needs Linux.
 
+## RPMs
+
+The `.rpm` files on the release page are signed with the same standby key. zypper refuses an unsigned
+package outright, and a signed one until its key is imported, so a user runs this once:
+
+```bash
+sudo rpm --import https://apt.bramble.sh/keys.asc
+```
+
+Signing is the `rpm` job in `desktop-release.yml` (`scripts/sign-rpm.ts`), between the Linux builds
+and publish, in the `apt-release` environment so that `desktop-release` never holds this key. That
+makes it one more approval per release. The Linux job hands the RPMs over under a separate artifact
+name, so publish can only receive the signed copies, and a dry run signs too.
+
+Three things that are not obvious:
+
+- `rpm --checksig` exits 0 for a package with no signature, so the script checks its output for
+  `signatures OK`, against a throwaway rpmdb holding only the shipped keyring.
+- Ubuntu's `rpm` package points `%__gpg` at a `/usr/bin/gpg2` that does not exist.
+- Ed25519 verifies on openSUSE Leap 15.6 and Tumbleweed, Fedora 45 and Rocky 9. rpm 4.14 on EL8 cannot
+  parse it, but EL8 has no `libwebkit2gtk-4.1`, so Bramble cannot be installed there anyway.
+
+`rpm --import` has no equivalent of `Signed-By:`, so the key is trusted for every package on the
+machine. It also does not rotate through the package the way the `.deb` keyring does: a new key means
+each RPM user importing it again, so announce it a release ahead. A `--local` release ships its RPMs
+unsigned, since `rpm` is not on the Mac and the key is on the YubiKey; it warns when it does.
+
 ## Hosting
 
 Cloudflare R2 (`bramble-apt`) behind the custom domain `apt.bramble.sh`. Not the website's

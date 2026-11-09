@@ -3,7 +3,7 @@ name: Desktop release
 # Builds, signs and publishes the desktop app for macOS, Linux and Windows as one release, so it
 # needs neither a Mac nor a YubiKey. docs/ci-releases.md has the trade.
 #
-# Four kinds of job, and only the last one holds anything that matters:
+# Five kinds of job, and only rpm and publish hold anything that matters:
 #
 # - **bump** runs the gate, commits the version through GitHub's API, and dispatches
 #   sign-windows.yml. The commit comes first, as on the local route, because that workflow builds
@@ -11,10 +11,12 @@ name: Desktop release
 # - **linux**, on native amd64 and arm64 runners, builds in the same Debian container as the local
 #   route. Neither holds a secret: the bundler will not emit updater artifacts unsigned, so their
 #   AppImages carry a throwaway signature that the publish job replaces.
+# - **rpm** signs the RPMs with the APT repository's key, in that key's own environment, so it is a
+#   second approval. Publish only ever receives the signed copies. docs/apt-releases.md.
 # - **macos** compiles both Apple slices and hands over the binaries, holding nothing. Compiling is
 #   where every crate's build script and proc macro runs, so it happens away from the keys; on
 #   macOS signing happens while bundling, not while compiling, which is what lets the two split.
-# - **publish**, on macOS, is the one approval and the only job the updater key ever reaches, so it
+# - **publish**, on macOS, is the only job the updater key ever reaches, so it
 #   runs first-party actions only (Rust comes from the image's rustup, pnpm from corepack). It
 #   bundles, codesigns and notarizes macOS from the handed-over binaries, re-signs the AppImages,
 #   waits for SignPath and re-signs the installer, verifies every updater signature against the
@@ -195,8 +197,66 @@ jobs:
           name: linux-${{ matrix.arch }}
           path: |
             dist-linux/deb/*.deb
-            dist-linux/rpm/*.rpm
             dist-linux/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 7
+
+      # Under its own name, which publish never downloads.
+      - name: Hand off the RPM for signing
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rpm-unsigned-${{ matrix.arch }}
+          path: dist-linux/rpm/*.rpm
+          if-no-files-found: error
+          retention-days: 7
+
+  rpm:
+    name: Sign the RPMs
+    needs: [bump, linux]
+    if: ${{ !contains(inputs.skip, 'linux') }}
+    runs-on: ubuntu-24.04
+    # The key apt-release.yml signs with, so first-party actions only, as there.
+    environment: apt-release
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.bump.outputs.sha }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install rpm
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends rpm
+
+      - name: Receive the RPMs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: rpm-unsigned-*
+          merge-multiple: true
+          path: dist-linux/rpm/
+
+      - name: Sign and check against the shipped keyring
+        env:
+          BRAMBLE_APT_GPG_KEY: F6A840761E00875560B1CA1AC265880E1ED5826E
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
+        run: node scripts/sign-rpm.ts
+
+      - name: Hand off the signed RPMs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rpm-signed
+          path: dist-linux/rpm/*.rpm
           if-no-files-found: error
           retention-days: 7
 
@@ -275,10 +335,10 @@ jobs:
     # Static, unlike the bump job's: a skipped job never evaluates its name, so an expression here
     # shows up in the UI as its own source whenever this job does not run.
     name: Sign and publish
-    needs: [bump, linux, macos]
+    needs: [bump, linux, rpm, macos]
     # Runs when a platform was skipped on purpose, not only when every build succeeded: a needs-job
     # that is skipped otherwise skips everything after it too.
-    if: ${{ !cancelled() && needs.bump.result == 'success' && (needs.linux.result == 'success' || needs.linux.result == 'skipped') && (needs.macos.result == 'success' || needs.macos.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.bump.result == 'success' && (needs.linux.result == 'success' || needs.linux.result == 'skipped') && (needs.rpm.result == 'success' || needs.rpm.result == 'skipped') && (needs.macos.result == 'success' || needs.macos.result == 'skipped') }}
     runs-on: macos-26
     # The approval gate, and the only job holding the updater key.
     environment: desktop-release
@@ -344,6 +404,13 @@ jobs:
           pattern: linux-*
           merge-multiple: true
           path: dist-linux/
+
+      - name: Receive the signed RPMs
+        if: ${{ !contains(inputs.skip, 'linux') }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: rpm-signed
+          path: dist-linux/rpm/
 
       # The ruleset on main refuses GITHUB_TOKEN, which it evaluates as the GitHub Actions app: a
       # personal repository cannot add that app to a bypass list. This one can be, and carries

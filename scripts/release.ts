@@ -2249,6 +2249,7 @@ async function releaseDesktop(version: string, universal: boolean, resume = fals
 	}
 
 	const { assets, sums, dmgs, expectedDmg } = collectDesktopAssets(version, universal, BUNDLE);
+	console.warn("warning: a local release ships its .rpm files unsigned; see docs/apt-releases.md");
 	const stage = mkdtempSync(join(tmpdir(), "bramble-release-"));
 	const sumsAsset = join(stage, "SHA256SUMS");
 	writeFileSync(sumsAsset, [...sums].map(([name, hash]) => `${hash}  ${name}\n`).join(""));

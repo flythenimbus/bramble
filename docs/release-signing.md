@@ -742,6 +742,9 @@ with the standby key and publishes it. A failure there leaves the release comple
 `gh workflow run apt-release.yml -f release=<tag>`. Until it runs, Debian and Ubuntu users do not
 see the release.
 
+**The RPMs are signed before publish, with the same key**, in a job of their own under `apt-release`,
+which is one more approval. See [apt-releases.md](apt-releases.md#rpms).
+
 **From this Mac** (`--local`), the fallback: every build here, the Linux one in containers, Windows
 still through GitHub and SignPath, and APT publishing at the end, all as before.
 
