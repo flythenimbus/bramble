@@ -17,13 +17,16 @@ const h = vi.hoisted(() => ({
 	hasPasswordSlot: true,
 	inviteDevice: vi.fn(),
 	navigate: vi.fn(),
+	verifyMasterPassword: vi.fn(),
+	setMeta: vi.fn(async () => {}),
+	removeMeta: vi.fn(async () => {}),
 }));
 vi.mock("../../../../hooks/useVault", () => ({
 	useVault: () => ({ hasPasswordSlot: h.hasPasswordSlot }),
 	useVaultActions: () => ({
 		inviteDevice: h.inviteDevice,
 		removeDevice: vi.fn(),
-		verifyMasterPassword: vi.fn(),
+		verifyMasterPassword: h.verifyMasterPassword,
 	}),
 }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => h.navigate }));
@@ -36,6 +39,8 @@ afterEach(() => {
 	h.hasPasswordSlot = true;
 	h.inviteDevice.mockClear();
 	h.navigate.mockClear();
+	h.setMeta.mockClear();
+	h.removeMeta.mockClear();
 });
 
 beforeAll(() => {
@@ -67,8 +72,8 @@ function mount(
 		},
 		storage: {
 			getMeta: async (k: string) => (k === "sync.group" ? opts.group : undefined),
-			setMeta: async () => {},
-			removeMeta: async () => {},
+			setMeta: h.setMeta,
+			removeMeta: h.removeMeta,
 			subscribeMeta: () => () => {},
 		},
 	} as unknown as Platform;
@@ -177,6 +182,54 @@ describe("the sync status", () => {
 
 // A name given on any device is a synced setting, so every device in the group shows it. The
 // device's own default stays in its roster entry, which only it can sign.
+// The field saves as you type and shows the hosted relay when nothing is saved. A saved blank looked
+// like the default and stopped sync on the desktop and iOS, with a message that named nothing.
+describe("the relay setting", () => {
+	const relayField = async () => {
+		fireEvent.click(await screen.findByRole("button", { name: "Advanced" }));
+		return screen.findByLabelText("Nostr relay URL");
+	};
+
+	it("forgets the relay when the field is cleared", async () => {
+		mount({ group: groupOf("me", "other") });
+		fireEvent.change(await relayField(), { target: { value: "" } });
+
+		expect(h.removeMeta).toHaveBeenCalledWith("sync.relay");
+		expect(h.setMeta).not.toHaveBeenCalledWith("sync.relay", expect.anything());
+	});
+
+	it("treats a field of spaces as cleared", async () => {
+		mount({ group: groupOf("me", "other") });
+		fireEvent.change(await relayField(), { target: { value: "   " } });
+
+		expect(h.removeMeta).toHaveBeenCalledWith("sync.relay");
+	});
+
+	it("saves a relay without the spaces around it", async () => {
+		mount({ group: groupOf("me", "other") });
+		fireEvent.change(await relayField(), { target: { value: " wss://relay.example.com " } });
+
+		expect(h.setMeta).toHaveBeenCalledWith("sync.relay", "wss://relay.example.com");
+		expect(h.removeMeta).not.toHaveBeenCalledWith("sync.relay");
+	});
+
+	it("invites over the hosted relay with the field cleared", async () => {
+		h.verifyMasterPassword.mockResolvedValueOnce(true);
+		h.inviteDevice.mockResolvedValueOnce("bramble-pair-1.x");
+		mount({ group: groupOf("me", "other") });
+		fireEvent.change(await relayField(), { target: { value: "" } });
+
+		fireEvent.click(screen.getByRole("button", { name: "Add another device" }));
+		fireEvent.change(await screen.findByLabelText("Master password"), {
+			target: { value: "pw" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+		await vi.waitFor(() => expect(h.inviteDevice).toHaveBeenCalled());
+		expect(h.inviteDevice.mock.calls[0]?.[0]).toBe("wss://bramble-relay.flythenimbus.workers.dev");
+	});
+});
+
 describe("device names", () => {
 	const STAMP = { wall: 5, counter: 0, node: "me" };
 	function synced(settings: SyncedSettings | undefined, ready = true) {

@@ -2,6 +2,7 @@
 
 import type { RosterPayload } from "@core/sync";
 import { syncKeyFor } from "@core/sync/sync-keys";
+import { relayOrDefault } from "@core/sync/transport/relay-url";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { api } from "../platform-api";
 import { ACTIVE_VAULT_SESSION_KEY } from "../session-keys";
@@ -116,12 +117,10 @@ export async function storeGroup(group: GroupConfig, ctx: SyncVaultCtx): Promise
 }
 
 const RELAY_KEY = "sync.relay";
-const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
 /** The signaling relay URL the background uses for ongoing sync. */
 export async function getStoredRelay(): Promise<string> {
-	const r = (await api.storage.local.get(RELAY_KEY))[RELAY_KEY];
-	return typeof r === "string" && r.length > 0 ? r : DEFAULT_RELAY;
+	return relayOrDefault((await api.storage.local.get(RELAY_KEY))[RELAY_KEY]);
 }
 
 export async function storeRelay(url: string): Promise<void> {

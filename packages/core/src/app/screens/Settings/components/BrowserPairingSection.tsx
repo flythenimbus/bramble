@@ -9,6 +9,7 @@ import { useVault, useVaultActions } from "../../../../hooks/useVault";
 import { useVaultRegistry } from "../../../../hooks/useVaultRegistry";
 import { linkSas } from "../../../../sync/link-sas";
 import type { PairingSas } from "../../../../sync/pairing-sas";
+import { relayOrDefault } from "../../../../sync/transport/relay-url";
 import { formatDate } from "../../../../util/format-date";
 import { isVaultEmpty, readVaultContents } from "../../../../vault/vault-empty";
 import { displayLabel } from "../../../../vault/vault-registry";
@@ -26,8 +27,6 @@ const WINDOW_SECONDS = 180;
 
 /** How long a link both screens confirmed waits to finish (pairing.rs `PENDING_MS`). */
 const PENDING_SECONDS = 300;
-
-const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
 /** Pair this app with a browser extension. Rendered only where the platform provides a
  * pairing adapter, which today is desktop. See docs/desktop-port.md. */
@@ -205,7 +204,7 @@ export function BrowserPairingSection() {
 	 * windows cannot disagree. `password` admission-signs it. */
 	const armInvite = async (password: string) => {
 		if (!pairing.armSyncInvite) return; // link only: this platform cannot deliver an invite
-		const relay = (await storage.getMeta<string>("sync.relay")) ?? DEFAULT_RELAY;
+		const relay = relayOrDefault(await storage.getMeta<string>("sync.relay"));
 		const iceUrl = (await storage.getMeta<string>("sync.iceUrl")) ?? undefined;
 		const invite = await inviteDevice(relay, iceUrl || undefined, password, { viaLink: true });
 		await pairing.armSyncInvite(invite, WINDOW_SECONDS * 1000);

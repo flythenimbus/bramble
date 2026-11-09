@@ -305,6 +305,18 @@ describe("retargetActiveVault", () => {
 	});
 });
 
+describe("the relay", () => {
+	it("uses the hosted one when the saved setting is blank", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		h.meta.set("sync.relay", "");
+		await startSession(await loadRoster());
+
+		expect(h.starts[0]?.relayUrl).toBe("wss://bramble-relay.flythenimbus.workers.dev");
+	});
+});
+
 describe("transports", () => {
 	it("runs one session over the relay and one over the browser link", async () => {
 		// Two sessions rather than one: a phone is only reachable through the relay, and a browser

@@ -16,6 +16,7 @@ import {
 	SYNC_LAST_SYNCED_KEY,
 } from "../../../../sync";
 import { deriveIceUrl } from "../../../../sync/transport/ice";
+import { DEFAULT_RELAY, relayOrDefault } from "../../../../sync/transport/relay-url";
 import { formatDate } from "../../../../util/format-date";
 import { SasDisplay } from "../../../components/SasDisplay";
 import { AdvancedDisclosure } from "../../../components/ui/advanced-disclosure";
@@ -29,7 +30,6 @@ import { Row, Section } from "./primitives";
 
 const inputClass =
 	"w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-input-border bg-transparent focus:outline-none focus:border-primary";
-const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 
 interface SyncGroup {
 	groupKey: string;
@@ -178,7 +178,8 @@ export function SyncConnectSection() {
 	// Persist on edit so the choice survives and ongoing sync + Settings pick it up.
 	const onRelayChange = (v: string) => {
 		setRelayUrl(v);
-		void storage.setMeta("sync.relay", v);
+		const url = v.trim();
+		void (url ? storage.setMeta("sync.relay", url) : storage.removeMeta("sync.relay")); // blank = hosted
 	};
 	const onIceChange = (v: string) => {
 		setIceUrl(v);
@@ -329,7 +330,9 @@ export function SyncConnectSection() {
 			setHostExpired(false);
 			setInviteError(null);
 			setAttemptNote(null);
-			setPairingCode(await inviteDevice(relayUrl.trim(), iceUrl.trim() || undefined, password));
+			setPairingCode(
+				await inviteDevice(relayOrDefault(relayUrl), iceUrl.trim() || undefined, password),
+			);
 			await refreshGroup();
 		});
 	// "Add device" entry point: confirm the master password first (it admission-signs the joiner).

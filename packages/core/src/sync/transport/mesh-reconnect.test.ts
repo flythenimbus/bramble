@@ -96,6 +96,13 @@ afterEach(async () => {
 });
 
 describe("the relay connection", () => {
+	it("says the relay URL is the problem, before opening anything", async () => {
+		await expect(joinMesh({ ...options(), relayUrl: "relay.example.com" })).rejects.toThrow(
+			/relay URL/,
+		);
+		expect(sockets).toHaveLength(0);
+	});
+
 	it("reconnects after the socket drops", async () => {
 		await mesh();
 		sockets[0]?.open();

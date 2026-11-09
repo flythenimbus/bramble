@@ -45,6 +45,14 @@ afterEach(() => {
 	vi.clearAllMocks();
 });
 
+describe("getStoredRelay", () => {
+	it("uses the hosted relay when the saved one is only spaces", async () => {
+		stubChrome({ "sync.relay": "   " });
+		const { getStoredRelay } = await loadConfig();
+		expect(await getStoredRelay()).toBe("wss://bramble-relay.flythenimbus.workers.dev");
+	});
+});
+
 describe("isSyncGroupKey", () => {
 	it("matches the flat and namespaced group keys, not the device keypair or relay", async () => {
 		const { isSyncGroupKey } = await loadConfig();

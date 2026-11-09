@@ -24,6 +24,7 @@ import {
 	padMessage,
 	unpadMessage,
 } from "./relay-channel";
+import { isRelayUrl } from "./relay-url";
 import { createPeer, type Peer, type PeerSignal } from "./webrtc-peer";
 
 export interface PeerSession {
@@ -169,8 +170,9 @@ class Mesh {
 	}
 
 	async start(): Promise<void> {
-		await this.roll();
 		const url = this.opts.relayUrl;
+		if (!isRelayUrl(url)) throw new Error("the relay URL isn't valid: check it under Advanced");
+		await this.roll();
 		const host = relayHost(url);
 		this.socket = new WebSocket(url);
 		let opened = false;

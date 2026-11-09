@@ -40,6 +40,7 @@ import {
 	wantedFromPayload,
 } from "@core/sync/transport/blob-sync";
 import type { MeshSession } from "@core/sync/transport/peer-session";
+import { relayOrDefault } from "@core/sync/transport/relay-url";
 import { startRosterSync } from "@core/sync/transport/roster-sync";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { desktopCrypto } from "../adapters/crypto";
@@ -61,7 +62,6 @@ import {
 
 const onTheLink = (pub: string): boolean => linkDevicePubs().has(pub);
 
-const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 const GROUP_KEY = "sync.group";
 const RELAY_KEY = "sync.relay";
 const ICE_KEY = "sync.iceUrl";
@@ -252,7 +252,7 @@ async function startRoster(): Promise<void> {
 	if (!group?.groupKey) return; // not enrolled in a group yet
 
 	const { privateKey, publicKey } = await deviceKeypair();
-	const relay = (await desktopStorage.getMeta<string>(RELAY_KEY)) ?? DEFAULT_RELAY;
+	const relay = relayOrDefault(await desktopStorage.getMeta<string>(RELAY_KEY));
 	const iceUrl = (await desktopStorage.getMeta<string>(ICE_KEY)) ?? "";
 
 	for (const session of rosterSessions) session.stop();

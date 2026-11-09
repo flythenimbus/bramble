@@ -34,6 +34,7 @@ import {
 } from "@core/sync/transport/blob-sync";
 import { startEnroll } from "@core/sync/transport/enroll-host";
 import type { MeshSession } from "@core/sync/transport/peer-session";
+import { relayOrDefault } from "@core/sync/transport/relay-url";
 import { startRosterSync } from "@core/sync/transport/roster-sync";
 import { parseRegistry, VAULT_REGISTRY_KEY } from "@core/vault/vault-registry";
 import { mobileCrypto } from "../adapters/crypto";
@@ -44,7 +45,6 @@ import { nativeSyncCrypto, type SyncCrypto } from "../native-crypto";
 import { secureStorage } from "../secure-storage";
 import { loadWasm } from "../wasm-loader";
 
-const DEFAULT_RELAY = "wss://bramble-relay.flythenimbus.workers.dev";
 const GROUP_KEY = "sync.group";
 const RELAY_KEY = "sync.relay";
 const ICE_KEY = "sync.iceUrl";
@@ -422,7 +422,7 @@ async function startRoster(): Promise<void> {
 	const group = await mobileStorage.getMeta<GroupConfig>(groupMetaKey);
 	if (!group?.groupKey) return; // not enrolled in a group yet
 	const { privateKey, publicKey } = await deviceKeypair();
-	const relay = (await mobileStorage.getMeta<string>(RELAY_KEY)) ?? DEFAULT_RELAY;
+	const relay = relayOrDefault(await mobileStorage.getMeta<string>(RELAY_KEY));
 	const iceUrl = (await mobileStorage.getMeta<string>(ICE_KEY)) ?? "";
 	const wasm = await loadSyncCrypto();
 	rosterSession?.stop();

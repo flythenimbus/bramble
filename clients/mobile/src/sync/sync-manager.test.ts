@@ -240,6 +240,18 @@ describe("session vault binding", () => {
 	});
 });
 
+describe("the relay", () => {
+	it("uses the hosted one when the saved setting is blank", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		h.meta.set("sync.relay", "");
+		await startSession(await loadManager());
+
+		expect(h.rosterOpts?.relayUrl).toBe("wss://bramble-relay.flythenimbus.workers.dev");
+	});
+});
+
 describe("the file session", () => {
 	it("holds the session's own vault's files, over direct connections, and stops with sync", async () => {
 		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A, VAULT_B));
