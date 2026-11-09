@@ -22,11 +22,15 @@ export interface PeerCallbacks {
 	onSignal(signal: PeerSignal): void;
 	onOpen(): void;
 	onMessage(data: string): void;
+	/** The connection has ended. Once per connection, and by the time close() returns. */
 	onClose(): void;
 	/** ICE/connection state transitions, surfaced for diagnostics (e.g. an ICE stall that
 	 * would otherwise hang silently at "initiating"). */
 	onState?(state: string): void;
 }
+
+// Past ICE's own timeout: nothing reports a connection that never gets going. See docs/p2p-sync.md.
+const CONNECT_DEADLINE_MS = 60_000;
 
 export function createPeer({
 	initiator,
@@ -43,11 +47,31 @@ export function createPeer({
 	// addIceCandidate before the remote description is set throws; buffer until then.
 	const pendingCandidates: RTCIceCandidateInit[] = [];
 
+	// The one way a connection ends, whichever part notices first.
+	let ended = false;
+	const end = () => {
+		if (ended) return;
+		ended = true;
+		clearTimeout(connectDeadline);
+		try {
+			channel?.close();
+		} catch {}
+		pc.close();
+		onClose();
+	};
+	const connectDeadline = setTimeout(() => {
+		onState?.("not connected, giving up");
+		end();
+	}, CONNECT_DEADLINE_MS);
+
 	const wire = (ch: RTCDataChannel) => {
 		channel = ch;
-		ch.onopen = () => onOpen();
+		ch.onopen = () => {
+			clearTimeout(connectDeadline);
+			onOpen();
+		};
 		ch.onmessage = (e) => onMessage(typeof e.data === "string" ? e.data : "");
-		ch.onclose = () => onClose();
+		ch.onclose = end;
 	};
 
 	let localCandidates = 0;
@@ -61,13 +85,13 @@ export function createPeer({
 	};
 	pc.onconnectionstatechange = () => {
 		onState?.(`conn ${pc.connectionState}`);
-		if (pc.connectionState === "failed" || pc.connectionState === "closed") onClose();
+		if (pc.connectionState === "failed" || pc.connectionState === "closed") end();
 	};
 	// ICE failing is distinct from the overall connection failing and surfaces sooner;
 	// report each transition and tear down on failure so a stuck connect never hangs silently.
 	pc.oniceconnectionstatechange = () => {
 		onState?.(`ice ${pc.iceConnectionState}`);
-		if (pc.iceConnectionState === "failed") onClose();
+		if (pc.iceConnectionState === "failed") end();
 	};
 
 	if (initiator) {
@@ -80,6 +104,7 @@ export function createPeer({
 				onState?.("offer sent");
 			} catch (e) {
 				onState?.(`offer error: ${(e as Error).message}`);
+				end();
 			}
 		})();
 	} else {
@@ -115,16 +140,13 @@ export function createPeer({
 				}
 			} catch (e) {
 				onState?.(`signal error (${signal.kind}): ${(e as Error).message}`);
+				// A stray answer can fail on a working connection; nothing comes of a failed offer.
+				if (signal.kind === "offer") end();
 			}
 		},
 		send(data) {
 			if (channel?.readyState === "open") channel.send(data);
 		},
-		close() {
-			try {
-				channel?.close();
-			} catch {}
-			pc.close();
-		},
+		close: end,
 	};
 }

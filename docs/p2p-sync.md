@@ -380,6 +380,15 @@ believing it already found the other. Frequent socket drops used to hide this by
 hello every minute or two — which the keepalive above removes. So the mesh now re-announces every
 30s, first forgetting any peer it holds no transport for (`Mesh.announce`).
 
+**A connection always reports its end.** The mesh won't connect to a peer it still holds, and not
+every ending fires an event: `close()` fires no connection state change, and an offer nobody answers
+stays at ICE `new` for good (measured on WKWebView and Chromium). The relay stores nothing, so one
+lost answer could shut two long-lived sessions out of each other until one restarted. `createPeer`
+now has one way out (`end`), run once whichever part notices first, which also frees a connection
+that failed before anything held it, and a connection that hasn't opened after 60s gives up. An
+offer for a peer already held starts a new connection, since an offer only comes from a connection
+the other side just started. Issue #205.
+
 ## Merge engine: entry-level, keeping concurrent versions
 
 ### Stamps

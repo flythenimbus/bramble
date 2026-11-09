@@ -403,6 +403,11 @@ class Mesh {
 	private async routeSignal(remote: string, signal: PeerSignal): Promise<void> {
 		if (this.skipped.has(remote)) return;
 		let peer = this.peers.get(remote);
+		// An offer means the other side started over, so whatever is held for it is finished.
+		if (peer && signal.kind === "offer") {
+			peer.close();
+			peer = undefined;
+		}
 		if (!peer) {
 			// Only an offer bootstraps a responder, but candidates arriving during its
 			// ICE request must wait for that same peer rather than being discarded.

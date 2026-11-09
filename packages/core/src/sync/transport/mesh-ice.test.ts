@@ -219,6 +219,52 @@ describe("ICE credentials for new peer connections", () => {
 		expect(fetchIce).toHaveBeenCalledTimes(1);
 	});
 
+	describe("an offer from a peer it already holds", () => {
+		// An offer only ever comes from a connection the other side has just started, so whatever is
+		// held for that peer is over. Issue #205: applying it to a closed one fails, and no answer goes
+		// back. These peers report their close, as createPeer does.
+		const reportingCloses = () =>
+			vi.mocked(createPeer).mockImplementation((callbacks) => ({
+				handleSignal: vi.fn(async () => {}),
+				send: () => {},
+				close: vi.fn(() => callbacks.onClose()),
+			}));
+		const made = (n: number) => vi.mocked(createPeer).mock.results[n]!.value;
+		const offer = (sdp: string): PeerSignal => ({ kind: "offer", sdp });
+
+		it("starts a new connection for it and closes the old one", async () => {
+			reportingCloses();
+			await start(async () => []);
+
+			await deliver(offer("first"));
+			await vi.waitFor(() => expect(createPeer).toHaveBeenCalledTimes(1));
+			await vi.waitFor(() => expect(made(0).handleSignal).toHaveBeenCalledWith(offer("first")));
+
+			await deliver(offer("second"));
+			await vi.waitFor(() => expect(createPeer).toHaveBeenCalledTimes(2));
+			await vi.waitFor(() => expect(made(1).handleSignal).toHaveBeenCalledWith(offer("second")));
+
+			expect(made(0).close).toHaveBeenCalledTimes(1);
+			expect(made(0).handleSignal).toHaveBeenCalledTimes(1);
+		});
+
+		it("leaves the connection alone for an answer or a candidate", async () => {
+			reportingCloses();
+			await start(async () => []);
+			const candidate: PeerSignal = { kind: "candidate", candidate: { candidate: "remote ICE" } };
+			const answer: PeerSignal = { kind: "answer", sdp: "their answer" };
+
+			await deliver(offer("first"));
+			await vi.waitFor(() => expect(made(0).handleSignal).toHaveBeenCalledWith(offer("first")));
+			await deliver(candidate);
+			await deliver(answer);
+
+			await vi.waitFor(() => expect(made(0).handleSignal).toHaveBeenCalledTimes(3));
+			expect(createPeer).toHaveBeenCalledTimes(1);
+			expect(made(0).close).not.toHaveBeenCalled();
+		});
+	});
+
 	it("does not create a peer when stopped during an ICE request", async () => {
 		let resolveIce!: (servers: RTCIceServer[]) => void;
 		const fetchIce = vi.fn(
