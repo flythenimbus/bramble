@@ -29,7 +29,7 @@ type Release = {
 	assets?: Array<{ name?: string; download_count?: number }>;
 };
 
-export const REPO = "flythenimbus/bramble";
+export const REPO = "bramble-sh/bramble";
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 
 // Installers only: no SHA256SUMS, no .sig, no Bramble.app.tar.gz (the auto-updater artifact).

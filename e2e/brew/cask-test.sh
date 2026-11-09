@@ -130,7 +130,7 @@ ok "$VERSION matches the update manifest"
 # catches a cask edited to a checksum that belongs to nothing, which `brew fetch` alone would
 # report only as a mismatch against whatever the URL happens to serve.
 say "the checksum matches the release's own SHA256SUMS"
-SUMS="https://github.com/flythenimbus/bramble/releases/download/${VERSION}-desktop/SHA256SUMS"
+SUMS="https://github.com/bramble-sh/bramble/releases/download/${VERSION}-desktop/SHA256SUMS"
 DMG="$(basename "$URL")"
 PUBLISHED="$(curl -fsSL "$SUMS" | awk -v f="$DMG" '$2 == f { print $1 }')"
 [ -n "$PUBLISHED" ] || die "$DMG is not in $SUMS; did the release rename the disk image?"

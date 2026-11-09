@@ -64,7 +64,7 @@ its own, resealed under the new vault's key. See
 Per vault, not per device, because a shared list made every vault back up to one
 place: configuring Nextcloud in a personal vault silently configured a work vault
 with the same server, credentials and folder, with no way to separate them
-([issue #49](https://github.com/flythenimbus/bramble/issues/49)). See
+([issue #49](https://github.com/bramble-sh/bramble/issues/49)). See
 [Config and state](#config-and-state-device-local-per-vault) for the keys and the
 one-time migration off the old shared list.
 

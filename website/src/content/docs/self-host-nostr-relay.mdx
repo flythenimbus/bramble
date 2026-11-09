@@ -41,7 +41,7 @@ The relay introduces your devices to each other. It only ever sees encrypted mes
 Build the image from Bramble's source and start it:
 
 ```sh
-git clone https://github.com/flythenimbus/bramble.git
+git clone https://github.com/bramble-sh/bramble.git
 cd bramble
 docker build -t bramble-relay services/nostr-relay/node
 docker run -d --name bramble-relay -p 127.0.0.1:7400:7400 \
@@ -58,7 +58,7 @@ relay.example.com {
 
 To check it, open `https://relay.example.com`. You should see `bramble signaling relay`.
 
-Prefer not to run a server? The same relay also runs as a Cloudflare Worker. The [relay's README](https://github.com/flythenimbus/bramble/blob/main/services/nostr-relay/README.md#deploy-to-cloudflare-workers) has the steps.
+Prefer not to run a server? The same relay also runs as a Cloudflare Worker. The [relay's README](https://github.com/bramble-sh/bramble/blob/main/services/nostr-relay/README.md#deploy-to-cloudflare-workers) has the steps.
 
 ## Point your devices at it
 
@@ -81,7 +81,7 @@ To connect from anywhere, add STUN by setting `ICE_SERVERS` when you start the c
 -e ICE_SERVERS='[{"urls":"stun:stun.example.com:3478"}]'
 ```
 
-Some networks block direct connections even with STUN, and those need a TURN server you run yourself. The [relay's README](https://github.com/flythenimbus/bramble/blob/main/services/nostr-relay/README.md#configure-stun-and-turn) covers TURN, including a starting config for coturn.
+Some networks block direct connections even with STUN, and those need a TURN server you run yourself. The [relay's README](https://github.com/bramble-sh/bramble/blob/main/services/nostr-relay/README.md#configure-stun-and-turn) covers TURN, including a starting config for coturn.
 
 ## Keep it to your own devices
 

@@ -7,8 +7,8 @@
 # same package to the same users on our own schedule, and CI can build it so it cannot rot.
 # Upstreaming later is a strict addition. See docs/desktop-port.md.
 #
-#   nix build github:flythenimbus/bramble
-#   nix run   github:flythenimbus/bramble
+#   nix build github:bramble-sh/bramble
+#   nix run   github:bramble-sh/bramble
 #
 # Or in a system configuration, via the overlay this exposes.
 

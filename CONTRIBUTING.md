@@ -10,7 +10,7 @@ describes what an acceptable contribution looks like, so you are not guessing.
   and changes to the vault format or crypto should be discussed before you write
   code. Bug reports and small fixes can go straight to a pull request.
 - **Found a security issue? Do not open a public issue.** Report it privately via
-  [GitHub Security Advisories](https://github.com/flythenimbus/bramble/security/advisories)
+  [GitHub Security Advisories](https://github.com/bramble-sh/bramble/security/advisories)
   or email. See [SECURITY.md](SECURITY.md).
 - **Read the design docs.** [docs/](docs/README.md) holds the reasoning behind the
   crypto, unlock flows, storage, and autofill. Code comments point there instead

@@ -3,7 +3,7 @@ name: nix hash
 # The fetchPnpmDeps hash pins the whole resolved dependency store, so any lockfile change
 # invalidates it. Nothing else in CI builds the flake, and a stale hash is not a degraded build
 # but no build at all, so it has to be refreshed the moment the lockfile moves rather than at
-# release time: `nix run github:flythenimbus/bramble` tracks main, not a tag. Four desktop
+# release time: `nix run github:bramble-sh/bramble` tracks main, not a tag. Four desktop
 # releases shipped over the month it was last broken without any of them noticing.
 
 on:
@@ -41,8 +41,8 @@ jobs:
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       # The same app the release jobs use: a ruleset on main refuses GITHUB_TOKEN, which it
-      # evaluates as the GitHub Actions app, and a personal repository cannot add that app to a
-      # bypass list. This one can be, and holds contents:write and nothing else.
+      # evaluates as the GitHub Actions app, and exempting that app would exempt every workflow.
+      # This one is on the bypass list and holds contents:write and nothing else.
       # See docs/ci-releases.md.
       - name: Token that may commit to main
         id: commit-token

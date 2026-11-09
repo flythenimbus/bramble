@@ -27,7 +27,7 @@ import { join, resolve } from "node:path";
 import { yubiKeyIdentity } from "./age-yubikey-identity.ts";
 import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
-const REPO = "flythenimbus/bramble";
+const REPO = "bramble-sh/bramble";
 const WRAPPERS = join(homedir(), ".config/bramble");
 
 const argv = process.argv.slice(2);

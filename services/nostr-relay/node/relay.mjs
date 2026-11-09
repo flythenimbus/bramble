@@ -37,7 +37,7 @@ const RELAY_INFO = JSON.stringify({
 	name: "Bramble signaling relay",
 	description:
 		"Forwards ephemeral events (kinds 20000-29999) to current subscribers. Stores nothing and does not verify signatures.",
-	software: "https://github.com/flythenimbus/bramble",
+	software: "https://github.com/bramble-sh/bramble",
 	supported_nips: [1, 11],
 	limitation: {
 		max_message_length: MAX_MSG_BYTES,

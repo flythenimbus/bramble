@@ -33,7 +33,7 @@ use crate::i18n::{t, APP_NAME, AUTHOR};
 pub const CHECK_FOR_UPDATES: &str = "check-for-updates";
 
 #[cfg(target_os = "macos")]
-const SOURCE_URL: &str = "https://github.com/flythenimbus/bramble";
+const SOURCE_URL: &str = "https://github.com/bramble-sh/bramble";
 
 #[cfg(target_os = "macos")]
 fn about<R: Runtime>(app: &AppHandle<R>) -> AboutMetadata<'static> {

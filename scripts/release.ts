@@ -77,7 +77,7 @@ import { notifyYubiKeyTouch } from "./yubikey-notify.ts";
 
 const HOME = process.env.HOME ?? "";
 // On a runner GitHub says which repository this is; here it is the one this script ships.
-const REPO = process.env.GITHUB_REPOSITORY ?? "flythenimbus/bramble";
+const REPO = process.env.GITHUB_REPOSITORY ?? "bramble-sh/bramble";
 
 // Up here rather than in the android section below, which is where they belong but not where they
 // can live: the dispatch near the top of this file calls releaseAndroid while the module is still

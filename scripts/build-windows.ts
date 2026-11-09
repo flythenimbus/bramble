@@ -154,7 +154,7 @@ function ciStartBuild(): void {
 	console.log(
 		`build-windows: run ${runId} started.\n` +
 			"  It will WAIT for you to approve the signing request in SignPath.\n" +
-			`  https://github.com/flythenimbus/bramble/actions/runs/${runId}`,
+			`  https://github.com/bramble-sh/bramble/actions/runs/${runId}`,
 	);
 }
 
@@ -165,7 +165,7 @@ function ciCollectBuild(): void {
 		fail("build-windows: no dispatched run recorded; run --ci-start first");
 	const runId = readFileSync(RUN_ID_FILE, "utf8").trim();
 
-	const runUrl = `https://github.com/flythenimbus/bramble/actions/runs/${runId}`;
+	const runUrl = `https://github.com/bramble-sh/bramble/actions/runs/${runId}`;
 	console.log(
 		`build-windows: waiting on ${runUrl} for SignPath's approval…\n` +
 			"  Approve the newest signing request in SignPath once the installer is built; they email the link.",
@@ -179,7 +179,7 @@ function ciCollectBuild(): void {
 	} catch {
 		fail(
 			`build-windows: run ${runId} did not succeed.\n` +
-				`  https://github.com/flythenimbus/bramble/actions/runs/${runId}`,
+				`  https://github.com/bramble-sh/bramble/actions/runs/${runId}`,
 		);
 	}
 

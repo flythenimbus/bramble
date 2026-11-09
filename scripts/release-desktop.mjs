@@ -174,7 +174,7 @@ for (const archive of archives) {
       signature: readFileSync(join(updaterDir, sig), "utf8").trim(),
       // Tags are `<version>-desktop` (the repo's shared namespace); the asset name is whatever
       // the bundler produced.
-      url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${archive}`,
+      url: `https://github.com/bramble-sh/bramble/releases/download/${version}-desktop/${archive}`,
     };
 }
 
@@ -204,7 +204,7 @@ if (MAC) {
         : "linux-x86_64";
       platforms[key] = {
         signature: readFileSync(join(linuxDir, sig), "utf8").trim(),
-        url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${image}`,
+        url: `https://github.com/bramble-sh/bramble/releases/download/${version}-desktop/${image}`,
       };
     }
   }
@@ -238,7 +238,7 @@ if (MAC) {
       const key = triple.startsWith("aarch64") ? "windows-aarch64" : "windows-x86_64";
       platforms[key] = {
         signature: readFileSync(join(dir, sig), "utf8").trim(),
-        url: `https://github.com/flythenimbus/bramble/releases/download/${version}-desktop/${installer}`,
+        url: `https://github.com/bramble-sh/bramble/releases/download/${version}-desktop/${installer}`,
       };
     }
   }

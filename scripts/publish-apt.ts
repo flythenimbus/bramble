@@ -116,7 +116,7 @@ if (release) {
 			"download",
 			release,
 			"--repo",
-			"flythenimbus/bramble",
+			"bramble-sh/bramble",
 			"--pattern",
 			"*.deb",
 			"--dir",

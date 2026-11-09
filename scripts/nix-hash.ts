@@ -79,7 +79,7 @@ if (process.argv.includes("--commit")) {
 	const { commitFiles } = await import("./github-commit.ts");
 	const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
 	const oid = commitFiles({
-		repo: "flythenimbus/bramble",
+		repo: "bramble-sh/bramble",
 		branch: "main",
 		expectedHeadOid: head,
 		headline: "chore(nix): refresh the pnpm hash for the new lockfile",

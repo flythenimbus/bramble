@@ -42,9 +42,8 @@ export function commitFiles(opts: {
 	});
 	// A token that may write to a protected branch, falling back to the ambient one.
 	//
-	// GITHUB_TOKEN cannot: a ruleset evaluates it as the GitHub Actions app, and a personal
-	// repository cannot add that app to a bypass list (the API refuses it as belonging to no
-	// organization). Nor does adding github-actions[bot] as a user, which was measured and does
+	// GITHUB_TOKEN cannot: a ruleset evaluates it as the GitHub Actions app, and exempting that
+	// app would exempt every workflow. Adding github-actions[bot] as a user was measured and does
 	// nothing. So release workflows mint a token from an app of our own that the ruleset does allow
 	// through, holding contents:write and nothing else. See docs/ci-releases.md.
 	const out = gh(["api", "graphql", "--input", "-"], body);

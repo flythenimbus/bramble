@@ -89,7 +89,7 @@ chmod +x Bramble_*.AppImage
 
 ### Fedora, openSUSE and other RPM-based distributions
 
-Download the `.rpm` for your computer from the [releases page](https://github.com/flythenimbus/bramble/releases?q=desktop&expanded=true). Import Bramble's signing key once, then install it:
+Download the `.rpm` for your computer from the [releases page](https://github.com/bramble-sh/bramble/releases?q=desktop&expanded=true). Import Bramble's signing key once, then install it:
 
 ```bash
 sudo rpm --import https://apt.bramble.sh/keys.asc
@@ -103,10 +103,10 @@ On openSUSE, install it with `sudo zypper install ./Bramble-*.rpm` instead.
 Bramble builds from source with its Nix flake:
 
 ```bash
-nix profile install github:flythenimbus/bramble
+nix profile install github:bramble-sh/bramble
 ```
 
-To try it without installing, run `nix run github:flythenimbus/bramble`.
+To try it without installing, run `nix run github:bramble-sh/bramble`.
 
 <Callout type="note" title="Quick access on Wayland">
 On a Wayland desktop, the quick-access shortcut doesn't work. Open the panel from the tray icon instead: choose **Quick Access**.

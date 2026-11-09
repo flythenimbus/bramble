@@ -1072,7 +1072,7 @@ Four stanzas in it are decisions rather than boilerplate:
   Verified by deliberately breaking it: it reported `0.14.0`. `strategy :github_releases` fixed
   that and was what we submitted, but a homebrew-cask maintainer pointed out the lighter answer on
   review. With no strategy at all, livecheck auto-selects `Git`, rewrites the download URL to
-  `https://github.com/flythenimbus/bramble.git` and matches the regex against `git ls-remote`
+  `https://github.com/bramble-sh/bramble.git` and matches the regex against `git ls-remote`
   tags: one request rather than a walk through the releases API, same answer, because the regex was
   always anchored on `-desktop` rather than on anything the strategy did. What keeps this honest is
   the assertion in `test:brew` that livecheck's answer equals the update manifest's version.
@@ -1193,7 +1193,7 @@ globs reach into other applications' support directories.
 nixpkgs:
 
 ```bash
-nix build github:flythenimbus/bramble      # or `nix run`
+nix build github:bramble-sh/bramble      # or `nix run`
 ```
 
 and it exposes `overlays.default` for a system configuration. `pnpm run test:nix` builds it in a
@@ -1222,7 +1222,7 @@ Four things about the derivation are worth knowing before changing it:
   `got:` value from the mismatch error. That is automated now. `scripts/nix-hash.ts` does exactly
   that (`--check` to test, no argument to fix), and `nix-hash.yml` runs it on any push to main
   touching `pnpm-lock.yaml`, committing the result through the release app. It is triggered by
-  the lockfile rather than by a release on purpose: `nix run github:flythenimbus/bramble` builds
+  the lockfile rather than by a release on purpose: `nix run github:bramble-sh/bramble` builds
   main, not a tag, so a release is not a boundary that protects anyone. The hash was last left
   stale for a month across seven lockfile changes and four desktop releases, and an outside
   contributor found it rather than us.

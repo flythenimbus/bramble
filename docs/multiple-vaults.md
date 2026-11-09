@@ -714,7 +714,7 @@ Each phase is independently shippable.
   Phase 4 first shipped with backup *targets* still device-global (one config backing up
   every vault), which turned out to be wrong in use: configuring Nextcloud in a personal
   vault silently configured a work vault with the same server, credentials and folder
-  ([issue #49](https://github.com/flythenimbus/bramble/issues/49)). Targets are now per
+  ([issue #49](https://github.com/bramble-sh/bramble/issues/49)). Targets are now per
   vault (`backup.targets:<id>`), as this document's key table always said. Consequences:
   - a target created in a vault writes to **exactly** the folder the user typed;
   - targets adopted from the old shared list are marked `sharedFolder` and keep the
@@ -964,7 +964,7 @@ ambient `vcrypto`, because unlock screens only render for the selected vault.
 Per-vault VEK shipped on the extension only; mobile's Rust core stays a process-global
 singleton, so `withVault` is undefined there and the binding at `useVault.createVault` is a
 silent no-op. That left mobile with the original hazard, and it reached a user:
-[#27](https://github.com/flythenimbus/bramble/issues/27) — a synced vault that no longer
+[#27](https://github.com/bramble-sh/bramble/issues/27) — a synced vault that no longer
 opens under **either** the master password or the recovery code, failing with
 `aes decrypt: aead::Error`.
 

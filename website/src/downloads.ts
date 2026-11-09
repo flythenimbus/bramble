@@ -8,7 +8,7 @@
  */
 import manifest from "../public/desktop/latest.json";
 
-const REPO = "https://github.com/flythenimbus/bramble";
+const REPO = "https://github.com/bramble-sh/bramble";
 
 export const DESKTOP_VERSION: string = manifest.version;
 
@@ -66,7 +66,7 @@ export const APT_INSTALL = [
 ].join("\n");
 
 /** Built from source by the flake at the repository root. See docs/desktop-port.md. */
-export const NIX_INSTALL = "nix profile install github:flythenimbus/bramble";
+export const NIX_INSTALL = "nix profile install github:bramble-sh/bramble";
 
 /**
  * In homebrew-cask itself, so there is no tap to add first. The canonical copy of the cask lives

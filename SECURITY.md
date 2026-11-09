@@ -15,7 +15,7 @@ newest release before reporting an issue.
 | Any older release  | :x:                |
 
 The current version is shown on the
-[releases page](https://github.com/flythenimbus/bramble/releases) and in the
+[releases page](https://github.com/bramble-sh/bramble/releases) and in the
 Chrome Web Store listing.
 
 ## Reporting a Vulnerability
@@ -27,7 +27,7 @@ risk.
 Use either of these private channels:
 
 - **GitHub Security Advisories (preferred).** Go to the
-  [Security tab](https://github.com/flythenimbus/bramble/security/advisories) and
+  [Security tab](https://github.com/bramble-sh/bramble/security/advisories) and
   click **Report a vulnerability**. This keeps the report private and lets us
   collaborate on a fix in one place.
 - **Email.** support@bramble.sh. For sensitive details, say so and we can arrange
