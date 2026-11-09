@@ -1,16 +1,7 @@
 Nouveautés de cette version :
 
-- Ouvrir le site web d’un identifiant directement depuis la liste ou depuis sa fiche.
-- Nommer vos appareils. Le nom des appareils et celui de votre coffre s’affichent désormais sur chaque appareil du groupe de synchronisation.
-- Filtrer la liste pour afficher les éléments comportant des pièces jointes, ou toucher une carte Aperçu pour n’afficher que ces éléments.
-- Effacer le champ de recherche en un seul toucher.
-- Ouvrir le générateur de mots de passe depuis l’en-tête.
-- AutoFill gère désormais les coffres très volumineux et propose en premier l’identifiant du sous-domaine du site.
-- Votre coffre n’apparaît plus dans l’aperçu du sélecteur d’applications.
-- Les sauvegardes peuvent désormais ne conserver que la copie la plus récente.
-- L’ajout d’un appareil à la synchronisation nécessite désormais un mot de passe maître, et un coffre synchronisé le conserve.
-- Revenir en arrière après avoir modifié un élément ne rouvre plus l’éditeur.
-- Les réglages indiquent désormais ce que signifie le verrouillage automatique « Jamais » : le coffre reste déverrouillé jusqu’à ce que vous le verrouilliez ou fermiez l’application.
-- Le filtre par type utilise les mêmes noms que le menu Ajouter, et les traductions en allemand et en espagnol sont plus claires.
+- Le verrouillage de l’application verrouille désormais aussi AutoFill, qui redemande confirmation avant de remplir.
+- La synchronisation fonctionne désormais avec plus de relais auto-hébergés.
+- Meilleur contraste du texte et contours de focus plus nets.
 
 Pas de compte, pas de cloud. Tout reste sur vos appareils.

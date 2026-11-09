@@ -1,16 +1,7 @@
 Novedades de esta versión:
 
-- Abrir el sitio web de un inicio de sesión directamente desde la lista o desde el propio inicio de sesión.
-- Poner nombre a sus dispositivos. Los nombres de los dispositivos y el nombre de su bóveda ahora se muestran en todos los dispositivos del grupo de sincronización.
-- Filtrar la lista para ver solo los elementos con adjuntos, o tocar una tarjeta de Resumen para mostrar únicamente esos elementos.
-- Borrar el campo de búsqueda con un toque.
-- Abrir el generador de contraseñas desde la cabecera.
-- AutoFill ahora gestiona bóvedas muy grandes y ofrece primero el inicio de sesión del subdominio del sitio.
-- Su bóveda ya no se muestra en la vista previa del selector de aplicaciones.
-- Las copias de seguridad ahora pueden conservar solo la copia más reciente.
-- Añadir un dispositivo a la sincronización ahora requiere una contraseña maestra, y una bóveda que se sincroniza la conserva.
-- Volver atrás desde la edición de un elemento ya no vuelve a abrir el editor.
-- Ajustes ahora indica qué significa «Nunca» en el bloqueo automático: la bóveda permanece desbloqueada hasta que la bloquee o cierre la aplicación.
-- El filtro de tipo usa los mismos nombres que el menú Añadir, y las traducciones al alemán y al español son más claras.
+- Al bloquear la aplicación también se bloquea AutoFill, por lo que vuelve a solicitar confirmación antes de rellenar.
+- La sincronización ahora funciona con más relés autoalojados.
+- Mejor contraste del texto y contornos de enfoque más claros.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

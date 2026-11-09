@@ -1,16 +1,7 @@
-Novità di questa versione:
+Novità in questa versione:
 
-- Aprire il sito web di un accesso direttamente dall'elenco o dall'accesso.
-- Assegnare un nome ai dispositivi. I nomi dei dispositivi e il nome del vault ora vengono visualizzati su ogni dispositivo del gruppo di sincronizzazione.
-- Filtrare l'elenco per elementi con allegati oppure toccare una scheda Panoramica per visualizzare solo quegli elementi.
-- Cancellare il campo di ricerca con un tocco.
-- Aprire il generatore di password dall'intestazione.
-- AutoFill ora gestisce vault molto grandi e propone prima l'accesso per il sottodominio del sito stesso.
-- Il vault non viene più mostrato nell'anteprima del selettore app.
-- I backup ora possono conservare solo la copia più recente.
-- Aggiungere un dispositivo alla sincronizzazione ora richiede una password principale e un vault sincronizzato la conserva.
-- Tornare indietro dalla modifica di un elemento non apre più l'editor.
-- Le impostazioni ora spiegano cosa significa il blocco automatico "Mai": il vault rimane sbloccato finché non lo blocca o non chiude l'app.
-- Il filtro per tipo usa gli stessi nomi del menu Aggiungi e le traduzioni in tedesco e spagnolo sono più chiare.
+- Bloccare l'app ora blocca anche AutoFill, che richiede di nuovo l'autorizzazione prima di compilare.
+- La sincronizzazione ora funziona con più relay self-hosted.
+- Contrasto del testo migliorato e contorni di focus più chiari.
 
 Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.

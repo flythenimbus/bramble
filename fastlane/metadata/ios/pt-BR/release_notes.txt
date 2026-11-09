@@ -1,16 +1,7 @@
 Novidades desta versão:
 
-- Abrir o site de um login diretamente da lista ou do próprio login.
-- Nomear seus dispositivos. Os nomes dos dispositivos e o nome do seu cofre agora aparecem em todos os dispositivos do grupo de sincronização.
-- Filtrar a lista para itens com anexos ou tocar em um cartão da Visão Geral para mostrar apenas esses itens.
-- Limpar a caixa de pesquisa com um toque.
-- Abrir o gerador de senhas pelo cabeçalho.
-- O AutoFill agora lida com cofres muito grandes e oferece primeiro o login do próprio subdomínio do site.
-- Seu cofre não aparece mais na pré-visualização do alternador de apps.
-- Os backups agora podem manter apenas a cópia mais recente.
-- Adicionar um dispositivo à sincronização agora exige uma senha mestra, e um cofre que sincroniza a mantém.
-- Voltar da edição de um item não abre mais o editor.
-- As configurações agora explicam o que significa o bloqueio automático "Nunca": o cofre permanece desbloqueado até você bloqueá-lo ou fechar o app.
-- O filtro de tipo usa os mesmos nomes do menu Adicionar, e as traduções em alemão e espanhol estão mais claras.
+- Bloquear o app agora também bloqueia o AutoFill, então ele solicita novamente antes de preencher.
+- A sincronização agora funciona com mais relés auto-hospedados.
+- Melhor contraste de texto e contornos de foco mais nítidos.
 
-Sem conta, sem nuvem. Tudo fica nos seus dispositivos.
+Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.
