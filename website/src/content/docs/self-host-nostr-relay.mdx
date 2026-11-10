@@ -25,7 +25,7 @@ keywords:
   - change relay
   - sync stopped after changing relay
   - devices can't find each other
-updatedDate: 2026-11-08
+updatedDate: 2026-11-10
 ---
 
 The relay introduces your devices to each other. It only ever sees encrypted messages and stores nothing, so you don't need your own for security. Hosting one means your devices' IP addresses and sync timing reach your server instead of ours. See [how sync works](/docs/how-sync-works) for the full picture.
@@ -35,6 +35,7 @@ The relay introduces your devices to each other. It only ever sees encrypted mes
 - A server all your devices can reach.
 - A domain name with a TLS certificate your devices trust. The apps connect over `wss://`.
 - Docker, or a Cloudflare account if you'd rather run it as a Worker.
+- Bramble updated on every device: version 1.24.0 or later on iPhone, 0.29.0 on Android, 0.17.0 for the desktop app, 1.38.0 for the Chrome extension and 1.35.0 for Firefox. Older versions ignore messages from newer ones on your relay, though every device shows as connected.
 
 ## Run the relay
 
@@ -99,12 +100,13 @@ Pairing codes carry the token, so anyone who sees a code learns it. Change the t
 
 You can use another Nostr relay, such as nostr-rs-relay, instead of Bramble's.
 
-Update Bramble on every device first. Older versions sign messages in a way standard relays refuse: the app shows as connected, but your devices never find each other.
+Update Bramble on every device first, to the versions under [What you need](#what-you-need). Older versions sign messages in a way standard relays refuse: the app shows as connected, but your devices never find each other.
 
 Standard relays can't give your devices STUN or TURN servers. Clear **TURN / ICE servers URL** to connect directly only, or point it at an endpoint of your own that returns them as JSON. Public relays may also limit or drop this kind of traffic, so a relay you run yourself is more reliable.
 
 ## If your devices can't find each other
 
 - Check that every device shows the same **Nostr relay URL**, then lock and unlock each one.
+- Check that every device is on the versions under [What you need](#what-you-need). A device that reports `ignored bad-signature event` is out of date.
 - Check that the address starts with `wss://`, and that the device trusts your certificate.
 - Check that your proxy forwards WebSocket connections.
