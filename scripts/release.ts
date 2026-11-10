@@ -918,13 +918,21 @@ async function dispatchRelease(
 
 	console.log("watching it (Ctrl-C stops watching, not the release)…");
 	if (workflow === "desktop-release.yml") {
-		// Two runs, not one: Windows builds and signs in its own sign-windows.yml run. See release-watch.ts.
+		// Two runs, not one: Windows builds and signs in its own sign-windows.yml run, where SignPath's
+		// approval also happens. See release-watch.ts.
+		let org = "";
+		try {
+			org = capture(`gh variable get SIGNPATH_ORGANIZATION_ID --repo ${REPO}`);
+		} catch {
+			// The SignPath prompt then points at its email instead.
+		}
 		const conclusion = watchDesktopRelease(
 			{
 				repo: REPO,
 				runId: id,
 				since,
 				windows: !dryRun && !skip.has("windows"),
+				signpathRequests: org ? `https://app.signpath.io/Web/${org}/SigningRequests` : undefined,
 			},
 			{
 				gh: (args) => execFileSync("gh", args, { encoding: "utf8" }),
@@ -1474,20 +1482,45 @@ async function dispatchDesktop(version: string, tag: string): Promise<void> {
 		// What sign-windows.yml reads. Names only: their values are not ours to read, just to check.
 		// Inside the function, not beside it: the dispatch at the top of this file calls in here
 		// while the module is still evaluating, and a module-level const below it would not exist.
-		const AZURE_VARIABLES = [
-			"AZURE_CLIENT_ID",
-			"AZURE_TENANT_ID",
-			"AZURE_SIGNING_ENDPOINT",
-			"AZURE_SIGNING_ACCOUNT",
-			"AZURE_CERTIFICATE_PROFILE",
+		// WINDOWS_SIGNER picks the signer, Azure unless it says `signpath`; the same rule as the workflow.
+		const NEEDS = {
+			azure: {
+				secrets: [],
+				variables: [
+					"AZURE_CLIENT_ID",
+					"AZURE_TENANT_ID",
+					"AZURE_SIGNING_ENDPOINT",
+					"AZURE_SIGNING_ACCOUNT",
+					"AZURE_CERTIFICATE_PROFILE",
+				],
+			},
+			signpath: {
+				secrets: ["SIGNPATH_API_TOKEN"],
+				variables: [
+					"SIGNPATH_ORGANIZATION_ID",
+					"SIGNPATH_PROJECT_SLUG",
+					"SIGNPATH_SIGNING_POLICY_SLUG",
+				],
+			},
+		};
+		const names = (cmd: string) =>
+			new Set(capture(`${cmd} --repo ${REPO} --json name --jq '.[].name'`).split("\n"));
+		const variables = names("gh variable list");
+		let signer = "";
+		if (variables.has("WINDOWS_SIGNER"))
+			signer = capture(`gh variable get WINDOWS_SIGNER --repo ${REPO}`).trim();
+		signer ||= "azure";
+		if (signer !== "azure" && signer !== "signpath")
+			fail(`WINDOWS_SIGNER is "${signer}"; it must be azure or signpath`);
+		const need = NEEDS[signer];
+		const secrets = need.secrets.length ? names("gh secret list") : new Set<string>();
+		const missing = [
+			...need.secrets.filter((n) => !secrets.has(n)),
+			...need.variables.filter((n) => !variables.has(n)),
 		];
-		const variables = new Set(
-			capture(`gh variable list --repo ${REPO} --json name --jq '.[].name'`).split("\n"),
-		);
-		const missing = AZURE_VARIABLES.filter((n) => !variables.has(n));
 		if (missing.length)
 			fail(
-				`Windows cannot be signed: Azure signing is not set up (missing ${missing.join(", ")}).\n` +
+				`Windows cannot be signed: ${signer} signing is not set up (missing ${missing.join(", ")}).\n` +
 					"Release without it, or finish the setup in docs/release-signing.md first:\n" +
 					`  pnpm run release desktop ${rawVersion} --skip=${[...skip, "windows"].join(",")}`,
 			);
@@ -1535,9 +1568,10 @@ function stepOutputs(values: Record<string, string>): void {
 function runnerBumpDesktop(version: string, tag: string): void {
 	const base = runnerBuildStart("desktop-release.yml", tag, "--runner-bump");
 	const dryRun = flags.has("--dry-run");
-	// The workflow computes this from the variables sign-windows.yml reads. Checked before the gate and the commit, so a run that could never finish does not start.
-	if (!skip.has("windows") && process.env.AZURE_SIGNING_READY !== "true")
-		fail("Azure signing is not set up, so Windows cannot be signed; dispatch with skip=windows");
+	// The workflow computes this from what sign-windows.yml reads, without handing the job the token.
+	// Checked before the gate and the commit, so a run that could never finish does not start.
+	if (!skip.has("windows") && process.env.WINDOWS_SIGNING_READY !== "true")
+		fail("Windows signing is not set up, so Windows cannot be signed; dispatch with skip=windows");
 	gate();
 	const files = bumpManifestVersion(DESKTOP_CONF, version);
 	let sha = base;
@@ -1562,7 +1596,8 @@ function runnerBumpDesktop(version: string, tag: string): void {
 		if (process.env.GITHUB_STEP_SUMMARY)
 			appendFileSync(
 				process.env.GITHUB_STEP_SUMMARY,
-				`Windows is building and signing in https://github.com/${REPO}/actions/runs/${windowsRun}.\n`,
+				`Windows is building and signing in https://github.com/${REPO}/actions/runs/${windowsRun}. ` +
+					"With SignPath, its approval link appears there once the installer is built.\n",
 			);
 	}
 	stepOutputs({ sha, windows_run: windowsRun });

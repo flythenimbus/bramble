@@ -8,7 +8,8 @@ Five independent signing setups, all reusing the same age + YubiKey at-rest sche
 ([GitHub-released and self-updating](#desktop-app-github-released-and-self-updating)) at the end.
 The desktop app carries a second, platform-specific signature as well: its Windows installer is
 Authenticode-signed through Azure
-([Windows: Authenticode through Azure Artifact Signing](#windows-authenticode-through-azure-artifact-signing)).
+([Windows: Authenticode through Azure Artifact Signing](#windows-authenticode-through-azure-artifact-signing))
+or, as the alternative, SignPath.
 
 ## Chrome Web Store verified uploads
 
@@ -704,13 +705,14 @@ covers three operating systems, so it has more parts than the others:
 3. **macOS** compiles both slices with no secrets and hands over the binaries. Compiling runs every
    crate's build script, so it stays away from the keys; on macOS the signing happens while
    bundling, which is what makes the split possible (`build-macos.ts --compile-only`).
-4. **Windows**, in `sign-windows.yml`, builds the installer and signs it through Azure Artifact
-   Signing, about 20 minutes in, with no approval of its own. The terminal that dispatched the
-   release follows that run beside the release.
+4. **Windows**, in `sign-windows.yml`, builds the installer and signs it, about 20 minutes in.
+   Through Azure (the default) there is no approval of its own. Through SignPath it waits for your
+   approval in SignPath: the terminal that dispatched the release says so the moment the sign job
+   starts, with your signing-requests page, and SignPath emails the link. You have five hours.
 5. **Publish**, on macOS, waits for your approval **in the `desktop-release` environment**. It is the
    only job the updater key ever reaches, and it runs first-party actions only. It bundles,
    codesigns and notarizes macOS from the handed-over binaries (`--bundle-only`), re-signs the
-   AppImages and the Azure-signed installer with the real key,
+   AppImages and the Authenticode-signed installer with the real key,
    verifies every updater signature against the public key compiled into the app, and publishes.
    The update manifest is committed only after the release exists, then the website deploy is
    dispatched explicitly, because a commit made with the workflow's own token triggers no push
@@ -728,8 +730,8 @@ carries that platform again, and the website's download for it falls back to the
 dispatcher prints exactly that warning for each skipped platform that has already shipped, then goes
 ahead: it is a trade to make knowingly, not a mistake to block.
 
-What it does block is a Windows build that cannot be signed. If Azure signing is not configured
-(the five `AZURE_*` variables, below), the release stops in seconds naming what is
+What it does block is a Windows build that cannot be signed. If the signer `WINDOWS_SIGNER` picks is not
+configured (the five `AZURE_*` variables, or SignPath's token and three variables, below), the release stops in seconds naming what is
 missing and the `--skip=windows` command to run instead, rather than an hour later when
 `sign-windows.yml` has nothing to sign with. The bump job checks the same thing on the runner, for a
 release dispatched from the Actions tab rather than from here.
@@ -744,7 +746,7 @@ see the release.
 which is one more approval. See [apt-releases.md](apt-releases.md#rpms).
 
 **From this Mac** (`--local`), the fallback: every build here, the Linux one in containers, Windows
-still through GitHub and Azure, and APT publishing at the end, all as before.
+still through GitHub and its signer, and APT publishing at the end, all as before.
 
 Either way, the build refuses to run without the key rather than producing an unsigned archive,
 because an unsigned one is rejected by every installed app: the release would look complete while
@@ -768,9 +770,11 @@ sign in with everywhere.
 
 The Windows installer is Authenticode-signed with
 [Azure Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) (formerly Trusted
-Signing), Basic tier, USD 9.99 a month. It plays the role the Apple Developer ID plays above:
-without it, Windows warns every person who downloads the installer. The certificate is issued to
-the identity Microsoft validated, so that is the publisher Windows shows.
+Signing), Basic tier, USD 9.99 a month, the default signer. SignPath stays ready as the other one,
+picked by the `WINDOWS_SIGNER` repository variable (`azure` or unset, or `signpath`; see
+[below](#windows-authenticode-through-signpath-alternative)). It plays the role the Apple
+Developer ID plays above: without it, Windows warns every person who downloads the installer. The
+certificate is issued to the identity Microsoft validated, so that is the publisher Windows shows.
 
 The signtool plugin runs only on Windows, so the release installer is built and signed on a
 `windows-latest` runner by `.github/workflows/sign-windows.yml`, not cross-compiled here. Two jobs,
@@ -837,8 +841,120 @@ for *the updater*, and only the second is the root of trust for updates.
    gh variable set AZURE_CERTIFICATE_PROFILE --body <profile name>
    ```
 
-   The desktop release's preflight reads the same five, so a release stops in seconds while any is
-   absent and names the `--skip=windows` command to run instead.
+   The desktop release's preflight reads the same five while Azure is the signer, so a release
+   stops in seconds while any is absent and names the `--skip=windows` command to run instead.
+
+### Windows: Authenticode through SignPath (alternative)
+
+Kept ready beside Azure: `gh variable set WINDOWS_SIGNER --body signpath` makes `sign-windows.yml`
+run its `sign-signpath` job instead of `sign-azure`, and the release preflight then checks
+SignPath's secret and variables instead of Azure's. Switching for real also means restoring the
+SignPath attribution its terms require (README "Code signing policy", `website/src/pages/
+code-signing.astro`, the Windows note in `DownloadBox.astro`; all three as they were before
+fbbdae10).
+
+The [SignPath Foundation](https://signpath.org/) is free for open source projects and issues a real
+Sectigo certificate. It plays the role the Apple
+Developer ID plays above: without it, Windows warns every person who downloads the installer, which
+is not a first impression a password manager should make.
+
+What SignPath demands in exchange is **provenance**. Their terms require every job leading up to
+the signing request to have run on a GitHub-hosted agent, with the repository, branch and build
+agent attested by GitHub itself, so a cross-compiled installer from a maintainer's machine cannot
+be signed at all. Windows is therefore the one artifact Bramble ships that is not built locally:
+`.github/workflows/sign-windows.yml` builds it on a `windows-latest` runner and submits the single
+`*-setup.exe` to SignPath, a maintainer approves the request in the SignPath UI (manual by
+design), and the signed installer comes back as the `bramble-windows-signed` artifact.
+
+It is two jobs, as the other release workflows are: **build**, which holds no secret, and **sign**,
+which holds the SignPath token, never checks out the repository, and so runs none of its code. The
+split matters more here than elsewhere because the production certificate waits on a person (the
+test certificate signs at once, which is why the test runs never showed it). The sign job submits
+without waiting, records the request's link as an "Approve in SignPath" notice, then polls
+SignPath's REST API for up to five hours. That notice is a record, not a prompt: GitHub publishes a
+job's notices only when the job ends, which during an approval wait is after you have approved.
+The live prompt comes from `scripts/release-watch.ts`, which watches the job's status (reported
+live) and points at your organization's signing-requests page once the sign job starts. The
+release's publish job is given
+GitHub's six-hour maximum so it outlasts the wait.
+
+**If nobody approves in time,** the sign job fails and the installer it was waiting on is kept.
+Deny the stale request in SignPath, re-run the failed job on the `sign-windows.yml` run (it submits
+a fresh request for the same build, no rebuild), approve that, then re-run the failed jobs of the
+release run: its publish job collects from the same `sign-windows.yml` run. That relies on SignPath
+accepting a re-run, which it does by default and would stop doing if the project's policy ever set
+`disallow_reruns`; then the release is simply cut again.
+
+On the way out the job asks Windows (`Get-AuthenticodeSignature`) and fails on two things: no
+signature at all, because a silently unsigned installer looks identical until a user hits
+SmartScreen, and a signature Windows does not trust. The second is what keeps a release off the
+TEST certificate, which is self-signed and reports `UnknownError`: shipped, it would be an
+installer Windows calls invalid, worse than an unsigned one. `SIGNPATH_SIGNING_POLICY_SLUG` is the
+only thing choosing between the two certificates, so this check is the backstop for it. A test run
+outside any release opts out explicitly, and the release path never does:
+
+```sh
+gh workflow run sign-windows.yml -f version=<current desktop version> -f allow_untrusted=true
+```
+
+The flow, driven by `scripts/build-windows.ts`:
+
+```sh
+pnpm run build:windows --unsigned      # cross-compiled here with cargo-xwin, throwaway updater key:
+                                      # for a VM, cannot be signed, must never be released
+pnpm run build:windows --ci-start      # dispatch the GitHub build + SignPath signing, record the run
+pnpm run build:windows --ci-collect    # wait, download the signed installer, updater-sign it here
+```
+
+**Authenticode first, updater signature second.** The `.sig` is generated locally by
+`--ci-collect`, over the Authenticode-signed bytes. SignPath signing rewrites the file, so the
+reverse order ships a signature over a file that no longer exists and every Windows update fails.
+For the same reason the workflow builds with a throwaway key (the bundler refuses to emit updater
+artifacts without one) and `--ci-collect` deletes that throwaway `.sig` on arrival: it describes
+the pre-signing bytes and no installed app trusts the key that made it.
+
+The updater key never goes to CI at all. SignPath signs for *Windows*; the minisign key signs
+for *the updater*, and only the second is the root of trust for updates. Same age + YubiKey scheme
+as above, same permanence rules.
+
+**Setup, as it actually went (2026-10-10).** The SignPath Foundation creates the organization and
+project (`bramble`) and links the GitHub.com trusted build system. The rest is ours, and each of
+these failed or would have failed a run before it was fixed:
+
+- **Install the [SignPath GitHub App](https://github.com/apps/signpath) on this repository.**
+  Their docs call it optional; the connector refuses without it ("Failed to retrieve GitHub App
+  token").
+- **Submit as a CI user**, a token-only SignPath account added as a Submitter on each signing
+  policy, with a human as Approver. An interactive user cannot be a Submitter once a policy requires
+  the trusted build system, so a personal token stops working exactly when it matters.
+- **The project's artifact configuration must open a zip.** `actions/upload-artifact` always zips,
+  and SignPath's default template expects a bare executable. `product-name` is the metadata
+  restriction the Foundation's terms require; the installer sets it from `productName`:
+
+  ```xml
+  <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+    <zip-file>
+      <pe-file path="*-setup.exe" product-name="Bramble">
+        <authenticode-sign />
+      </pe-file>
+    </zip-file>
+  </artifact-configuration>
+  ```
+
+- **Repository settings:** `SIGNPATH_API_TOKEN` as a *repository* secret (`sign-windows.yml` has no
+  environment, so it cannot read an environment's), and `SIGNPATH_ORGANIZATION_ID`,
+  `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` as variables. The desktop release's
+  preflight reads the same four, which is why a release stops early while any is absent.
+
+The policy variable starts on `test-signing`, whose certificate is issued at once; the Foundation
+orders the production certificate for `release-signing` only after a test-signed build has come
+through the connector. Until the variable points at the release policy, desktop releases go out
+with `--skip=windows`, and the trust check above turns forgetting that into a failed run instead
+of a shipped installer. The release policy should require approval, the trusted build system and
+origin verification, all three of which the test policy leaves off.
+
+The Windows signer is **SignPath Foundation**, not Bramble: the certificate is issued to the
+Foundation, so that is the verified publisher Windows shows on the installer.
 
 ### If the YubiKey is lost
 

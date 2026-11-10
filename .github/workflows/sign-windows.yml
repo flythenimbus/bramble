@@ -1,11 +1,13 @@
 name: Sign Windows installer
 
-# Builds the Windows installer on a GitHub runner and Authenticode-signs it with Azure Artifact
-# Signing. The release installer is built here rather than cross-compiled on a Mac because the
+# Builds the Windows installer on a GitHub runner and Authenticode-signs it, with Azure Artifact
+# Signing or SignPath Foundation: the repository variable WINDOWS_SIGNER picks (`azure`, the default,
+# or `signpath`). Exactly one sign job runs and both hand back `bramble-windows-signed`, so nothing
+# downstream knows which signed. The release installer is built here rather than cross-compiled on a Mac because the
 # signing tool runs only on Windows; see docs/desktop-port.md.
 #
-# Two jobs, like the other release workflows: `build` holds no credential, `sign` can obtain an
-# Azure token. Nothing is stored for that: `sign` runs in the `windows-signing` environment, which
+# Build, then sign, like the other release workflows: `build` holds no credential. The Azure job
+# can obtain an Azure token. Nothing is stored for that: `sign` runs in the `windows-signing` environment, which
 # only main may deploy to, and Azure trusts a GitHub OIDC token for exactly that environment of this
 # repository (a federated credential). So a branch or a fork can build, never sign. Split also so
 # the third-party code a build runs (every crate's build script, every npm install hook) never runs
@@ -18,7 +20,8 @@ name: Sign Windows installer
 #
 # Driven by `pnpm run build:windows --ci-start`, which dispatches this, and `--ci-collect`, which
 # waits for it and signs what comes back. Outside a release: `gh workflow run sign-windows.yml -f
-# version=<the version in tauri.conf.json on main>`.
+# version=<the version in tauri.conf.json on main>`, plus `-f allow_untrusted=true` against
+# SignPath's TEST certificate. SignPath's own constraints are on its job below.
 
 on:
   workflow_dispatch:
@@ -27,6 +30,14 @@ on:
         description: The version this run is expected to build, as a guard against a stale ref
         required: true
         type: string
+      # Off unless asked for, so it is the TEST run that has to say so and not the release: a release
+      # path that forgot a flag would otherwise ship whatever certificate the policy variable points
+      # at, which before the production certificate exists is the test one.
+      allow_untrusted:
+        description: Accept a signature Windows does not trust (SignPath test certificate runs only, never a release)
+        required: false
+        default: false
+        type: boolean
 
 # Nothing by default; each job asks for what it uses.
 permissions: {}
@@ -38,6 +49,8 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 90
+    outputs:
+      artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v7
 
@@ -109,15 +122,17 @@ jobs:
           ls -la unsigned/
 
       - name: Upload the unsigned installer
+        id: unsigned
         uses: actions/upload-artifact@v7
         with:
           name: bramble-windows-unsigned
           path: unsigned/
           if-no-files-found: error
 
-  sign:
+  sign-azure:
     name: Sign with Azure
     needs: build
+    if: ${{ vars.WINDOWS_SIGNER == '' || vars.WINDOWS_SIGNER == 'azure' }}
     runs-on: windows-latest
     # The OIDC subject Azure trusts, and the branch rule that keeps everything but main out of it.
     environment: windows-signing
@@ -188,6 +203,133 @@ jobs:
           if ($sig.Status -ne 'Valid') {
             Write-Output "::error::the signature does not validate ($($sig.Status))"
             exit 1
+          }
+          Get-ChildItem signed
+
+      - name: Upload the signed installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: bramble-windows-signed
+          path: signed/
+          if-no-files-found: error
+
+  # SignPath's free tier for open source verifies where a binary came from: every job leading up to
+  # the request must run on a GitHub-hosted runner, with origin metadata from GitHub itself. A
+  # production signature waits on a person approving it in SignPath, so a slow approval costs only
+  # this job: re-running it resubmits the same installer, no rebuild. The terminal that dispatched
+  # the release says when to approve; see release-watch.ts.
+  sign-signpath:
+    name: Sign with SignPath
+    needs: build
+    if: ${{ vars.WINDOWS_SIGNER == 'signpath' }}
+    runs-on: windows-latest
+    # `id-token` is what SignPath's origin verification reads.
+    permissions:
+      contents: read
+      id-token: write
+    # Five hours for a person to approve, plus the download and the checks.
+    timeout-minutes: 320
+    steps:
+      # Submitted without waiting, so the link exists before the wait starts. The approval is manual
+      # by design: SignPath Foundation requires a person to decide each release may be signed.
+      - name: Submit the signing request
+        id: submit
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          wait-for-completion: false
+
+      # A record on the run. GitHub shows notices only once the job ends, so not a live prompt: the
+      # live one is release-watch.ts, keyed on this job's name (SIGN_JOB there).
+      - name: Announce where to approve it
+        shell: bash
+        env:
+          URL: ${{ steps.submit.outputs.signing-request-web-url }}
+        run: |
+          echo "::notice title=Approve in SignPath::$URL"
+          printf '### Approve the signing request in SignPath\n\n%s\n' "$URL" >> "$GITHUB_STEP_SUMMARY"
+
+      # SignPath's documented REST API, polled rather than the action's own wait, so the step above
+      # could run first. A missed window fails here with the build kept: re-run this job.
+      - name: Wait for the approval, then download the signed installer
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          ORGANIZATION: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          REQUEST: ${{ steps.submit.outputs.signing-request-id }}
+        run: |
+          $api = "https://app.signpath.io/Api/v1/$env:ORGANIZATION/SigningRequests/$env:REQUEST"
+          $headers = @{ Authorization = "Bearer $env:SIGNPATH_API_TOKEN" }
+          $deadline = (Get-Date).AddHours(5)
+          $last = ""
+          $errors = 0
+          while ($true) {
+            try {
+              $s = Invoke-RestMethod -Uri "$api/Status" -Headers $headers
+              $errors = 0
+              if ($s.workflowStatus -ne $last) {
+                Write-Output "$(Get-Date -Format HH:mm:ss) $($s.workflowStatus)"
+                $last = $s.workflowStatus
+              }
+              if ($s.isFinalStatus) { break }
+            } catch {
+              # A dropped connection over five hours is ordinary; only a run of them gives up.
+              $errors += 1
+              if ($errors -ge 10) { Write-Output "::error::SignPath stopped answering: $_"; exit 1 }
+            }
+            if ((Get-Date) -gt $deadline) {
+              Write-Output "::error::nobody approved the signing request within five hours. Re-run this job to submit a fresh one (the build is kept), and deny the stale request in SignPath."
+              exit 1
+            }
+            Start-Sleep -Seconds 30
+          }
+          if ($s.status -ne 'Completed') {
+            Write-Output "::error::the signing request ended $($s.status) ($($s.workflowStatus))"
+            exit 1
+          }
+          Invoke-WebRequest -Uri "$api/SignedArtifact" -Headers $headers -OutFile signed.zip
+          Expand-Archive signed.zip -DestinationPath signed
+
+      # The failure worth catching is a silently UNSIGNED artifact: it looks identical to a signed
+      # one until a user downloads it and SmartScreen says otherwise.
+      #
+      # Asks Windows whether a signer is present rather than grepping the binary for an issuer
+      # name. The grep this replaces would have failed against SignPath's TEST certificate, which
+      # is what a new subscription gets before the production one is issued, reporting "not
+      # signed" for a run where signing had worked perfectly.
+      #
+      # Trust is a hard failure too, unless the run was dispatched with allow_untrusted. A test
+      # certificate is self-signed and reports UnknownError here, which is right for a test run and
+      # disastrous in a release: users would get an installer Windows calls invalid, worse than an
+      # unsigned one. `SIGNPATH_SIGNING_POLICY_SLUG` is the only thing choosing between the two
+      # certificates, so this check is what stops a release going out on the wrong one.
+      - name: Assert the installer came back signed
+        shell: pwsh
+        env:
+          ALLOW_UNTRUSTED: ${{ inputs.allow_untrusted }}
+        run: |
+          $exe = Get-ChildItem signed\*-setup.exe | Select-Object -First 1
+          if ($null -eq $exe) { Write-Output "::error::no -setup.exe came back from signing"; exit 1 }
+
+          $sig = Get-AuthenticodeSignature $exe.FullName
+          if ($null -eq $sig.SignerCertificate) {
+            Write-Output "::error::$($exe.Name) carries no signature; did signing actually run?"
+            exit 1
+          }
+
+          Write-Output "signer: $($sig.SignerCertificate.Subject)"
+          Write-Output "issuer: $($sig.SignerCertificate.Issuer)"
+          Write-Output "status: $($sig.Status)"
+          if ($sig.Status -ne 'Valid') {
+            if ($env:ALLOW_UNTRUSTED -ne 'true') {
+              Write-Output "::error::the signature does not validate ($($sig.Status)); a release needs one Windows trusts. Is SIGNPATH_SIGNING_POLICY_SLUG still the test policy?"
+              exit 1
+            }
+            Write-Output "::warning::signature is present but does not validate on this runner ($($sig.Status)). Accepted because this run set allow_untrusted (test certificate)."
           }
           Get-ChildItem signed
 

@@ -4,17 +4,45 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { type Job, jobChanges, watchDesktopRelease } from "./release-watch.ts";
+import {
+	approvalPrompt,
+	type Job,
+	jobChanges,
+	SIGN_JOB,
+	watchDesktopRelease,
+} from "./release-watch.ts";
 
 const REPO = "o/r";
 const SINCE = "2026-10-20T10:00:00Z";
-const SIGN_JOB = "Sign with Azure";
+const REQUESTS = "https://app.signpath.io/Web/org/SigningRequests";
 
 const job = (name: string, status: string, conclusion: string | null = null, id = 1): Job => ({
 	name,
 	status,
 	conclusion,
 	databaseId: id,
+});
+
+describe("approvalPrompt", () => {
+	it("prompts once the signing job is running, with the requests page", () => {
+		assert.match(approvalPrompt([job(SIGN_JOB, "in_progress")], REQUESTS) ?? "", /SigningRequests/);
+	});
+
+	it("says nothing while Windows is still building", () => {
+		assert.equal(approvalPrompt([job("Build (unsigned)", "in_progress")], REQUESTS), null);
+	});
+
+	it("says nothing once signing is over, since there is nothing left to approve", () => {
+		assert.equal(approvalPrompt([job(SIGN_JOB, "completed", "success")], REQUESTS), null);
+	});
+
+	it("says nothing for the Azure job, which needs no approval", () => {
+		assert.equal(approvalPrompt([job("Sign with Azure", "in_progress")], REQUESTS), null);
+	});
+
+	it("still prompts without the page, pointing at SignPath's email", () => {
+		assert.match(approvalPrompt([job(SIGN_JOB, "in_progress")]) ?? "", /emails you the link/);
+	});
 });
 
 describe("jobChanges", () => {
@@ -66,7 +94,7 @@ function fakeGh(s: {
 function watch(f: ReturnType<typeof fakeGh>, windows = true) {
 	const lines: string[] = [];
 	const conclusion = watchDesktopRelease(
-		{ repo: REPO, runId: "100", since: SINCE, windows, pollMs: 0 },
+		{ repo: REPO, runId: "100", since: SINCE, windows, signpathRequests: REQUESTS, pollMs: 0 },
 		{ gh: f.gh, sleep: () => {}, log: (l) => lines.push(l) },
 	);
 	return { conclusion, lines, out: lines.join("\n") };
@@ -80,7 +108,7 @@ const done = {
 };
 
 describe("watchDesktopRelease", () => {
-	it("follows the Windows run beside the release", () => {
+	it("prompts to approve once, as soon as the signing job starts", () => {
 		const f = fakeGh({
 			release: [running, running, running, done],
 			signRuns: [{ databaseId: 7, createdAt: "2026-10-20T10:01:00Z" }],
@@ -91,13 +119,16 @@ describe("watchDesktopRelease", () => {
 				{ status: "completed", jobs: [job(SIGN_JOB, "completed", "success", 2)] },
 			],
 		});
-		const { conclusion, out } = watch(f);
+		const { conclusion, lines, out } = watch(f);
 
 		assert.equal(conclusion, "success");
-		assert.equal(out.split("Sign with Azure: in progress").length - 1, 1, "once per change");
-		assert.match(out, /windows: Build \(unsigned\): in progress/);
+		assert.equal(out.split(REQUESTS).length - 1, 1, "the prompt is printed exactly once");
+		// Not before the build is done: there is no request to approve yet.
+		const prompt = lines.findIndex((l) => l.includes("approve the newest signing request"));
+		const building = lines.findIndex((l) => l.includes("Build (unsigned): in progress"));
+		assert.ok(building < prompt, "prompted only after the build");
 		assert.match(out, /windows: building in https:\/\/github\.com\/o\/r\/actions\/runs\/7/);
-		assert.match(out, /windows: Sign with Azure: success/);
+		assert.match(out, /windows: Sign with SignPath: success/);
 		assert.match(out, /Publish: waiting for your approval/);
 	});
 

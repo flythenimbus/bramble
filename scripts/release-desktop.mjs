@@ -211,7 +211,7 @@ if (MAC) {
 }
 
 // The Windows half, on the same principle as the Linux one, but built on a GitHub runner rather
-// than here, where Azure Artifact Signing can reach it (scripts/build-windows.ts explains the trade).
+// than here, where the signer can reach it (scripts/build-windows.ts explains the trade).
 //
 // Here the download and the updater artifact are the SAME file. macOS has a `.dmg` to click and a
 // separate `.app.tar.gz` for the updater, and Linux has a `.deb` and an AppImage; NSIS has one
@@ -228,7 +228,7 @@ if (MAC) {
       if (!files.includes(sig)) {
         console.error(
           `${installer} has no ${sig}. The Windows build must be signed for a release:\n` +
-            "  pnpm run build:windows -- --ci-start     (dispatch the build, signed through Azure)\n" +
+            "  pnpm run build:windows -- --ci-start     (dispatch the build and its signing)\n" +
             "  pnpm run build:windows -- --ci-collect   (download it, then sign it here)\n" +
             "A --unsigned build cannot be released: it carries a throwaway updater key.",
         );

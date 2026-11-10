@@ -1041,10 +1041,11 @@ Windows is the only platform where those are one file. macOS has a `.dmg` to cli
 `.app.tar.gz` for the updater; Linux has a `.deb` that cannot self-update and an AppImage that
 can. NSIS has one installer, which Tauri signs in place and the updater downloads and runs.
 
-SignPath Foundation (free for open source) was used first and dropped on 2026-11-10: its production
-certificate waited weeks on the Foundation, every release waited on a manual approval in its UI,
-and Windows would have named SignPath Foundation as the publisher. Azure costs USD 9.99 a month and
-signs in seconds. It can also be driven from the Mac (via `jsign`), which would allow signing the
+SignPath Foundation (free for open source) was set up first; on 2026-11-10 Azure became the default
+because SignPath's production certificate had waited a month on the Foundation, every release
+would wait on a manual approval in its UI, and Windows would name SignPath Foundation as the
+publisher. SignPath stays wired up as the alternative (`WINDOWS_SIGNER=signpath`). Azure costs
+USD 9.99 a month and signs in seconds. It can also be driven from the Mac (via `jsign`), which would allow signing the
 cross-compiled build; that is not wired up, since the CI route already works. A traditional OV
 certificate is the fallback, and it would mean signing on the Windows VM, since the CA/Browser
 Forum has required the key to live on hardware since 2023.
