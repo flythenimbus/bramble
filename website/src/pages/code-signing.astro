@@ -5,40 +5,30 @@ import { LINKS } from "@/consts";
 
 <LegalLayout
 	title="Code signing policy"
-	description="How the Bramble desktop app's Windows installer is built and signed: free code signing provided by SignPath.io, certificate by SignPath Foundation."
+	description="How the Bramble desktop app's Windows installer is built and signed with Azure Artifact Signing."
 	path="/code-signing"
-	meta="Effective date: 10 October 2026"
+	meta="Effective date: 10 November 2026"
 >
-	<p class="lead">
-		Free code signing provided by <a href="https://signpath.io">SignPath.io</a>, certificate by
-		<a href="https://signpath.org">SignPath Foundation</a>.
-	</p>
-
 	<h2>What is signed</h2>
 	<p>
-		The Windows installer for the Bramble desktop app is Authenticode-signed through SignPath. The
-		certificate is issued to the SignPath Foundation, so Windows names
-		<strong>SignPath Foundation</strong> as the verified publisher when you run the installer. That
-		is expected, and it is how you can tell a genuine installer from one that was altered after it
-		was signed.
+		The Windows installer for the Bramble desktop app is Authenticode-signed with Microsoft's
+		<a href="https://learn.microsoft.com/azure/artifact-signing/">Azure Artifact Signing</a>. Microsoft
+		verifies who the publisher is before issuing the certificate, and Windows shows that publisher when
+		you run the installer. A changed installer no longer matches its signature.
 	</p>
-	<p>
-		Only Bramble's own software is signed this way. Bramble does not use this certificate to sign
-		anyone else's programs or libraries.
-	</p>
+	<p>Only Bramble's own software is signed with this certificate.</p>
 
 	<h2>How a signed build is made</h2>
 	<ul>
 		<li>
-			<strong>From the public source, on GitHub's machines.</strong> The installer is built by
-			GitHub Actions on GitHub-hosted runners, directly from the public
-			<a href={LINKS.github}>source repository</a>. Nothing built on a personal computer is ever
-			submitted for signing. SignPath verifies where each build came from using information
-			supplied by GitHub itself, not by the build.
+			<strong>From the public source, on GitHub's machines.</strong> GitHub Actions builds the installer
+			on GitHub-hosted runners, directly from the public
+			<a href={LINKS.github}>source repository</a>. Nothing built on a personal computer is signed.
 		</li>
 		<li>
-			<strong>Every release is approved by hand.</strong> A signing request is only fulfilled
-			after an approver (below) reviews and approves it in SignPath.
+			<strong>Only from the main branch.</strong> Signing works only for builds of the main branch of
+			that repository. No signing key or password is stored anywhere: Azure trusts GitHub's own proof
+			of which workflow is asking.
 		</li>
 		<li>
 			<strong>The build scripts are source too.</strong> The workflow that builds and signs the
@@ -54,11 +44,11 @@ import { LINKS } from "@/consts";
 			as pull requests and are reviewed before they are merged.
 		</li>
 		<li>
-			<strong>Approvers:</strong> <a href="https://github.com/flythenimbus">@flythenimbus</a>, who
-			approves each signing request.
+			<strong>Release approvers:</strong> <a href="https://github.com/flythenimbus">@flythenimbus</a>,
+			who approves each release before it is published.
 		</li>
 	</ul>
-	<p>Everyone in these roles uses multi-factor authentication for GitHub and for SignPath.</p>
+	<p>Everyone in these roles uses multi-factor authentication for GitHub and for Azure.</p>
 
 	<h2>Privacy</h2>
 	<p>
@@ -69,10 +59,10 @@ import { LINKS } from "@/consts";
 
 	<h2>Other downloads</h2>
 	<p>
-		This policy covers the Windows installer, the only download signed through SignPath. Bramble's
-		other downloads are signed through their own channels: the macOS app with Bramble's Apple
-		Developer ID and notarized by Apple, the browser extensions and the iOS app by their stores, and
-		the Android and Linux releases with Bramble's own release keys.
+		This policy covers the Windows installer. Bramble's other downloads are signed through their own
+		channels: the macOS app with Bramble's Apple Developer ID and notarized by Apple, the browser
+		extensions and the iOS app by their stores, and the Android and Linux releases with Bramble's own
+		release keys.
 	</p>
 
 	<h2>Reporting a problem</h2>

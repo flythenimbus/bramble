@@ -64,9 +64,8 @@ run, one set of touches, and then the token goes in a drawer as the recovery pat
 ## The shape
 
 Each target gets one workflow that builds, signs and publishes. There is no "CI builds, you sign"
-split any more, because the keys are in CI too. Windows keeps its own shape inside that: SignPath
-verifies where an installer came from, and its trust is configured around `sign-windows.yml`, so
-that workflow stays separate, throwaway updater key and all, with a build job and a sign job of its
+split any more, because the keys are in CI too. Windows keeps its own shape inside that: Azure's
+signing identity trusts only `sign-windows.yml`'s environment, so that workflow stays separate, throwaway updater key and all, with a build job and a sign job of its
 own (see release-signing.md, "Windows"). What moved is the other end:
 `build-windows.ts --ci-start` is dispatched by the desktop workflow's first job instead of a Mac,
 and `--ci-collect`, which re-signs the installer for the updater, runs in the publish job that holds
@@ -134,7 +133,7 @@ tag with one `latest.json`, so none of them can leave the Mac until all three ca
 | **1** | **Android**, fully from CI. Built: `android-release.yml`, `release android` | keystore + password |
 | **2** | **Firefox**. Built: `firefox-release.yml`, `release firefox`, with an AMO preflight | AMO credentials |
 | **3** | **Chrome**. Built: `chrome-release.yml`, `release chromium`, with a store preflight | CWS key + service account |
-| **4** | **Desktop**. Built: `desktop-release.yml`, `release desktop`: Linux in the Debian container on native amd64 + arm64 runners, macOS compiled in a job holding no secrets, Windows through `sign-windows.yml` and SignPath, then one approved macOS job that bundles, codesigns, notarizes, signs every updater artifact and publishes. APT through `apt-release.yml`, after the release, behind its own approval | updater key, Developer ID `.p12`, ASC key |
+| **4** | **Desktop**. Built: `desktop-release.yml`, `release desktop`: Linux in the Debian container on native amd64 + arm64 runners, macOS compiled in a job holding no secrets, Windows through `sign-windows.yml` and Azure Artifact Signing, then one approved macOS job that bundles, codesigns, notarizes, signs every updater artifact and publishes. APT through `apt-release.yml`, after the release, behind its own approval | updater key, Developer ID `.p12`, ASC key |
 | **later** | OIDC custody | |
 
 Android leads because it is self-contained and proves every part of the pattern in one place: a
@@ -145,12 +144,12 @@ APT last.
 
 Shipping all three together is also why desktop is the one target that can be told to leave a
 platform out: `release desktop <version> --skip=windows`, or several, comma-separated. It exists
-because SignPath approval is outside this repository, so Windows can be unavailable for reasons
-macOS and Linux are not, and a release should not have to wait on it. The cost is that `latest.json`
+because Windows signing depends on an Azure account outside this repository, so Windows can be
+unavailable for reasons macOS and Linux are not, and a release should not have to wait on it. The cost is that `latest.json`
 holds one version for every platform, so a skipped platform drops out of the manifest rather than
 staying where it was, and its users' manual update checks fail until it is back. The dispatcher
 warns for each skipped platform that has already shipped and then proceeds; it refuses only the case
-where nothing could work, a Windows build with SignPath unconfigured. The long-term fix is
+where nothing could work, a Windows build with Azure signing unconfigured. The long-term fix is
 per-platform manifests through Tauri's `{{target}}` endpoint templating, which needs a release with
 the new endpoint in it before it helps anyone.
 

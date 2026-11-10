@@ -976,16 +976,14 @@ should be short and the result is only ever going into a VM. Tauri supports cros
 calls it a last resort. It cannot be Authenticode-signed, so it must not be released, and the
 script refuses to produce one without `--unsigned` for exactly that reason.
 
-**Releasing** builds on a GitHub runner instead, and the reason is provenance rather than build
-quality. Authenticode signing comes from [SignPath Foundation](https://signpath.org/), which is
-free for open source projects and issues a real Sectigo certificate; in exchange it verifies where
-a binary came from, and requires every job leading up to the signing request to have run on a
-GitHub-hosted agent, with the origin metadata supplied by GitHub rather than by the build script.
-A cross-compiled installer from a laptop cannot satisfy that, so Windows is the one artifact
-Bramble ships that is not built on the maintainer's machine.
+**Releasing** builds on a GitHub runner instead. Authenticode signing comes from
+[Azure Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/), whose signtool
+plugin runs on Windows, and whose signing identity is reachable only through an OIDC token from
+`sign-windows.yml`'s `main`-only environment, with no stored secret. So Windows is the one
+artifact Bramble ships that is not built on the maintainer's machine.
 
 That trade is acceptable here and would not be on macOS, for one reason: **the updater key does
-not go with it.** SignPath signs for *Windows*; the minisign key signs for *the updater*, and only
+not go with it.** Azure signs for *Windows*; the minisign key signs for *the updater*, and only
 the second is the root of trust for every update the app will ever accept. So CI hands back an
 Authenticode-signed installer and `build-windows.ts --ci-collect` signs it locally, over the
 signed bytes. The order is not negotiable: Authenticode first, updater signature second. Reversed,
@@ -993,18 +991,17 @@ the `.sig` describes a file that no longer exists and every Windows update fails
 
 ### How a release actually runs
 
-The Windows step is also the only one that waits on a human, since SignPath requires a maintainer
-to approve each signing request. So it is started first and collected last:
+The Windows build is the slowest step, so it is started first and collected last:
 
 1. `release.ts` pushes the `chore(release)` commit **before** the builds. This is the one place
    the desktop release differs from the other four platforms, and the Windows build forces it: a
    runner can only build a commit it can fetch, so a bump still sitting in the working tree would
-   have CI produce, and SignPath sign, an installer for the previous version. The workflow
+   have CI build and sign an installer for the previous version. The workflow
    re-reads the version out of `tauri.conf.json` and fails loudly if it does not match, so losing
    that race is noisy rather than silent.
 2. `--ci-start` dispatches `sign-windows.yml` and records the run id.
-3. macOS builds and notarizes locally; Linux builds in its container. The SignPath approval and
-   the notarization upload are waiting at the same time rather than one after the other.
+3. macOS builds and notarizes locally; Linux builds in its container. The Windows build and
+   the notarization upload run at the same time rather than one after the other.
 4. `--ci-collect` waits for the run, downloads the signed installer, and signs it with the
    YubiKey-held updater key.
 5. Only then is the tag pushed. A failed build leaves a `chore(release)` commit on main with no
@@ -1044,13 +1041,13 @@ Windows is the only platform where those are one file. macOS has a `.dmg` to cli
 `.app.tar.gz` for the updater; Linux has a `.deb` that cannot self-update and an AppImage that
 can. NSIS has one installer, which Tauri signs in place and the updater downloads and runs.
 
-Azure Artifact Signing was the other candidate and was rejected on cost: $9.99/month forever, for
-a dozen signatures a year, when SignPath costs nothing for a GPL project. Its advantage was that
-it can be driven from the Mac (via `jsign`) and so would not have forced the build into CI; that
-turned out to be the cheaper thing to give up. A traditional OV certificate is the fallback if
-SignPath ever declines, and it would mean signing on the Windows VM, since the CA/Browser Forum
-has required the key to live on hardware since 2023 and a smartcard cannot be driven from a
-cross-compile.
+SignPath Foundation (free for open source) was used first and dropped on 2026-11-10: its production
+certificate waited weeks on the Foundation, every release waited on a manual approval in its UI,
+and Windows would have named SignPath Foundation as the publisher. Azure costs USD 9.99 a month and
+signs in seconds. It can also be driven from the Mac (via `jsign`), which would allow signing the
+cross-compiled build; that is not wired up, since the CI route already works. A traditional OV
+certificate is the fallback, and it would mean signing on the Windows VM, since the CA/Browser
+Forum has required the key to live on hardware since 2023.
 
 ### Homebrew
 

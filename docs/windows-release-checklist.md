@@ -30,10 +30,10 @@ None of this can be automated honestly: it needs a real desktop, a real browser,
 
 ### Installer and SmartScreen
 
-- [ ] The **signed** installer (the SignPath artifact, not a local build) downloads and runs
-      without the "unknown publisher" warning, naming **SignPath Foundation** as the verified
-      publisher: the certificate is issued to the Foundation, not to Bramble, so that name is
-      correct. An unsigned local build must still warn, which is correct too.
+- [ ] The **signed** installer (the `sign-windows.yml` artifact, not a local build) downloads and
+      runs without the "unknown publisher" warning, naming the identity validated in Azure
+      Artifact Signing as the verified publisher. An unsigned local build must still warn, which
+      is correct too.
 - [ ] Install, then install again over it: an update in place must not lose the vault or force a
       logout. (The updater is the usual update path, but users do reinstall.)
 - [ ] Install on a clean Windows 10 VM: WebView2 bootstrapping and the 1909-era floor.
@@ -77,7 +77,7 @@ None of this can be automated honestly: it needs a real desktop, a real browser,
       the update, downloads, installs, relaunches. (The committed placeholder manifest has no
       Windows entry by design; it appears with the first signed release.)
 - [ ] The `.sig` published must be the one generated over the Authenticode-signed bytes. A
-      signature made before SignPath signed describes a file that no longer exists and the update
+      signature made before Authenticode signing describes a file that no longer exists and the update
       fails, which is why the order is a hard rule in build-windows.ts.
 
 ### Uninstall, both answers

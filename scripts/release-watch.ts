@@ -1,6 +1,5 @@
-// Follows a desktop release AND the sign-windows.yml run it starts, a line per change, and says when
-// to go and approve in SignPath. `gh run watch` sees only the first run, so it would sit silent
-// through the one step that waits on you outside GitHub. See docs/release-signing.md.
+// Follows a desktop release AND the sign-windows.yml run it starts, a line per change. `gh run watch`
+// sees only the first run, so a Windows failure would show only as the publish job failing later.
 
 export interface Job {
 	name: string;
@@ -10,9 +9,6 @@ export interface Job {
 }
 
 const SIGN_WORKFLOW = "sign-windows.yml";
-/** The job in sign-windows.yml that submits and waits. Must match the workflow. */
-export const SIGN_JOB = "Sign with SignPath";
-
 function describe(job: Job): string {
 	if (job.status === "completed") return job.conclusion ?? "completed";
 	// A job held at an environment's required reviewers.
@@ -32,20 +28,6 @@ export function jobChanges(jobs: Job[], seen: Map<string, string>, prefix = ""):
 	return lines;
 }
 
-/**
- * The prompt to go and approve, once the signing job has started.
- *
- * Read from the job's status, the one thing GitHub reports live: the run's notices and summaries
- * appear only when the job ends, which during an approval wait is after you have approved.
- */
-export function approvalPrompt(jobs: Job[], requests?: string): string | null {
-	const signing = jobs.some((j) => j.name === SIGN_JOB && j.status === "in_progress");
-	if (!signing) return null;
-	return requests
-		? `\n  windows: approve the newest signing request in SignPath now:\n    ${requests}\n`
-		: "\n  windows: approve the newest signing request in SignPath now (SignPath emails you the link).\n";
-}
-
 /** `gh` with these arguments, returning stdout; throws when it fails. */
 export type Gh = (args: string[]) => string;
 
@@ -56,8 +38,6 @@ export interface WatchOptions {
 	since: string;
 	/** Whether this release builds Windows at all. */
 	windows: boolean;
-	/** SignPath's signing-requests page for this organization, when it is known. */
-	signpathRequests?: string;
 	pollMs?: number;
 }
 
@@ -75,7 +55,6 @@ export function watchDesktopRelease(o: WatchOptions, deps: WatchDeps): string {
 	const seenWindows = new Map<string, string>();
 	let signRun: string | null = null;
 	let signDone = false;
-	let prompted = false;
 	let failures = 0;
 
 	for (;;) {
@@ -133,11 +112,6 @@ export function watchDesktopRelease(o: WatchOptions, deps: WatchDeps): string {
 						"status,jobs",
 					]);
 					for (const line of jobChanges(sign.jobs, seenWindows, "windows: ")) deps.log(line);
-					const prompt = prompted ? null : approvalPrompt(sign.jobs, o.signpathRequests);
-					if (prompt) {
-						deps.log(prompt);
-						prompted = true;
-					}
 					if (sign.status === "completed") signDone = true;
 				}
 			} catch {

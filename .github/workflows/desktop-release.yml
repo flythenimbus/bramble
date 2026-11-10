@@ -19,13 +19,13 @@ name: Desktop release
 # - **publish**, on macOS, is the only job the updater key ever reaches, so it
 #   runs first-party actions only (Rust comes from the image's rustup, pnpm from corepack). It
 #   bundles, codesigns and notarizes macOS from the handed-over binaries, re-signs the AppImages,
-#   waits for SignPath and re-signs the installer, verifies every updater signature against the
+#   collects the Azure-signed installer and re-signs it, verifies every updater signature against the
 #   public key compiled into the app, and publishes. The update manifest is committed after the
 #   release exists, which deploys the website on its own: that commit is made with the release
 #   app's token, and an app's commits fire push workflows where this workflow's token cannot.
 #
-# Windows keeps its own approval, in SignPath, which signs the installer with a certificate this
-# repository never holds. The APT repository is still signed from a Mac: its key lives on a
+# The Windows installer is Authenticode-signed in sign-windows.yml through Azure Artifact Signing,
+# with no stored credential: an OIDC token from that workflow's environment. The APT repository is still signed from a Mac: its key lives on a
 # YubiKey and has not moved yet (`pnpm run publish:apt --release <tag>`).
 #
 # `pnpm run release desktop <version>` dispatches this and watches it. A dry run commits nothing and
@@ -129,9 +129,8 @@ jobs:
           SKIP: ${{ inputs.skip }}
           GH_TOKEN: ${{ github.token }}
           BRAMBLE_COMMIT_TOKEN: ${{ steps.commit-token.outputs.token }}
-          # Whether sign-windows.yml could sign anything, without handing this job the token: the
-          # comparison happens in the expression, and only its answer reaches the step.
-          SIGNPATH_READY: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' && vars.SIGNPATH_PROJECT_SLUG != '' && vars.SIGNPATH_SIGNING_POLICY_SLUG != '' }}
+          # Whether sign-windows.yml could sign anything.
+          AZURE_SIGNING_READY: ${{ vars.AZURE_CLIENT_ID != '' && vars.AZURE_TENANT_ID != '' && vars.AZURE_SIGNING_ENDPOINT != '' && vars.AZURE_SIGNING_ACCOUNT != '' && vars.AZURE_CERTIFICATE_PROFILE != '' }}
         run: |
           set -euo pipefail
           flags=(--runner-bump)
@@ -345,8 +344,7 @@ jobs:
     permissions:
       contents: write # the tag, the release and the manifest commit
       actions: read # collecting the Windows installer from sign-windows.yml
-    # Bundling, codesigning and notarization, then as long as SignPath's approval takes: the sign
-    # job waits up to five hours for it, so this is GitHub's six-hour maximum.
+    # Bundling, codesigning and notarization, which Apple can stretch to hours: GitHub's maximum.
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

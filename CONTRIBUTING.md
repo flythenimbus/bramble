@@ -82,7 +82,7 @@ pnpm --filter @vault/platform-desktop exec tauri build --bundles nsis
 
 The installer lands in `src-tauri/target/release/bundle/nsis/`, unsigned: for a
 VM, not for anyone else. Release installers are built by CI and
-Authenticode-signed through SignPath; see
+Authenticode-signed through Azure Artifact Signing; see
 [docs/desktop-port.md](docs/desktop-port.md) and
 [docs/release-signing.md](docs/release-signing.md). While iterating, the app's
 local data (vault, logs, the browser-link manifest) lives under
