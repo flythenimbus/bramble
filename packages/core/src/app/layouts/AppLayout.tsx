@@ -26,8 +26,7 @@ export function AppLayout() {
 	const { activeId, vaults } = useVaultRegistry();
 	useVaultNameSync();
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
-	const vaultLabel =
-		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
+	const vaultLabel = activeIndex >= 0 ? displayLabel(vaults[activeIndex]!, activeIndex) : null;
 
 	const onBack = useRouteBack();
 

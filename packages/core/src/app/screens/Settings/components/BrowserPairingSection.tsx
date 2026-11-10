@@ -217,7 +217,7 @@ export function BrowserPairingSection() {
 		const contents = await readVaultContents(storage, activeId, entries.length, files.length);
 		const targets = await storage.getMeta<unknown[]>(backupTargetsKeyFor(activeId));
 		await pairing.setVaultSummary({
-			name: displayLabel(vaults[index]?.label ?? "", Math.max(0, index)),
+			name: displayLabel(vaults[index] ?? { label: "" }, Math.max(0, index)),
 			empty: isVaultEmpty(contents),
 			entries: entries.length,
 			backupTargets: (targets?.length ?? 0) > 0,

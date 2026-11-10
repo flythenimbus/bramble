@@ -151,11 +151,14 @@ export function VaultRegistryProvider({
 	const createRecord = useCallback(
 		async (label = "") => {
 			const id = crypto.randomUUID();
-			await persist(addVault(registry, { id, label, createdAt: Date.now() }));
+			// Fresh: another window's delete or add since this render would otherwise be undone, or
+			// its number handed out twice.
+			const current = parseRegistry(await storage.getMeta(VAULT_REGISTRY_KEY));
+			await persist(addVault(current, { id, label, createdAt: Date.now() }));
 			setActiveId(id);
 			return id;
 		},
-		[registry, persist],
+		[storage, persist],
 	);
 	// rename/remove only ever act on the active vault (no target id), so a vault can never
 	// rename or delete another vault.

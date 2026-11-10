@@ -24,7 +24,7 @@ export function VaultChoiceList({ onSelect }: { onSelect: (id: string) => void }
 	return (
 		<div className="space-y-3">
 			{vaults.map((v, i) => {
-				const label = displayLabel(v.label, i);
+				const label = displayLabel(v, i);
 				return (
 					<Button
 						key={v.id}

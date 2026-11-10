@@ -86,9 +86,11 @@ joining device receives it. The registry label is the cached copy the locked scr
 show.
 
 Label policy: labels are **optional** and **need not be unique** (the id
-disambiguates). A vault with a blank label is displayed as "Vault N" by its position
-in the list, resolved at render time rather than stored, so the fallback stays
-correct as vaults are added and removed.
+disambiguates). A vault with a blank label is displayed as "Vault N", where N is the
+record's `number`: one more than the highest on the device when it was added, and
+never changed after. It used to be the vault's place in the list, so deleting Vault 1
+renamed the rest Vault 1 and Vault 2, and the deleted vault looked like it was still
+there. A registry from before `number` gets the numbers it showed at the time.
 
 ### Per-vault storage keys
 
@@ -1246,7 +1248,7 @@ behavior, clobbers included); the fix is real once 3 lands.
 - **Concurrency:** ~~one vault unlocked at a time~~ **superseded (2026-07): independent
   per-vault unlock on the extension via a VEK map; mobile stays single-active. See
   [Per-vault VEK](#per-vault-vek).**
-- **Labels:** optional; duplicates allowed; blank displays as "Vault N" by position;
+- **Labels:** optional; duplicates allowed; blank displays as "Vault N" (a stored number);
   shown in the pre-unlock picker.
 - **Sync:** active-vault-only in v1.
 - **Primary vault:** ~~unified. One pointer drives mobile autofill, biometric unlock,

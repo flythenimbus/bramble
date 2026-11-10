@@ -56,12 +56,53 @@ describe("renameVault", () => {
 
 describe("displayLabel", () => {
 	it("uses the label when set", () => {
-		expect(displayLabel("Personal", 0)).toBe("Personal");
+		expect(displayLabel({ label: "Personal", number: 4 }, 0)).toBe("Personal");
 	});
 
-	it("falls back to Vault N (1-based) when blank or whitespace", () => {
-		expect(displayLabel("", 0)).toBe("Vault 1");
-		expect(displayLabel("   ", 2)).toBe("Vault 3");
+	it("falls back to Vault N when blank or whitespace", () => {
+		expect(displayLabel({ label: "", number: 1 }, 0)).toBe("Vault 1");
+		expect(displayLabel({ label: "   ", number: 3 }, 0)).toBe("Vault 3");
+	});
+});
+
+describe("an unnamed vault's number", () => {
+	const names = (reg: VaultRegistry) => listedVaults(reg).map((v, i) => displayLabel(v, i));
+	const three = () => addVault(addVault(addVault(EMPTY_REGISTRY, rec("a")), rec("b")), rec("c"));
+
+	it("counts up as vaults are added", () => {
+		expect(names(three())).toEqual(["Vault 1", "Vault 2", "Vault 3"]);
+	});
+
+	// Numbered by place, deleting Vault 1 relabelled the rest Vault 1 and Vault 2: the deleted
+	// name stayed on the list and the last one seemed to go.
+	it("stays with its vault when another is deleted", () => {
+		expect(names(removeVault(three(), "a"))).toEqual(["Vault 2", "Vault 3"]);
+		expect(names(removeVault(three(), "b"))).toEqual(["Vault 1", "Vault 3"]);
+	});
+
+	it("is never one a vault still on the list has", () => {
+		const reg = addVault(removeVault(three(), "a"), rec("d"));
+		expect(names(reg)).toEqual(["Vault 2", "Vault 3", "Vault 4"]);
+	});
+
+	it("survives a round trip through storage", () => {
+		const stored = JSON.parse(JSON.stringify(removeVault(three(), "a")));
+		expect(names(parseRegistry(stored))).toEqual(["Vault 2", "Vault 3"]);
+	});
+
+	it("is fixed at what it shows for a registry from before numbers were kept", () => {
+		const old = { vaults: [rec("a"), rec("b", "Work"), rec("c")] };
+		const reg = parseRegistry(old);
+		expect(names(reg)).toEqual(["Vault 1", "Work", "Vault 3"]);
+		expect(names(removeVault(reg, "a"))).toEqual(["Work", "Vault 3"]);
+	});
+
+	it("goes after the listed ones for a hidden vault from before numbers were kept", () => {
+		const copy = { at: 5, blobHash: "abc", into: "b" };
+		const old = { vaults: [{ ...rec("old"), hidden: copy }, rec("b"), rec("c")] };
+		const reg = parseRegistry(old);
+		expect(names(reg)).toEqual(["Vault 1", "Vault 2"]);
+		expect(names(removeVault(reg, "b"))).toEqual(["Vault 3", "Vault 2"]);
 	});
 });
 
@@ -76,7 +117,7 @@ describe("parseRegistry", () => {
 	});
 
 	it("round-trips a valid registry", () => {
-		const reg: VaultRegistry = { vaults: [rec("a", "Personal", 1)] };
+		const reg: VaultRegistry = { vaults: [{ ...rec("a", "Personal", 1), number: 1 }] };
 		expect(parseRegistry(reg)).toEqual(reg);
 	});
 
@@ -86,7 +127,7 @@ describe("parseRegistry", () => {
 			primaryId: "a",
 			legacyBlobVaultId: "a",
 		});
-		expect(parsed).toEqual({ vaults: [rec("a", "Personal", 1)] });
+		expect(parsed).toEqual({ vaults: [{ ...rec("a", "Personal", 1), number: 1 }] });
 		expect("primaryId" in parsed).toBe(false);
 		expect("legacyBlobVaultId" in parsed).toBe(false);
 	});

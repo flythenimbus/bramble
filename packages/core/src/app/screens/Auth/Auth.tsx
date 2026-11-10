@@ -72,8 +72,7 @@ export function Auth() {
 	// The vault this screen is unlocking, named in the top-left (mirrors the unlocked header).
 	// Absent on first run, when there's no vault yet.
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
-	const vaultLabel =
-		activeIndex >= 0 ? displayLabel(vaults[activeIndex]!.label, activeIndex) : null;
+	const vaultLabel = activeIndex >= 0 ? displayLabel(vaults[activeIndex]!, activeIndex) : null;
 	const canWebauthnUnlock = useWebauthnUnlock();
 	const { popOut, canPopOut } = usePopOut();
 	const { t } = useLingui();

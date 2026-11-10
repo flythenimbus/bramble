@@ -155,7 +155,7 @@ export function DesktopLinkSection() {
 
 	const outcome = link.outcome;
 	const activeIndex = vaults.findIndex((v) => v.id === activeId);
-	const browserName = displayLabel(vaults[activeIndex]?.label ?? "", Math.max(0, activeIndex));
+	const browserName = displayLabel(vaults[activeIndex] ?? { label: "" }, Math.max(0, activeIndex));
 	const desktopName = link.summary?.name ?? t`the desktop app's vault`;
 	const error = link.error ?? refreshError;
 

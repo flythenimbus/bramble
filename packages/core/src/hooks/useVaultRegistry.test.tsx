@@ -168,6 +168,20 @@ describe("VaultRegistryProvider", () => {
 		);
 	});
 
+	it("createRecord adds to the registry as stored, not to this window's copy", async () => {
+		const stored = addVault(two, { id: "c", label: "", createdAt: 3 });
+		const { get, setMeta } = mount(stored);
+		await act(async () => {});
+		// Another window deletes c, then this one adds a vault.
+		stored.vaults = stored.vaults.filter((v) => v.id !== "c");
+		await act(async () => {
+			await get().createRecord("");
+		});
+		const written = (setMeta.mock.calls.at(-1) as unknown[])[1] as typeof stored;
+		expect(written.vaults.map((v) => v.id)).not.toContain("c");
+		expect(written.vaults.at(-1)?.number).toBe(3);
+	});
+
 	it("is ready with no vaults and no active id on a fresh install", async () => {
 		const { get } = mount(undefined);
 		await act(async () => {});
