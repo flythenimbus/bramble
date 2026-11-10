@@ -4,7 +4,7 @@ import type { VaultSetupMode } from "../types";
 
 interface SetupHeaderProps {
 	mode: VaultSetupMode;
-	/** Mobile: storage is app-managed, so drop the "choose where to store" copy. */
+	/** Compact presentation for the single-window mobile host. */
 	mobile?: boolean;
 	/** Adding a parallel vault (vaults already exist), not first-run setup. */
 	adding?: boolean;
@@ -21,9 +21,7 @@ export function SetupHeader({ mode, mobile, adding }: SetupHeaderProps) {
 					? t`Open an encrypted .bramble backup and make it the vault on this device.`
 					: adding
 						? t`Create a new vault alongside your existing ones, with its own master password.`
-						: mobile
-							? t`Pick a master password to protect your vault.`
-							: t`Choose where to store your encrypted vault and pick a master password.`;
+						: t`Pick a master password to protect your vault.`;
 	return (
 		<div className="text-center mb-6">
 			<BrambleGlyph className="w-16 h-16 text-foreground mb-4 inline-block" />

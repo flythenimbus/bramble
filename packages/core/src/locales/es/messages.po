@@ -973,8 +973,8 @@ msgid "Choose where to store encrypted backups. Bramble only ever uploads cipher
 msgstr "Elija dónde almacenar las copias de seguridad cifradas. Bramble solo carga texto cifrado, por lo que su proveedor no puede leer nada en su bóveda. Añada tantos destinos como desee."
 
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
-msgid "Choose where to store your encrypted vault and pick a master password."
-msgstr "Seleccione dónde almacenar su bóveda cifrada y elija una contraseña maestra."
+#~ msgid "Choose where to store your encrypted vault and pick a master password."
+#~ msgstr "Seleccione dónde almacenar su bóveda cifrada y elija una contraseña maestra."
 
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "Choose..."
