@@ -1218,6 +1218,10 @@ msgstr "Copiar {0}"
 msgid "Copy address"
 msgstr "Copiar dirección"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Copy log"
+msgstr "Copiar registro"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Copy previous password"
 msgstr "Copiar contraseña anterior"

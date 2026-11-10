@@ -56,6 +56,7 @@ function mount(
 	} = {},
 ) {
 	const listeners: ((e: SyncEvent) => void)[] = [];
+	const statusListeners: ((s: string) => void)[] = [];
 	const approveEnrollment = vi.fn(async (_approved: boolean) => {});
 	const platform = {
 		target: "desktop",
@@ -64,7 +65,10 @@ function mount(
 				listeners.push(cb);
 				return () => {};
 			},
-			onSyncStatus: () => () => {},
+			onSyncStatus: (cb: (s: string) => void) => {
+				statusListeners.push(cb);
+				return () => {};
+			},
 			getPendingEnrollApproval: async () => null,
 			approveEnrollment,
 			stopEnrollInvite: async () => {},
@@ -93,7 +97,11 @@ function mount(
 		act(() => {
 			for (const cb of listeners) cb(e);
 		});
-	return { emit, approveEnrollment };
+	const status = (s: string) =>
+		act(() => {
+			for (const cb of statusListeners) cb(s);
+		});
+	return { emit, status, approveEnrollment };
 }
 
 const APPROVAL = {
@@ -177,6 +185,36 @@ describe("the sync status", () => {
 		});
 		expect(await screen.findByText(/can't read its sync key right now/)).toBeTruthy();
 		expect(screen.queryByText(/^Synced/)).toBeNull();
+	});
+});
+
+// People send this log with bug reports, and the desktop app lets nothing be selected by default.
+describe("the sync log", () => {
+	it("copies every line with the button in its corner", async () => {
+		const writeText = vi.fn(async (_text: string) => {});
+		Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+		const { status } = mount({ group: groupOf("me", "peer") });
+		status("relay connected (nostr.example.com)");
+		status("ignored bad-signature event from b941d388");
+
+		fireEvent.click(await screen.findByRole("button", { name: "Copy log" }));
+
+		expect(writeText).toHaveBeenCalledWith(
+			"relay connected (nostr.example.com)\nignored bad-signature event from b941d388",
+		);
+	});
+
+	it("can be selected on the desktop", async () => {
+		const { status } = mount({ group: groupOf("me", "peer") });
+		status("relay connected (nostr.example.com)");
+		const line = await screen.findByText("relay connected (nostr.example.com)");
+		expect(line.closest("[data-selectable]")).toBeTruthy();
+	});
+
+	it("isn't shown, and offers nothing to copy, before anything is logged", async () => {
+		mount({ group: groupOf("me", "peer") });
+		await screen.findByText("Synced · 2 devices");
+		expect(screen.queryByRole("button", { name: "Copy log" })).toBeNull();
 	});
 });
 

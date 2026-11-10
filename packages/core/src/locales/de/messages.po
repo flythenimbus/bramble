@@ -1218,6 +1218,10 @@ msgstr "Kopieren {0}"
 msgid "Copy address"
 msgstr "Adresse kopieren"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Copy log"
+msgstr "Protokoll kopieren"
+
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Copy previous password"
 msgstr "Vorheriges Passwort kopieren"
@@ -1472,7 +1476,7 @@ msgstr "Gerätecode"
 
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Device sync"
-msgstr "Geräresynchronisierung"
+msgstr "Gerätesynchronisierung"
 
 #: packages/core/src/app/components/PasswordGenerator.tsx
 msgid "Digits"

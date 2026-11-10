@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { useNavigate } from "@tanstack/react-router";
-import { Pencil, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
+import { Check, Copy, Pencil, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
@@ -138,6 +138,7 @@ export function SyncConnectSection() {
 	const [gateBusy, setGateBusy] = useState(false);
 	const [log, setLog] = useState<string[]>([]);
 	const logRef = useRef<HTMLDivElement>(null);
+	const [logCopied, setLogCopied] = useState(false);
 
 	// Group membership (source of truth for "are we paired, and with whom"). undefined
 	// while loading so we don't flash the onboarding UI over an existing group.
@@ -238,6 +239,16 @@ export function SyncConnectSection() {
 	useEffect(() => {
 		logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
 	}, [log]);
+
+	const copyLog = async () => {
+		try {
+			await navigator.clipboard.writeText(log.join("\n"));
+			setLogCopied(true);
+			setTimeout(() => setLogCopied(false), 1500);
+		} catch {
+			// Clipboard can be blocked; the log stays on screen and selectable.
+		}
+	};
 
 	// TODO(i18n): note()/run() labels and ✅ messages below feed the hidden debug log
 	// (its render is commented out), so they're left untranslated for now.
@@ -390,16 +401,32 @@ export function SyncConnectSection() {
 			{/* Live transport status log (offer sent / answer applied / ice connected /
 			    channel open) — surfaces enrollment + sync diagnostics in the dev panel. */}
 			{log.length > 0 && (
-				<div
-					ref={logRef}
-					className="max-h-40 overflow-y-auto rounded-lg border border-border bg-background/50 p-2 text-xs font-mono space-y-0.5"
-				>
-					{log.map((line, i) => (
-						// biome-ignore lint/suspicious/noArrayIndexKey: append-only status log
-						<div key={i} className="text-muted-foreground break-words">
-							{line}
-						</div>
-					))}
+				<div className="relative">
+					<div
+						ref={logRef}
+						data-selectable
+						className="max-h-40 overflow-y-auto rounded-lg border border-border bg-background/50 p-2 pr-9 text-xs font-mono space-y-0.5"
+					>
+						{log.map((line, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: append-only status log
+							<div key={i} className="text-muted-foreground break-words">
+								{line}
+							</div>
+						))}
+					</div>
+					<Button
+						variant="ghost"
+						size="none"
+						onClick={copyLog}
+						className="absolute top-1 right-1 p-1.5 rounded-md"
+						aria-label={t`Copy log`}
+					>
+						{logCopied ? (
+							<Check className="w-3.5 h-3.5 text-primary" />
+						) : (
+							<Copy className="w-3.5 h-3.5" />
+						)}
+					</Button>
 				</div>
 			)}
 
