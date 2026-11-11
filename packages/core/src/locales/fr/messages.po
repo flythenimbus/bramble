@@ -79,6 +79,11 @@ msgstr "{0, plural, one {Cette sauvegarde contient # pièce jointe, que Bramble 
 msgid "{0} · added {1}"
 msgstr "{0} · ajouté {1}"
 
+#. placeholder {0}: entry.name
+#: packages/core/src/app/routes/EntryDetailRoute.tsx
+msgid "{0} (copy)"
+msgstr "{0} (copie)"
+
 #. placeholder {0}: d.domain
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "{0} (your domain)"
@@ -516,6 +521,10 @@ msgstr "Un point de terminaison qui renvoie vos propres serveurs ICE au format J
 #: packages/core/src/app/components/SasDisplay.tsx
 msgid "Anchor"
 msgstr "Ancre"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Another item uses this password"
+msgstr "Un autre élément utilise ce mot de passe."
 
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 msgid "API key"
@@ -1574,6 +1583,14 @@ msgstr "Télécharge et redémarre Bramble. Votre coffre-fort n'est pas affecté
 msgid "DuckDuckGo has no API key page. Open the Autofill tab, then your browser's developer tools, click Generate Private Duck Address, and copy the token that follows authorization: Bearer in the Network tab."
 msgstr "DuckDuckGo ne dispose pas de page de clé API. Ouvrez l’onglet Remplissage automatique, puis les outils de développement de votre navigateur, cliquez sur Générer une adresse Duck privée et copiez le jeton qui suit authorization: Bearer dans l’onglet Réseau."
 
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Duplicate"
+msgstr "Doublon"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Duplicate entry"
+msgstr "Entrée en double"
+
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
@@ -2470,8 +2487,8 @@ msgid "Name Z-A"
 msgstr "Nom Z-A"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
-msgid "Never"
-msgstr "Jamais"
+#~ msgid "Never"
+#~ msgstr "Jamais"
 
 #: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
 msgid "New {modeLabel}"
@@ -3221,6 +3238,10 @@ msgstr "Restaurer le coffre"
 msgid "Restoring…"
 msgstr "Restauration en cours…"
 
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Reused"
+msgstr "Réutilisé"
+
 #. placeholder {0}: provider.label
 #: packages/core/src/app/screens/Import/ImportShell.tsx
 msgid "Review what we found in your {0} export"
@@ -3270,6 +3291,7 @@ msgstr "S’exécute discrètement dans la barre des menus afin que les sauvegar
 msgid "Santa"
 msgstr "Père Noël"
 
+#: packages/core/src/app/entry-modes/attachments.tsx
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Save"
 msgstr "Enregistrer"
@@ -3285,6 +3307,10 @@ msgstr "Enregistrez un fichier .kdbx que vous pourrez ouvrir dans KeePassXC ou t
 #: packages/core/src/app/screens/Settings/components/DataSection.tsx
 msgid "Save an encrypted .bramble copy of your vault. It still needs your master password to open."
 msgstr "Enregistrez une copie .bramble chiffrée de votre coffre. Elle nécessite toujours votre mot de passe principal pour être ouverte."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Save attachment"
+msgstr "Enregistrer la pièce jointe"
 
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
 msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
@@ -3366,6 +3392,10 @@ msgstr "Faire défiler vers la gauche"
 #: packages/core/src/app/components/ui/scroll-edges.tsx
 msgid "Scroll right"
 msgstr "Faire défiler vers la droite"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Search #{importedTag} to find them."
+msgstr "Recherchez #{importedTag} pour les trouver."
 
 #: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
 msgid "Search logins"
@@ -4435,6 +4465,18 @@ msgstr "Appareil non nommé"
 #: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
 msgid "Unsigned"
 msgstr "Non signé"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Until app closes"
+msgstr "Jusqu'à la fermeture de l'application"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Until Bramble quits"
+msgstr "Jusqu'à la fermeture de Bramble"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Until browser closes"
+msgstr "Jusqu'à la fermeture du navigateur"
 
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Update and restart"
