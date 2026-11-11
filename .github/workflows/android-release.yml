@@ -43,6 +43,11 @@ on:
         required: false
         default: ""
         type: string
+      email:
+        description: "Email the release notes to newsletter subscribers (skipped if one went out in the last 7 days)"
+        required: false
+        default: false
+        type: boolean
 permissions: {}
 
 # Two releases racing would bump from the same base; the second would fail its commit, but only
@@ -178,3 +183,13 @@ jobs:
           flags=(--runner-publish)
           if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
           node scripts/release.ts android "$VERSION" "${flags[@]}"
+
+  newsletter:
+    name: Newsletter
+    needs: publish
+    if: ${{ inputs.email && !inputs.dry_run && needs.publish.result == 'success' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/newsletter.yml
+    with:
+      tag: ${{ inputs.version }}-android

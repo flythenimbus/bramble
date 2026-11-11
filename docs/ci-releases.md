@@ -175,6 +175,16 @@ Neither the dispatch order nor the approval order matters: each release commits 
 version bumps (see the release commit, above), and retries if two land in the same second. `all`
 still does not exist: four approvals and four sets of notes, to save one command.
 
+## Emailing subscribers
+
+`--email` on a GitHub-route release (`pnpm release desktop minor --email`) sets the workflow's
+`email` input, off by default. Once the release is published, `newsletter.yml` sends its notes
+(the summary above "All changes") to Buttondown subscribers, at most once every seven days: if any
+email went out in the last seven days, hand-written ones included, it skips with a notice. Runs are
+serialized so a pair released together sends once. iOS never emails, since it publishes after App
+Store review. Needs `BUTTONDOWN_API_KEY` in the `newsletter` environment. To email a release that
+is already out: `gh workflow run newsletter.yml -f tag=<tag>`.
+
 ## What this never buys
 
 - **Store review.** Chrome Web Store, AMO and App Store review stay human and stay slow.

@@ -51,6 +51,11 @@ on:
         required: false
         default: ""
         type: string
+      email:
+        description: "Email the release notes to newsletter subscribers (skipped if one went out in the last 7 days)"
+        required: false
+        default: false
+        type: boolean
       skip:
         description: "Platforms to leave out, comma-separated: macos, linux, windows (blank = none)"
         required: false
@@ -461,3 +466,13 @@ jobs:
     with:
       release: ${{ inputs.version }}-desktop
     secrets: inherit
+
+  newsletter:
+    name: Newsletter
+    needs: publish
+    if: ${{ inputs.email && !inputs.dry_run && needs.publish.result == 'success' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/newsletter.yml
+    with:
+      tag: ${{ inputs.version }}-desktop
