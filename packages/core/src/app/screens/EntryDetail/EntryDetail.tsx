@@ -192,7 +192,7 @@ export function EntryDetail({
 				)}
 
 				{/* Kept away from Edit so a slip on the header can't archive or delete. */}
-				<div className="px-4 py-2.5 border-t border-border/50 flex items-center justify-end gap-2">
+				<div className="px-4 py-2.5 border-t border-border/50 flex flex-wrap items-center justify-end gap-2">
 					<Button
 						variant="secondary"
 						size="sm"
