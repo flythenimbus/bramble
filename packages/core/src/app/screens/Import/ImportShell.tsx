@@ -24,9 +24,11 @@ import {
 	parseImport,
 	tallyByType,
 } from "../../../import";
+import { tagImport } from "../../../import/tag-import";
 import { base64ToBytes } from "../../../util/bytes";
 import { splitAlreadyImported } from "../../../vault/entry-identity";
 import { plaintextSize } from "../../../vault/file-mutations";
+import { importTag } from "../../../vault/tags";
 import { FilePickerRow } from "../../components/FilePickerRow";
 import { Button } from "../../components/ui/button";
 import { VaultChoiceList } from "../../components/VaultChoiceList";
@@ -56,6 +58,7 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 	const [result, setResult] = useState<ImportResult | null>(null);
 	const [imported, setImported] = useState<number | null>(null);
 	const [importedFiles, setImportedFiles] = useState(0);
+	const [importedTag, setImportedTag] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	// Encrypted .kdbx picked, awaiting its master password.
@@ -284,6 +287,11 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 							<Plural value={importedFiles} one="Added # attachment" other="Added # attachments" />
 						)}
 					</h1>
+					{imported > 0 && (
+						<p className="text-sm">
+							<Trans>Search #{importedTag} to find them.</Trans>
+						</p>
+					)}
 					{imported > 0 && importedFiles > 0 && (
 						<p className="text-sm">
 							<Plural
@@ -453,7 +461,10 @@ export function ImportShell({ onClose }: { onClose?: () => void } = {}) {
 		setBusy(true);
 		setError(null);
 		try {
-			await importEntries(result.imported, attachments);
+			const now = new Date();
+			const tagged = tagImport(result.imported, attachments, now);
+			await importEntries(tagged.items, tagged.attachments);
+			setImportedTag(importTag(now));
 			setImported(result.imported.length);
 			setImportedFiles(attachments.length);
 			release();

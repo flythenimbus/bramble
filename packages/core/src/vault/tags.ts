@@ -58,6 +58,18 @@ export function normalizeTags(raw: unknown): string[] | undefined {
 	return out.length > 0 ? out : undefined;
 }
 
+/** The tag an import adds to what it creates, so a merge's new entries can be found (#209). */
+export function importTag(now: Date): string {
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return `imported-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** Each item with the import tag appended; an entry already at the tag cap keeps its own. */
+export function withImportTag<T extends { tags?: string[] }>(items: readonly T[], now: Date): T[] {
+	const tag = importTag(now);
+	return items.map((item) => ({ ...item, tags: normalizeTags([...(item.tags ?? []), tag]) }));
+}
+
 /** Whether two normalized tag lists hold the same tags in the same order. */
 export function tagsEqual(a: string[] | undefined, b: string[] | undefined): boolean {
 	if (a === b) return true;
