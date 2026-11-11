@@ -52,7 +52,7 @@ on:
         default: ""
         type: string
       email:
-        description: "Email the release notes to newsletter subscribers (skipped if one went out in the last 7 days)"
+        description: "Email subscribers; releases within an hour share one email, at most one a week"
         required: false
         default: false
         type: boolean

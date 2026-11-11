@@ -2,16 +2,33 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { blockingEmail, composeEmail, type Email, WEEK_MS } from "./newsletter.ts";
+import {
+	blockingEmail,
+	type Email,
+	fallbackMerge,
+	parseMerge,
+	plan,
+	points,
+	type Release,
+	render,
+	WEEK_MS,
+} from "./newsletter.ts";
 
 const NOW = Date.parse("2026-11-11T12:00:00Z");
 const at = (ms: number) => new Date(ms).toISOString();
 const email = (o: Partial<Email>): Email => ({
-	subject: "Bramble Desktop 0.17.0",
+	id: "em_1",
+	subject: "Something",
 	status: "sent",
 	publish_date: at(NOW - 3 * 24 * 3600 * 1000),
 	creation_date: at(NOW - 3 * 24 * 3600 * 1000),
 	...o,
+});
+const rel = (tag: string, name: string, body: string): Release => ({
+	tag,
+	name,
+	body,
+	url: `https://github.com/bramble-sh/bramble/releases/tag/${tag}`,
 });
 
 describe("blockingEmail", () => {
@@ -35,12 +52,6 @@ describe("blockingEmail", () => {
 		);
 	});
 
-	it("blocks on a scheduled email", () => {
-		assert.ok(
-			blockingEmail([email({ status: "scheduled", publish_date: at(NOW + 3600_000) })], NOW),
-		);
-	});
-
 	it("ignores drafts and failed sends", () => {
 		assert.equal(
 			blockingEmail([email({ status: "draft" }), email({ status: "errored" })], NOW),
@@ -53,27 +64,114 @@ describe("blockingEmail", () => {
 	});
 });
 
-describe("composeEmail", () => {
-	const url = "https://github.com/bramble-sh/bramble/releases/tag/1.38.0-chromium";
-
-	it("keeps the summary and drops the commit list", () => {
-		const { subject, body } = composeEmail({
-			name: "Chromium Extension 1.38.0",
-			body: "Passkeys.\n\n- Fixed a thing.\n\n## All changes (7)\n\n### Features\n\n- feat\n",
-			url,
-		});
-		assert.equal(subject, "Bramble Chromium Extension 1.38.0");
-		assert.match(body, /^Passkeys\.\n\n- Fixed a thing\.\n\n\[Full release notes\]/);
-		assert.doesNotMatch(body, /All changes/);
-		assert.ok(body.includes(url));
+describe("plan", () => {
+	const pending = email({
+		id: "em_batch",
+		status: "scheduled",
+		publish_date: at(NOW + 1000),
+		metadata: { bramble_release_tags: ["1.38.0-chromium"] },
 	});
 
-	it("falls back to the whole body when there is no summary", () => {
-		const { body } = composeEmail({
-			name: "Android 0.30.0",
-			body: "## All changes (1)\n\n- fix\n",
-			url,
+	it("starts a batch when nothing went out this week", () => {
+		assert.deepEqual(plan([], "0.17.0-desktop", NOW), { kind: "create", tags: ["0.17.0-desktop"] });
+	});
+
+	it("joins the batch still waiting to send", () => {
+		const p = plan([pending], "0.17.0-desktop", NOW);
+		assert.equal(p.kind, "update");
+		assert.deepEqual(p.kind === "update" && p.tags, ["1.38.0-chromium", "0.17.0-desktop"]);
+	});
+
+	it("does not add a tag twice on a re-run", () => {
+		const p = plan([pending], "1.38.0-chromium", NOW);
+		assert.deepEqual(p.kind === "update" && p.tags, ["1.38.0-chromium"]);
+	});
+
+	it("skips once the batch has sent", () => {
+		const sent = { ...pending, status: "sent", publish_date: at(NOW - 1000) };
+		assert.equal(plan([sent], "0.17.0-desktop", NOW).kind, "skip");
+	});
+
+	it("skips when someone else's email is scheduled", () => {
+		assert.equal(
+			plan([email({ status: "scheduled", publish_date: at(NOW + 1000) })], "x-desktop", NOW).kind,
+			"skip",
+		);
+	});
+});
+
+describe("points", () => {
+	it("takes the lead paragraph and bullets, not the commit list", () => {
+		assert.deepEqual(points("Lead.\n\n- One.\n- Two.\n\n## All changes (2)\n\n- feat\n"), [
+			"Lead.",
+			"One.",
+			"Two.",
+		]);
+	});
+});
+
+describe("fallbackMerge", () => {
+	it("groups by platform and drops exact repeats", () => {
+		const m = fallbackMerge([
+			rel("1.38.0-chromium", "Chromium Extension 1.38.0", "- Shared fix.\n- Chrome thing."),
+			rel("1.35.0-firefox", "Firefox Extension 1.35.0", "- Shared fix!\n- Firefox thing."),
+			rel("0.29.0-android", "Android 0.29.0", "- Phone thing."),
+		]);
+		assert.deepEqual(m, {
+			general: [],
+			sections: {
+				browser: ["Shared fix.", "Chrome thing.", "Firefox thing."],
+				mobile: ["Phone thing."],
+			},
 		});
-		assert.match(body, /All changes/);
+	});
+});
+
+describe("parseMerge", () => {
+	const given = ["desktop", "browser"] as const;
+
+	it("accepts the asked-for shape, even wrapped in prose", () => {
+		const m = parseMerge('Here:\n{"general": ["A."], "desktop": ["B."], "browser": []}', [
+			...given,
+		]);
+		assert.deepEqual(m, { general: ["A."], sections: { desktop: ["B."] } });
+	});
+
+	it("refuses a section it was not given", () => {
+		assert.equal(parseMerge('{"general": [], "mobile": ["X."]}', [...given]), null);
+	});
+
+	it("refuses a general section from a single platform", () => {
+		assert.equal(parseMerge('{"general": ["A."], "desktop": []}', ["desktop"]), null);
+	});
+
+	it("refuses junk and empty answers", () => {
+		assert.equal(parseMerge("no", [...given]), null);
+		assert.equal(parseMerge('{"general": [], "desktop": [1]}', [...given]), null);
+		assert.equal(parseMerge('{"general": []}', [...given]), null);
+	});
+});
+
+describe("render", () => {
+	it("puts general first, then platforms in a fixed order, then the links", () => {
+		const releases = [
+			rel("0.29.0-android", "Android 0.29.0", ""),
+			rel("0.17.0-desktop", "Desktop 0.17.0", ""),
+		];
+		const { subject, body } = render(
+			{ general: ["G."], sections: { mobile: ["M."], desktop: ["D."] } },
+			releases,
+			NOW,
+		);
+		assert.equal(subject, "What's new in Bramble, November 11");
+		assert.match(
+			body,
+			/^## General updates\n\n- G\.\n\n## Desktop \(macOS, Linux, Windows\)\n\n- D\.\n\n## Mobile\n\n- M\.\n\nFull release notes: \[Android 0\.29\.0\]/,
+		);
+	});
+
+	it("leaves out an empty general section", () => {
+		const { body } = render({ general: [], sections: { browser: ["B."] } }, [], NOW);
+		assert.match(body, /^## Browser extensions/);
 	});
 });
