@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { AlertTriangle, Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, CopyPlus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../context/PlatformContext";
 import type { ConflictChoice, ConflictVersion, Entry } from "../../../hooks/useVault";
@@ -18,6 +18,8 @@ interface EntryDetailProps {
 	onDelete: () => Promise<void>;
 	/** Archive or restore this entry. Reversible, so it runs without a confirmation step. */
 	onSetArchived: (archived: boolean) => Promise<void>;
+	/** Open a new entry's form seeded from this one. */
+	onDuplicate: () => void;
 	/** Show every entry carrying this tag. */
 	onSelectTag: (tag: string) => void;
 	/** Called after a successful field copy, to record the entry as recently used. */
@@ -34,6 +36,7 @@ export function EntryDetail({
 	onEdit,
 	onDelete,
 	onSetArchived,
+	onDuplicate,
 	onSelectTag,
 	onUse,
 	conflict,
@@ -190,6 +193,16 @@ export function EntryDetail({
 
 				{/* Kept away from Edit so a slip on the header can't archive or delete. */}
 				<div className="px-4 py-2.5 border-t border-border/50 flex items-center justify-end gap-2">
+					<Button
+						variant="secondary"
+						size="sm"
+						onClick={onDuplicate}
+						aria-label={t`Duplicate entry`}
+						className="gap-1.5 mr-auto"
+					>
+						<CopyPlus className="w-3.5 h-3.5" />
+						<Trans>Duplicate</Trans>
+					</Button>
 					<Button
 						variant="secondary"
 						size="sm"

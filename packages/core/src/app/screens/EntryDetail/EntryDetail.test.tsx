@@ -36,6 +36,7 @@ function show(entry: Entry = CARD) {
 	const onEdit = vi.fn();
 	const onDelete = vi.fn(async () => {});
 	const onSetArchived = vi.fn(async (_archived: boolean) => {});
+	const onDuplicate = vi.fn();
 	render(
 		<I18nProvider i18n={i18n}>
 			<PlatformProvider platform={platform}>
@@ -44,12 +45,13 @@ function show(entry: Entry = CARD) {
 					onEdit={onEdit}
 					onDelete={onDelete}
 					onSetArchived={onSetArchived}
+					onDuplicate={onDuplicate}
 					onSelectTag={() => {}}
 				/>
 			</PlatformProvider>
 		</I18nProvider>,
 	);
-	return { onEdit, onDelete, onSetArchived };
+	return { onEdit, onDelete, onSetArchived, onDuplicate };
 }
 
 const precedes = (a: Element, b: Element) =>
@@ -82,6 +84,15 @@ describe("EntryDetail actions", () => {
 		const { onEdit } = show();
 		fireEvent.click(screen.getByRole("button", { name: "Edit entry" }));
 		expect(onEdit).toHaveBeenCalledOnce();
+	});
+
+	it("duplicates (#212)", () => {
+		const { onDuplicate } = show();
+		const duplicate = screen.getByRole("button", { name: "Duplicate entry" });
+		expect(duplicate.textContent).toBe("Duplicate");
+		expect(precedes(duplicate, screen.getByRole("button", { name: "Archive entry" }))).toBe(true);
+		fireEvent.click(duplicate);
+		expect(onDuplicate).toHaveBeenCalledOnce();
 	});
 
 	it("archives a live entry", async () => {
@@ -151,6 +162,7 @@ describe("EntryDetail conflict", () => {
 						onEdit={() => {}}
 						onDelete={async () => {}}
 						onSetArchived={async () => {}}
+						onDuplicate={() => {}}
 						onSelectTag={() => {}}
 						onUse={onUse}
 						conflict={{ versions: 1, deleted: false }}

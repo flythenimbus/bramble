@@ -30,6 +30,8 @@ interface EntryFormProps {
 	type: EntryType;
 	defaultUrl?: string;
 	initialEntry?: EntryData;
+	/** Creating, even though `initialEntry` seeds the form (a duplicate, a captured login). */
+	isNew?: boolean;
 	initialBreach?: BreachStatus;
 	// Restored pop-out snapshot; wins over initialEntry / defaultUrl when present.
 	draftValues?: EntryFormDraft;
@@ -46,6 +48,7 @@ export function EntryForm({
 	type,
 	defaultUrl = "",
 	initialEntry,
+	isNew = false,
 	initialBreach,
 	draftValues,
 	registerDraft,
@@ -110,7 +113,8 @@ export function EntryForm({
 	const Fields = mode.Fields;
 	// Label verbatim so acronyms keep their case (e.g. "SSH key").
 	const modeLabel = mode.label;
-	const heading = initialEntry ? <Trans>Edit {modeLabel}</Trans> : <Trans>New {modeLabel}</Trans>;
+	const heading =
+		initialEntry && !isNew ? <Trans>Edit {modeLabel}</Trans> : <Trans>New {modeLabel}</Trans>;
 	const label = submitLabel ?? t`Save ${modeLabel}`;
 
 	return (

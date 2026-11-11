@@ -69,6 +69,7 @@ export function CreateEntryRoute() {
 				type={entryType}
 				defaultUrl={defaultUrl}
 				initialEntry={pendingInitial}
+				isNew
 				draftValues={draft}
 				registerDraft={registerDraftGetter}
 				// Cancel reopens the list where it was; a save starts it fresh, to find the new item.

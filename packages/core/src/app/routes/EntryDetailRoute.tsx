@@ -1,15 +1,19 @@
+import { useLingui } from "@lingui/react/macro";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { usePrefs } from "../../hooks/usePrefs";
 import { useVault } from "../../hooks/useVault";
 import { checkPasswordBreach } from "../../util/pwned";
+import { duplicateEntry } from "../../vault/duplicate";
 import { useRouteBack } from "../hooks/useRouteBack";
+import { setPendingCreateEntry } from "../pending-create-entry";
 import { EntryDetail } from "../screens/EntryDetail/EntryDetail";
 
 const BREACH_STALE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /** Route for a single entry's detail view; lazily refreshes login breach status. */
 export function EntryDetailRoute() {
+	const { t } = useLingui();
 	const navigate = useNavigate();
 	const back = useRouteBack();
 	const { entryId } = useParams({ from: "/_app/vault/$entryId" });
@@ -62,6 +66,10 @@ export function EntryDetailRoute() {
 					else navigate({ to: "/vault" });
 				}}
 				onSetArchived={(archived) => setEntriesArchived([entryId], archived)}
+				onDuplicate={() => {
+					setPendingCreateEntry(duplicateEntry(entry, t`${entry.name} (copy)`));
+					navigate({ to: "/vault/new/$type", params: { type: entry.type } });
+				}}
 				// The tag filter lives in `q`, so picking a tag is just a search: one source of
 				// truth, and the resulting URL is the same one typing `#tag` would produce.
 				onSelectTag={(tag) => navigate({ to: "/vault", search: { q: `#${tag}` } })}
