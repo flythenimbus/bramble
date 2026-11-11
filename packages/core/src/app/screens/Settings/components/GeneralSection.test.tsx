@@ -53,6 +53,23 @@ describe("GeneralSection auto-lock timeout", () => {
 		expect(timeoutOptions()).toContain("5 minutes");
 	});
 
+	// #188: "Never" read as surviving a restart, which would mean writing the key to disk.
+	it.each([
+		["chromium", "Until browser closes"],
+		["firefox", "Until browser closes"],
+		["desktop", "Until Bramble quits"],
+		["ios", "Until app closes"],
+		["android", "Until app closes"],
+	] as [Target, string][])(
+		"names the no-timeout option for what ends it on %s",
+		(target, label) => {
+			mount(target);
+			expect(screen.getByRole("option", { name: label })).toHaveProperty("value", "0");
+			expect(screen.queryByRole("option", { name: "Never" })).toBeNull();
+			cleanup();
+		},
+	);
+
 	it("offers Immediate in the browser and on phones", () => {
 		for (const target of ["chromium", "ios"] as Target[]) {
 			mount(target);

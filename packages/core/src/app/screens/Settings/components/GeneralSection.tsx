@@ -134,9 +134,15 @@ export function GeneralSection() {
 						<option value="15">{t`15 minutes`}</option>
 						<option value="30">{t`30 minutes`}</option>
 						<option value="60">{t`1 hour`}</option>
-						{/* Never auto-lock: hold the vault open until a manual lock or restart.
-						    OS screen-lock is governed by the separate toggle below. */}
-						<option value="0">{t`Never`}</option>
+						{/* No timeout: hold the vault open until a manual lock or the session ends
+						    (#188). OS screen-lock is governed by the separate toggle below. */}
+						<option value="0">
+							{target === "chromium" || target === "firefox"
+								? t`Until browser closes`
+								: target === "desktop"
+									? t`Until Bramble quits`
+									: t`Until app closes`}
+						</option>
 					</SelectField>
 				</div>
 			</Row>
