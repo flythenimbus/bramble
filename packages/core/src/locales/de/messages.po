@@ -3178,7 +3178,7 @@ msgstr "Zurücksetzen"
 
 #: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
 msgid "Resetting invalidates your old code."
-msgstr "Das Zurücksetzen ungültigt Ihren alten Code."
+msgstr "Durch das Zurücksetzen wird Ihr alter Code ungültig."
 
 #: packages/core/src/app/bulk-actions/archive.tsx
 #: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
