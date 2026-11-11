@@ -3,13 +3,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	batch,
 	blockingEmail,
 	type Email,
 	fallbackMerge,
+	markedTag,
 	parseMerge,
-	plan,
 	points,
 	type Release,
+	type Run,
 	render,
 	WEEK_MS,
 } from "./newsletter.ts";
@@ -17,7 +19,6 @@ import {
 const NOW = Date.parse("2026-11-11T12:00:00Z");
 const at = (ms: number) => new Date(ms).toISOString();
 const email = (o: Partial<Email>): Email => ({
-	id: "em_1",
 	subject: "Something",
 	status: "sent",
 	publish_date: at(NOW - 3 * 24 * 3600 * 1000),
@@ -64,39 +65,48 @@ describe("blockingEmail", () => {
 	});
 });
 
-describe("plan", () => {
-	const pending = email({
-		id: "em_batch",
-		status: "scheduled",
-		publish_date: at(NOW + 1000),
-		metadata: { bramble_release_tags: ["1.38.0-chromium"] },
+describe("markedTag", () => {
+	it("reads the tag of a run that asked for an email", () => {
+		assert.equal(markedTag("0.17.0-desktop +email"), "0.17.0-desktop");
 	});
 
-	it("starts a batch when nothing went out this week", () => {
-		assert.deepEqual(plan([], "0.17.0-desktop", NOW), { kind: "create", tags: ["0.17.0-desktop"] });
+	it("ignores runs that did not, dry runs and other workflows", () => {
+		assert.equal(markedTag("0.17.0-desktop"), null);
+		assert.equal(markedTag("Dry run: 0.17.0-desktop"), null);
+		assert.equal(markedTag("1.24.0-ios +email"), null);
+	});
+});
+
+describe("batch", () => {
+	const run = (display_title: string, status = "completed", ago = 3600_000): Run => ({
+		display_title,
+		status,
+		created_at: at(NOW - ago),
 	});
 
-	it("joins the batch still waiting to send", () => {
-		const p = plan([pending], "0.17.0-desktop", NOW);
-		assert.equal(p.kind, "update");
-		assert.deepEqual(p.kind === "update" && p.tags, ["1.38.0-chromium", "0.17.0-desktop"]);
-	});
-
-	it("does not add a tag twice on a re-run", () => {
-		const p = plan([pending], "1.38.0-chromium", NOW);
-		assert.deepEqual(p.kind === "update" && p.tags, ["1.38.0-chromium"]);
-	});
-
-	it("skips once the batch has sent", () => {
-		const sent = { ...pending, status: "sent", publish_date: at(NOW - 1000) };
-		assert.equal(plan([sent], "0.17.0-desktop", NOW).kind, "skip");
-	});
-
-	it("skips when someone else's email is scheduled", () => {
-		assert.equal(
-			plan([email({ status: "scheduled", publish_date: at(NOW + 1000) })], "x-desktop", NOW).kind,
-			"skip",
+	it("waits while another run that asked for an email is going", () => {
+		const b = batch(
+			[
+				run("1.38.0-chromium +email"),
+				run("0.17.0-desktop +email", "waiting"),
+				run("0.30.0-android", "in_progress"),
+			],
+			NOW,
 		);
+		assert.deepEqual(b, { waiting: ["0.17.0-desktop"], tags: ["1.38.0-chromium"] });
+	});
+
+	it("takes this week's finished runs once each, and nothing older", () => {
+		const b = batch(
+			[
+				run("1.38.0-chromium +email"),
+				run("1.38.0-chromium +email"),
+				run("1.35.0-firefox +email"),
+				run("0.28.0-android +email", "completed", WEEK_MS + 1000),
+			],
+			NOW,
+		);
+		assert.deepEqual(b, { waiting: [], tags: ["1.38.0-chromium", "1.35.0-firefox"] });
 	});
 });
 

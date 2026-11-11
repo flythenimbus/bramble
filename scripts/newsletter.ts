@@ -1,29 +1,39 @@
-// node scripts/newsletter.ts <tag>
+// node scripts/newsletter.ts draft <email.json>
+// node scripts/newsletter.ts send <email.json>
 //
-// Emails release notes to the Buttondown newsletter: one email per batch of releases, at most one
-// every seven days. Run by .github/workflows/newsletter.yml after each release that asked for it;
-// runs are serialized, so each sees what the last one did.
+// One Buttondown email per batch of releases, at most one every seven days, read by a person before
+// it sends. .github/workflows/newsletter.yml runs `draft` whenever a release run finishes; only runs
+// dispatched with `--email` take part, and they say so in their name ("<tag> +email").
 //
-// Releases finish at different times, so the email is not sent straight away. The first release
-// schedules it SEND_DELAY_MS out; each later one rebuilds it from every release in the batch and
-// pushes the send time back again. The batch's tags live in the email's metadata. Any other email
-// in the last seven days, a hand-written one included, means this release is skipped with a notice.
+// - While another such run is still going, `draft` does nothing: the last one to finish drafts for
+//   all of them, so releases approved hours apart still share one email.
+// - Any email in the last seven days, a hand-written one included, means no email.
+// - Otherwise every such release published in the last seven days goes in, merged by the
+//   release-notes model (DEEPSEEK_API_KEY) into a section for what every platform got and one per
+//   platform group. Without the model, or when its answer does not check out, each group lists its
+//   own notes and there is no general section.
 //
-// The body has one section for changes every platform got and one per platform group. The merge
-// is drafted by the same model as the release notes (DEEPSEEK_API_KEY); without one, or when its
-// answer does not check out, each group lists its own notes and there is no general section.
+// The draft goes to the run summary. `send` runs only after an approval in the `newsletter`
+// environment, checks the week again, and sends.
 //
-// Env: BUTTONDOWN_API_KEY, GH_TOKEN, GITHUB_REPOSITORY, DEEPSEEK_API_KEY (optional).
+// Env: GH_TOKEN, GITHUB_REPOSITORY, BUTTONDOWN_API_KEY (read-only for draft, sending for send),
+// DEEPSEEK_API_KEY (draft, optional), GITHUB_STEP_SUMMARY, GITHUB_OUTPUT.
 
 import { execFileSync } from "node:child_process";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { chat } from "./i18n/ollama.mjs";
 
 const API = "https://api.buttondown.com/v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const WEEK_MS = 7 * DAY_MS;
-export const SEND_DELAY_MS = 60 * 60 * 1000;
-const TAGS_KEY = "bramble_release_tags";
+
+export const WORKFLOWS = [
+	"desktop-release.yml",
+	"chrome-release.yml",
+	"firefox-release.yml",
+	"android-release.yml",
+];
 
 // Every status where subscribers got, or are about to get, the email. Not draft, errored, deleted.
 export const SENDING = [
@@ -45,12 +55,16 @@ export type Section = keyof typeof SECTIONS;
 const ORDER: Section[] = ["desktop", "browser", "mobile"];
 
 export interface Email {
-	id: string;
 	subject: string;
 	status: string;
 	publish_date: string | null;
 	creation_date: string;
-	metadata?: Record<string, unknown>;
+}
+
+export interface Run {
+	display_title: string;
+	status: string;
+	created_at: string;
 }
 
 export interface Release {
@@ -72,10 +86,23 @@ export function sectionOf(tag: string): Section {
 	throw new Error(`no newsletter section for ${tag}`);
 }
 
-const batchTags = (e: Email): string[] | undefined => {
-	const tags = e.metadata?.[TAGS_KEY];
-	return Array.isArray(tags) ? (tags as string[]) : undefined;
-};
+/** The tag of a release run that asked for an email, from its name; null for any other run. */
+export function markedTag(title: string): string | null {
+	return title.match(/^(\S+-(?:desktop|chromium|firefox|android)) \+email$/)?.[1] ?? null;
+}
+
+/** Of the runs that asked for an email: those still going, and the tags of those done this week. */
+export function batch(runs: Run[], now: number): { waiting: string[]; tags: string[] } {
+	const waiting: string[] = [];
+	const tags: string[] = [];
+	for (const r of runs) {
+		const tag = markedTag(r.display_title);
+		if (!tag) continue;
+		if (r.status !== "completed") waiting.push(tag);
+		else if (Date.parse(r.created_at) > now - WEEK_MS && !tags.includes(tag)) tags.push(tag);
+	}
+	return { waiting, tags };
+}
 
 /** The email that blocks a send now, if any: one sent in the last week, or one still going out. */
 export function blockingEmail(emails: Email[], now: number): Email | undefined {
@@ -84,22 +111,6 @@ export function blockingEmail(emails: Email[], now: number): Email | undefined {
 		const when = Date.parse(e.publish_date ?? e.creation_date);
 		return Number.isNaN(when) || when > now - WEEK_MS;
 	});
-}
-
-export type Plan =
-	| { kind: "update"; email: Email; tags: string[] }
-	| { kind: "create"; tags: string[] }
-	| { kind: "skip"; blocker: Email };
-
-/** Join the batch still waiting to send, else start one, unless another email went out this week. */
-export function plan(emails: Email[], tag: string, now: number): Plan {
-	const pending = emails.find((e) => e.status === "scheduled" && batchTags(e));
-	if (pending) {
-		const tags = batchTags(pending) as string[];
-		return { kind: "update", email: pending, tags: tags.includes(tag) ? tags : [...tags, tag] };
-	}
-	const blocker = blockingEmail(emails, now);
-	return blocker ? { kind: "skip", blocker } : { kind: "create", tags: [tag] };
 }
 
 /** A release's points: the lead paragraph and each bullet above "All changes". */
@@ -256,58 +267,113 @@ async function recentEmails(now: number): Promise<Email[]> {
 	return emails;
 }
 
-function release(tag: string): Release & { isDraft: boolean; isPrerelease: boolean } {
-	const repo = process.env.GITHUB_REPOSITORY ?? "";
-	const fields = "name,body,url,isDraft,isPrerelease";
-	const out = execFileSync("gh", ["release", "view", tag, "--repo", repo, "--json", fields], {
-		encoding: "utf8",
-	});
-	return { tag, ...JSON.parse(out) };
+const repo = () => process.env.GITHUB_REPOSITORY ?? "";
+const gh = (args: string[]) => execFileSync("gh", args, { encoding: "utf8" });
+
+function releaseRuns(now: number): Run[] {
+	const since = new Date(now - WEEK_MS - DAY_MS).toISOString().slice(0, 10);
+	return WORKFLOWS.flatMap(
+		(w) =>
+			(
+				JSON.parse(
+					gh([
+						"api",
+						`repos/${repo()}/actions/workflows/${w}/runs?event=workflow_dispatch&created=>=${since}&per_page=100`,
+					]),
+				) as { workflow_runs: Run[] }
+			).workflow_runs,
+	);
 }
 
-async function main(tag: string): Promise<void> {
-	const own = release(tag);
-	if (own.isDraft || own.isPrerelease) {
-		console.log(`::notice::${tag} is not a published release; no email`);
+/** The release, if it is out: a run that asked for an email may have failed before publishing. */
+function published(tag: string): Release | null {
+	try {
+		const r = JSON.parse(
+			gh([
+				"release",
+				"view",
+				tag,
+				"--repo",
+				repo(),
+				"--json",
+				"name,body,url,isDraft,isPrerelease",
+			]),
+		) as Release & { isDraft: boolean; isPrerelease: boolean };
+		return r.isDraft || r.isPrerelease ? null : { tag, name: r.name, body: r.body, url: r.url };
+	} catch {
+		return null;
+	}
+}
+
+const notice = (msg: string) => console.log(`::notice::${msg}`);
+
+async function draft(out: string): Promise<void> {
+	const now = Date.now();
+	const { waiting, tags } = batch(releaseRuns(now), now);
+	if (waiting.length) {
+		notice(`No email yet: ${waiting.join(", ")} still running; the last to finish drafts it`);
 		return;
 	}
-
-	const now = Date.now();
-	const next = plan(await recentEmails(now), tag, now);
-	if (next.kind === "skip") {
-		const b = next.blocker;
-		console.log(
-			`::notice::No email for ${tag}: "${b.subject}" (${b.status}, ` +
-				`${b.publish_date ?? b.creation_date}) went out in the last 7 days`,
+	const blocker = blockingEmail(await recentEmails(now), now);
+	if (blocker) {
+		notice(
+			`No email: "${blocker.subject}" (${blocker.status}, ` +
+				`${blocker.publish_date ?? blocker.creation_date}) went out in the last 7 days`,
 		);
 		return;
 	}
+	const releases = tags
+		.map(published)
+		.filter((r): r is Release => r !== null)
+		.sort((a, b) => ORDER.indexOf(sectionOf(a.tag)) - ORDER.indexOf(sectionOf(b.tag)));
+	if (!releases.length) {
+		notice("No email: no release that asked for one was published this week");
+		return;
+	}
 
-	const releases = next.tags.map((t) => (t === tag ? own : release(t)));
 	const email = render(await merge(releases), releases, now);
-	const payload = JSON.stringify({
-		...email,
-		status: "scheduled",
-		publish_date: new Date(now + SEND_DELAY_MS).toISOString(),
-		metadata: { [TAGS_KEY]: next.tags },
+	writeFileSync(out, JSON.stringify({ ...email, tags: releases.map((r) => r.tag) }));
+	const summary = process.env.GITHUB_STEP_SUMMARY;
+	if (summary)
+		appendFileSync(
+			summary,
+			`# ${email.subject}\n\nApprove the send job to email this to every subscriber.\n\n---\n\n${email.body}`,
+		);
+	const output = process.env.GITHUB_OUTPUT;
+	if (output) appendFileSync(output, "ready=true\n");
+	console.log(`${email.subject}\n\n${email.body}`);
+}
+
+async function send(file: string): Promise<void> {
+	const email = JSON.parse(readFileSync(file, "utf8")) as {
+		subject: string;
+		body: string;
+		tags: string[];
+	};
+	const now = Date.now();
+	// Again: the approval can come days after the draft, and an email may have gone out since.
+	const blocker = blockingEmail(await recentEmails(now), now);
+	if (blocker)
+		throw new Error(`"${blocker.subject}" went out after this was drafted; not sending a second`);
+	await buttondown("/emails", {
+		method: "POST",
+		body: JSON.stringify({
+			subject: email.subject,
+			body: email.body,
+			status: "about_to_send",
+			metadata: { bramble_release_tags: email.tags },
+		}),
 	});
-	if (next.kind === "update")
-		await buttondown(`/emails/${next.email.id}`, { method: "PATCH", body: payload });
-	else await buttondown("/emails", { method: "POST", body: payload });
-	console.log(
-		`::notice::"${email.subject}" (${next.tags.join(", ")}) sends at ` +
-			`${new Date(now + SEND_DELAY_MS).toISOString()} unless another release joins it first`,
-	);
-	console.log(email.body);
+	notice(`Emailed subscribers "${email.subject}"`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-	const tag = process.argv[2];
-	if (!tag) {
-		console.error("usage: node scripts/newsletter.ts <tag>");
+	const [command, file] = process.argv.slice(2);
+	if (!file || (command !== "draft" && command !== "send")) {
+		console.error("usage: node scripts/newsletter.ts draft|send <email.json>");
 		process.exit(2);
 	}
-	main(tag).catch((e: Error) => {
+	(command === "draft" ? draft(file) : send(file)).catch((e: Error) => {
 		console.error(`::error::${e.message}`);
 		process.exit(1);
 	});

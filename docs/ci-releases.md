@@ -178,16 +178,19 @@ still does not exist: four approvals and four sets of notes, to save one command
 ## Emailing subscribers
 
 `--email` on a GitHub-route release (`pnpm release desktop minor --email`) sets the workflow's
-`email` input, off by default. Once the release is published, `newsletter.yml` schedules a
-Buttondown email an hour out. Each later release with `--email` joins that email before it sends,
-rebuilding it from every release in it and pushing the send back another hour, so releasing
-everywhere at once makes one email: "General updates" for what every platform got, then Desktop,
-Browser extensions and Mobile. DeepSeek merges the notes; without it each platform lists its own.
-At most one email goes out every seven days: any other email in that window, hand-written ones
-included, means a release is skipped with a notice. iOS never joins, since it publishes after App
-Store review. Needs `BUTTONDOWN_API_KEY` and `DEEPSEEK_API_KEY` in the `newsletter` environment.
-The scheduled email can be read or edited in Buttondown until it sends. To add a release that is
-already out: `gh workflow run newsletter.yml -f tag=<tag>`.
+`email` input, off by default, and the run is named `<tag> +email`. `newsletter.yml` runs whenever
+a release run finishes. While any other `+email` run is still going it does nothing, so the last
+one to finish drafts a single email for every `+email` release published that week: "General
+updates" for what every platform got, then Desktop, Browser extensions and Mobile, merged by
+DeepSeek (without it each platform lists its own notes). The draft is in that run's summary, and
+the send job waits for an approval in the `newsletter` environment. At most one email goes out
+every seven days, checked when drafting and again when sending; hand-written emails count. iOS never
+joins, since it publishes after App Store review. To draft again after rejecting one:
+`gh workflow run newsletter.yml`.
+
+Setup: environment `newsletter-draft` (no reviewer) holds `DEEPSEEK_API_KEY` and a read-only
+`BUTTONDOWN_API_KEY`; environment `newsletter` (required reviewer) holds the sending
+`BUTTONDOWN_API_KEY`, so it is out of reach until the approval.
 
 ## What this never buys
 

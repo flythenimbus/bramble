@@ -8,8 +8,8 @@
 //        These three release from GitHub (docs/ci-releases.md): dispatch, then watch the run.
 //        --dry-run   everything short of publishing: nothing committed, tagged or uploaded
 //        --no-watch  return once the run exists
-//        --email     also email subscribers once published; releases within an hour share one
-//                    email, at most one a week (scripts/newsletter.ts); desktop too
+//        --email     also email subscribers: the last release with it to finish drafts one email
+//                    for all of them, sent on approval, at most one a week (scripts/newsletter.ts)
 //        --local     the fallback: build, sign and publish on this machine, with the YubiKey
 //        --resume    (android, local) sign the apk the last local run already built
 //   pnpm run release ios      <version|patch|minor|major> [--ipa]

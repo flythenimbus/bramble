@@ -1,4 +1,6 @@
 name: Android release
+# The tag, and " +email" when it asked for one: newsletter.yml reads that to batch the email.
+run-name: "${{ inputs.dry_run && 'Dry run: ' || '' }}${{ inputs.version }}-android${{ inputs.email && !inputs.dry_run && ' +email' || '' }}"
 
 # Builds, signs and publishes the Android APK from GitHub, so a release needs neither a Mac nor a
 # YubiKey. docs/ci-releases.md has the whole trade; this file is the Android half of it.
@@ -44,7 +46,7 @@ on:
         default: ""
         type: string
       email:
-        description: "Email subscribers; releases within an hour share one email, at most one a week"
+        description: "Email subscribers once the last release of this batch is out (approved separately, at most one a week)"
         required: false
         default: false
         type: boolean
@@ -183,13 +185,3 @@ jobs:
           flags=(--runner-publish)
           if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
           node scripts/release.ts android "$VERSION" "${flags[@]}"
-
-  newsletter:
-    name: Newsletter
-    needs: publish
-    if: ${{ inputs.email && !inputs.dry_run && needs.publish.result == 'success' }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/newsletter.yml
-    with:
-      tag: ${{ inputs.version }}-android

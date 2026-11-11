@@ -1,40 +1,42 @@
 name: Newsletter
 
-# Adds a published release to the next Buttondown email: releases an hour or less apart share one
-# email, sectioned by platform, and at most one goes out every seven days (scripts/newsletter.ts).
-# Called by the release workflows when dispatched with `email: true`
-# (`pnpm release <target> <version> --email`), and runnable by hand for a release already out.
+# One Buttondown email per batch of releases, at most one a week, sent only after an approval
+# (scripts/newsletter.ts has the rules). Runs whenever a release run finishes; only runs dispatched
+# with `email: true` (`pnpm release <target> <version> --email`) take part, which they say in their
+# name. The last of them to finish drafts the email for all of them into this run's summary; the
+# send job then waits for an approval in the `newsletter` environment. Dispatch by hand to draft
+# again, after a rejected draft or a failed send.
 #
-# Needs BUTTONDOWN_API_KEY (email write + sending access) in the `newsletter` environment, and
-# DEEPSEEK_API_KEY there to merge the notes across platforms.
+# Secrets, each in its own environment so the sending key is only reachable after the approval:
+# - newsletter-draft (no reviewer): BUTTONDOWN_API_KEY with read-only email access, DEEPSEEK_API_KEY
+# - newsletter (required reviewer): BUTTONDOWN_API_KEY with email write and sending access
 
 on:
-  workflow_call:
-    inputs:
-      tag:
-        required: true
-        type: string
+  workflow_run:
+    workflows: [Desktop release, Chrome release, Firefox release, Android release]
+    types: [completed]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag to email, e.g. 1.38.0-chromium"
-        required: true
-        type: string
 
 permissions: {}
 
+# One at a time, so two releases finishing together cannot both draft. A run waiting for the
+# approval holds the line; whatever queues behind it finds the email sent and stops.
+concurrency:
+  group: newsletter
+  cancel-in-progress: false
+
 jobs:
-  send:
-    name: Email subscribers
+  draft:
+    name: Draft
+    if: ${{ github.event_name == 'workflow_dispatch' || endsWith(github.event.workflow_run.display_title, ' +email') }}
     runs-on: ubuntu-latest
-    environment: newsletter
+    environment: newsletter-draft
     permissions:
       contents: read
+      actions: read
     timeout-minutes: 10
-    # One at a time across every release, so two finishing together cannot both pass the weekly check.
-    concurrency:
-      group: newsletter
-      cancel-in-progress: false
+    outputs:
+      ready: ${{ steps.draft.outputs.ready }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -43,10 +45,43 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Schedule the email, or join the one already scheduled
+      - name: Draft the email, if this is the last release of the batch
+        id: draft
         env:
           BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
-        run: node scripts/newsletter.ts "$TAG"
+        run: node scripts/newsletter.ts draft email.json
+      - name: Hand the draft to the send job
+        if: ${{ steps.draft.outputs.ready == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: newsletter
+          path: email.json
+          if-no-files-found: error
+          retention-days: 7
+
+  send:
+    name: Send (approve after reading the draft's summary)
+    needs: draft
+    if: ${{ needs.draft.outputs.ready == 'true' }}
+    runs-on: ubuntu-latest
+    environment: newsletter
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: newsletter
+      - name: Send, unless an email went out since the draft
+        env:
+          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+        run: node scripts/newsletter.ts send email.json

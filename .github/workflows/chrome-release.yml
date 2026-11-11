@@ -1,4 +1,6 @@
 name: Chrome release
+# The tag, and " +email" when it asked for one: newsletter.yml reads that to batch the email.
+run-name: "${{ inputs.dry_run && 'Dry run: ' || '' }}${{ inputs.version }}-chromium${{ inputs.email && !inputs.dry_run && ' +email' || '' }}"
 
 # Builds the Chromium extension, packs and signs the .crx, submits it to the Chrome Web Store, and
 # publishes the GitHub release, so a release needs neither a Mac nor a YubiKey. docs/ci-releases.md
@@ -41,7 +43,7 @@ on:
         default: ""
         type: string
       email:
-        description: "Email subscribers; releases within an hour share one email, at most one a week"
+        description: "Email subscribers once the last release of this batch is out (approved separately, at most one a week)"
         required: false
         default: false
         type: boolean
@@ -166,13 +168,3 @@ jobs:
           flags=(--runner-publish)
           if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); fi
           node scripts/release.ts chromium "$VERSION" "${flags[@]}"
-
-  newsletter:
-    name: Newsletter
-    needs: publish
-    if: ${{ inputs.email && !inputs.dry_run && needs.publish.result == 'success' }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/newsletter.yml
-    with:
-      tag: ${{ inputs.version }}-chromium
