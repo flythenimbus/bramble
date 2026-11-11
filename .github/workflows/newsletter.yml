@@ -1,7 +1,7 @@
 name: Newsletter
 
-# One Buttondown email per batch of releases, at most one a week, sent only after an approval
-# (scripts/newsletter.ts has the rules). Runs whenever a release run finishes; only runs dispatched
+# One Buttondown email per batch of releases, at most one a week, sent only after an approval, and
+# the same text as a post on the website's blog (scripts/newsletter.ts has the rules). Runs whenever a release run finishes; only runs dispatched
 # with `email: true` (`pnpm release <target> <version> --email`) take part, which their "Email
 # subscribers" job shows by running rather than being skipped. The last of them to finish drafts the email for all of them into this run's summary; the
 # send job then waits for an approval in the `newsletter` environment. Dispatch by hand to draft
@@ -10,6 +10,8 @@ name: Newsletter
 # Secrets, each in its own environment so the sending key is only reachable after the approval:
 # - newsletter-draft (no reviewer): BUTTONDOWN_API_KEY with read-only email access, DEEPSEEK_API_KEY
 # - newsletter (required reviewer): BUTTONDOWN_API_KEY with email write and sending access
+# The blog post is committed by the release app (RELEASE_APP_ID, RELEASE_APP_PRIVATE_KEY), whose
+# push to main deploys the website.
 
 on:
   workflow_run:
@@ -61,7 +63,7 @@ jobs:
           retention-days: 7
 
   send:
-    name: Send (approve after reading the draft's summary)
+    name: Send and post (approve after reading the draft's summary)
     needs: draft
     if: ${{ needs.draft.outputs.ready == 'true' }}
     runs-on: ubuntu-latest
@@ -80,7 +82,17 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: newsletter
-      - name: Send, unless an email went out since the draft
+      # The ruleset on main refuses GITHUB_TOKEN; this app is on its bypass list and holds
+      # contents:write and nothing else. docs/ci-releases.md.
+      - name: Token that may commit to main
+        id: commit-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - name: Post to the blog, then send, unless an email went out since the draft
         env:
           BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          BRAMBLE_COMMIT_TOKEN: ${{ steps.commit-token.outputs.token }}
+          GH_TOKEN: ${{ steps.commit-token.outputs.token }}
         run: node scripts/newsletter.ts send email.json

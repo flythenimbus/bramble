@@ -16,14 +16,17 @@
 //   own notes and there is no general section.
 //
 // The draft goes to the run summary. `send` runs only after an approval in the `newsletter`
-// environment, checks the week again, and sends.
+// environment, checks the week again, commits the same text as a blog post on the website (through
+// the release app, which may commit to main; the push deploys the site), then sends the email.
 //
 // Env: GH_TOKEN, GITHUB_REPOSITORY, BUTTONDOWN_API_KEY (read-only for draft, sending for send),
-// DEEPSEEK_API_KEY (draft, optional), GITHUB_STEP_SUMMARY, GITHUB_OUTPUT.
+// DEEPSEEK_API_KEY (draft, optional), BRAMBLE_COMMIT_TOKEN (send), GITHUB_STEP_SUMMARY,
+// GITHUB_OUTPUT.
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { commitFiles } from "./github-commit.ts";
 import { chat } from "./i18n/ollama.mjs";
 
 const API = "https://api.buttondown.com/v1";
@@ -282,6 +285,31 @@ export function render(
 	};
 }
 
+export interface Post {
+	path: string;
+	content: string;
+}
+
+/** The email as a blog post: same title and text, dated the day it was drafted. */
+export function blogPost(
+	email: { subject: string; body: string },
+	releases: Release[],
+	now: number,
+): Post {
+	const day = new Date(now).toISOString().slice(0, 10);
+	const names = releases.map((r) => r.name);
+	const list =
+		names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
+	// JSON strings are valid YAML double-quoted scalars, so quoting is JSON.stringify.
+	return {
+		path: `website/src/content/blog/whats-new-${day}.md`,
+		content:
+			`---\ntitle: ${JSON.stringify(email.subject)}\n` +
+			`description: ${JSON.stringify(`What changed in ${list}.`)}\n` +
+			`pubDate: ${day}\n---\n\n${email.body}`,
+	};
+}
+
 async function buttondown(path: string, init: RequestInit = {}): Promise<unknown> {
 	const key = process.env.BUTTONDOWN_API_KEY;
 	if (!key) throw new Error("BUTTONDOWN_API_KEY is not set");
@@ -365,6 +393,39 @@ function publishedReleases(): Published[] {
 
 const notice = (msg: string) => console.log(`::notice::${msg}`);
 
+/** Commit the post to main, unless it is already there. */
+function publishPost(post: Post, title: string): void {
+	try {
+		gh(["api", `repos/${repo()}/contents/${post.path}?ref=main`, "--jq", ".sha"]);
+		notice(`${post.path} is already on main; not committing it again`);
+		return;
+	} catch {
+		// Not there yet.
+	}
+	writeFileSync(post.path, post.content);
+	for (let attempt = 1; ; attempt++) {
+		const head = gh(["api", `repos/${repo()}/git/ref/heads/main`, "--jq", ".object.sha"]).trim();
+		try {
+			commitFiles({
+				repo: repo(),
+				branch: "main",
+				expectedHeadOid: head,
+				headline: `docs(blog): ${title}`,
+				files: [post.path],
+			});
+			notice(`Committed ${post.path}; the website deploys from that push`);
+			return;
+		} catch (e) {
+			// Main moved between the read and the commit; the post touches nothing else, so retry.
+			const err = e as { stdout?: unknown; message?: string };
+			const stale = /STALE_DATA|Expected branch to point to/.test(
+				`${err.stdout ?? ""} ${err.message ?? ""}`,
+			);
+			if (!stale || attempt >= 5) throw e;
+		}
+	}
+}
+
 async function draft(out: string): Promise<void> {
 	const now = Date.now();
 	const { waiting, releases } = batch(releaseRuns(now), publishedReleases(), now);
@@ -386,12 +447,15 @@ async function draft(out: string): Promise<void> {
 	}
 
 	const email = render(await merge(releases), releases, now);
-	writeFileSync(out, JSON.stringify({ ...email, tags: releases.map((r) => r.tag) }));
+	const post = blogPost(email, releases, now);
+	writeFileSync(out, JSON.stringify({ ...email, tags: releases.map((r) => r.tag), post }));
+	const url = post.path.replace(/^website\/src\/content(\/blog\/.+)\.md$/, "https://bramble.sh$1");
 	const summary = process.env.GITHUB_STEP_SUMMARY;
 	if (summary)
 		appendFileSync(
 			summary,
-			`# ${email.subject}\n\nApprove the send job to email this to every subscriber.\n\n---\n\n${email.body}`,
+			`# ${email.subject}\n\nApprove the send job to email this to every subscriber and ` +
+				`publish it as a blog post at ${url}.\n\n---\n\n${email.body}`,
 		);
 	const output = process.env.GITHUB_OUTPUT;
 	if (output) appendFileSync(output, "ready=true\n");
@@ -403,12 +467,15 @@ async function send(file: string): Promise<void> {
 		subject: string;
 		body: string;
 		tags: string[];
+		post: Post;
 	};
 	const now = Date.now();
 	// Again: the approval can come days after the draft, and an email may have gone out since.
 	const blocker = blockingEmail(await recentEmails(now), now);
 	if (blocker)
 		throw new Error(`"${blocker.subject}" went out after this was drafted; not sending a second`);
+	// The post first: a re-run after a failed send finds it there and goes straight to the email.
+	publishPost(email.post, email.subject);
 	await buttondown("/emails", {
 		method: "POST",
 		body: JSON.stringify({

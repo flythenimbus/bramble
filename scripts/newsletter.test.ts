@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import {
 	batch,
 	blockingEmail,
+	blogPost,
 	type Email,
 	fallbackMerge,
 	type Intent,
@@ -237,5 +238,30 @@ describe("render", () => {
 	it("leaves out an empty general section", () => {
 		const { body } = render({ general: [], sections: { browser: ["B."] } }, [], NOW);
 		assert.match(body, /^## Browser extensions/);
+	});
+});
+
+describe("blogPost", () => {
+	it("dates the post and keeps the email's title and text", () => {
+		const releases = ["Desktop 0.18.0", "Chromium Extension 1.39.0", "Android 0.30.0"].map(
+			(name) => ({
+				tag: "x",
+				name,
+				body: "",
+				url: "",
+			}),
+		);
+		const post = blogPost(
+			{ subject: "What's new in Bramble, November 11", body: "## General updates\n\n- G.\n" },
+			releases,
+			NOW,
+		);
+		assert.equal(post.path, "website/src/content/blog/whats-new-2026-11-11.md");
+		assert.equal(
+			post.content,
+			'---\ntitle: "What\'s new in Bramble, November 11"\n' +
+				'description: "What changed in Desktop 0.18.0, Chromium Extension 1.39.0 and Android 0.30.0."\n' +
+				"pubDate: 2026-11-11\n---\n\n## General updates\n\n- G.\n",
+		);
 	});
 });

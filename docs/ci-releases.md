@@ -185,7 +185,9 @@ it does nothing, so the last one to finish drafts a single email for every such 
 that week: "General
 updates" for what every platform got, then Desktop, Browser extensions and Mobile, merged by
 DeepSeek (without it each platform lists its own notes). The draft is in that run's summary, and
-the send job waits for an approval in the `newsletter` environment. At most one email goes out
+the send job waits for an approval in the `newsletter` environment. Approving it also publishes
+the same text as a blog post (`website/src/content/blog/whats-new-<date>.md`, committed to main by
+the release app, which deploys the site). At most one email goes out
 every seven days, checked when drafting and again when sending; hand-written emails count. iOS never
 joins, since it publishes after App Store review. To draft again after rejecting one:
 `gh workflow run newsletter.yml`.
