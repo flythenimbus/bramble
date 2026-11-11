@@ -8,8 +8,10 @@
 //        These three release from GitHub (docs/ci-releases.md): dispatch, then watch the run.
 //        --dry-run   everything short of publishing: nothing committed, tagged or uploaded
 //        --no-watch  return once the run exists
-//        --email     also email subscribers: the last release with it to finish drafts one email
-//                    for all of them, sent on approval, at most one a week (scripts/newsletter.ts)
+//        --publish-release-notes
+//                    email the notes to subscribers and post them on the blog: the last release
+//                    with it to finish drafts once for all of them, published on approval, at
+//                    most once a week (scripts/publish-release-notes.ts)
 //        --local     the fallback: build, sign and publish on this machine, with the YubiKey
 //        --resume    (android, local) sign the apk the last local run already built
 //   pnpm run release ios      <version|patch|minor|major> [--ipa]
@@ -902,7 +904,9 @@ async function dispatchRelease(
 				version,
 				dry_run: String(dryRun),
 				...(notes ? { notes } : {}),
-				...(flags.has("--email") && !dryRun ? { email: "true" } : {}),
+				...(flags.has("--publish-release-notes") && !dryRun
+					? { publish_release_notes: "true" }
+					: {}),
 				...inputs,
 			}),
 			stdio: ["pipe", "inherit", "inherit"],

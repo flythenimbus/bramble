@@ -1,26 +1,27 @@
-// node scripts/newsletter.ts draft <email.json>
-// node scripts/newsletter.ts send <email.json>
+// node scripts/publish-release-notes.ts draft <notes.json>
+// node scripts/publish-release-notes.ts publish <notes.json>
 //
-// One Buttondown email per batch of releases, at most one every seven days, read by a person before
-// it sends. .github/workflows/newsletter.yml runs `draft` whenever a release run finishes; only runs
-// dispatched with `--email` take part. Those run a no-op job, "Email subscribers", that is skipped
-// otherwise: the API does not show a run's inputs, but it does show its jobs. A run's release is
-// the one with its workflow's tag suffix published while it ran.
+// Publishes a batch of releases' notes once, read by a person first: one Buttondown email to
+// subscribers, at most one every seven days, and the same text as a blog post on the website.
+// .github/workflows/publish-release-notes.yml runs `draft` whenever a release run finishes; only
+// runs dispatched with `--publish-release-notes` take part. Those run a no-op job, "Publish release
+// notes", that is skipped otherwise: the API does not show a run's inputs, but it does show its
+// jobs. A run's release is the one with its workflow's tag suffix published while it ran.
 //
 // - While another such run is still going, `draft` does nothing: the last one to finish drafts for
-//   all of them, so releases approved hours apart still share one email.
-// - Any email in the last seven days, a hand-written one included, means no email.
+//   all of them, so releases approved hours apart still share one email and one post.
+// - Any email in the last seven days, a hand-written one included, means nothing is published.
 // - Otherwise every such release published in the last seven days goes in, merged by the
 //   release-notes model (DEEPSEEK_API_KEY) into a section for what every platform got and one per
 //   platform group. Without the model, or when its answer does not check out, each group lists its
 //   own notes and there is no general section.
 //
-// The draft goes to the run summary. `send` runs only after an approval in the `newsletter`
-// environment, checks the week again, commits the same text as a blog post on the website (through
-// the release app, which may commit to main; the push deploys the site), then sends the email.
+// The draft goes to the run summary. `publish` runs only after an approval in the `release-notes`
+// environment, checks the week again, commits the text as a blog post (through the release app,
+// which may commit to main; the push deploys the site), then sends the email.
 //
-// Env: GH_TOKEN, GITHUB_REPOSITORY, BUTTONDOWN_API_KEY (read-only for draft, sending for send),
-// DEEPSEEK_API_KEY (draft, optional), BRAMBLE_COMMIT_TOKEN (send), GITHUB_STEP_SUMMARY,
+// Env: GH_TOKEN, GITHUB_REPOSITORY, BUTTONDOWN_API_KEY (read-only for draft, sending for publish),
+// DEEPSEEK_API_KEY (draft, optional), BRAMBLE_COMMIT_TOKEN (publish), GITHUB_STEP_SUMMARY,
 // GITHUB_OUTPUT.
 
 import { execFileSync } from "node:child_process";
@@ -88,7 +89,7 @@ export interface RunIntent extends Run {
 }
 export type Intent = "yes" | "no" | "unknown";
 
-export const INTENT_JOB = "Email subscribers";
+export const INTENT_JOB = "Publish release notes";
 
 export interface Release {
 	tag: string;
@@ -111,7 +112,7 @@ export function sectionOf(tag: string): Section {
 	if (tag.endsWith("-desktop")) return "desktop";
 	if (tag.endsWith("-chromium") || tag.endsWith("-firefox")) return "browser";
 	if (tag.endsWith("-android")) return "mobile";
-	throw new Error(`no newsletter section for ${tag}`);
+	throw new Error(`no release-notes section for ${tag}`);
 }
 
 /**
@@ -430,19 +431,19 @@ async function draft(out: string): Promise<void> {
 	const now = Date.now();
 	const { waiting, releases } = batch(releaseRuns(now), publishedReleases(), now);
 	if (waiting.length) {
-		notice(`No email yet: ${waiting.join(", ")} still running; the last to finish drafts it`);
+		notice(`Nothing yet: ${waiting.join(", ")} still running; the last to finish drafts it`);
 		return;
 	}
 	const blocker = blockingEmail(await recentEmails(now), now);
 	if (blocker) {
 		notice(
-			`No email: "${blocker.subject}" (${blocker.status}, ` +
+			`Nothing published: "${blocker.subject}" (${blocker.status}, ` +
 				`${blocker.publish_date ?? blocker.creation_date}) went out in the last 7 days`,
 		);
 		return;
 	}
 	if (!releases.length) {
-		notice("No email: no release that asked for one was published this week");
+		notice("Nothing to publish: no release that asked for it was published this week");
 		return;
 	}
 
@@ -454,7 +455,7 @@ async function draft(out: string): Promise<void> {
 	if (summary)
 		appendFileSync(
 			summary,
-			`# ${email.subject}\n\nApprove the send job to email this to every subscriber and ` +
+			`# ${email.subject}\n\nApprove the publish job to email this to every subscriber and ` +
 				`publish it as a blog post at ${url}.\n\n---\n\n${email.body}`,
 		);
 	const output = process.env.GITHUB_OUTPUT;
@@ -462,7 +463,7 @@ async function draft(out: string): Promise<void> {
 	console.log(`${email.subject}\n\n${email.body}`);
 }
 
-async function send(file: string): Promise<void> {
+async function publish(file: string): Promise<void> {
 	const email = JSON.parse(readFileSync(file, "utf8")) as {
 		subject: string;
 		body: string;
@@ -473,7 +474,9 @@ async function send(file: string): Promise<void> {
 	// Again: the approval can come days after the draft, and an email may have gone out since.
 	const blocker = blockingEmail(await recentEmails(now), now);
 	if (blocker)
-		throw new Error(`"${blocker.subject}" went out after this was drafted; not sending a second`);
+		throw new Error(
+			`"${blocker.subject}" went out after this was drafted; not publishing a second`,
+		);
 	// The post first: a re-run after a failed send finds it there and goes straight to the email.
 	publishPost(email.post, email.subject);
 	await buttondown("/emails", {
@@ -490,11 +493,11 @@ async function send(file: string): Promise<void> {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	const [command, file] = process.argv.slice(2);
-	if (!file || (command !== "draft" && command !== "send")) {
-		console.error("usage: node scripts/newsletter.ts draft|send <email.json>");
+	if (!file || (command !== "draft" && command !== "publish")) {
+		console.error("usage: node scripts/publish-release-notes.ts draft|publish <notes.json>");
 		process.exit(2);
 	}
-	(command === "draft" ? draft(file) : send(file)).catch((e: Error) => {
+	(command === "draft" ? draft(file) : publish(file)).catch((e: Error) => {
 		console.error(`::error::${e.message}`);
 		process.exit(1);
 	});

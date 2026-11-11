@@ -175,25 +175,25 @@ Neither the dispatch order nor the approval order matters: each release commits 
 version bumps (see the release commit, above), and retries if two land in the same second. `all`
 still does not exist: four approvals and four sets of notes, to save one command.
 
-## Emailing subscribers
+## Publishing release notes
 
-`--email` on a GitHub-route release (`pnpm release desktop minor --email`) sets the workflow's
-`email` input, off by default, which runs the release's no-op "Email subscribers" job
-instead of skipping it: the API shows a run's jobs but not its inputs. `newsletter.yml` runs
-whenever a release run finishes. While any other release that asked for an email is still going
-it does nothing, so the last one to finish drafts a single email for every such release published
-that week: "General
-updates" for what every platform got, then Desktop, Browser extensions and Mobile, merged by
-DeepSeek (without it each platform lists its own notes). The draft is in that run's summary, and
-the send job waits for an approval in the `newsletter` environment. Approving it also publishes
-the same text as a blog post (`website/src/content/blog/whats-new-<date>.md`, committed to main by
-the release app, which deploys the site). At most one email goes out
-every seven days, checked when drafting and again when sending; hand-written emails count. iOS never
-joins, since it publishes after App Store review. To draft again after rejecting one:
-`gh workflow run newsletter.yml`.
+`--publish-release-notes` on a GitHub-route release (`pnpm release desktop minor
+--publish-release-notes`) sets the workflow's `publish_release_notes` input, off by default, which
+runs the release's no-op "Publish release notes" job instead of skipping it: the API shows a run's
+jobs but not its inputs. `publish-release-notes.yml` runs whenever a release run finishes. While
+any other release that asked to publish is still going it does nothing, so the last one to finish
+drafts once for every such release published that week: "General updates" for what every platform
+got, then Desktop, Browser extensions and Mobile, merged by DeepSeek (without it each platform
+lists its own notes). The draft is in that run's summary, and the publish job waits for an approval
+in the `release-notes` environment. Approving it emails Buttondown subscribers and posts the same
+text on the blog (`website/src/content/blog/whats-new-<date>.md`, committed to main by the release
+app, which deploys the site). At most one email goes out every seven days, checked when drafting
+and again when publishing; hand-written emails count. iOS never takes part, since it publishes
+after App Store review. To draft again after rejecting one: `gh workflow run
+publish-release-notes.yml`.
 
-Setup: environment `newsletter-draft` (no reviewer) holds `DEEPSEEK_API_KEY` and a read-only
-`BUTTONDOWN_API_KEY`; environment `newsletter` (required reviewer) holds the sending
+Setup: environment `release-notes-draft` (no reviewer) holds `DEEPSEEK_API_KEY` and a read-only
+`BUTTONDOWN_API_KEY`; environment `release-notes` (required reviewer) holds the sending
 `BUTTONDOWN_API_KEY`, so it is out of reach until the approval.
 
 ## What this never buys

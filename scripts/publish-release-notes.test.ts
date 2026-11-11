@@ -1,4 +1,4 @@
-// node --test scripts/newsletter.test.ts
+// node --test scripts/publish-release-notes.test.ts
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -18,7 +18,7 @@ import {
 	type RunIntent,
 	render,
 	WEEK_MS,
-} from "./newsletter.ts";
+} from "./publish-release-notes.ts";
 
 const NOW = Date.parse("2026-11-11T12:00:00Z");
 const at = (ms: number) => new Date(ms).toISOString();
@@ -70,7 +70,7 @@ describe("blockingEmail", () => {
 });
 
 describe("intentOf", () => {
-	const job = (status: string, conclusion: string | null, name = "Email subscribers"): Job => ({
+	const job = (status: string, conclusion: string | null, name = "Publish release notes"): Job => ({
 		name,
 		status,
 		conclusion,

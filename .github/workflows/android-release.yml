@@ -42,8 +42,8 @@ on:
         required: false
         default: ""
         type: string
-      email:
-        description: "Email subscribers once the last release of this batch is out (approved separately, at most one a week)"
+      publish_release_notes:
+        description: "Email the notes to subscribers and post them on the blog, once the last release of this batch is out (approved separately, at most once a week)"
         required: false
         default: false
         type: boolean
@@ -61,16 +61,17 @@ env:
   NDK_VERSION: 27.3.13750724
 
 jobs:
-  # Does nothing. Running at all is how newsletter.yml learns this release asked for an email: the
-  # API shows a run's jobs, not its inputs. A static name, since a skipped job shows its source.
-  email:
-    name: Email subscribers
-    if: ${{ inputs.email && !inputs.dry_run }}
+  # Does nothing. Running at all is how publish-release-notes.yml learns this release asked to be
+  # published: the API shows a run's jobs, not its inputs. A static name, since a skipped job shows
+  # its source.
+  publish_release_notes:
+    name: Publish release notes
+    if: ${{ inputs.publish_release_notes && !inputs.dry_run }}
     runs-on: ubuntu-latest
     permissions: {}
     timeout-minutes: 1
     steps:
-      - run: echo "newsletter.yml drafts the email once the last release that asked for one is out"
+      - run: echo "publish-release-notes.yml drafts once the last release that asked for it is out"
 
   build:
     name: Build (unsigned)
