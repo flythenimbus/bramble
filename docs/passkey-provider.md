@@ -462,6 +462,13 @@ local "which provider made this passkey" UIs. Worth doing for attribution, not l
   passkey-specific security regression. Done on every surface since 2026-11-01: UV "required" and
   PRF force a verification in the ceremony, and a ceremony without one reports UV=0
   ([passkey-security-review.md](passkey-security-review.md)).
+  The extension has one opt-in exception, **Confirm passkeys once per unlock**
+  (`pref.passkeyConfirmOncePerUnlock`, off by default): the unlock that opened the vault counts as
+  the verification until it locks, so no confirm window opens and every ceremony reports UV=1. On
+  Chrome the only smooth answer to that window is the master password (a key tap ends the request),
+  so a site that requires verification otherwise means typing it on every sign-in. Anyone at an
+  unlocked browser can already read every password, so what the user gives up is the extra check on
+  passkey-only accounts and on sites that treat UV as a second factor.
 - **Caller binding.** Android binds every rpId to its caller: a verified privileged browser's origin
   must be that site, and an app needs the rpId's `assetlinks.json` to vouch for it. Chrome takes the
   origin from its own stamp on the proxied request, Firefox from the message sender.

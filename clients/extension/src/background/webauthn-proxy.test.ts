@@ -475,6 +475,7 @@ describe("runCreateCeremony", () => {
 		locked?: boolean;
 		unlockOk?: boolean;
 		verifyOk?: boolean;
+		unlockVerifies?: boolean;
 		entries?: Entry[];
 		replies?: CardReply[];
 	}) {
@@ -483,6 +484,7 @@ describe("runCreateCeremony", () => {
 		const h: CeremonyHost = {
 			isLocked: () => opts.locked ?? false,
 			ensureUnlocked: async () => opts.unlockOk ?? true,
+			unlockVerifies: opts.unlockVerifies ?? false,
 			verifyUser: vi.fn(async () => opts.verifyOk ?? true),
 			loadEntries: async () => opts.entries ?? [],
 			showCard: async (o) => {
@@ -561,6 +563,13 @@ describe("runCreateCeremony", () => {
 		});
 	});
 
+	it("once per unlock, saves without asking again and claims the unlock", async () => {
+		const { h } = host({ entries: [], unlockVerifies: true });
+		const strict = await runCreateCeremony({ ...req, needsVerification: true }, h);
+		expect(strict).toMatchObject({ approved: true, userVerified: true, placement: "new" });
+		expect(h.verifyUser).not.toHaveBeenCalled();
+	});
+
 	it("declining the first card aborts without unlocking", async () => {
 		const unlock = vi.fn(async () => true);
 		const { h } = host({ locked: true, replies: [{ approved: false }] });
@@ -612,6 +621,7 @@ describe("runGetCeremony", () => {
 		locked?: boolean;
 		unlockOk?: boolean;
 		verifyOk?: boolean;
+		unlockVerifies?: boolean;
 		entries?: Entry[];
 		replies?: CardReply[];
 	}) {
@@ -620,6 +630,7 @@ describe("runGetCeremony", () => {
 		const h: CeremonyHost = {
 			isLocked: () => opts.locked ?? false,
 			ensureUnlocked: async () => opts.unlockOk ?? true,
+			unlockVerifies: opts.unlockVerifies ?? false,
 			verifyUser: vi.fn(async () => opts.verifyOk ?? true),
 			loadEntries: async () => opts.entries ?? [],
 			showCard: async (o) => {
@@ -701,6 +712,28 @@ describe("runGetCeremony", () => {
 			const { h } = host({ locked: true, entries: [pk("AAA", "octocat")] });
 			expect(await runGetCeremony(strict, h)).toMatchObject({ approved: true, userVerified: true });
 			expect(h.verifyUser).not.toHaveBeenCalled();
+		});
+
+		// "Confirm passkeys once per unlock": the unlock that opened the vault is the check, so an
+		// unlocked vault neither asks again nor claims less than it would have after asking.
+		it("once per unlock, an unlocked vault is the verification and nothing asks", async () => {
+			const { h } = host({ entries: [pk("AAA", "octocat")], unlockVerifies: true });
+			expect(await runGetCeremony(strict, h)).toMatchObject({
+				approved: true,
+				userVerified: true,
+				credentialId: "AAA",
+			});
+			expect(await runGetCeremony(req, h)).toMatchObject({ approved: true, userVerified: true });
+			expect(h.verifyUser).not.toHaveBeenCalled();
+		});
+
+		it("once per unlock still needs the account card", async () => {
+			const { h } = host({
+				entries: [pk("AAA", "octocat")],
+				unlockVerifies: true,
+				replies: [{ approved: false }],
+			});
+			expect(await runGetCeremony(strict, h)).toEqual({ approved: false });
 		});
 	});
 

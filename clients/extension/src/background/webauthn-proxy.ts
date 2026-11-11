@@ -107,6 +107,8 @@ export interface CeremonyHost {
 	}) => Promise<CardReply>;
 	isLocked: () => boolean;
 	ensureUnlocked: () => Promise<boolean>;
+	/** "Confirm passkeys once per unlock": the unlock that opened the vault is the verification. */
+	unlockVerifies: boolean;
 	/** Ask the user to confirm it's them (master password or security key) on an unlocked vault. */
 	verifyUser: () => Promise<boolean>;
 	loadEntries: () => Promise<Entry[]>;
@@ -145,8 +147,9 @@ async function unlockAndLoad(
 
 /**
  * Approve, claiming user verification only when it happened: the unlock this ceremony just did,
- * or a confirm-it's-you for a request that needs one. A card click alone is consent, so an
- * already-unlocked vault reports UV=0 unless the site needs verification (docs/passkey-prf.md).
+ * an earlier unlock when the user chose once per unlock, or a confirm-it's-you for a request that
+ * needs one. A card click alone is consent, so an already-unlocked vault otherwise reports UV=0
+ * unless the site needs verification (docs/passkey-prf.md).
  */
 async function approve(
 	req: CeremonyRequest,
@@ -154,7 +157,8 @@ async function approve(
 	startedLocked: boolean,
 	choice: Omit<Approved, "approved" | "userVerified">,
 ): Promise<CeremonyDecision> {
-	if (startedLocked) return { approved: true, userVerified: true, ...choice };
+	if (startedLocked || host.unlockVerifies)
+		return { approved: true, userVerified: true, ...choice };
 	if (!req.needsVerification) return { approved: true, userVerified: false, ...choice };
 	if (!(await host.verifyUser())) return { approved: false };
 	return { approved: true, userVerified: true, ...choice };

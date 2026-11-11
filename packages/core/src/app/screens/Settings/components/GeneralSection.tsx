@@ -10,6 +10,7 @@ import {
 	SlidersHorizontal,
 	TextCursorInput,
 	Timer,
+	UserCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
@@ -276,6 +277,22 @@ export function GeneralSection() {
 							<span className="text-xs text-destructive text-right">{passkeyProviderError}</span>
 						)}
 					</div>
+				</Row>
+			)}
+
+			{/* Sites that check it's you otherwise get a confirm on every passkey use. The background
+			    reads the pref at each ceremony, so persisting it is all it takes. */}
+			{hasPasskeyProviderToggle && prefs.passkeyProviderEnabled && (
+				<Row
+					icon={<UserCheck className="w-4 h-4 text-primary" />}
+					title={t`Confirm passkeys once per unlock`}
+					subtitle={t`Unlocking counts as confirming it's you until the vault locks.`}
+				>
+					<Toggle
+						checked={prefs.passkeyConfirmOncePerUnlock}
+						onChange={(enabled) => void update("passkeyConfirmOncePerUnlock", enabled)}
+						label={t`Toggle confirm passkeys once per unlock`}
+					/>
 				</Row>
 			)}
 

@@ -22,7 +22,7 @@ import {
 	savePlacement,
 } from "./passkey-store";
 import { openPopoutAt, openUnlockView } from "./popout";
-import { getPasskeyProviderEnabled } from "./prefs";
+import { getPasskeyConfirmOncePerUnlock, getPasskeyProviderEnabled } from "./prefs";
 import { extensionOnly, on } from "./router";
 import { vaultLocked } from "./session";
 import {
@@ -186,6 +186,7 @@ function cornerCeremonyForTab(tabId: number, requestGone: () => boolean): Ceremo
 			const host: CeremonyHost = {
 				isLocked: () => startedLocked,
 				ensureUnlocked: () => ensureUnlocked(remaining()),
+				unlockVerifies: await getPasskeyConfirmOncePerUnlock(),
 				verifyUser: () => verifyUser(req, remaining(), requestGone),
 				loadEntries: loadDecryptedEntries,
 				showCard: (opts) => showCard(tabId, cardPayload(req, opts), remaining()),

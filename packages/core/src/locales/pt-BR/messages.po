@@ -1085,6 +1085,10 @@ msgstr "Confirmar nova senha"
 msgid "Confirm on your device…"
 msgstr "Confirmar no seu dispositivo…"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Confirm passkeys once per unlock"
+msgstr "Confirmar passkeys uma vez por desbloqueio"
+
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Confirm password"
 msgstr "Confirmar senha"
@@ -4216,6 +4220,10 @@ msgid "Toggle breach checks"
 msgstr "Alternar verificações de vazamento"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle confirm passkeys once per unlock"
+msgstr "Alternar confirmação de passkeys uma vez por desbloqueio"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle default password manager"
 msgstr "Alternar o gerenciador de senhas padrão"
 
@@ -4452,6 +4460,10 @@ msgstr "Desbloquear seu cofre usando seu código de acesso."
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
 #~ msgstr "Desbloqueie seu cofre com a chave de segurança"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Unlocking counts as confirming it's you until the vault locks."
+msgstr "O desbloqueio conta como confirmação de que é você até que o cofre seja bloqueado."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx

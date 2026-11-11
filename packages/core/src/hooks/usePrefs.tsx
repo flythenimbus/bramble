@@ -46,6 +46,10 @@ export const PREF_AUTOFILL_QUICKTYPE = "pref.autofillQuickType";
 // Extension only: act as a WebAuthn passkey provider for other sites. Off by default
 // (attaching the proxy intercepts all browser WebAuthn). See docs/passkey-provider.md.
 export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
+// Extension only: an unlocked vault counts as confirming it's you for passkey sign-ins, so a site
+// that checks doesn't ask again until the vault locks. Off by default. Read by the background
+// (webauthn-provider.ts); see docs/passkey-provider.md.
+export const PREF_PASSKEY_CONFIRM_ONCE = "pref.passkeyConfirmOncePerUnlock";
 // Chromium only: also lock the vault when the OS screen locks, independent of the timeout.
 // On by default (a screen-lock is a reasonable security floor); turned off to stay unlocked
 // on a trusted device even under "Never". See issue #6.
@@ -83,6 +87,7 @@ const DEFAULT_BIOMETRIC_AUTO_PROMPT = false;
 const DEFAULT_BIOMETRIC_PASSCODE_FALLBACK = false;
 const DEFAULT_AUTOFILL_QUICKTYPE = false;
 export const DEFAULT_PASSKEY_PROVIDER = false;
+export const DEFAULT_PASSKEY_CONFIRM_ONCE = false;
 export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
 const DEFAULT_STATS_COLLAPSED = false;
 const DEFAULT_AUTOSTART_PROMPT_DISMISSED = false;
@@ -105,6 +110,8 @@ export interface Prefs {
 	autofillQuickType: boolean;
 	// Extension: act as a WebAuthn passkey provider for other sites.
 	passkeyProviderEnabled: boolean;
+	// Extension: an unlock counts as confirming it's you for passkeys until the vault locks.
+	passkeyConfirmOncePerUnlock: boolean;
 	// Extension: also lock when the OS screen locks, regardless of the timeout.
 	lockOnScreenLock: boolean;
 	// Home: collapse the Total / At Risk / Strong stats row.
@@ -134,6 +141,7 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	biometricPasscodeFallback: PREF_BIOMETRIC_PASSCODE_FALLBACK,
 	autofillQuickType: PREF_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: PREF_PASSKEY_PROVIDER,
+	passkeyConfirmOncePerUnlock: PREF_PASSKEY_CONFIRM_ONCE,
 	lockOnScreenLock: PREF_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: PREF_STATS_COLLAPSED,
 	autostartPromptDismissed: PREF_AUTOSTART_PROMPT_DISMISSED,
@@ -176,6 +184,7 @@ const PREF_SCOPE: Record<keyof Prefs, PrefScope> = {
 	biometricAutoPrompt: "vault",
 	autofillQuickType: "device",
 	passkeyProviderEnabled: "device",
+	passkeyConfirmOncePerUnlock: "device",
 	lockOnScreenLock: "device",
 	statsCollapsed: "device",
 	autostartPromptDismissed: "device",
@@ -238,6 +247,7 @@ const DEFAULT_PREFS: Prefs = {
 	biometricPasscodeFallback: DEFAULT_BIOMETRIC_PASSCODE_FALLBACK,
 	autofillQuickType: DEFAULT_AUTOFILL_QUICKTYPE,
 	passkeyProviderEnabled: DEFAULT_PASSKEY_PROVIDER,
+	passkeyConfirmOncePerUnlock: DEFAULT_PASSKEY_CONFIRM_ONCE,
 	lockOnScreenLock: DEFAULT_LOCK_ON_SCREEN_LOCK,
 	statsCollapsed: DEFAULT_STATS_COLLAPSED,
 	autostartPromptDismissed: DEFAULT_AUTOSTART_PROMPT_DISMISSED,
@@ -346,7 +356,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		}));
 		void (async () => {
 			if (retireLegacy) await retireLegacyFlatPrefs(storage);
-			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -373,6 +383,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				storage.getMeta<unknown>(PREF_GENERATOR),
 				storage.getMeta<unknown>(PREF_REVIEW_NUDGE),
 				storage.getMeta<boolean>(PREF_DEFAULT_MANAGER_PROMPT_DISMISSED),
+				storage.getMeta<boolean>(PREF_PASSKEY_CONFIRM_ONCE),
 			]);
 			if (cancelled) return;
 			// One `now` for the read: a fresh install's clock starts here rather than at whichever
@@ -392,6 +403,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				biometricAutoPrompt: typeof g === "boolean" ? g : DEFAULT_BIOMETRIC_AUTO_PROMPT,
 				autofillQuickType: typeof h === "boolean" ? h : DEFAULT_AUTOFILL_QUICKTYPE,
 				passkeyProviderEnabled: typeof i === "boolean" ? i : DEFAULT_PASSKEY_PROVIDER,
+				passkeyConfirmOncePerUnlock: typeof q === "boolean" ? q : DEFAULT_PASSKEY_CONFIRM_ONCE,
 				lockOnScreenLock: typeof j === "boolean" ? j : DEFAULT_LOCK_ON_SCREEN_LOCK,
 				statsCollapsed: typeof k === "boolean" ? k : DEFAULT_STATS_COLLAPSED,
 				autostartPromptDismissed: typeof l === "boolean" ? l : DEFAULT_AUTOSTART_PROMPT_DISMISSED,

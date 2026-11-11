@@ -1085,6 +1085,10 @@ msgstr "Confirmer le nouveau mot de passe"
 msgid "Confirm on your device…"
 msgstr "Confirmez sur votre appareil…"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Confirm passkeys once per unlock"
+msgstr "Confirmer les passkeys une fois par déverrouillage"
+
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Confirm password"
 msgstr "Confirmer le mot de passe"
@@ -4216,6 +4220,10 @@ msgid "Toggle breach checks"
 msgstr "Activer la vérification des fuites"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle confirm passkeys once per unlock"
+msgstr "Activer/désactiver la confirmation des passkeys une fois par déverrouillage"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle default password manager"
 msgstr "Activer/désactiver le gestionnaire de mots de passe par défaut"
 
@@ -4452,6 +4460,10 @@ msgstr "Déverrouiller votre coffre-fort avec votre code d’accès."
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
 #~ msgstr "Déverrouillez votre coffre avec votre clé de sécurité"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Unlocking counts as confirming it's you until the vault locks."
+msgstr "Le déverrouillage vaut confirmation de votre identité jusqu'au verrouillage du coffre."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx

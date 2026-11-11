@@ -1,17 +1,28 @@
 /** @vitest-environment happy-dom */
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../../../context/PlatformContext";
 import type { Target } from "../../../../flags";
 import { GeneralSection } from "./GeneralSection";
 
+const h = vi.hoisted(() => ({
+	passkeyProviderEnabled: false,
+	update: (async () => {}) as (key: string, value: unknown) => Promise<void>,
+}));
+
 vi.mock("../../../../hooks/usePrefs", () => ({
 	usePrefs: () => ({
-		prefs: { autoLockMinutes: 15, clipboardClearSeconds: 30, neverSaveSites: [] },
+		prefs: {
+			autoLockMinutes: 15,
+			clipboardClearSeconds: 30,
+			neverSaveSites: [],
+			passkeyProviderEnabled: h.passkeyProviderEnabled,
+			passkeyConfirmOncePerUnlock: false,
+		},
 		loaded: true,
-		update: vi.fn(),
+		update: h.update,
 	}),
 }));
 vi.mock("../../../../hooks/useVault", () => ({ useVault: () => ({ entries: [] }) }));
@@ -74,6 +85,44 @@ describe("GeneralSection auto-lock timeout", () => {
 		for (const target of ["chromium", "ios"] as Target[]) {
 			mount(target);
 			expect(timeoutOptions()).toContain("Immediate");
+			cleanup();
+		}
+	});
+});
+
+// Daniel's ask: a site that checks it's you asked for the master password on every passkey use.
+describe("GeneralSection passkey confirmation", () => {
+	const toggle = () =>
+		screen.queryByRole("button", { name: "Toggle confirm passkeys once per unlock" });
+
+	beforeEach(() => {
+		h.passkeyProviderEnabled = false;
+		h.update = vi.fn(async () => {});
+	});
+
+	it("offers once per unlock only while Bramble handles passkeys", () => {
+		mount("chromium");
+		expect(toggle()).toBeNull();
+		cleanup();
+		h.passkeyProviderEnabled = true;
+		mount("chromium");
+		expect(toggle()?.getAttribute("aria-pressed")).toBe("false");
+	});
+
+	it("saves the choice", () => {
+		h.passkeyProviderEnabled = true;
+		mount("firefox");
+		const button = toggle();
+		if (!button) throw new Error("no toggle");
+		fireEvent.click(button);
+		expect(h.update).toHaveBeenCalledWith("passkeyConfirmOncePerUnlock", true);
+	});
+
+	it("isn't on phones or the desktop app, where the OS asks", () => {
+		h.passkeyProviderEnabled = true;
+		for (const target of ["ios", "android", "desktop"] as Target[]) {
+			mount(target);
+			expect(toggle()).toBeNull();
 			cleanup();
 		}
 	});

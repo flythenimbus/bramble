@@ -1085,6 +1085,10 @@ msgstr "Confirm new password"
 msgid "Confirm on your device…"
 msgstr "Confirm on your device…"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Confirm passkeys once per unlock"
+msgstr "Confirm passkeys once per unlock"
+
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Confirm password"
 msgstr "Confirm password"
@@ -4216,6 +4220,10 @@ msgid "Toggle breach checks"
 msgstr "Toggle breach checks"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle confirm passkeys once per unlock"
+msgstr "Toggle confirm passkeys once per unlock"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle default password manager"
 msgstr "Toggle default password manager"
 
@@ -4452,6 +4460,10 @@ msgstr "Unlock your vault using your passcode."
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
 #~ msgstr "Unlock your vault with your security key"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Unlocking counts as confirming it's you until the vault locks."
+msgstr "Unlocking counts as confirming it's you until the vault locks."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx

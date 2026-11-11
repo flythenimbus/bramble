@@ -66,6 +66,16 @@ describe("getClipboardSeconds", () => {
 	});
 });
 
+describe("getPasskeyConfirmOncePerUnlock", () => {
+	it("defaults to asking every time and only honors a boolean", async () => {
+		const read = async (local?: Record<string, unknown>) =>
+			(await loadPrefs(local)).prefs.getPasskeyConfirmOncePerUnlock();
+		expect(await read()).toBe(false);
+		expect(await read({ "pref.passkeyConfirmOncePerUnlock": true })).toBe(true);
+		expect(await read({ "pref.passkeyConfirmOncePerUnlock": "yes" })).toBe(false);
+	});
+});
+
 describe("getOfferToSavePref", () => {
 	it("defaults to true and only honors a boolean", async () => {
 		expect(await (await loadPrefs()).prefs.getOfferToSavePref()).toBe(true);

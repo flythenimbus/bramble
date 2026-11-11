@@ -1085,6 +1085,10 @@ msgstr "Neues Passwort bestätigen"
 msgid "Confirm on your device…"
 msgstr "Auf Ihrem Gerät bestätigen…"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Confirm passkeys once per unlock"
+msgstr "Passkeys einmal pro Entsperren bestätigen"
+
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Confirm password"
 msgstr "Passwort bestätigen"
@@ -4216,6 +4220,10 @@ msgid "Toggle breach checks"
 msgstr "Überprüfung auf Datenlecks umschalten"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle confirm passkeys once per unlock"
+msgstr "Bestätigung von Passkeys einmal pro Entsperren umschalten"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle default password manager"
 msgstr "Standard-Passwortmanager umschalten"
 
@@ -4452,6 +4460,10 @@ msgstr "Entsperren Sie Ihren Tresor mit Ihrem Passcode."
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
 #~ msgstr "Mit Sicherheitsschlüssel entsperren"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Unlocking counts as confirming it's you until the vault locks."
+msgstr "Das Entsperren gilt als Bestätigung, dass Sie es sind, bis der Tresor gesperrt wird."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx

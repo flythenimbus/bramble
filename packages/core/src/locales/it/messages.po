@@ -1085,6 +1085,10 @@ msgstr "Confermare la nuova password"
 msgid "Confirm on your device…"
 msgstr "Confermare sul dispositivo…"
 
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Confirm passkeys once per unlock"
+msgstr "Confermare le passkey una volta per sblocco"
+
 #: packages/core/src/app/components/ui/file-password-dialog.tsx
 msgid "Confirm password"
 msgstr "Confermare password"
@@ -4216,6 +4220,10 @@ msgid "Toggle breach checks"
 msgstr "Attiva controlli delle violazioni"
 
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle confirm passkeys once per unlock"
+msgstr "Attivare/disattivare la conferma delle passkey una volta per sblocco"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Toggle default password manager"
 msgstr "Attivare/disattivare il gestore di password predefinito"
 
@@ -4452,6 +4460,10 @@ msgstr "Sblocchi la cassaforte con il codice di accesso."
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #~ msgid "Unlock your vault with your security key"
 #~ msgstr "Sblocchiate la vostra cassaforte con la chiave di sicurezza."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Unlocking counts as confirming it's you until the vault locks."
+msgstr "Lo sblocco equivale a confermare l'identità finché la cassaforte non si blocca."
 
 #: packages/core/src/app/screens/Auth/Auth.tsx
 #: packages/core/src/app/screens/Import/components/UnlockGate.tsx

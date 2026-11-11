@@ -11,6 +11,7 @@ const PREF_AUTOFILL_ENABLED = "pref.autofillEnabled";
 const PREF_NEVER_SAVE_SITES = "pref.neverSaveSites";
 export const PREF_PASSKEY_PROVIDER = "pref.passkeyProviderEnabled";
 export const PREF_LOCK_ON_SCREEN_LOCK = "pref.lockOnScreenLock";
+const PREF_PASSKEY_CONFIRM_ONCE = "pref.passkeyConfirmOncePerUnlock";
 const PREF_GENERATOR = "pref.generator";
 
 const DEFAULT_AUTOLOCK_MINUTES = 15;
@@ -71,6 +72,15 @@ export async function getAutofillEnabled(): Promise<boolean> {
 		if (typeof v === "boolean") return v;
 	} catch {}
 	return DEFAULT_AUTOFILL_ENABLED;
+}
+
+/** Off by default: a site that checks it's you gets a fresh confirm on every passkey use. */
+export async function getPasskeyConfirmOncePerUnlock(): Promise<boolean> {
+	try {
+		const r = await api.storage.local.get(PREF_PASSKEY_CONFIRM_ONCE);
+		if (r[PREF_PASSKEY_CONFIRM_ONCE] === true) return true;
+	} catch {}
+	return false;
 }
 
 export async function getPasskeyProviderEnabled(): Promise<boolean> {

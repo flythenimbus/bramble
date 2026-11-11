@@ -21,8 +21,10 @@ const h = vi.hoisted(() => ({
 	releaseCeremony: undefined as (() => void) | undefined,
 	/** What the mocked get ceremony does with its host (default: wait for releaseCeremony). */
 	runGet: undefined as
-		| ((host: { verifyUser: () => Promise<boolean> }) => Promise<unknown>)
+		| ((host: { verifyUser: () => Promise<boolean>; unlockVerifies: boolean }) => Promise<unknown>)
 		| undefined,
+	/** The stored "Confirm passkeys once per unlock" pref. */
+	confirmOnce: false,
 	/** App routes the provider opened in a detached window, and the handlers marked extension-only. */
 	openedPaths: [] as string[],
 	extensionOnly: new Set<unknown>(),
@@ -31,6 +33,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("./prefs", () => ({
+	getPasskeyConfirmOncePerUnlock: async () => h.confirmOnce,
 	getPasskeyProviderEnabled: () =>
 		new Promise<boolean>((resolve) => {
 			h.settlePref = resolve;
@@ -79,7 +82,10 @@ vi.mock("./session", () => ({ vaultLocked: () => false }));
 
 vi.mock("./webauthn-proxy", () => ({
 	runCreateCeremony: async () => ({ approved: false }),
-	runGetCeremony: (_req: unknown, host: { verifyUser: () => Promise<boolean> }) =>
+	runGetCeremony: (
+		_req: unknown,
+		host: { verifyUser: () => Promise<boolean>; unlockVerifies: boolean },
+	) =>
 		h.runGet
 			? h.runGet(host)
 			: new Promise((resolve) => {
@@ -94,6 +100,7 @@ async function load() {
 	h.applied = [];
 	h.hookThrows = false;
 	h.runGet = undefined;
+	h.confirmOnce = false;
 	h.openedPaths = [];
 	h.closedWindows = [];
 	h.extensionOnly.clear();
@@ -209,6 +216,14 @@ describe("confirm it's you", () => {
 		await answer?.({ payload: { id: "someone-else", verified: true } });
 		await answer?.({ payload: { id: url.searchParams.get("id"), verified: true } });
 		expect(await pending).toEqual({ approved: true });
+	});
+
+	it("hands the ceremony the once-per-unlock pref, read when it starts", async () => {
+		const m = await load();
+		h.runGet = async (host) => ({ unlockVerifies: host.unlockVerifies });
+		expect(await m.depsForTab(1).ceremony(req)).toEqual({ unlockVerifies: false });
+		h.confirmOnce = true;
+		expect(await m.depsForTab(1).ceremony(req)).toEqual({ unlockVerifies: true });
 	});
 
 	it("a no from the window is a no", async () => {

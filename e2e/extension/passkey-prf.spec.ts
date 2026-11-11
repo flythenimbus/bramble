@@ -129,6 +129,60 @@ test("PRF round-trips through Chrome's webAuthenticationProxy", async ({
 	expect(await signIn("salt-a", "salt-b")).toBe(saltB);
 });
 
+// "Confirm passkeys once per unlock": the unlock that opened the vault is the check, so a site that
+// requires verification (or uses PRF) gets UV and the same keys with no confirm window.
+test("once per unlock, an unlocked vault confirms without a window", async ({
+	context,
+	extensionId,
+}) => {
+	const setup = await context.newPage();
+	await createVault(setup, extensionId);
+	await setup.evaluate(async () => {
+		await chrome.storage.local.set({ "pref.passkeyConfirmOncePerUnlock": true });
+		await chrome.runtime.sendMessage({
+			type: "PASSKEY_PROVIDER_SET_ENABLED",
+			payload: { enabled: true },
+		});
+	});
+	await context.route(/^http:\/\/localhost:4719\//, (route) =>
+		route.fulfill({
+			body: "<!doctype html><title>PRF</title><p>PRF test</p>",
+			headers: { "content-type": "text/html" },
+		}),
+	);
+	const page = await context.newPage();
+	await page.goto("http://localhost:4719/");
+	await page.bringToFront();
+	let windows = 0;
+	context.on("page", () => windows++);
+
+	const created = await actOnPasskeyCard(page, "passkey-approve", () => create(page, "salt-a"));
+	expect(created.first).toMatch(/^[0-9a-f]{64}$/);
+	expect(await actOnPasskeyCard(page, "passkey-pick", () => get(page, created.id, "salt-a"))).toBe(
+		created.first,
+	);
+
+	const uv = await actOnPasskeyCard(page, "passkey-pick", () =>
+		page.evaluate(async (id) => {
+			const rawId = Uint8Array.from(atob(id.replace(/-/g, "+").replace(/_/g, "/")), (c) =>
+				c.charCodeAt(0),
+			);
+			const cred = (await navigator.credentials.get({
+				publicKey: {
+					rpId: "localhost",
+					challenge: new Uint8Array(32),
+					allowCredentials: [{ type: "public-key", id: rawId }],
+					userVerification: "required",
+				},
+			})) as PublicKeyCredential;
+			const auth = (cred.response as AuthenticatorAssertionResponse).authenticatorData;
+			return (new Uint8Array(auth)[32] ?? 0) & 0x04;
+		}, created.id),
+	);
+	expect(uv).toBe(0x04);
+	expect(windows).toBe(0);
+});
+
 // #187: the sign-in worked, but the confirm window left its route behind, so the toolbar popup
 // reopened on a confirm whose request was already gone.
 test("the toolbar popup doesn't reopen a finished confirm", async ({ context, extensionId }) => {
