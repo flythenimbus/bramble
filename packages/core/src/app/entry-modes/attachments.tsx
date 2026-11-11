@@ -1,5 +1,13 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { CloudDownload, ExternalLink, FileLock2, Loader2, Paperclip, Trash2 } from "lucide-react";
+import {
+	CloudDownload,
+	Download,
+	ExternalLink,
+	FileLock2,
+	Loader2,
+	Paperclip,
+	Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MAX_ATTACHMENT_BYTES } from "../../backup/archive";
 import { useCan, usePlatform } from "../../context/PlatformContext";
@@ -158,9 +166,10 @@ function AttachmentRow({
 	held: boolean | null;
 	status: FileTransferStatus | undefined;
 }) {
-	const { detachFile, describeFile, openFile } = useVaultActions();
-	const { canOpenFiles } = useVaultState();
+	const { detachFile, describeFile, openFile, saveFile } = useVaultActions();
+	const { canOpenFiles, canSaveFiles } = useVaultState();
 	const [opening, setOpening] = useState(false);
+	const [saving, setSaving] = useState(false);
 	const { t } = useLingui();
 	const [name, setName] = useState<string | null>(null);
 	const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -218,6 +227,28 @@ function AttachmentRow({
 					) : (
 						<ExternalLink className="w-4 h-4" />
 					)}
+				</Button>
+			)}
+			{canSaveFiles && held !== false && !confirmingRemove && (
+				<Button
+					variant="ghost"
+					size="icon"
+					disabled={saving || held === null}
+					aria-label={t`Save attachment`}
+					title={t`Save`}
+					onClick={async () => {
+						setSaving(true);
+						setError(null);
+						try {
+							await saveFile(record);
+						} catch (e) {
+							setError((e as Error).message);
+						} finally {
+							setSaving(false);
+						}
+					}}
+				>
+					{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
 				</Button>
 			)}
 			<InlineConfirm

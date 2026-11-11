@@ -12,6 +12,8 @@ const h = vi.hoisted(() => ({
 	lockListener: null as ((locked: boolean) => void) | null,
 	lastOpen: null as { srcPath: string; dstPath: string } | null,
 	lastShare: null as { files?: string[]; title?: string } | null,
+	lastSave: null as { srcPath: string; name: string; mime: string } | null,
+	saved: true,
 }));
 
 vi.mock("@capacitor/filesystem", () => ({
@@ -38,6 +40,15 @@ vi.mock("@capacitor/share", () => ({
 		},
 	},
 }));
+vi.mock("@capacitor/core", () => ({
+	registerPlugin: () => ({
+		saveAs: async (o: { srcPath: string; name: string; mime: string }) => {
+			h.calls.push("save");
+			h.lastSave = o;
+			return { saved: h.saved };
+		},
+	}),
+}));
 vi.mock("../auto-lock", () => ({
 	armFilePickGrace: () => h.calls.push("grace"),
 }));
@@ -57,7 +68,9 @@ vi.mock("./vault-session", () => ({
 	},
 }));
 
-const { createMobilePresenter, startOpenedCopySweeps } = await import("./file-presenter");
+const { createMobilePresenter, createMobileSaver, startOpenedCopySweeps } = await import(
+	"./file-presenter"
+);
 
 const VAULT = "11111111-2222-4333-8444-555555555555";
 const HASH = "a".repeat(64);
@@ -71,6 +84,30 @@ beforeEach(() => {
 	h.shareError = null;
 	h.lastOpen = null;
 	h.lastShare = null;
+	h.lastSave = null;
+	h.saved = true;
+});
+
+// #217: Android's share sheet has no reliable "save to device", so Save opens the system's own.
+describe("createMobileSaver", () => {
+	it("decrypts, arms the grace, saves that copy, then deletes it", async () => {
+		await expect(createMobileSaver(VAULT, sealerNamed("passport.pdf"))(record)).resolves.toBe(true);
+		expect(h.calls).toEqual(["mkdir:open", "decrypt", "grace", "save"]);
+		expect(h.lastSave).toEqual({
+			srcPath: h.lastOpen?.dstPath,
+			name: "passport.pdf",
+			mime: "application/pdf",
+		});
+		// Unlike Open, nothing reads the copy once the save resolves.
+		const folder = h.lastOpen?.dstPath.match(/open\/[0-9a-f-]{36}/)?.[0];
+		expect(h.rmdirs).toEqual([`CACHE:${folder}`]);
+	});
+
+	it("reports a cancelled save, and still deletes the copy", async () => {
+		h.saved = false;
+		await expect(createMobileSaver(VAULT, sealerNamed("a.pdf"))(record)).resolves.toBe(false);
+		expect(h.rmdirs).toHaveLength(1);
+	});
 });
 
 describe("createMobilePresenter", () => {

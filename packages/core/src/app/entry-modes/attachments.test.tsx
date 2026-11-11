@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
 	held: new Set<string>(),
 	status: {} as Record<string, FileTransferStatus>,
 	asked: [] as string[][],
+	canSaveFiles: false,
+	saved: [] as string[],
 }));
 
 vi.mock("../../hooks/useVault", async (importOriginal) => ({
@@ -26,6 +28,7 @@ vi.mock("../../hooks/useVault", async (importOriginal) => ({
 		files: h.files,
 		canAttachFiles: true,
 		canOpenFiles: true,
+		canSaveFiles: h.canSaveFiles,
 		canPickFiles: false,
 	}),
 	useVaultActions: () => actions,
@@ -39,6 +42,10 @@ const actions = {
 	},
 	describeFile: async () => ({ name: "passport.pdf", mime: "application/pdf" }),
 	openFile: async () => {},
+	saveFile: async (r: FileRecord) => {
+		h.saved.push(r.hash);
+		return true;
+	},
 	detachFile: async () => {},
 	attachFile: async () => {},
 	pickFile: async () => null,
@@ -88,6 +95,33 @@ beforeEach(() => {
 	h.held = new Set();
 	h.status = {};
 	h.asked = [];
+	h.canSaveFiles = false;
+	h.saved = [];
+});
+
+// #217: Android's share sheet has no reliable "save to device", so it gets a Save of its own.
+describe("saving an attachment", () => {
+	it("offers Save where the platform can save, and saves that file", async () => {
+		h.held = new Set([record(1).hash]);
+		h.canSaveFiles = true;
+		mount("android");
+		(await screen.findByRole("button", { name: "Save attachment" })).click();
+		await waitFor(() => expect(h.saved).toEqual([record(1).hash]));
+	});
+
+	it("offers no Save elsewhere", async () => {
+		h.held = new Set([record(1).hash]);
+		mount("ios");
+		expect(await screen.findByRole("button", { name: "Open attachment" })).toBeTruthy();
+		expect(screen.queryByRole("button", { name: "Save attachment" })).toBeNull();
+	});
+
+	it("offers no Save for a file that hasn't arrived", async () => {
+		h.canSaveFiles = true;
+		mount("android");
+		await waitFor(() => expect(h.asked.length).toBeGreaterThan(0));
+		expect(screen.queryByRole("button", { name: "Save attachment" })).toBeNull();
+	});
 });
 
 afterEach(cleanup);

@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(AutofillBridgePlugin.class);
         registerPlugin(BiometricVaultPlugin.class);
+        registerPlugin(FileSaverPlugin.class);
         registerPlugin(NativeCryptoPlugin.class);
         registerPlugin(NativeHttpPlugin.class);
         super.onCreate(savedInstanceState);

@@ -5,10 +5,11 @@
 // it packs a vault's attachments into that vault's backup, and must see exactly the files the UI
 // wrote, not a second instance's view of them.
 
+import { Capacitor } from "@capacitor/core";
 import { createBlobHasher, createBlobStore, type FileAdapter, type VaultFiles } from "@core/index";
 import { askBlobStatus } from "@core/sync/blob-status";
 import { createMobileBlobBackend, deleteMobileVaultBlobs } from "./blob-store";
-import { createMobilePresenter } from "./file-presenter";
+import { createMobilePresenter, createMobileSaver } from "./file-presenter";
 import { createMobileFileSealer } from "./file-sealer";
 
 const byVault = new Map<string, VaultFiles>();
@@ -22,10 +23,15 @@ export const mobileFiles: FileAdapter = {
 				createHasher: createBlobHasher,
 			});
 			const sealer = createMobileFileSealer({ blobs });
+			const save = createMobileSaver(vaultId, sealer);
 			files = {
 				blobs,
 				sealer,
 				present: createMobilePresenter(vaultId, sealer),
+				// A getter: getPlatform() answers "web" until the bridge is injected (see biometric.ts).
+				get save() {
+					return Capacitor.getPlatform() === "android" ? save : undefined;
+				},
 				transferStatus: (hashes) => askBlobStatus(vaultId, hashes),
 			};
 			byVault.set(vaultId, files);

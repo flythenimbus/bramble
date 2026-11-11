@@ -468,6 +468,13 @@ resolves. That makes one ordering load-bearing: the auto-lock grace is armed bef
 the sheet opens, because the sheet backgrounds the app and an "Immediately" auto-lock
 would otherwise lock at once and sweep the copy before the chosen app read it.
 
+Android's share sheet has no reliable "save to device" target, so Android also gets
+`VaultFiles.save(record)`, gated by `canSaveFiles` (#217). It decrypts the same way,
+then `FileSaverPlugin.kt` opens the system save dialog (`ACTION_CREATE_DOCUMENT`) and
+copies the file there off the main thread; a failed copy deletes the half-written
+document. The copy is deleted as soon as the save resolves, since nothing else reads it.
+iOS has no Save button: its share sheet already offers Save to Files.
+
 Every path handed to Rust goes through `pathFromUri`, which decodes Capacitor's
 percent-encoded `file://` URIs. Hashes and UUIDs never needed it; a user's file name
 with a space does.

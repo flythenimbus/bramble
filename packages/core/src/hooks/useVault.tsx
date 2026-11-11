@@ -318,6 +318,8 @@ export interface VaultState {
 	canAttachFiles: boolean;
 	/** Whether this platform can hand a decrypted attachment to another app; gates Open. */
 	canOpenFiles: boolean;
+	/** Whether this platform saves an attachment through a save dialog of its own; gates Save. */
+	canSaveFiles: boolean;
 	/** Whether this platform picks attachments with its own dialog rather than `<input>`. */
 	canPickFiles: boolean;
 	/** Entries with sibling versions or a concurrent delete, by id (docs/sync-conflicts.md). */
@@ -405,6 +407,9 @@ export interface VaultActions {
 	/** Decrypt an attachment and hand it to the OS to open, share or save. Rejects where the
 	 * platform cannot, so check `canOpenFiles` first. */
 	openFile(record: FileRecord): Promise<void>;
+	/** Decrypt an attachment into a place the user picks. False if they cancel. Rejects where
+	 * the platform cannot, so check `canSaveFiles` first. */
+	saveFile(record: FileRecord): Promise<boolean>;
 	/** Whether this device holds an attachment's bytes yet. A file attached on another device
 	 * is named by the vault before its bytes arrive (see docs/file-attachments.md). */
 	hasFile(record: FileRecord): Promise<boolean>;
@@ -1516,6 +1521,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		[vaultFiles],
 	);
 	const canOpenFiles = !!vaultFiles?.present;
+	const canSaveFiles = !!vaultFiles?.save;
 	const canPickFiles = !!vaultFiles?.pick;
 	const pickFile = useCallback(async (): Promise<PickedAttachment | null> => {
 		if (!vaultFiles?.pick) throw new Error("this platform has no file dialog of its own");
@@ -1525,6 +1531,13 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 		async (record: FileRecord): Promise<void> => {
 			if (!vaultFiles?.present) throw new Error("this platform cannot open attachments");
 			await vaultFiles.present(record);
+		},
+		[vaultFiles],
+	);
+	const saveFile = useCallback(
+		async (record: FileRecord): Promise<boolean> => {
+			if (!vaultFiles?.save) throw new Error("this platform cannot save attachments");
+			return vaultFiles.save(record);
 		},
 		[vaultFiles],
 	);
@@ -2192,6 +2205,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			files,
 			canAttachFiles,
 			canOpenFiles,
+			canSaveFiles,
 			canPickFiles,
 			entries,
 			conflicts,
@@ -2218,6 +2232,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			files,
 			canAttachFiles,
 			canOpenFiles,
+			canSaveFiles,
 			canPickFiles,
 			entries,
 			conflicts,
@@ -2385,6 +2400,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			renameFile,
 			describeFile,
 			openFile,
+			saveFile,
 			hasFile,
 			fileStatus,
 			pickFile,
@@ -2440,6 +2456,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
 			renameFile,
 			describeFile,
 			openFile,
+			saveFile,
 			hasFile,
 			fileStatus,
 			pickFile,
