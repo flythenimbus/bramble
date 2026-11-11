@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
 import { usePrefs } from "../../hooks/usePrefs";
 import { isLogin, useVault } from "../../hooks/useVault";
+import { reusedPasswordIds } from "../../vault/password-reuse";
 import { allTags } from "../../vault/tags";
 import { DefaultManagerCard } from "../components/DefaultManagerCard";
 import { ReviewNudgeCard } from "../components/ReviewNudgeCard";
@@ -86,8 +87,15 @@ export function VaultHomeRoute() {
 	// Project each entry into a list row via its mode descriptor (type-agnostic).
 	const items = useMemo<VaultListItem[]>(() => {
 		const withFiles = new Set(files.map((f) => f.entryId));
+		const reused = reusedPasswordIds(entries);
 		return entries.map((entry) =>
-			toListItem(entry, showBreaches, conflicts.get(entry.id), withFiles.has(entry.id)),
+			toListItem(
+				entry,
+				showBreaches,
+				conflicts.get(entry.id),
+				withFiles.has(entry.id),
+				reused.has(entry.id),
+			),
 		);
 	}, [entries, files, showBreaches, conflicts]);
 

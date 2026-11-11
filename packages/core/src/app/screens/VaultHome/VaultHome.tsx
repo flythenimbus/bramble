@@ -19,7 +19,12 @@ import {
 	toggleSelected,
 } from "./selection";
 import { VaultSearchBar } from "./VaultSearchBar";
-import { filterAndSortEntries, type HealthFilter, type VaultSearch } from "./vault-search";
+import {
+	filterAndSortEntries,
+	type HealthFilter,
+	isAtRisk,
+	type VaultSearch,
+} from "./vault-search";
 
 /** Ties the list's scroller to the router's saved position for it. */
 export const VAULT_LIST_SCROLL_ID = "vault-list";
@@ -33,6 +38,8 @@ export interface VaultListItem {
 	initials?: string;
 	secondary: string;
 	leaked?: boolean;
+	/** A login whose password another live login also uses. */
+	reused?: boolean;
 	passkeys?: number;
 	/** Sync kept other versions of it, or a concurrent delete, awaiting a choice. */
 	conflict?: boolean;
@@ -153,7 +160,7 @@ export function VaultHome({
 		let atRisk = 0;
 		let strong = 0;
 		for (const item of live) {
-			if (item.leaked) atRisk += 1;
+			if (isAtRisk(item)) atRisk += 1;
 			else if (item.type === "login") strong += 1;
 		}
 		return { atRisk, strong };
@@ -289,6 +296,7 @@ export function VaultHome({
 											icon={item.icon}
 											initials={item.initials}
 											leaked={item.leaked}
+											reused={item.reused}
 											passkeys={item.passkeys}
 											conflict={item.conflict}
 											copyItems={item.copyItems}

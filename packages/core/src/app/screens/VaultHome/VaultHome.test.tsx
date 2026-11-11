@@ -239,6 +239,12 @@ describe("VaultHome overview cards", () => {
 		expect((card(/At Risk/) as HTMLButtonElement).disabled).toBe(false);
 	});
 
+	it("counts reused passwords as At Risk (#210)", () => {
+		overview({ health: "atRisk" }, false, [item("forum", { reused: true }), item("mail")]);
+		expect(card(/At Risk/).textContent).toContain("1");
+		expect(screen.getByText("Items (1)")).toBeTruthy();
+	});
+
 	it("lifts the filter while the Overview is collapsed", () => {
 		overview({ health: "atRisk" }, true);
 		expect(screen.getByText("Items (3)")).toBeTruthy();

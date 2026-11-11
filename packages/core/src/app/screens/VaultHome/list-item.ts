@@ -18,6 +18,7 @@ export function toListItem(
 	showBreaches: boolean,
 	conflict?: EntryConflict,
 	hasFiles = false,
+	reused = false,
 ): VaultListItem {
 	const mode = getEntryMode(entry.type);
 	const view = mode.row(entry);
@@ -27,6 +28,7 @@ export function toListItem(
 		type: entry.type,
 		name: entry.name,
 		leaked: showBreaches ? view.leaked : false,
+		reused,
 		// Custom fields are shared across all modes, so they fold into copy actions and search
 		// text here rather than in each descriptor.
 		copyItems: [...view.copyItems, ...customFieldsCopyItems(entry.customFields)],

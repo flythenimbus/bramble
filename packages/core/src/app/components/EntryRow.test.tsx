@@ -78,6 +78,19 @@ describe("EntryRow passkey marker", () => {
 // Touch surfaces have no hover, so the row's controls were only reachable by the
 // tap-then-hope behaviour WebKit synthesizes. The copy button was effectively
 // invisible on mobile.
+describe("EntryRow risk badge", () => {
+	it("says Reused for a shared password (#210)", () => {
+		renderRow({ reused: true });
+		expect(screen.getByText("Reused")).toBeTruthy();
+	});
+
+	it("says Breached when a reused password is also breached", () => {
+		renderRow({ reused: true, leaked: true });
+		expect(screen.getByText("Breached")).toBeTruthy();
+		expect(screen.queryByText("Reused")).toBeNull();
+	});
+});
+
 describe("EntryRow action controls", () => {
 	const copyItems = [{ label: "password", value: "s3cret" }];
 

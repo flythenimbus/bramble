@@ -28,6 +28,8 @@ interface EntryRowProps {
 	initials?: string;
 	/** Login-only "Breached" badge. */
 	leaked?: boolean;
+	/** Login-only "Reused" badge: another login has the same password. Breached wins. */
+	reused?: boolean;
 	/** Login-only: passkeys held by this entry. Marked on the row because deleting the entry
 	 * deletes them with it, so a duplicate carrying one is the copy worth keeping. */
 	passkeys?: number;
@@ -63,6 +65,7 @@ export const EntryRow = memo(function EntryRow({
 	icon: Icon,
 	initials,
 	leaked,
+	reused = false,
 	passkeys = 0,
 	conflict = false,
 	copyItems,
@@ -231,17 +234,19 @@ export const EntryRow = memo(function EntryRow({
 				never shifts. Touch has no hover to swap on, so the two sit side by side
 				and the actions are always reachable. */}
 			<div className={touch ? "shrink-0 flex items-center gap-1.5" : "relative shrink-0 grid"}>
-				{leaked && (
+				{(leaked || reused) && (
 					<span
 						className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] uppercase tracking-wide bg-destructive/10 text-destructive border border-destructive/20 pointer-events-none ${
 							touch
 								? ""
 								: "row-start-1 col-start-1 justify-self-end self-center opacity-100 group-hover:opacity-0 group-focus-within:opacity-0 transition-opacity"
 						}`}
-						title={t`Password found in a known data breach`}
+						title={
+							leaked ? t`Password found in a known data breach` : t`Another item uses this password`
+						}
 					>
 						<AlertTriangle className="w-3 h-3" />
-						<Trans>Breached</Trans>
+						{leaked ? <Trans>Breached</Trans> : <Trans>Reused</Trans>}
 					</span>
 				)}
 				{/* Dropped in selection mode: the row's job is then the checkbox, and a

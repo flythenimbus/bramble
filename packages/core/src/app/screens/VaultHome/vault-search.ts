@@ -75,6 +75,13 @@ export interface SearchableEntry {
 	hasFiles?: boolean;
 	/** A login whose password is in a known breach (and breach checks are on). */
 	leaked?: boolean;
+	/** A login whose password another live login also uses. */
+	reused?: boolean;
+}
+
+/** What the Overview's At Risk card counts and lists. */
+export function isAtRisk(item: Pick<SearchableEntry, "leaked" | "reused">): boolean {
+	return item.leaked === true || item.reused === true;
 }
 
 /** Split a raw query into lowercased tokens. */
@@ -184,8 +191,8 @@ export function filterAndSortEntries<T extends SearchableEntry>(
 		if (search.type !== "all" && item.type !== search.type) return false;
 		if (search.attachments && !item.hasFiles) return false;
 		// The same tests the Overview counts with, so a card lists exactly what it counted.
-		if (search.health === "atRisk" && !item.leaked) return false;
-		if (search.health === "strong" && (item.type !== "login" || item.leaked)) return false;
+		if (search.health === "atRisk" && !isAtRisk(item)) return false;
+		if (search.health === "strong" && (item.type !== "login" || isAtRisk(item))) return false;
 		// Every tag token must match some tag, as with text tokens: two of them narrow.
 		const keys = item.tagKeys;
 		if (tags.length > 0 && !tags.every((t) => keys?.some((k) => k.startsWith(t)))) return false;

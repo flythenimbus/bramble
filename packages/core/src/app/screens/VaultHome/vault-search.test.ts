@@ -100,6 +100,14 @@ describe("filterAndSortEntries", () => {
 		expect(names("all")).toEqual(["Bank", "Mail", "Wifi"]);
 	});
 
+	it("counts a reused password as At Risk, not Strong (#210)", () => {
+		const items = [item({ name: "Forum", reused: true }), item({ name: "Mail" })];
+		const names = (health: VaultSearch["health"]) =>
+			filterAndSortEntries(items, search({ health })).map((i) => i.name);
+		expect(names("atRisk")).toEqual(["Forum"]);
+		expect(names("strong")).toEqual(["Mail"]);
+	});
+
 	it("filters by tag when the query carries a #token", () => {
 		const items = [
 			item({ name: "Payroll", tagKeys: ["work"], searchText: "payroll" }),

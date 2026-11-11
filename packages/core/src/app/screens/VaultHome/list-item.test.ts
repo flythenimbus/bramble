@@ -38,6 +38,11 @@ describe("toListItem", () => {
 		expect(toListItem(login({ passkeys: [passkey] }), true).passkeys).toBe(1);
 	});
 
+	it("marks a reused password only when told to", () => {
+		expect(toListItem(login(), true, undefined, false, true).reused).toBe(true);
+		expect(toListItem(login(), true).reused).toBe(false);
+	});
+
 	it("reports zero for a login with none", () => {
 		expect(toListItem(login(), true).passkeys).toBe(0);
 	});
