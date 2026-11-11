@@ -50,6 +50,7 @@
 		"ci:check": "biome ci .",
 		"nuke:artifacts": "node scripts/nuke-artifacts.ts",
 		"release": "node --env-file-if-exists=.env.local scripts/release.ts",
+		"release-notes:preview": "node --env-file-if-exists=.env.local scripts/publish-release-notes.ts preview",
 		"bump:ios": "node scripts/bump-mobile.ts ios",
 		"bump:android": "node scripts/bump-mobile.ts android",
 		"bump:mobile": "node scripts/bump-mobile.ts mobile",

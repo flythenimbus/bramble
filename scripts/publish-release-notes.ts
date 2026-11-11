@@ -1,5 +1,6 @@
 // node scripts/publish-release-notes.ts draft <notes.json>
 // node scripts/publish-release-notes.ts publish <notes.json>
+// pnpm release-notes:preview [tag...]   (read-only: prints what would be published)
 //
 // Publishes a batch of releases' notes once, read by a person first: one Buttondown email to
 // subscribers, at most one every seven days, and the same text as a blog post on the website.
@@ -25,7 +26,9 @@
 // GITHUB_OUTPUT.
 
 import { execFileSync } from "node:child_process";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { commitFiles } from "./github-commit.ts";
 import { chat } from "./i18n/ollama.mjs";
@@ -345,7 +348,8 @@ async function recentEmails(now: number): Promise<Email[]> {
 	return emails;
 }
 
-const repo = () => process.env.GITHUB_REPOSITORY ?? "";
+// Locally, gh fills {owner}/{repo} from the checkout's remote.
+const repo = () => process.env.GITHUB_REPOSITORY ?? "{owner}/{repo}";
 const gh = (args: string[]) => execFileSync("gh", args, { encoding: "utf8" });
 
 const api = <T>(path: string) => JSON.parse(gh(["api", `repos/${repo()}/${path}`])) as T;
@@ -463,6 +467,39 @@ async function draft(out: string): Promise<void> {
 	console.log(`${email.subject}\n\n${email.body}`);
 }
 
+/** The releases a preview shows: the tags asked for, or each workflow's newest. */
+export function previewReleases(all: Published[], tags: string[]): Release[] {
+	const picked = tags.length
+		? tags.map((t) => {
+				const r = all.find((p) => p.tag === t);
+				if (!r) throw new Error(`no published release ${t}`);
+				return r;
+			})
+		: Object.values(WORKFLOWS).flatMap((suffix) => {
+				const r = all.find((p) => p.tag.endsWith(`-${suffix}`));
+				return r ? [r] : [];
+			});
+	return picked
+		.map(({ tag, name, body, url }) => ({ tag, name, body, url }))
+		.sort((a, b) => ORDER.indexOf(sectionOf(a.tag)) - ORDER.indexOf(sectionOf(b.tag)));
+}
+
+/** What `draft` would produce for these releases, skipping the run and weekly-cap checks. */
+async function preview(tags: string[]): Promise<void> {
+	const now = Date.now();
+	const releases = previewReleases(publishedReleases(), tags);
+	if (!releases.length) throw new Error("no published releases to preview");
+	const email = render(await merge(releases), releases, now);
+	const post = blogPost(email, releases, now);
+	const dir = mkdtempSync(join(tmpdir(), "release-notes-"));
+	const postFile = join(dir, basename(post.path));
+	writeFileSync(join(dir, "email.md"), `# ${email.subject}\n\n${email.body}`);
+	writeFileSync(postFile, post.content);
+	console.log(`${email.subject}\n\n${email.body}\nSaved to ${dir}: email.md and the blog post.`);
+	console.log(`To see the post on the site: cp ${postFile} ${post.path}`);
+	console.log("then `pnpm --dir website dev`, and delete the copy after.");
+}
+
 async function publish(file: string): Promise<void> {
 	const email = JSON.parse(readFileSync(file, "utf8")) as {
 		subject: string;
@@ -492,12 +529,23 @@ async function publish(file: string): Promise<void> {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-	const [command, file] = process.argv.slice(2);
-	if (!file || (command !== "draft" && command !== "publish")) {
-		console.error("usage: node scripts/publish-release-notes.ts draft|publish <notes.json>");
+	const [command, ...rest] = process.argv.slice(2);
+	const file = rest[0];
+	const run =
+		command === "preview"
+			? preview(rest)
+			: file && command === "draft"
+				? draft(file)
+				: file && command === "publish"
+					? publish(file)
+					: null;
+	if (!run) {
+		console.error(
+			"usage: node scripts/publish-release-notes.ts draft|publish <notes.json> | preview [tag...]",
+		);
 		process.exit(2);
 	}
-	(command === "draft" ? draft(file) : publish(file)).catch((e: Error) => {
+	run.catch((e: Error) => {
 		console.error(`::error::${e.message}`);
 		process.exit(1);
 	});

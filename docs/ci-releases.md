@@ -192,6 +192,11 @@ and again when publishing; hand-written emails count. iOS never takes part, sinc
 after App Store review. To draft again after rejecting one: `gh workflow run
 publish-release-notes.yml`.
 
+To see what would be published without running anything: `pnpm release-notes:preview [tag...]`
+merges each workflow's newest release (or the tags given) and prints the email, skipping the
+run and weekly checks. It only reads GitHub releases and calls DeepSeek; nothing is sent or
+committed.
+
 Setup: environment `release-notes-draft` (no reviewer) holds `DEEPSEEK_API_KEY` and a read-only
 `BUTTONDOWN_API_KEY`; environment `release-notes` (required reviewer) holds the sending
 `BUTTONDOWN_API_KEY`, so it is out of reach until the approval.

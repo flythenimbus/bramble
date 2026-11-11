@@ -14,6 +14,7 @@ import {
 	type Published,
 	parseMerge,
 	points,
+	previewReleases,
 	type Release,
 	type RunIntent,
 	render,
@@ -263,5 +264,33 @@ describe("blogPost", () => {
 				'description: "What changed in Desktop 0.18.0, Chromium Extension 1.39.0 and Android 0.30.0."\n' +
 				"pubDate: 2026-11-11\n---\n\n## General updates\n\n- G.\n",
 		);
+	});
+});
+
+describe("previewReleases", () => {
+	const pub = (tag: string): Published => ({ ...rel(tag, tag, ""), published_at: at(NOW) });
+	const all = [
+		pub("1.38.0-chromium"),
+		pub("0.29.0-android"),
+		pub("1.37.0-chromium"),
+		pub("0.17.0-desktop"),
+	];
+
+	it("takes each workflow's newest, desktop first", () => {
+		assert.deepEqual(
+			previewReleases(all, []).map((r) => r.tag),
+			["0.17.0-desktop", "1.38.0-chromium", "0.29.0-android"],
+		);
+	});
+
+	it("takes the tags asked for", () => {
+		assert.deepEqual(
+			previewReleases(all, ["1.37.0-chromium"]).map((r) => r.tag),
+			["1.37.0-chromium"],
+		);
+	});
+
+	it("refuses a tag that is not published", () => {
+		assert.throws(() => previewReleases(all, ["9.9.9-firefox"]), /no published release/);
 	});
 });
