@@ -3,7 +3,9 @@
 //
 // One Buttondown email per batch of releases, at most one every seven days, read by a person before
 // it sends. .github/workflows/newsletter.yml runs `draft` whenever a release run finishes; only runs
-// dispatched with `--email` take part, and they say so in their name ("<tag> +email").
+// dispatched with `--email` take part. Those run a no-op job, "Email subscribers", that is skipped
+// otherwise: the API does not show a run's inputs, but it does show its jobs. A run's release is
+// the one with its workflow's tag suffix published while it ran.
 //
 // - While another such run is still going, `draft` does nothing: the last one to finish drafts for
 //   all of them, so releases approved hours apart still share one email.
@@ -28,12 +30,13 @@ const API = "https://api.buttondown.com/v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const WEEK_MS = 7 * DAY_MS;
 
-export const WORKFLOWS = [
-	"desktop-release.yml",
-	"chrome-release.yml",
-	"firefox-release.yml",
-	"android-release.yml",
-];
+/** Each release workflow and the suffix of the tags it publishes. */
+export const WORKFLOWS: Record<string, string> = {
+	"desktop-release.yml": "desktop",
+	"chrome-release.yml": "chromium",
+	"firefox-release.yml": "firefox",
+	"android-release.yml": "android",
+};
 
 // Every status where subscribers got, or are about to get, the email. Not draft, errored, deleted.
 export const SENDING = [
@@ -62,16 +65,38 @@ export interface Email {
 }
 
 export interface Run {
-	display_title: string;
+	id: number;
+	name: string;
 	status: string;
 	created_at: string;
+	updated_at: string;
 }
+
+export interface Job {
+	name: string;
+	status: string;
+	conclusion: string | null;
+}
+
+/** A release run, the tag suffix its workflow publishes, and whether it asked for an email. */
+export interface RunIntent extends Run {
+	suffix: string;
+	intent: Intent;
+}
+export type Intent = "yes" | "no" | "unknown";
+
+export const INTENT_JOB = "Email subscribers";
 
 export interface Release {
 	tag: string;
 	name: string;
 	body: string;
 	url: string;
+}
+
+/** A GitHub release as the API lists it. */
+export interface Published extends Release {
+	published_at: string | null;
 }
 
 export interface Merged {
@@ -86,22 +111,46 @@ export function sectionOf(tag: string): Section {
 	throw new Error(`no newsletter section for ${tag}`);
 }
 
-/** The tag of a release run that asked for an email, from its name; null for any other run. */
-export function markedTag(title: string): string | null {
-	return title.match(/^(\S+-(?:desktop|chromium|firefox|android)) \+email$/)?.[1] ?? null;
+/**
+ * Whether a release run asked for an email, from its jobs: "no" if the intent job was skipped,
+ * "unknown" while GitHub has yet to decide, which counts as waiting.
+ */
+export function intentOf(jobs: Job[]): Intent {
+	const job = jobs.find((j) => j.name === INTENT_JOB);
+	if (job?.status !== "completed") return "unknown";
+	return job.conclusion === "success" ? "yes" : "no";
 }
 
-/** Of the runs that asked for an email: those still going, and the tags of those done this week. */
-export function batch(runs: Run[], now: number): { waiting: string[]; tags: string[] } {
+/**
+ * Of the runs that asked for an email: the names of those still going, and the releases this
+ * week's finished ones published. A finished run with no release failed before publishing; one
+ * with no intent job predates it, and never asked.
+ */
+export function batch(
+	runs: RunIntent[],
+	releases: Published[],
+	now: number,
+): { waiting: string[]; releases: Release[] } {
 	const waiting: string[] = [];
-	const tags: string[] = [];
+	const found: Release[] = [];
 	for (const r of runs) {
-		const tag = markedTag(r.display_title);
-		if (!tag) continue;
-		if (r.status !== "completed") waiting.push(tag);
-		else if (Date.parse(r.created_at) > now - WEEK_MS && !tags.includes(tag)) tags.push(tag);
+		if (r.intent === "no") continue;
+		if (r.status !== "completed") {
+			waiting.push(`${r.name} (run ${r.id})`);
+			continue;
+		}
+		if (r.intent !== "yes" || Date.parse(r.created_at) <= now - WEEK_MS) continue;
+		const from = Date.parse(r.created_at);
+		const to = Date.parse(r.updated_at);
+		const release = releases.find((p) => {
+			const at = Date.parse(p.published_at ?? "");
+			return p.tag.endsWith(`-${r.suffix}`) && at >= from && at <= to;
+		});
+		if (release && !found.some((f) => f.tag === release.tag))
+			found.push({ tag: release.tag, name: release.name, body: release.body, url: release.url });
 	}
-	return { waiting, tags };
+	found.sort((a, b) => ORDER.indexOf(sectionOf(a.tag)) - ORDER.indexOf(sectionOf(b.tag)));
+	return { waiting, releases: found };
 }
 
 /** The email that blocks a send now, if any: one sent in the last week, or one still going out. */
@@ -270,46 +319,55 @@ async function recentEmails(now: number): Promise<Email[]> {
 const repo = () => process.env.GITHUB_REPOSITORY ?? "";
 const gh = (args: string[]) => execFileSync("gh", args, { encoding: "utf8" });
 
-function releaseRuns(now: number): Run[] {
+const api = <T>(path: string) => JSON.parse(gh(["api", `repos/${repo()}/${path}`])) as T;
+
+function releaseRuns(now: number): RunIntent[] {
 	const since = new Date(now - WEEK_MS - DAY_MS).toISOString().slice(0, 10);
-	return WORKFLOWS.flatMap(
-		(w) =>
-			(
-				JSON.parse(
-					gh([
-						"api",
-						`repos/${repo()}/actions/workflows/${w}/runs?event=workflow_dispatch&created=>=${since}&per_page=100`,
-					]),
-				) as { workflow_runs: Run[] }
-			).workflow_runs,
+	return Object.entries(WORKFLOWS).flatMap(([workflow, suffix]) =>
+		api<{ workflow_runs: Run[] }>(
+			`actions/workflows/${workflow}/runs?event=workflow_dispatch&created=>=${since}&per_page=100`,
+		).workflow_runs.map((r) => ({
+			id: r.id,
+			name: r.name,
+			status: r.status,
+			created_at: r.created_at,
+			updated_at: r.updated_at,
+			suffix,
+			intent: intentOf(
+				api<{ jobs: Job[] }>(`actions/runs/${r.id}/jobs?filter=latest&per_page=100`).jobs,
+			),
+		})),
 	);
 }
 
-/** The release, if it is out: a run that asked for an email may have failed before publishing. */
-function published(tag: string): Release | null {
-	try {
-		const r = JSON.parse(
-			gh([
-				"release",
-				"view",
-				tag,
-				"--repo",
-				repo(),
-				"--json",
-				"name,body,url,isDraft,isPrerelease",
-			]),
-		) as Release & { isDraft: boolean; isPrerelease: boolean };
-		return r.isDraft || r.isPrerelease ? null : { tag, name: r.name, body: r.body, url: r.url };
-	} catch {
-		return null;
-	}
+/** Published releases, newest first: drafts and prereleases never go in an email. */
+function publishedReleases(): Published[] {
+	return api<
+		{
+			tag_name: string;
+			name: string;
+			body: string | null;
+			html_url: string;
+			draft: boolean;
+			prerelease: boolean;
+			published_at: string | null;
+		}[]
+	>("releases?per_page=100")
+		.filter((r) => !r.draft && !r.prerelease)
+		.map((r) => ({
+			tag: r.tag_name,
+			name: r.name,
+			body: r.body ?? "",
+			url: r.html_url,
+			published_at: r.published_at,
+		}));
 }
 
 const notice = (msg: string) => console.log(`::notice::${msg}`);
 
 async function draft(out: string): Promise<void> {
 	const now = Date.now();
-	const { waiting, tags } = batch(releaseRuns(now), now);
+	const { waiting, releases } = batch(releaseRuns(now), publishedReleases(), now);
 	if (waiting.length) {
 		notice(`No email yet: ${waiting.join(", ")} still running; the last to finish drafts it`);
 		return;
@@ -322,10 +380,6 @@ async function draft(out: string): Promise<void> {
 		);
 		return;
 	}
-	const releases = tags
-		.map(published)
-		.filter((r): r is Release => r !== null)
-		.sort((a, b) => ORDER.indexOf(sectionOf(a.tag)) - ORDER.indexOf(sectionOf(b.tag)));
 	if (!releases.length) {
 		notice("No email: no release that asked for one was published this week");
 		return;

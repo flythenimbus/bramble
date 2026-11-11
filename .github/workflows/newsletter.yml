@@ -2,8 +2,8 @@ name: Newsletter
 
 # One Buttondown email per batch of releases, at most one a week, sent only after an approval
 # (scripts/newsletter.ts has the rules). Runs whenever a release run finishes; only runs dispatched
-# with `email: true` (`pnpm release <target> <version> --email`) take part, which they say in their
-# name. The last of them to finish drafts the email for all of them into this run's summary; the
+# with `email: true` (`pnpm release <target> <version> --email`) take part, which their "Email
+# subscribers" job shows by running rather than being skipped. The last of them to finish drafts the email for all of them into this run's summary; the
 # send job then waits for an approval in the `newsletter` environment. Dispatch by hand to draft
 # again, after a rejected draft or a failed send.
 #
@@ -28,7 +28,6 @@ concurrency:
 jobs:
   draft:
     name: Draft
-    if: ${{ github.event_name == 'workflow_dispatch' || endsWith(github.event.workflow_run.display_title, ' +email') }}
     runs-on: ubuntu-latest
     environment: newsletter-draft
     permissions:

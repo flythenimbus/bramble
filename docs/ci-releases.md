@@ -178,9 +178,11 @@ still does not exist: four approvals and four sets of notes, to save one command
 ## Emailing subscribers
 
 `--email` on a GitHub-route release (`pnpm release desktop minor --email`) sets the workflow's
-`email` input, off by default, and the run is named `<tag> +email`. `newsletter.yml` runs whenever
-a release run finishes. While any other `+email` run is still going it does nothing, so the last
-one to finish drafts a single email for every `+email` release published that week: "General
+`email` input, off by default, which runs the release's no-op "Email subscribers" job
+instead of skipping it: the API shows a run's jobs but not its inputs. `newsletter.yml` runs
+whenever a release run finishes. While any other release that asked for an email is still going
+it does nothing, so the last one to finish drafts a single email for every such release published
+that week: "General
 updates" for what every platform got, then Desktop, Browser extensions and Mobile, merged by
 DeepSeek (without it each platform lists its own notes). The draft is in that run's summary, and
 the send job waits for an approval in the `newsletter` environment. At most one email goes out

@@ -1,7 +1,4 @@
 name: Chrome release
-# The tag, and " +email" when it asked for one: newsletter.yml reads that to batch the email.
-run-name: "${{ inputs.dry_run && 'Dry run: ' || '' }}${{ inputs.version }}-chromium${{ inputs.email && !inputs.dry_run && ' +email' || '' }}"
-
 # Builds the Chromium extension, packs and signs the .crx, submits it to the Chrome Web Store, and
 # publishes the GitHub release, so a release needs neither a Mac nor a YubiKey. docs/ci-releases.md
 # has the trade; this follows the Firefox workflow's shape, for the same reasons.
@@ -54,6 +51,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Does nothing. Running at all is how newsletter.yml learns this release asked for an email: the
+  # API shows a run's jobs, not its inputs. A static name, since a skipped job shows its source.
+  email:
+    name: Email subscribers
+    if: ${{ inputs.email && !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 1
+    steps:
+      - run: echo "newsletter.yml drafts the email once the last release that asked for one is out"
+
   build:
     name: Build
     runs-on: ubuntu-24.04

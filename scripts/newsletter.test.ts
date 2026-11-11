@@ -7,11 +7,14 @@ import {
 	blockingEmail,
 	type Email,
 	fallbackMerge,
-	markedTag,
+	type Intent,
+	intentOf,
+	type Job,
+	type Published,
 	parseMerge,
 	points,
 	type Release,
-	type Run,
+	type RunIntent,
 	render,
 	WEEK_MS,
 } from "./newsletter.ts";
@@ -65,48 +68,99 @@ describe("blockingEmail", () => {
 	});
 });
 
-describe("markedTag", () => {
-	it("reads the tag of a run that asked for an email", () => {
-		assert.equal(markedTag("0.17.0-desktop +email"), "0.17.0-desktop");
+describe("intentOf", () => {
+	const job = (status: string, conclusion: string | null, name = "Email subscribers"): Job => ({
+		name,
+		status,
+		conclusion,
 	});
 
-	it("ignores runs that did not, dry runs and other workflows", () => {
-		assert.equal(markedTag("0.17.0-desktop"), null);
-		assert.equal(markedTag("Dry run: 0.17.0-desktop"), null);
-		assert.equal(markedTag("1.24.0-ios +email"), null);
+	it("is yes when the intent job ran", () => {
+		assert.equal(intentOf([job("completed", "success")]), "yes");
+	});
+
+	it("is no when it was skipped", () => {
+		assert.equal(intentOf([job("completed", "skipped")]), "no");
+	});
+
+	it("is unknown before GitHub has decided, or with no such job", () => {
+		assert.equal(intentOf([job("queued", null)]), "unknown");
+		assert.equal(intentOf([]), "unknown");
+		assert.equal(intentOf([job("completed", "success", "Build (unsigned)")]), "unknown");
 	});
 });
 
 describe("batch", () => {
-	const run = (display_title: string, status = "completed", ago = 3600_000): Run => ({
-		display_title,
+	const HOUR = 3600_000;
+	let id = 0;
+	const run = (
+		suffix: string,
+		intent: Intent,
+		status = "completed",
+		start = 3 * HOUR,
+	): RunIntent => ({
+		id: ++id,
+		name: `${suffix} release`,
 		status,
-		created_at: at(NOW - ago),
+		created_at: at(NOW - start),
+		updated_at: at(NOW - start + 2 * HOUR),
+		suffix,
+		intent,
+	});
+	const pub = (tag: string, ago: number): Published => ({
+		tag,
+		name: tag,
+		body: "",
+		url: `https://example.test/${tag}`,
+		published_at: at(NOW - ago),
 	});
 
-	it("waits while another run that asked for an email is going", () => {
+	it("waits while another run that asked for an email, or might have, is going", () => {
 		const b = batch(
 			[
-				run("1.38.0-chromium +email"),
-				run("0.17.0-desktop +email", "waiting"),
-				run("0.30.0-android", "in_progress"),
+				run("chromium", "yes"),
+				run("desktop", "yes", "waiting"),
+				run("android", "no", "in_progress"),
+				run("firefox", "unknown", "queued"),
+			],
+			[pub("1.38.0-chromium", 2 * HOUR)],
+			NOW,
+		);
+		assert.deepEqual(b.waiting, [`desktop release (run ${id - 2})`, `firefox release (run ${id})`]);
+		assert.deepEqual(
+			b.releases.map((r) => r.tag),
+			["1.38.0-chromium"],
+		);
+	});
+
+	it("finds each run's release by suffix and publish time, in section order", () => {
+		const b = batch(
+			[run("android", "yes"), run("chromium", "yes"), run("desktop", "yes")],
+			[
+				pub("0.30.0-android", 2 * HOUR),
+				pub("0.29.0-android", 50 * HOUR), // an earlier release, outside this run
+				pub("1.38.0-chromium", 2 * HOUR),
+				pub("0.18.0-desktop", 2 * HOUR),
 			],
 			NOW,
 		);
-		assert.deepEqual(b, { waiting: ["0.17.0-desktop"], tags: ["1.38.0-chromium"] });
+		assert.deepEqual(
+			b.releases.map((r) => r.tag),
+			["0.18.0-desktop", "1.38.0-chromium", "0.30.0-android"],
+		);
 	});
 
-	it("takes this week's finished runs once each, and nothing older", () => {
+	it("leaves out runs that did not ask, did not publish, or are over a week old", () => {
 		const b = batch(
 			[
-				run("1.38.0-chromium +email"),
-				run("1.38.0-chromium +email"),
-				run("1.35.0-firefox +email"),
-				run("0.28.0-android +email", "completed", WEEK_MS + 1000),
+				run("chromium", "no"),
+				run("firefox", "yes"),
+				run("android", "yes", "completed", WEEK_MS + HOUR),
 			],
+			[pub("1.38.0-chromium", 2 * HOUR), pub("0.29.0-android", WEEK_MS)],
 			NOW,
 		);
-		assert.deepEqual(b, { waiting: [], tags: ["1.38.0-chromium", "1.35.0-firefox"] });
+		assert.deepEqual(b, { waiting: [], releases: [] });
 	});
 });
 
