@@ -2,10 +2,13 @@ import CryptoKit
 import Foundation
 
 // Computes a live TOTP code from a stored key, for one-time-code AutoFill (ProvidesOneTimeCodes).
-// Mirrors android/.../Totp.kt and util/totp.ts: accepts an `otpauth://totp/...` URI or a bare
-// base32 secret; RFC 6238 defaults (SHA1, 6 digits, 30s). Only the digits ever leave here, never
-// the seed. Returns nil for HOTP / garbage so callers can skip the entry.
+// Mirrors android/.../Totp.kt and util/totp.ts: accepts an `otpauth://totp/...` URI, a Steam Guard
+// key (`steam://`, `otpauth://steam/` or `encoder=steam`) or a bare base32 secret; RFC 6238
+// defaults (SHA1, 6 digits, 30s). Only the code ever leaves here, never the seed. Returns nil for
+// HOTP / garbage so callers can skip the entry.
 enum Totp {
+
+	private static let steamAlphabet = Array("23456789BCDFGHJKMNPQRTVWXY")
 
 	static func generate(_ key: String?, now: Date = Date()) -> String? {
 		guard let raw = key?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
@@ -15,26 +18,50 @@ enum Totp {
 		var digits = 6
 		var period = 30.0
 		var algorithm = "SHA1"
-		if raw.lowercased().hasPrefix("otpauth://") {
-			guard raw.lowercased().hasPrefix("otpauth://totp"),  // HOTP unsupported
-				let items = URLComponents(string: raw)?.queryItems,
-				let secret = items.first(where: { $0.name == "secret" })?.value
+		var steam = false
+		let lower = raw.lowercased()
+		if lower.hasPrefix("steam://") {
+			secretB32 = String(raw.dropFirst("steam://".count))
+			steam = true
+		} else if lower.hasPrefix("otpauth://") {
+			guard let parts = URLComponents(string: raw), let items = parts.queryItems,
+				let secret = items.first(where: { $0.name.lowercased() == "secret" })?.value
 			else { return nil }
+			let host = parts.host?.lowercased()
+			steam =
+				host == "steam"
+				|| items.first(where: { $0.name.lowercased() == "encoder" })?.value?.lowercased() == "steam"
+			guard host == "totp" || steam else { return nil }  // HOTP unsupported
 			secretB32 = secret
 			if let d = items.first(where: { $0.name == "digits" })?.value, let v = Int(d) { digits = v }
 			if let p = items.first(where: { $0.name == "period" })?.value, let v = Double(p) { period = v }
-			if let a = items.first(where: { $0.name == "algorithm" })?.value { algorithm = a.uppercased() }
+			if let a = items.first(where: { $0.name == "algorithm" })?.value {
+				algorithm = a.uppercased().replacingOccurrences(of: "-", with: "")
+			}
+		}
+		guard let secret = base32Decode(secretB32) else { return nil }
+		if steam {
+			let counter = UInt64(max(0, (now.timeIntervalSince1970 / 30).rounded(.down)))
+			guard var n = truncate(secret: secret, counter: counter, algorithm: "SHA1") else { return nil }
+			var code = ""
+			for _ in 0..<5 {
+				code.append(steamAlphabet[Int(n % UInt32(steamAlphabet.count))])
+				n /= UInt32(steamAlphabet.count)
+			}
+			return code
 		}
 		// The dynamic truncation yields 31 bits, so more than 10 digits is meaningless.
-		guard period > 0, (1...10).contains(digits), let secret = base32Decode(secretB32) else {
+		guard period > 0, (1...10).contains(digits) else { return nil }
+		let counter = UInt64(max(0, (now.timeIntervalSince1970 / period).rounded(.down)))
+		guard let binary = truncate(secret: secret, counter: counter, algorithm: algorithm) else {
 			return nil
 		}
-		let counter = UInt64(max(0, (now.timeIntervalSince1970 / period).rounded(.down)))
-		return hotp(secret: secret, counter: counter, digits: digits, algorithm: algorithm)
+		let mod = UInt64(pow(10.0, Double(digits)))
+		return String(format: "%0\(digits)llu", UInt64(binary) % mod)
 	}
 
-	private static func hotp(secret: Data, counter: UInt64, digits: Int, algorithm: String) -> String?
-	{
+	// RFC 4226 dynamic truncation: the 31-bit value a code is cut from.
+	private static func truncate(secret: Data, counter: UInt64, algorithm: String) -> UInt32? {
 		var be = counter.bigEndian
 		let msg = withUnsafeBytes(of: &be) { Data($0) }
 		let key = SymmetricKey(data: secret)
@@ -47,11 +74,8 @@ enum Totp {
 		guard let last = mac.last else { return nil }
 		let offset = Int(last & 0x0f)
 		guard mac.count >= offset + 4 else { return nil }
-		let binary =
-			(UInt32(mac[offset] & 0x7f) << 24) | (UInt32(mac[offset + 1]) << 16)
+		return (UInt32(mac[offset] & 0x7f) << 24) | (UInt32(mac[offset + 1]) << 16)
 			| (UInt32(mac[offset + 2]) << 8) | UInt32(mac[offset + 3])
-		let mod = UInt32(pow(10.0, Double(digits)))
-		return String(format: "%0\(digits)u", binary % mod)
 	}
 
 	private static func base32Decode(_ input: String) -> Data? {

@@ -136,7 +136,8 @@ function withholdPasskeyExtensions(items: CxfItem[]): number {
 /** Structured TOTP, or null when the stored key isn't one we can parse (HOTP, garbage). */
 function totpCredential(stored: string): CxfCredential | null {
 	const parsed = parseTotp(stored);
-	if (!parsed) return null;
+	// CXF has no Steam encoding; as a custom field the key at least survives.
+	if (!parsed || parsed.steam) return null;
 	const { totp, issuer, account } = parsed;
 	return {
 		type: "totp",

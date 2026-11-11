@@ -107,6 +107,16 @@ describe("toCxf: logins", () => {
 		expect(run(e).warnings[0]).toMatch(/one-time-code/);
 	});
 
+	it("keeps a Steam key as a custom field, since CXF can't express Steam codes", () => {
+		const e = login({ totp: "steam://JBSWY3DPEHPK3PXP" });
+		expect(cred(e, "totp")).toBeUndefined();
+		expect(cred(e, "custom-fields")?.fields).toContainEqual({
+			fieldType: "concealed-string",
+			value: "steam://JBSWY3DPEHPK3PXP",
+			label: "TOTP",
+		});
+	});
+
 	it("re-encodes passkey ids from our standard base64 to CXF's unpadded base64url", () => {
 		// 0xfb 0xff 0xbe -> standard "+/++", base64url "-_--", and the padding must go.
 		const b64 = bytesToBase64(new Uint8Array([0xfb, 0xff, 0xbe]));

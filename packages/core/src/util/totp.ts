@@ -5,27 +5,107 @@ export interface ParsedTotp {
 	totp: OTPAuth.TOTP;
 	issuer: string;
 	account: string;
+	/** A Steam Guard key: `totp.generate()` yields Steam's 5-character code. */
+	steam: boolean;
+}
+
+const STEAM_ALPHABET = "23456789BCDFGHJKMNPQRTVWXY";
+
+/** Steam Guard: SHA-1, a 30 s step, and 5 characters from Steam's alphabet instead of digits. */
+class SteamTotp extends OTPAuth.TOTP {
+	constructor(config: { secret: OTPAuth.Secret; issuer: string; label: string }) {
+		// 10 digits is the whole 31-bit truncated value, which generate() re-encodes.
+		super({ ...config, algorithm: "SHA1", digits: 10, period: 30 });
+	}
+
+	override generate(opts?: { timestamp?: number }): string {
+		let n = Number(super.generate(opts));
+		let code = "";
+		for (let i = 0; i < 5; i++) {
+			code += STEAM_ALPHABET[n % 26];
+			n = Math.floor(n / 26);
+		}
+		return code;
+	}
+}
+
+function secretFromBase32(value: string | undefined): OTPAuth.Secret | null {
+	const clean = value?.replace(/[\s-]/g, "").toUpperCase();
+	return clean && !/^=*$/.test(clean) ? OTPAuth.Secret.fromBase32(clean) : null;
+}
+
+function decodeLoosely(s: string): string {
+	try {
+		return decodeURIComponent(s);
+	} catch {
+		return s;
+	}
 }
 
 /**
- * Parse a stored key into a TOTP generator. Accepts an `otpauth://totp/...` URI
- * or a bare base32 secret; returns null for anything else (HOTP, migration
- * blobs, garbage) so callers can show an "invalid key" state.
+ * Read an `otpauth://` URI the way Android and iOS autofill do (Totp.kt, Totp.swift) rather than
+ * by the strict key-URI grammar, which refuses URIs other apps export: an empty label, a spaced
+ * secret, `period=30.0`, a `?` inside a value. #204.
+ */
+function parseOtpauth(raw: string): ParsedTotp | null {
+	const url = new URL(raw);
+	const kind = url.host.toLowerCase();
+	const params = new Map<string, string>();
+	for (const [k, v] of url.searchParams) params.set(k.toLowerCase(), v);
+	const steam = kind === "steam" || params.get("encoder")?.toLowerCase() === "steam";
+	if (kind !== "totp" && !steam) return null;
+
+	const secret = secretFromBase32(params.get("secret"));
+	if (!secret) return null;
+	const label = decodeLoosely(url.pathname.replace(/^\//, ""));
+	const colon = label.indexOf(":");
+	const account = colon < 0 ? label : label.slice(colon + 1).trim();
+	const issuer = params.get("issuer") || (colon < 0 ? "" : label.slice(0, colon));
+	if (steam)
+		return { totp: new SteamTotp({ secret, issuer, label: account }), issuer, account, steam };
+
+	const period = Number(params.get("period") ?? 30);
+	const digits = Number(params.get("digits") ?? 6);
+	// The dynamic truncation yields 31 bits, so more than 10 digits is meaningless.
+	if (
+		!Number.isInteger(period) ||
+		period < 1 ||
+		!Number.isInteger(digits) ||
+		digits < 1 ||
+		digits > 10
+	)
+		return null;
+	// The constructor canonicalizes the algorithm ("sha-256" -> SHA256) and throws on an unknown one.
+	const algorithm = params.get("algorithm") ?? "SHA1";
+	const totp = new OTPAuth.TOTP({ secret, issuer, label: account, algorithm, digits, period });
+	return { totp, issuer, account, steam };
+}
+
+/**
+ * Parse a stored key into a TOTP generator. Accepts an `otpauth://totp/...` URI, a Steam Guard key
+ * (`steam://<secret>`, `otpauth://steam/...` or `encoder=steam`), or a bare base32 secret; returns
+ * null for anything else (HOTP, migration blobs, garbage) so callers can show an "invalid key" state.
  */
 export function parseTotp(input: string | undefined | null): ParsedTotp | null {
 	const raw = input?.trim();
 	if (!raw) return null;
 	try {
-		if (/^otpauth:\/\//i.test(raw)) {
-			const parsed = OTPAuth.URI.parse(raw);
-			// URI.parse also yields HOTP; we only generate TOTP.
-			if (!(parsed instanceof OTPAuth.TOTP)) return null;
-			return { totp: parsed, issuer: parsed.issuer, account: parsed.label };
+		if (/^otpauth:\/\//i.test(raw)) return parseOtpauth(raw);
+		if (/^steam:\/\//i.test(raw)) {
+			const secret = secretFromBase32(raw.slice("steam://".length));
+			if (!secret) return null;
+			return {
+				totp: new SteamTotp({ secret, issuer: "Steam", label: "" }),
+				issuer: "Steam",
+				account: "",
+				steam: true,
+			};
 		}
-		const secret = OTPAuth.Secret.fromBase32(raw.replace(/[\s-]/g, "").toUpperCase());
+		const secret = secretFromBase32(raw);
+		if (!secret) return null;
 		// RFC 6238 defaults for a bare secret.
 		const totp = new OTPAuth.TOTP({ secret, algorithm: "SHA1", digits: 6, period: 30 });
-		return { totp, issuer: "", account: "" };
+		return { totp, issuer: "", account: "", steam: false };
 	} catch {
 		return null;
 	}

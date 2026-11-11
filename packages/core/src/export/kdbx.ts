@@ -17,6 +17,7 @@
 import type { KdbxSaveEntry, KdbxSaveFile } from "../adapters/crypto";
 import type { EntryData } from "../hooks/useVault";
 import type { FileRecord } from "../sync";
+import { parseTotp } from "../util/totp";
 import type { FileMeta } from "../vault/file-mutations";
 
 type Pair = { key: string; value: string; protected: boolean };
@@ -53,10 +54,18 @@ class Fields {
 	}
 }
 
-/** KeePassXC reads a full `otpauth://` URI from `otp`; a bare base32 secret is the
- * KeeOtp `TOTP Seed` convention. Our own importer accepts either. */
+/** KeePassXC reads a full `otpauth://` URI from `otp`, and a Steam key as `encoder=steam`; a bare
+ * base32 secret is the KeeOtp `TOTP Seed` convention. Our own importer accepts all three. */
 function addTotp(f: Fields, totp: string): void {
-	if (/^otpauth:\/\//i.test(totp.trim())) f.add("otp", totp, true);
+	const steam = parseTotp(totp);
+	if (steam?.steam) {
+		const label = encodeURIComponent(`Steam:${steam.account}`);
+		f.add(
+			"otp",
+			`otpauth://totp/${label}?secret=${steam.totp.secret.base32}&issuer=Steam&encoder=steam`,
+			true,
+		);
+	} else if (/^otpauth:\/\//i.test(totp.trim())) f.add("otp", totp, true);
 	else f.add("TOTP Seed", totp, true);
 }
 

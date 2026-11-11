@@ -67,6 +67,15 @@ describe("toKdbxEntries: logins", () => {
 		expect(isProtected(bare, "TOTP Seed")).toBe(true);
 	});
 
+	it("writes a Steam key in KeePassXC's encoder=steam form", async () => {
+		const steam = login({ totp: "steam://JBSWY3DPEHPK3PXP" });
+		expect(value(steam, "otp")).toBe(
+			"otpauth://totp/Steam%3A?secret=JBSWY3DPEHPK3PXP&issuer=Steam&encoder=steam",
+		);
+		expect(value(steam, "TOTP Seed")).toBeUndefined();
+		expect(isProtected(steam, "otp")).toBe(true);
+	});
+
 	it("omits fields with no value", async () => {
 		const keys = fields(login({ urls: [] })).map((s) => s.key);
 		expect(keys).not.toContain("URL");

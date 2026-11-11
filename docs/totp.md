@@ -15,10 +15,17 @@ how the OTP field is detected and filled.
 
 ## Accepted input shapes
 
-`parseTotp` accepts the two shapes a user can actually end up with:
+`parseTotp` accepts the shapes a user can actually end up with:
 
 - A full **`otpauth://totp/...` URI**, which a scanned QR code yields. It carries
-  issuer, account, digits, period, and algorithm.
+  issuer, account, digits, period, and algorithm. It is read loosely, the way
+  Android and iOS autofill (`Totp.kt`, `Totp.swift`) always have, not by the
+  strict key-URI grammar, which refuses URIs other apps export: an empty label,
+  a spaced secret, `period=30.000000`, a `?` inside a value (#204).
+- A **Steam Guard key**: `steam://<secret>` (Bitwarden), `otpauth://steam/...`
+  (Aegis) or `encoder=steam` (KeePassXC). Steam uses SHA1 and 30 seconds but
+  shows 5 characters from its own alphabet. KDBX export writes the KeePassXC
+  form; CXF has no Steam encoding, so it exports as a custom field (#55).
 - A **bare base32 secret**, which sites print under the QR as a "setup key",
   possibly with the spaces or dashes they group it into. Whitespace and dashes
   are stripped and the secret is uppercased before parsing.
@@ -30,8 +37,8 @@ Anything else returns `null` so callers can show a clear "invalid key" state
 rather than a wrong code:
 
 - empty input,
-- HOTP (counter-based) URIs, even though `OTPAuth.URI.parse` accepts them, since
-  only TOTP is generated,
+- HOTP (counter-based) URIs, since only TOTP is generated,
+- an unknown algorithm, or digits outside 1 to 10,
 - Google's `otpauth-migration://` export blob,
 - an unparseable secret.
 
