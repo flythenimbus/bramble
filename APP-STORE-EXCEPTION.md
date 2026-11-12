@@ -42,4 +42,7 @@ The permission covers the code of each copyright holder who has granted it:
 A contribution made before this permission was added carries the GNU GPL version 3 alone until
 its author agrees to the permission. Authors who have agreed are listed here:
 
-- (none yet)
+- 0cwa
+- ashishgogula
+- daflyinbed
+- omnizs38
