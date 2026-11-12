@@ -4,8 +4,9 @@ import type { BrowserContext, Frame, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { backgroundWorker, createVault, openPopup, seedExampleLogin } from "./helpers";
 
-// The fill shortcut (#215): Ctrl+Shift+L (Cmd+Shift+L on a Mac) fills the page's login, also with
-// "Autofill on web pages" off, and shows the list when several logins match.
+// Two ways to act on a site's logins besides picking one: the fill shortcut (#215), Ctrl+Shift+L
+// (Cmd+Shift+L on a Mac), which fills the page's login, also with "Autofill on web pages" off, and
+// shows the list when several match; and the dropdown's New login row (#213).
 //
 // A synthetic key press never reaches Chrome's extension shortcuts, so the test dispatches the
 // command to the background's real listener, with the real tab, as the browser would.
@@ -102,4 +103,24 @@ test("it shows the list when several logins match, and fills nothing", async ({
 	await expect.poll(() => pickerFrame(page), { timeout: 10_000 }).toBeDefined();
 	await expect(pickerFrame(page)?.getByText("Second Login") ?? page.locator("none")).toBeVisible();
 	await expect(page.locator("#pass")).toHaveValue("");
+});
+
+// #213: under a site's logins, a row that opens Bramble's form to save another one, with the site
+// and a name filled in.
+test("the dropdown's New login row opens the create form for the site", async ({
+	context,
+	extensionId,
+}) => {
+	await vaultWithLogin(context, extensionId);
+	const page = await openSite(context);
+	await page.locator("#user").click();
+	await expect.poll(() => pickerFrame(page), { timeout: 10_000 }).toBeDefined();
+	const row = pickerFrame(page)?.locator("[data-tp-new-login]");
+	if (!row) throw new Error("no picker");
+	await expect(row).toBeVisible();
+
+	const [form] = await Promise.all([context.waitForEvent("page"), row.click()]);
+	await expect(form.getByRole("heading", { name: "New Login" })).toBeVisible();
+	await expect(form.getByLabel("Website URL", { exact: true })).toHaveValue(site());
+	await expect(form.getByLabel("Name", { exact: true })).toHaveValue("launch.test");
 });

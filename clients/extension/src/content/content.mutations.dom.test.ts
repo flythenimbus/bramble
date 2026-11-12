@@ -35,6 +35,7 @@ vi.mock("./picker", () => ({
 		onDismiss: vi.fn(),
 		onUseSuggested: vi.fn(),
 		onUseAlias: vi.fn(),
+		onNewLogin: vi.fn(),
 		onRegenerate: vi.fn(),
 	},
 }));

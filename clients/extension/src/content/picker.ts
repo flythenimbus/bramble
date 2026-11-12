@@ -6,6 +6,7 @@ import { hostOffset } from "./host-offset";
 import { type AliasRowState, dropdownAlias } from "./html/dropdown-alias";
 import { dropdownItem } from "./html/dropdown-item";
 import { dropdownLocked } from "./html/dropdown-locked";
+import { dropdownNewLogin } from "./html/dropdown-new-login";
 import { dropdownStyles } from "./html/dropdown-styles";
 import { dropdownSuggest } from "./html/dropdown-suggest";
 import { EARLY_CLICK_MS, isLegible } from "./legibility";
@@ -31,6 +32,8 @@ let regenerateCb: (() => void) | null = null;
 // The alias row reports the same way, so this module never learns what an alias is or who makes
 // one; the content policy owns the round trip and the fill.
 let aliasCb: (() => void) | null = null;
+// The "new login" row opens the create form; the content policy owns that request.
+let newLoginCb: (() => void) | null = null;
 
 // A suggest option threads a generated password to whichever renderer is active.
 type SuggestOpt = { password: string };
@@ -41,6 +44,7 @@ type RowOpts = {
 	suggest?: SuggestOpt;
 	alias?: AliasRowState;
 	carriedId?: string;
+	newLogin?: boolean;
 };
 
 /**
@@ -60,7 +64,8 @@ function renderKey(matches: MatchSummary[], opts?: RowOpts): string {
 	// The carried id is part of the content: the same rows with a different card marked is a
 	// different dropdown, and keyed on ids alone the badge would stay where it was first drawn.
 	const c = opts?.carriedId ? `c:${opts.carriedId}\0` : "";
-	return a + c + (opts?.suggest ? `s:${opts.suggest.password}\0` : "") + matchesKey(matches);
+	const n = opts?.newLogin ? "n\0" : "";
+	return a + c + n + (opts?.suggest ? `s:${opts.suggest.password}\0` : "") + matchesKey(matches);
 }
 
 // Anchor field shared by both renderers (the page input the picker sits under).
@@ -361,6 +366,7 @@ function buildDropdown(matches: MatchSummary[], field: HTMLInputElement, opts?: 
 	if (opts?.alias) parts.push(dropdownAlias(opts.alias));
 	if (opts?.suggest) parts.push(dropdownSuggest(opts.suggest.password));
 	for (const m of matches) parts.push(dropdownItem({ ...m, carried: m.id === opts?.carriedId }));
+	if (opts?.newLogin) parts.push(dropdownNewLogin());
 	const root = mountDropdown(field, parts.join(""));
 	openMatchesKey = key;
 	openDropdownKind = "matches";
@@ -391,6 +397,12 @@ function buildDropdown(matches: MatchSummary[], field: HTMLInputElement, opts?: 
 		if (target?.closest("[data-tp-alias]")) {
 			e.preventDefault();
 			if (pickAllowed(dropdownEl, true)) aliasCb?.();
+			return;
+		}
+		if (target?.closest("[data-tp-new-login]")) {
+			e.preventDefault();
+			removeDropdown();
+			newLoginCb?.();
 		}
 	});
 }
@@ -439,6 +451,7 @@ type IframeRender =
 			suggest?: SuggestOpt;
 			alias?: AliasRowState;
 			carriedId?: string;
+			newLogin?: boolean;
 	  }
 	| { kind: "locked" };
 
@@ -540,7 +553,8 @@ function flushPendingRender(): void {
 			? 1
 			: render.matches.length +
 				(render.suggest ? 1 : 0) +
-				(render.alias && render.alias.state !== "busy" ? 1 : 0);
+				(render.alias && render.alias.state !== "busy" ? 1 : 0) +
+				(render.newLogin ? 1 : 0);
 	if (render.kind === "matches") {
 		postToUi({
 			type: "RENDER_MATCHES",
@@ -549,6 +563,7 @@ function flushPendingRender(): void {
 			suggest: render.suggest,
 			alias: render.alias,
 			carriedId: render.carriedId,
+			newLogin: render.newLogin,
 		});
 	} else {
 		postToUi({ type: "RENDER_LOCKED" });
@@ -570,9 +585,10 @@ function armReadinessTimeout(): void {
 				buildDropdown(render.matches, field, {
 					otpOnly: render.otpOnly,
 					// Carried over, or falling back to the shadow renderer silently drops whichever
-					// extra row was on offer: the suggestion as well as the alias.
+					// extra row was on offer: the suggestion, the alias, and the new-login row.
 					suggest: render.suggest,
 					alias: render.alias,
+					newLogin: render.newLogin,
 				});
 			else buildLockedDropdown(field);
 		}
@@ -595,6 +611,7 @@ function iframeShow(field: HTMLInputElement, render: IframeRender): void {
 					suggest: render.suggest,
 					alias: render.alias,
 					carriedId: render.carriedId,
+					newLogin: render.newLogin,
 				})
 			: "\0locked";
 	if (iframeReady && key === iframeMatchesKey) return;
@@ -650,6 +667,7 @@ function showMatchesUi(matches: MatchSummary[], field: HTMLInputElement, opts?: 
 		suggest: opts?.suggest,
 		alias: opts?.alias,
 		carriedId: opts?.carriedId,
+		newLogin: opts?.newLogin,
 	});
 }
 
@@ -687,6 +705,7 @@ function onUiMessage(e: MessageEvent): void {
 		| { type: "UI_USE_SUGGESTED"; pointer?: boolean }
 		| { type: "UI_REGENERATE" }
 		| { type: "UI_USE_ALIAS"; pointer?: boolean }
+		| { type: "UI_NEW_LOGIN" }
 		| undefined;
 	switch (msg?.type) {
 		case "UI_CONNECTED":
@@ -731,6 +750,11 @@ function onUiMessage(e: MessageEvent): void {
 			// Creating an alias spends the user's allowance and fills the page field, so it takes
 			// the same anti-clickjacking gate as a secret pick.
 			if (pickAllowed(iframeHostEl, msg.pointer)) aliasCb?.();
+			break;
+		case "UI_NEW_LOGIN":
+			// Opens Bramble's own window and fills nothing, so it needs no clickjacking gate.
+			hideIframe();
+			newLoginCb?.();
 			break;
 	}
 }
@@ -804,6 +828,10 @@ export const picker = {
 		regenerateCb = cb;
 	},
 	/** Fired when the user chooses the email-alias row, in any state it accepts a click in. */
+	/** Fired when the user chooses the "new login" row. */
+	onNewLogin(cb: () => void): void {
+		newLoginCb = cb;
+	},
 	onUseAlias(cb: () => void): void {
 		aliasCb = cb;
 	},

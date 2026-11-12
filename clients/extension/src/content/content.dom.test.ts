@@ -41,6 +41,7 @@ const removePicker = vi.fn(() => {
 let onSuggestedCb: (() => void) | null = null;
 let regenerateCb: (() => void) | null = null;
 let aliasRowCb: (() => void) | null = null;
+let newLoginCb: (() => void) | null = null;
 let unlockCb: ((field: HTMLInputElement | null) => void) | null = null;
 let pickCb: ((entryId: string, otpOnly: boolean) => void) | null = null;
 // Models picker.removeDropdown()'s real behavior: on a normal (iframe-mode) site it is a
@@ -76,6 +77,9 @@ vi.mock("./picker", () => ({
 		},
 		onUseAlias: (cb: () => void) => {
 			aliasRowCb = cb;
+		},
+		onNewLogin: (cb: () => void) => {
+			newLoginCb = cb;
 		},
 	},
 }));
@@ -723,6 +727,43 @@ describe("content: strong-password suggestion on signup", () => {
 		pass.focus();
 		send({ type: "AUTOFILL_MATCHES", payload: result({ logins: [] }) });
 		expect(lastSuggest()).toBeUndefined();
+	});
+});
+
+// #213: a login field's matches end with a row to save another login for the site.
+describe("content: the new-login row", () => {
+	beforeEach(() => {
+		showMatches.mockClear();
+		removePicker.mockClear();
+		pickerState.host = null;
+		pickerState.anchor = null;
+		pendingQueryResponses.length = 0;
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" autocomplete="username" />
+				<input id="pass" type="password" name="password" autocomplete="current-password" />
+			</form>`;
+		invalidatePageFields();
+	});
+
+	it("is offered under a login field's matches, and opens the create form", () => {
+		const user = document.getElementById("user") as HTMLInputElement;
+		user.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [{ id: "1", name: "Example", secondary: "user@example.com" }] }),
+		});
+		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(user);
+		expect(showMatches.mock.calls.at(-1)?.[2]).toEqual({ newLogin: true });
+
+		safeSendMessage.mockClear();
+		newLoginCb?.();
+		expect(safeSendMessage).toHaveBeenCalledWith({
+			type: "POPOUT_OPEN",
+			payload: { reason: "new-login" },
+		});
+		expect(removePicker).toHaveBeenCalled();
 	});
 });
 

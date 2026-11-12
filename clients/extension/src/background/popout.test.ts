@@ -84,6 +84,23 @@ describe("POPOUT_OPEN", () => {
 		expect(bg.state.session[HANDOFF_KEY]).toEqual({ path: "/vault/new", draft: { pw: "s3cret" } });
 	});
 
+	// #213: the page dropdown's "new login" row names a reason, and the background picks the route.
+	it("opens the new-login form for the new-login reason, ignoring any path a page supplies", async () => {
+		const bg = await loadBackground();
+		await bg.send({ type: "POPOUT_OPEN", payload: {} }, pageSender("example.com", 4));
+		const { resp } = await bg.send(
+			{
+				type: "POPOUT_OPEN",
+				payload: { reason: "new-login", handoff: { path: "/settings/danger" } },
+			},
+			pageSender("example.com", 4),
+		);
+		expect(resp).toEqual({ ok: true });
+		expect(bg.state.session[HANDOFF_KEY]).toEqual({ path: "/vault/new/login" });
+		// A window already open would drop the route, so this one opens fresh.
+		expect(bg.state.windowsCreated).toHaveLength(2);
+	});
+
 	it("falls back to an unpositioned window when Chrome rejects the bounds", async () => {
 		// Anchored beside a window near the screen edge, the computed bounds can land off-screen and
 		// Chrome rejects the whole create ("must be at least 50% within visible screen space"),

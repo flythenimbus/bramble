@@ -33,6 +33,7 @@ const handlers = {
 	onUseSuggested: vi.fn(),
 	onUseAlias: vi.fn(),
 	onRegenerate: vi.fn(),
+	onNewLogin: vi.fn(),
 };
 
 /** A stand-in for the UI document's window: records what the field frame sends it. */
@@ -161,6 +162,14 @@ describe("honouring a pick", () => {
 		deliver({ type: "UI_PICK", entryId: "card-1" }, ui, EXT_ORIGIN);
 
 		expect(handlers.onPick).toHaveBeenCalledWith("card-1", false);
+	});
+
+	it("relays the new-login row from the pinned UI, and only from it (#213)", () => {
+		const ui = bind();
+		deliver({ type: "UI_NEW_LOGIN" }, ui, EXT_ORIGIN);
+		expect(handlers.onNewLogin).toHaveBeenCalledTimes(1);
+		deliver({ type: "UI_NEW_LOGIN" }, window, location.origin);
+		expect(handlers.onNewLogin).toHaveBeenCalledTimes(1);
 	});
 
 	it("drops a pick for an entry that was never rendered", () => {

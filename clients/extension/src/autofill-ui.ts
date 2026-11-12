@@ -20,6 +20,8 @@ type Inbound =
 			otpOnly?: boolean;
 			suggest?: { password: string };
 			alias?: AliasRowState;
+			// A trailing "new login" row, under a login field's matches (#213).
+			newLogin?: boolean;
 			// The card already filled elsewhere on this page: rendered with a badge, never
 			// highlighted (Enter belongs to the page's form).
 			carriedId?: string;
@@ -58,6 +60,7 @@ type NavRow =
 	| { kind: "alias" }
 	| { kind: "suggest" }
 	| { kind: "match"; id: string }
+	| { kind: "newLogin" }
 	| { kind: "locked" };
 let rows: NavRow[] = [];
 let highlight = -1;
@@ -331,6 +334,21 @@ function suggestRow(password: string): string {
 	`;
 }
 
+/** Twin of content/html/dropdown-new-login.ts. Both must change together; see template-parity. */
+function newLoginRow(): string {
+	return html`
+		<div class="tp-item tp-new-login" data-tp-new-login="1" role="option">
+			<div class="tp-avatar tp-avatar-suggest">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+			</div>
+			<div class="tp-text">
+				<span class="tp-name">${t("newLoginTitle")}</span>
+				<span class="tp-user">${t("newLoginUse")}</span>
+			</div>
+		</div>
+	`;
+}
+
 function lockedRow(): string {
 	return html`
 		<div class="tp-item tp-locked" data-tp-popout="1">
@@ -422,6 +440,7 @@ function activate(i: number): void {
 	if (row.kind === "match") post({ type: "UI_PICK", entryId: row.id, otpOnly });
 	else if (row.kind === "suggest") post({ type: "UI_USE_SUGGESTED" });
 	else if (row.kind === "alias") post({ type: "UI_USE_ALIAS" });
+	else if (row.kind === "newLogin") post({ type: "UI_NEW_LOGIN" });
 	else post({ type: "UI_POPOUT" });
 }
 
@@ -452,6 +471,11 @@ document.addEventListener("mousedown", (e) => {
 	if (target?.closest("[data-tp-alias]")) {
 		e.preventDefault();
 		if (clickAllowed()) post({ type: "UI_USE_ALIAS", pointer: true });
+		return;
+	}
+	if (target?.closest("[data-tp-new-login]")) {
+		e.preventDefault();
+		post({ type: "UI_NEW_LOGIN" });
 		return;
 	}
 	if (target?.closest("[data-tp-popout]")) {
@@ -506,6 +530,10 @@ function handleInbound(msg: Inbound | undefined): void {
 			for (const m of msg.matches) {
 				rows.push({ kind: "match", id: m.id });
 				body.push(matchRow(m, m.id === msg.carriedId));
+			}
+			if (msg.newLogin) {
+				rows.push({ kind: "newLogin" });
+				body.push(newLoginRow());
 			}
 			render(body.join(""));
 			settledAt = performance.now();

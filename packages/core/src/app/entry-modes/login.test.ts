@@ -121,3 +121,22 @@ describe("loginMode row open-website link", () => {
 		expect(launch([])).toBeUndefined();
 	});
 });
+
+// #213: a login started from a page (the toolbar's Add, or the dropdown's New login) is named
+// after the site, so saving one more for it takes only the username and password.
+describe("loginMode new form seeded from a page", () => {
+	it("names the login after the site's host", () => {
+		const form = loginMode.emptyForm({ defaultUrl: "https://www.github.com" });
+		expect(form.name).toBe("github.com");
+		expect(form.urls).toEqual([{ value: "https://www.github.com" }]);
+	});
+
+	it("keeps a non-default port out of the name", () => {
+		expect(loginMode.emptyForm({ defaultUrl: "http://router.lan:8080" }).name).toBe("router.lan");
+	});
+
+	it("starts unnamed without a page", () => {
+		expect(loginMode.emptyForm({}).name).toBe("");
+		expect(loginMode.emptyForm({ defaultUrl: "" }).name).toBe("");
+	});
+});

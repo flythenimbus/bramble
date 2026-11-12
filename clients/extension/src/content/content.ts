@@ -237,6 +237,7 @@ function showMatchesFor(
 		suggest?: { password: string };
 		alias?: AliasRowState;
 		carriedId?: string;
+		newLogin?: boolean;
 	},
 ): void {
 	if (matches.length === 0 && !opts?.suggest && !opts?.alias) return;
@@ -259,6 +260,7 @@ function showMatchesFor(
 		suggest: opts?.suggest,
 		alias: opts?.alias,
 		carriedId: opts?.carriedId,
+		newLogin: opts?.newLogin,
 	});
 	armRelayFallback(() => showMatchesFor(matches, field, opts));
 }
@@ -626,7 +628,8 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 		removePicker();
 		return;
 	}
-	showMatchesFor(visible, field);
+	// Under the site's logins, a way to save another one (#213).
+	showMatchesFor(visible, field, { newLogin: true });
 }
 
 /**
@@ -811,7 +814,7 @@ async function fillFromShortcut(): Promise<void> {
 	}
 	silenceAutoOpen = false;
 	into.focus();
-	showMatchesFor(logins, into);
+	showMatchesFor(logins, into, { newLogin: true });
 }
 
 function focusedCandidate(): HTMLInputElement | null {
@@ -1092,6 +1095,16 @@ picker.onUseSuggested(() => {
  * one suggestion that can fail, and the failure is the only thing that tells someone whether to
  * fix a key, a plan or an allowance.
  */
+/** The "new login" row: Bramble's create form in a pop-out, for this site (#213). */
+function openNewLogin(): void {
+	cancelOperations();
+	silenceAutoOpen = true;
+	removePicker();
+	safeSendMessage({ type: "POPOUT_OPEN", payload: { reason: "new-login" } });
+}
+
+picker.onNewLogin(openNewLogin);
+
 picker.onUseAlias(() => {
 	cancelOperations();
 	const field = anchorField();
@@ -1197,6 +1210,7 @@ if (frameRelay.isTop()) {
 				showMatchesFor([], field, { suggest: { password: pw } });
 			});
 		},
+		onNewLogin: openNewLogin,
 	});
 }
 

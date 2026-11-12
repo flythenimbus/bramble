@@ -13,6 +13,7 @@ import uiSource from "../autofill-ui.ts?raw";
 import { html as uiHtml } from "../autofill-ui-template";
 import aliasSource from "./html/dropdown-alias.ts?raw";
 import itemSource from "./html/dropdown-item.ts?raw";
+import newLoginSource from "./html/dropdown-new-login.ts?raw";
 import stylesSource from "./html/dropdown-styles.ts?raw";
 import { html as contentHtml } from "./template";
 
@@ -105,5 +106,29 @@ describe("the carried-card badge is in both renderers", () => {
 		expect(itemSource).toContain('class="tp-badge"');
 		expect(itemSource).toContain('t("cardUsedHere")');
 		expect(stylesSource).toContain(".tp-badge {");
+	});
+});
+
+// The "new login" row (#213) lives in both renderers too, for the same reason the alias row does.
+describe("the new-login row is identical in both renderers", () => {
+	const rowLines = (src: string, from: string): string[] => {
+		const start = src.indexOf(from);
+		expect(start).toBeGreaterThan(-1);
+		const end = src.indexOf("`;", start);
+		return src
+			.slice(start, end)
+			.split("\n")
+			.map((l) => l.trim())
+			.filter((l) => l.startsWith("<"));
+	};
+
+	it("renders the same markup", () => {
+		expect(rowLines(uiSource, "function newLoginRow(")).toEqual(
+			rowLines(newLoginSource, "export const dropdownNewLogin"),
+		);
+	});
+
+	it("keeps the hook the click handlers match on", () => {
+		for (const src of [uiSource, newLoginSource]) expect(src).toContain('data-tp-new-login="1"');
 	});
 });

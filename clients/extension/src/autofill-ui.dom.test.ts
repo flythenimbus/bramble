@@ -173,3 +173,31 @@ describe("autofill-ui: clicks need the browser to vouch the picker is visible", 
 		);
 	});
 });
+
+// #213: a "new login" row under a login field's matches, reachable by keyboard after them.
+describe("autofill-ui: the new-login row", () => {
+	it("renders last, and the keyboard reaches it after the matches", async () => {
+		if (!adopted) throw new Error("the hand-over case did not leave a port");
+		document.body.innerHTML = "";
+		adopted.port.postMessage({ type: "RENDER_MATCHES", matches: [MATCH], newLogin: true });
+		await vi.waitFor(() => expect(document.querySelector("[data-tp-new-login]")).not.toBeNull());
+		const items = [...document.querySelectorAll(".tp-item")];
+		expect(items.at(-1)?.hasAttribute("data-tp-new-login")).toBe(true);
+		expect(items.at(-1)?.textContent).toContain("newLoginTitle");
+
+		const since = adopted.received.length;
+		adopted.port.postMessage({ type: "UI_KEY", key: "ArrowDown" });
+		adopted.port.postMessage({ type: "UI_KEY", key: "ArrowDown" });
+		adopted.port.postMessage({ type: "UI_KEY", key: "Enter" });
+		await vi.waitFor(() =>
+			expect(adopted!.received.slice(since)).toContainEqual({ type: "UI_NEW_LOGIN" }),
+		);
+	});
+
+	it("is absent unless asked for", async () => {
+		document.body.innerHTML = "";
+		adopted!.port.postMessage({ type: "RENDER_MATCHES", matches: [MATCH] });
+		await vi.waitFor(() => expect(document.querySelector("[data-entry-id]")).not.toBeNull());
+		expect(document.querySelector("[data-tp-new-login]")).toBeNull();
+	});
+});

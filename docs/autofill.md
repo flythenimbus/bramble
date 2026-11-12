@@ -268,6 +268,17 @@ element isn't an iframe). It asks afresh, since with the switch off it holds no 
 then fills the one matching login like a pick, or shows the list when several match. The
 host check in `authorizeFill` applies as for any pick.
 
+### The new-login row
+
+A login field's matches end with **New login** (#213), so a site that already has logins
+can get another without leaving the page for the popup. It fills nothing: the row sends
+`POPOUT_OPEN` with `reason: "new-login"`, and the background opens the create form at
+`/vault/new/login` itself. A page names a reason, never a route. The form reads the site
+from the tab behind the pop-out (`getCurrentTabOrigin`) and names the login after its host.
+The row is in all three renderers: the iframe, the shadow fallback
+(`content/html/dropdown-new-login.ts`, kept identical by `template-parity.test.ts`), and the
+frame relay.
+
 ## When the content script looks at the page again
 
 An SPA can swap a login form in without a navigation, so a `childList`

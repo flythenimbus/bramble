@@ -830,6 +830,16 @@ function LoginDetail({ entry, copied, copy }: EntryDetailBodyProps) {
 	);
 }
 
+/** A page's host without "www.", or "" when there is no usable URL. */
+function siteName(url: string | undefined): string {
+	if (!url) return "";
+	try {
+		return new URL(url).hostname.replace(/^www\./, "");
+	} catch {
+		return "";
+	}
+}
+
 export const loginMode: EntryMode = {
 	type: "login",
 	get label() {
@@ -841,8 +851,8 @@ export const loginMode: EntryMode = {
 	icon: Globe,
 
 	emptyForm: ({ defaultUrl }) => ({
-		name: "",
-		// Seed with the active tab's URL when launched from a page, else start empty.
+		// Seeded from the active tab when launched from a page: its URL, and its host as the name.
+		name: siteName(defaultUrl),
 		urls: defaultUrl ? [{ value: defaultUrl }] : [],
 		username: "",
 		password: "",

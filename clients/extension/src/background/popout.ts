@@ -108,12 +108,17 @@ async function popoutOpen(
 	armViewGrace();
 
 	const payload = message.payload as { handoff?: { draft?: unknown }; reason?: string } | undefined;
-	const handoff = payload?.handoff;
+	// The page dropdown's "new login" row names a reason, never a path: a page must not steer the
+	// window to a route of its choosing. The form reads the site from the tab behind it (#213).
+	const newLogin = payload?.reason === "new-login";
+	const handoff: { draft?: unknown; path?: string } | undefined = newLogin
+		? { path: "/vault/new/login" }
+		: payload?.handoff;
 	// Single instance: focus an already-open pop-out instead of spawning a duplicate. A request
 	// carrying an in-flight draft is the exception - the open window consumed its boot handoff
 	// once, so focusing it would silently drop the new draft (which can hold a plaintext
 	// password). Route-only / unlock-request pop-outs have nothing to lose, so they dedupe.
-	if (handoff?.draft === undefined && (await focusExistingPopout())) {
+	if (!newLogin && handoff?.draft === undefined && (await focusExistingPopout())) {
 		return { ok: true };
 	}
 	if (payload?.reason === "unlock") await targetLastOpenedVault();

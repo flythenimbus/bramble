@@ -318,6 +318,21 @@ describe("picker: only the iframe's port can pick", () => {
 		await vi.waitFor(() => expect(picks).toEqual([[MATCH.id, false]]));
 	});
 
+	// #213: the new-login row rides the same port, and a render with it counts one more row.
+	it("passes the new-login row to the iframe and reports its choice", async () => {
+		const { uiPort, posts, field } = await setup();
+		let opened = 0;
+		picker.onNewLogin(() => opened++);
+		picker.showMatches([MATCH], field, { newLogin: true });
+		await settle();
+		expect(posts).toContainEqual(
+			expect.objectContaining({ type: "RENDER_MATCHES", newLogin: true }),
+		);
+
+		uiPort.postMessage({ type: "UI_NEW_LOGIN" });
+		await vi.waitFor(() => expect(opened).toBe(1));
+	});
+
 	it("ignores a pick for an entry it never rendered", async () => {
 		const { uiPort, picks } = await setup();
 

@@ -41,6 +41,7 @@ export type RelayRender =
 			suggest?: SuggestOpt;
 			alias?: AliasRowState;
 			carriedId?: string;
+			newLogin?: boolean;
 	  }
 	| { kind: "locked" };
 
@@ -50,6 +51,7 @@ export interface RelayClientHandlers {
 	onHighlight(active: boolean): void;
 	onUseSuggested(): void;
 	onRegenerate(): void;
+	onNewLogin(): void;
 }
 
 let relay: FrameRelay | null = null;
@@ -106,6 +108,7 @@ function flush(): void {
 		suggest: render.suggest,
 		alias: render.alias,
 		carriedId: render.carriedId,
+		newLogin: render.newLogin,
 	});
 }
 
@@ -180,6 +183,9 @@ function handleMessage(e: MessageEvent): void {
 			break;
 		case "UI_REGENERATE":
 			handlers?.onRegenerate();
+			break;
+		case "UI_NEW_LOGIN":
+			handlers?.onNewLogin();
 			break;
 	}
 }
