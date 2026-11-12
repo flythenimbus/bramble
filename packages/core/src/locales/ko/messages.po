@@ -1,0 +1,4424 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-11-11 22:27-0500\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: ko\n"
+
+#. placeholder {0}: result.warnings.length - 8
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "…and {0} more"
+msgstr "… 외 {0}개 더"
+
+#. placeholder {0}: outcome.rejected
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "{0, plural, one {# attachment in the backup file was damaged and wasn't restored. The vault still lists it.} other {# attachments in the backup file were damaged and weren't restored. The vault still lists them.}}"
+msgstr "{0, plural, one {백업 파일의 첨부 파일 #개가 손상되어 복원되지 않았습니다. 보관함에는 계속 표시됩니다.} other {백업 파일의 첨부 파일 #개가 손상되어 복원되지 않았습니다. 보관함에는 계속 표시됩니다.}}"
+
+#. placeholder {0}: outcome.restored
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "{0, plural, one {# attachment restored with it.} other {# attachments restored with it.}}"
+msgstr "{0, plural, one {첨부 파일 #개가 함께 복원되었습니다.} other {첨부 파일 #개가 함께 복원되었습니다.}}"
+
+#. placeholder {0}: leftBehind.unreadableTargets
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{0, plural, one {# backup target couldn't be opened, so it wasn't brought over.} other {# backup targets couldn't be opened, so they weren't brought over.}}"
+msgstr "{0, plural, one {백업 대상 #개를 열 수 없어 가져오지 못했습니다.} other {백업 대상 #개를 열 수 없어 가져오지 못했습니다.}}"
+
+#. placeholder {0}: unsigned.length
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "{0, plural, one {# device has not signed its roster entry yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell it from an impostor.} other {# devices have not signed their roster entries yet. Each device signs itself the next time Bramble opens on it; until then the others cannot tell them from an impostor.}}"
+msgstr "{0, plural, one {기기 #대가 아직 로스터 항목에 서명하지 않았습니다. 각 기기는 다음에 Bramble이 열릴 때 스스로 서명합니다. 그 전까지 다른 기기들은 해당 기기를 사칭자와 구분할 수 없습니다.} other {기기 #대가 아직 로스터 항목에 서명하지 않았습니다. 각 기기는 다음에 Bramble이 열릴 때 스스로 서명합니다. 그 전까지 다른 기기들은 해당 기기들을 사칭자와 구분할 수 없습니다.}}"
+
+#. placeholder {0}: entries.length
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "{0, plural, one {# entry goes into the file, with its passkeys and history.} other {# entries go into the file, with their passkeys and history.}}"
+msgstr "{0, plural, one {항목 #개가 패스키와 기록과 함께 파일에 들어갑니다.} other {항목 #개가 패스키와 기록과 함께 파일에 들어갑니다.}}"
+
+#. placeholder {0}: attachments.length
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{0, plural, one {Add # attachment} other {Add # attachments}}"
+msgstr "{0, plural, one {첨부 파일 #개 추가} other {첨부 파일 #개 추가}}"
+
+#. placeholder {0}: ids.length
+#: packages/core/src/app/bulk-actions/delete.tsx
+msgid "{0, plural, one {Delete # entry?} other {Delete # entries?}}"
+msgstr "{0, plural, one {항목 #개 삭제?} other {항목 #개 삭제?}}"
+
+#. placeholder {0}: blocked.count
+#: packages/core/src/app/components/backup-blocked.tsx
+msgid "{0, plural, one {Not backed up: # attachment isn't on this device yet. Backups resume once it arrives.} other {Not backed up: # attachments aren't on this device yet. Backups resume once they arrive.}}"
+msgstr "{0, plural, one {백업되지 않음: 첨부 파일 #개가 아직 이 기기에 없습니다. 해당 파일이 도착하면 백업이 재개됩니다.} other {백업되지 않음: 첨부 파일 #개가 아직 이 기기에 없습니다. 해당 파일이 도착하면 백업이 재개됩니다.}}"
+
+#. placeholder {0}: outcome.unstorable
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "{0, plural, one {This backup has # attachment, which Bramble can't store on this device yet. Keep the backup file, which still has it.} other {This backup has # attachments, which Bramble can't store on this device yet. Keep the backup file, which still has them.}}"
+msgstr "{0, plural, one {이 백업에는 Bramble이 아직 이 기기에 저장할 수 없는 첨부 파일 #개가 있습니다. 해당 파일이 계속 들어 있는 백업 파일을 보관하세요.} other {이 백업에는 Bramble이 아직 이 기기에 저장할 수 없는 첨부 파일 #개가 있습니다. 해당 파일이 계속 들어 있는 백업 파일을 보관하세요.}}"
+
+#. placeholder {0}: fingerprint(d.publicKey)
+#. placeholder {1}: addedOn(d.addedAt)
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "{0} · added {1}"
+msgstr "{0} · {1} 추가됨"
+
+#. placeholder {0}: entry.name
+#: packages/core/src/app/routes/EntryDetailRoute.tsx
+msgid "{0} (copy)"
+msgstr "{0} (복사본)"
+
+#. placeholder {0}: d.domain
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "{0} (your domain)"
+msgstr "{0} (내 도메인)"
+
+#. placeholder {0}: heldBack.length
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{0} more look like entries you already have (the same site, username and password, or the same card number), so they are held back."
+msgstr "{0}개 더는 이미 보유한 항목과 비슷하여(동일한 사이트, 사용자 이름, 비밀번호 또는 동일한 카드 번호) 보류되었습니다."
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "{affected, plural, one {Tag # entry} other {Tag # entries}}"
+msgstr "{affected, plural, one {항목 #개 태그 지정} other {항목 #개 태그 지정}}"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "{affected, plural, one {Untag # entry} other {Untag # entries}}"
+msgstr "{affected, plural, one {항목 #개 태그 해제} other {항목 #개 태그 해제}}"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "{appName} recovery code"
+msgstr "{appName} 복구 코드"
+
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{attachments, plural, one {# attachment} other {# attachments}}"
+msgstr "{attachments, plural, one {첨부 파일 #개} other {첨부 파일 #개}}"
+
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "{attachments, plural, one {Attachments aren't transferred: # file on these entries won't be in the export.} other {Attachments aren't transferred: # files on these entries won't be in the export.}}"
+msgstr "{attachments, plural, one {첨부 파일은 전송되지 않음: 이 항목의 파일 #개는 내보내기에 포함되지 않습니다.} other {첨부 파일은 전송되지 않음: 이 항목의 파일 #개는 내보내기에 포함되지 않습니다.}}"
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "{browserName} also syncs with {others}. Combining moves only this browser; they stay on {browserName}."
+msgstr "{browserName}은(는) {others}과(와)도 동기화됩니다. 통합하면 이 브라우저만 이동하며, 나머지는 {browserName}에 남습니다."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{conflicted, plural, one {# entry has a sync conflict. Only the version shown came across.} other {# entries have a sync conflict. Only the version shown came across.}}"
+msgstr "{conflicted, plural, one {동기화 충돌이 있는 항목 #개가 있습니다. 표시된 버전만 가져왔습니다.} other {동기화 충돌이 있는 항목 #개가 있습니다. 표시된 버전만 가져왔습니다.}}"
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "{conflicted, plural, one {# entry has a sync conflict. Only the version you see is exported.} other {# entries have a sync conflict. Only the version you see is exported.}}"
+msgstr "{conflicted, plural, one {동기화 충돌이 있는 항목 #개가 있습니다. 표시된 버전만 내보냅니다.} other {동기화 충돌이 있는 항목 #개가 있습니다. 표시된 버전만 내보냅니다.}}"
+
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "{conflicted, plural, one {# of these entries has a sync conflict. Only the version you see is exported.} other {# of these entries have a sync conflict. Only the version you see is exported.}}"
+msgstr "{conflicted, plural, one {이 항목 중 #개에 동기화 충돌이 있습니다. 표시된 버전만 내보냅니다.} other {이 항목 중 #개에 동기화 충돌이 있습니다. 표시된 버전만 내보냅니다.}}"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "{count, plural, one {# selected} other {# selected}}"
+msgstr "{count, plural, one {#개 선택됨} other {#개 선택됨}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{duplicates} more were already in your vault and will not be added again."
+msgstr "{duplicates}개 더는 이미 보관함에 있어 다시 추가되지 않습니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "{from} has it. Coming next."
+msgstr "{from}에 있습니다. 곧 가져옵니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "{from} has it. Trying again shortly."
+msgstr "{from}에 있습니다. 곧 다시 시도합니다."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{held, plural, one {# entry looked like one the desktop's vault already has, so it stayed in the old vault.} other {# entries looked like ones the desktop's vault already has, so they stayed in the old vault.}}"
+msgstr "{held, plural, one {데스크톱의 보관함에 이미 있는 항목과 비슷한 항목 #개가 이전 보관함에 남았습니다.} other {데스크톱의 보관함에 이미 있는 항목과 비슷한 항목 #개가 이전 보관함에 남았습니다.}}"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{held, plural, one {# entry looks like one the desktop's vault already has, so it wasn't copied.} other {# entries look like ones the desktop's vault already has, so they weren't copied.}}"
+msgstr "{held, plural, one {데스크톱의 보관함에 이미 있는 항목과 비슷한 항목 #개는 복사되지 않았습니다.} other {데스크톱의 보관함에 이미 있는 항목과 비슷한 항목 #개는 복사되지 않았습니다.}}"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "{hiddenCount, plural, one {# hidden by the current filter} other {# hidden by the current filter}}"
+msgstr "{hiddenCount, plural, one {현재 필터로 숨김 #개} other {현재 필터로 숨김 #개}}"
+
+#: packages/core/src/app/bulk-actions/delete.tsx
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "{hiddenCount, plural, one {# of them is hidden by the current filter.} other {# of them are hidden by the current filter.}}"
+msgstr "{hiddenCount, plural, one {그중 #개는 현재 필터로 숨겨져 있습니다.} other {그중 #개는 현재 필터로 숨겨져 있습니다.}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{importedFiles, plural, one {# attachment came with them.} other {# attachments came with them.}}"
+msgstr "{importedFiles, plural, one {첨부 파일 #개가 함께 들어왔습니다.} other {첨부 파일 #개가 함께 들어왔습니다.}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{importedFiles, plural, one {Added # attachment} other {Added # attachments}}"
+msgstr "{importedFiles, plural, one {첨부 파일 #개 추가됨} other {첨부 파일 #개 추가됨}}"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "{moving, plural, one {Archive # entry?} other {Archive # entries?}}"
+msgstr "{moving, plural, one {항목 #개 보관?} other {항목 #개 보관?}}"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "{moving, plural, one {Restore # entry?} other {Restore # entries?}}"
+msgstr "{moving, plural, one {항목 #개 복원?} other {항목 #개 복원?}}"
+
+#: packages/core/src/app/bulk-actions/delete.tsx
+msgid "{passkeys, plural, one {# passkey is stored on these entries and is deleted with them.} other {# passkeys are stored on these entries and are deleted with them.}}"
+msgstr "{passkeys, plural, one {패스키 #개가 이 항목들에 저장되어 있으며 항목과 함께 삭제됩니다.} other {패스키 #개가 이 항목들에 저장되어 있으며 항목과 함께 삭제됩니다.}}"
+
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "{passkeys, plural, one {# passkey} other {# passkeys}}"
+msgstr "{passkeys, plural, one {패스키 #개} other {패스키 #개}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{passwordDiffers} share a site and username with an entry you already have, but with a different password. They will be added as new entries."
+msgstr "{passwordDiffers}개는 이미 보유한 항목과 사이트와 사용자 이름은 같지만 비밀번호가 다릅니다. 새 항목으로 추가됩니다."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{quarantined, plural, one {# damaged entry stayed in the old vault.} other {# damaged entries stayed in the old vault.}}"
+msgstr "{quarantined, plural, one {손상된 항목 #개가 이전 보관함에 남았습니다.} other {손상된 항목 #개가 이전 보관함에 남았습니다.}}"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "{remaining}s left"
+msgstr "{remaining}초 남음"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "{rp} wants to use your passkey. Confirm it's you to continue."
+msgstr "{rp}에서 사용자의 패스키를 사용하려고 합니다. 계속하려면 본인임을 확인하세요."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{skippedFiles, plural, one {# attachment in this file is left out: this browser can add files only once it's linked to the Bramble desktop app.} other {# attachments in this file are left out: this browser can add files only once it's linked to the Bramble desktop app.}}"
+msgstr "{skippedFiles, plural, one {이 파일의 첨부 파일 #개는 제외됩니다: 이 브라우저는 Bramble 데스크톱 앱에 연결된 후에만 파일을 추가할 수 있습니다.} other {이 파일의 첨부 파일 #개는 제외됩니다: 이 브라우저는 Bramble 데스크톱 앱에 연결된 후에만 파일을 추가할 수 있습니다.}}"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "{toExisting, plural, one {# attachment will be added to an entry you already have.} other {# attachments will be added to entries you already have.}}"
+msgstr "{toExisting, plural, one {첨부 파일 #개가 이미 보유한 항목에 추가됩니다.} other {첨부 파일 #개가 이미 보유한 항목들에 추가됩니다.}}"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "{uncarried, plural, one {# file didn't copy. It is still in the old vault.} other {# files didn't copy. They are still in the old vault.}}"
+msgstr "{uncarried, plural, one {파일 #개가 복사되지 않았습니다. 이전 저장소에 그대로 있습니다.} other {파일 #개가 복사되지 않았습니다. 이전 저장소에 그대로 있습니다.}}"
+
+#. placeholder {0}: result.imported.length
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "<0>{0}</0> items ready to import"
+msgstr "<0>{0}</0>개 항목 가져오기 준비 완료"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "1 hour"
+msgstr "1시간"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "1 minute"
+msgstr "1분"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "15 minutes"
+msgstr "15분"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "2 minutes"
+msgstr "2분"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "30 minutes"
+msgstr "30분"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "30 seconds"
+msgstr "30초"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "5 minutes"
+msgstr "5분"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "A card number is 12 to 19 digits."
+msgstr "카드 번호는 12~19자리입니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "A device has connected with your pairing code. Check that it is showing these exact symbols, then approve. Your vault has not been sent yet."
+msgstr "기기가 페어링 코드로 연결되었습니다. 이 기기에 동일한 기호가 표시되는지 확인한 후 승인하세요. 저장소는 아직 전송되지 않았습니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "A device has it. Coming next."
+msgstr "다른 기기에 이미 있습니다. 다음에 진행됩니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "A device has it. Trying again shortly."
+msgstr "다른 기기에 이미 있습니다. 곧 다시 시도합니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "A device is online but can't connect to this one."
+msgstr "기기가 온라인 상태이지만 이 기기에 연결할 수 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "A one-time backup code that unlocks your vault if you're locked out."
+msgstr "잠긴 경우 저장소를 여는 일회용 백업 코드입니다."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "A QR code was found, but it isn't an authenticator setup code. Open the site's 2FA page, or paste the setup key."
+msgstr "QR 코드를 찾았지만 인증기 설정 코드가 아닙니다. 사이트의 2FA 페이지를 열거나 설정 키를 붙여넣으세요."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "A security code is 3 or 4 digits."
+msgstr "보안 코드는 3~4자리입니다."
+
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "About"
+msgstr "정보"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Access key ID"
+msgstr "액세스 키 ID"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "Actions"
+msgstr "작업"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Add"
+msgstr "추가"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Add a backup target"
+msgstr "백업 대상 추가"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Add a device"
+msgstr "기기 추가"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Add a key under Tap to unlock before you can turn off the master password."
+msgstr "마스터 비밀번호를 끄려면 먼저 '탭하여 잠금 해제' 아래에 키를 추가하세요."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Add a new login"
+msgstr "새 로그인 추가"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Add a tag"
+msgstr "태그 추가"
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Add a vault"
+msgstr "저장소 추가"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Add another device"
+msgstr "다른 기기 추가"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Add another target"
+msgstr "다른 대상 추가"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Add custom fields to store additional information like security questions, billing postal codes, account numbers, etc."
+msgstr "보안 질문, 청구 우편번호, 계좌 번호 등 추가 정보를 저장하려면 사용자 정의 필드를 추가하세요."
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Add field"
+msgstr "필드 추가"
+
+#: packages/core/src/app/components/AddDropdown.tsx
+msgid "Add New"
+msgstr "새로 추가"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Add tag"
+msgstr "태그 추가"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Add the desktop's vault"
+msgstr "데스크톱의 저장소 추가"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Add the websites this login covers. Leave empty for a credential not tied to a site."
+msgstr "이 로그인이 적용되는 웹사이트를 추가하세요. 사이트에 연결되지 않은 자격 증명은 비워 두세요."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Add URL"
+msgstr "URL 추가"
+
+#. placeholder {0}: next.length
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Added tag {added}. {0} tags."
+msgstr "태그 {added} 추가되었습니다. 태그 {0}개."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Added when you create a passkey on a site with Bramble. Remove to delete."
+msgstr "Bramble을 사용해 사이트에서 패스키를 생성하면 추가됩니다. 삭제하려면 제거하세요."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Adding a device needs a master password"
+msgstr "기기를 추가하려면 마스터 비밀번호가 필요합니다."
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "Adds {desktopName} next to {browserName}. Switch between them from the vault menu."
+msgstr "{desktopName}을(를) {browserName} 옆에 추가합니다. 볼트 메뉴에서 둘 사이를 전환하세요."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Addy needs a domain before it can create an alias."
+msgstr "Addy는 별칭을 만들려면 먼저 도메인이 필요합니다."
+
+#: packages/core/src/app/components/ui/advanced-disclosure.tsx
+msgid "Advanced"
+msgstr "고급"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Aeroplane"
+msgstr "비행기"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Alias domain"
+msgstr "별칭 도메인"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Alias format"
+msgstr "별칭 형식"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Alias provider"
+msgstr "별칭 제공업체"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Alias style"
+msgstr "별칭 스타일"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Aliases"
+msgstr "별칭"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "All"
+msgstr "모두"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "all your devices"
+msgstr "모든 기기"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Allow again"
+msgstr "다시 허용"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Allow and continue"
+msgstr "허용하고 계속"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Allow passcode fallback"
+msgstr "암호 폴백 허용"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Also lock the vault whenever your computer's screen locks, whatever the timeout."
+msgstr "시간 제한과 관계없이 컴퓨터 화면이 잠길 때마다 볼트도 잠급니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "An app password reaches every file in the account, not just this folder, and cannot be narrowed. For a backup that holds your whole vault history, a separate account used only for backups is worth the two minutes."
+msgstr "앱 비밀번호는 이 폴더뿐 아니라 계정의 모든 파일에 접근할 수 있으며 범위를 좁힐 수 없습니다. 전체 볼트 기록을 담는 백업에는 백업 전용 별도 계정을 사용하는 2분이 아깝지 않습니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "An attachment hasn't reached this device yet, so the export would be missing it. Try again once it has."
+msgstr "첨부 파일이 아직 이 기기에 도착하지 않아 내보내기에 포함되지 않습니다. 도착한 후 다시 시도하세요."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "An endpoint that returns your own ICE servers as JSON. Defaults to the relay's."
+msgstr "자체 ICE 서버를 JSON으로 반환하는 엔드포인트입니다. 기본값은 릴레이의 엔드포인트입니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Anchor"
+msgstr "앵커"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Another item uses this password"
+msgstr "다른 항목이 이 비밀번호를 사용합니다."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "API key"
+msgstr "API 키"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "API key (leave blank to keep the saved one)"
+msgstr "API 키(비워 두면 저장된 키 유지)"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Appearance"
+msgstr "모양"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Apple"
+msgstr "Apple"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Approve"
+msgstr "승인"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Approve only if your browser shows the same symbols."
+msgstr "브라우저에 동일한 기호가 표시될 때만 승인하세요."
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archive"
+msgstr "보관"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archive entry"
+msgstr "항목 보관"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archived"
+msgstr "보관됨"
+
+#. placeholder {0}: formatDateTime(entry.archivedAt)
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Archived {0}"
+msgstr "보관됨 {0}"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Archived items"
+msgstr "보관된 항목"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "Archiving…"
+msgstr "보관 중…"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for {brand} as soon as the unlock screen appears, with no tap."
+msgstr "잠금 해제 화면이 나타나면 탭 없이 {brand} 인증을 요청합니다."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for Face ID or a fingerprint as soon as the unlock screen appears, with no tap."
+msgstr "잠금 해제 화면이 나타나면 탭 없이 Face ID 또는 지문 인증을 요청합니다."
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Ask for Touch ID or Windows Hello as soon as Bramble opens, with no tap."
+msgstr "Bramble이 열리면 탭 없이 Touch ID 또는 Windows Hello 인증을 요청합니다."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Ask for your passcode as soon as the unlock screen appears, with no tap."
+msgstr "잠금 해제 화면이 나타나면 탭 없이 암호 입력을 요청합니다."
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "At Risk"
+msgstr "위험"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Attach a file"
+msgstr "파일 첨부"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+#: packages/core/src/hooks/useVault.tsx
+msgid "Attachments"
+msgstr "첨부 파일"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Attachments ready to add to entries you already have"
+msgstr "기존 항목에 추가할 수 있는 첨부 파일"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Authenticator key"
+msgstr "인증자 키"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Authenticator key (TOTP)"
+msgstr "인증자 키(TOTP)"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Authenticator returned an unknown credential."
+msgstr "인증자가 알 수 없는 자격 증명을 반환했습니다."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Auto-lock timeout"
+msgstr "자동 잠금 시간"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Auto-submit after fill"
+msgstr "자동 완성 후 자동 제출"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Autofill on web pages"
+msgstr "웹 페이지에서 자동 완성"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Avoid look-alike characters (0 O l 1)"
+msgstr "유사 문자 피하기 (0 O l 1)"
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Back"
+msgstr "뒤로"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Back to vault"
+msgstr "보관함으로 돌아가기"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Back up now"
+msgstr "지금 백업"
+
+#. placeholder {0}: runningIds.size
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backing up {0}…"
+msgstr "{0} 백업 중…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backing up…"
+msgstr "백업 중…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backs up on schedule"
+msgstr "일정에 따라 백업"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backs up when you unlock this vault"
+msgstr "이 보관함을 잠금 해제할 때 백업"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backup folder (optional)"
+msgstr "백업 폴더(선택 사항)"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Backup's master password"
+msgstr "백업 마스터 비밀번호"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Backups"
+msgstr "백업"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backups are best-effort, not a fixed time. Each target backs up at most as often as you pick, the next time you unlock Bramble after one is due, so real frequency depends on how often you open it on this device. Unchanged vaults are skipped."
+msgstr "백업은 고정된 시간이 아니라 최선을 다해 수행됩니다. 각 대상은 선택한 빈도까지만 백업되며, 백업 예정 이후 이 기기에서 Bramble을 잠금 해제할 때 실행되므로 실제 빈도는 이 기기에서 여는 빈도에 따라 달라집니다. 변경되지 않은 보관함은 건너뜁니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backups on this computer run when you unlock a vault, because this session has no keyring to keep the connection details in. Starting GNOME Keyring or KWallet, or turning on KeePassXC's Secret Service integration, lets them run on schedule instead."
+msgstr "이 세션에는 연결 정보를 보관할 키링이 없기 때문에 이 컴퓨터에서는 보관함을 잠금 해제할 때 백업이 실행됩니다. GNOME Keyring이나 KWallet을 시작하거나 KeePassXC의 Secret Service 통합을 켜면 일정에 따라 실행됩니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Backups to keep"
+msgstr "유지할 백업"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Ball"
+msgstr "공"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Banana"
+msgstr "바나나"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Before you continue, three things change and none of them can be undone:"
+msgstr "계속하기 전에 세 가지가 변경되며 어느 것도 되돌릴 수 없습니다:"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Bell"
+msgstr "종"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Bicycle"
+msgstr "자전거"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Biometric unlock"
+msgstr "생체 인식 잠금 해제"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Biometric unlock isn't available on this device."
+msgstr "이 기기에서는 생체 인식 잠금 해제를 사용할 수 없습니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Book"
+msgstr "책"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Bramble {version} is available. Updating downloads it and restarts the app. Your vault is not touched."
+msgstr "Bramble {version} 버전을 사용할 수 있습니다. 업데이트하면 앱을 내려받고 다시 시작합니다. 보관함은 변경되지 않습니다."
+
+#: packages/core/src/app/components/CryptoErrorText.tsx
+msgid "Bramble couldn't open this vault right now. Please report this error in <0>our issue tracker</0>."
+msgstr "Bramble이 지금 이 보관함을 열 수 없습니다. <0>이슈 트래커</0>에 이 오류를 보고해 주세요."
+
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
+msgid "Bramble couldn't open this vault right now. Please report this error in our issue tracker."
+msgstr "Bramble이 지금 이 보관함을 열 수 없습니다. 이슈 트래커에 이 오류를 보고해 주세요."
+
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
+msgid "Bramble couldn't safely update this device's key storage, so the vault stayed locked. Try again."
+msgstr "Bramble이 이 기기의 키 저장소를 안전하게 업데이트하지 못해 보관함이 잠긴 상태로 유지되었습니다. 다시 시도하세요."
+
+#: packages/core/src/app/ErrorBoundary.tsx
+msgid "Bramble hit an unexpected error. Your vault is safe — it stays encrypted on this device. Try reloading; if it keeps happening, reopen the app."
+msgstr "Bramble에 예기치 않은 오류가 발생했습니다. 보관함은 안전하며 이 기기에서 암호화된 상태로 유지됩니다. 새로 고침해 보고, 계속 발생하면 앱을 다시 여세요."
+
+#: packages/core/src/app/screens/Settings/components/SupportSection.tsx
+msgid "Bramble is free and open source. If it's useful to you, a tip helps keep it going. Scan a code with your wallet, or copy the address. Thank you."
+msgstr "Bramble은 무료 오픈소스입니다. 유용하게 사용하셨다면 팁으로 운영에 도움을 주세요. 지갑으로 코드를 스캔하거나 주소를 복사하세요. 감사합니다."
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble is installed directly, so updates are checked here."
+msgstr "Bramble은 직접 설치되어 있으므로 여기에서 업데이트를 확인합니다."
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Bramble is up to date"
+msgstr "Bramble은 최신 상태입니다"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble is up to date."
+msgstr "Bramble은 최신 상태입니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Bramble needs that permission to talk to the desktop app."
+msgstr "Bramble이 데스크톱 앱과 통신하려면 해당 권한이 필요합니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Bramble needs your permission to talk to the desktop app on this computer. Your browser will ask you to confirm."
+msgstr "Bramble이 이 컴퓨터의 데스크톱 앱과 통신하려면 권한이 필요합니다. 브라우저에서 확인을 요청합니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Bramble only needs to upload and list. Restricting the key to this one bucket, and leaving out delete, limits what it can do if it is ever stolen."
+msgstr "Bramble은 업로드와 목록 조회만 필요합니다. 키를 이 버킷 하나로 제한하고 삭제 권한을 제외하면, 키가 유출되더라도 할 수 있는 작업이 제한됩니다."
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Bramble restarts by itself once this finishes."
+msgstr "이 작업이 끝나면 Bramble이 자동으로 다시 시작됩니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Bramble will never delete anything here, so this can use a credential that isn't allowed to. One that's stolen then can't destroy your backup history."
+msgstr "Bramble은 여기서 어떤 항목도 삭제하지 않으므로 삭제 권한이 없는 자격 증명을 사용할 수 있습니다. 이렇게 하면 자격 증명이 유출되더라도 백업 기록을 파괴할 수 없습니다."
+
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Breached"
+msgstr "유출됨"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Bring entries in from 1Password, Bitwarden, KeePass, Proton Pass, Apple or Google"
+msgstr "1Password, Bitwarden, KeePass, Proton Pass, Apple 또는 Google에서 항목 가져오기"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Bring your logins, cards and notes over from another manager"
+msgstr "다른 비밀번호 관리자에서 로그인, 카드, 메모 가져오기"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Browser extension"
+msgstr "브라우저 확장 프로그램"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Bucket"
+msgstr "버킷"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Butterfly"
+msgstr "나비"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Cactus"
+msgstr "선인장"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Cake"
+msgstr "케이크"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Can't save this code"
+msgstr "이 코드를 저장할 수 없습니다."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+#: packages/core/src/app/components/ui/confirm-dialog.tsx
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
+#: packages/core/src/app/components/ui/inline-confirm.tsx
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Cancel"
+msgstr "취소"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Capitalize each word"
+msgstr "각 단어 첫 글자 대문자로"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "card number"
+msgstr "카드 번호"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Card number"
+msgstr "카드 번호"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Cardholder name"
+msgstr "카드 소유자 이름"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Cat"
+msgstr "고양이"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Change"
+msgstr "변경"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Change it on the site to keep your account safe."
+msgstr "계정을 안전하게 유지하려면 해당 사이트에서 변경하십시오."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Change your master password"
+msgstr "마스터 비밀번호 변경"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Changed on two devices before they synced"
+msgstr "동기화되기 전에 두 기기에서 변경됨"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check"
+msgstr "확인"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check for updates"
+msgstr "업데이트 확인"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Check for updates when Bramble opens"
+msgstr "Bramble 실행 시 업데이트 확인"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Check key"
+msgstr "키 확인"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Check passwords for breaches"
+msgstr "비밀번호 유출 여부 확인"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Check the digits; that isn't a valid card number."
+msgstr "숫자를 확인하십시오. 유효한 카드 번호가 아닙니다."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Check the key first, to load the choices this provider needs."
+msgstr "이 공급자가 필요로 하는 선택 항목을 불러오려면 먼저 키를 확인하십시오."
+
+#. placeholder {0}: linkPending.label
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Check these match {0}"
+msgstr "다음 항목이 {0}와(과) 일치하는지 확인하십시오."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Check these match your desktop app"
+msgstr "다음 항목이 데스크톱 앱과 일치하는지 확인하십시오."
+
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Check this matches"
+msgstr "이 항목이 일치하는지 확인하십시오."
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Checking…"
+msgstr "확인 중…"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Choose a .bramble file"
+msgstr ".bramble 파일 선택"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Choose a different vault"
+msgstr "다른 보관함 선택"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Choose a master password"
+msgstr "마스터 비밀번호 선택"
+
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
+#: packages/core/src/hooks/useVault.tsx
+msgid "Choose a password for the exported file."
+msgstr "내보낸 파일에 사용할 비밀번호를 선택하십시오."
+
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
+msgid "Choose a vault to unlock"
+msgstr "잠금 해제할 보관함 선택"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Choose another file"
+msgstr "다른 파일 선택"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Choose the vault these items should go into"
+msgstr "이 항목들을 넣을 보관함 선택"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Choose where to save this 2FA code."
+msgstr "이 2FA 코드를 저장할 위치를 선택하십시오."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Choose where to store encrypted backups. Bramble only ever uploads ciphertext, so your provider can't read anything in your vault. Add as many as you like."
+msgstr "암호화된 백업을 저장할 위치를 선택하십시오. Bramble은 항상 암호문만 업로드하므로 제공업체는 보관함의 어떤 내용도 읽을 수 없습니다. 원하는 만큼 추가하십시오."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Choose..."
+msgstr "선택..."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Clear after"
+msgstr "일정 시간 후 지우기"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Clear search"
+msgstr "검색 지우기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Clipboard auto-clear"
+msgstr "클립보드 자동 지우기"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Clock"
+msgstr "시계"
+
+#: packages/core/src/app/components/ui/modal.tsx
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Close"
+msgstr "닫기"
+
+#: packages/core/src/app/screens/Import/components/Shell.tsx
+msgid "Close import"
+msgstr "가져오기 닫기"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Cloud"
+msgstr "클라우드"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Cloud backups"
+msgstr "클라우드 백업"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Code from the desktop app"
+msgstr "데스크톱 앱의 코드"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Code scanned"
+msgstr "코드 스캔됨"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Codes are short-lived on purpose. Generate a new one when your other device is ready to scan it."
+msgstr "코드는 원래 짧은 시간 동안만 유효합니다. 다른 기기에서 스캔할 준비가 되면 새 코드를 생성하십시오."
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "Combine into one"
+msgstr "하나로 합치기"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Coming soon"
+msgstr "곧 제공 예정"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Comma (,)"
+msgstr "쉼표(,)"
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "Compare versions"
+msgstr "버전 비교"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Confirm"
+msgstr "확인"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Confirm disconnect"
+msgstr "연결 해제 확인"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Confirm here and approve in the desktop app, only if both show the same symbols."
+msgstr "두 곳에 동일한 기호가 표시되는 경우에만 여기에서 확인하고 데스크톱 앱에서 승인하십시오."
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Confirm it's you"
+msgstr "본인 확인"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Confirm master password"
+msgstr "마스터 비밀번호 확인"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Confirm new password"
+msgstr "새 비밀번호 확인"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Confirm on your device…"
+msgstr "기기에서 확인…"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Confirm passkeys once per unlock"
+msgstr "잠금 해제 시 패스키 한 번 확인"
+
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
+msgid "Confirm password"
+msgstr "비밀번호 확인"
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Confirm with your key"
+msgstr "키로 확인"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Confirm your master password to generate the recovery code."
+msgstr "복구 코드를 생성하려면 마스터 비밀번호를 확인하십시오."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Confirm your master password to reset the recovery code."
+msgstr "복구 코드를 재설정하려면 마스터 비밀번호를 확인하십시오."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Confirm your new password"
+msgstr "새 비밀번호 확인"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "Confirmed. Sign in again on {rp}."
+msgstr "확인되었습니다. {rp}에서 다시 로그인하십시오."
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Conflict"
+msgstr "충돌"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Connect"
+msgstr "연결"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Connect {name}"
+msgstr "{name} 연결"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Connect a browser"
+msgstr "브라우저 연결"
+
+#: packages/core/src/app/components/AliasGenerator.tsx
+msgid "Connect an alias provider to create addresses here."
+msgstr "여기에서 주소를 만들려면 별칭 제공업체를 연결하십시오."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Connected"
+msgstr "연결됨"
+
+#. placeholder {0}: formatDate(browser.pairedAt)
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Connected {0}"
+msgstr "{0} 연결됨"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Connected to {connected}. It is syncing this vault and can fill from it."
+msgstr "{connected}에 연결됨. 이 보관함을 동기화 중이며 여기에서 자동 완성할 수 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Connected."
+msgstr "연결됨."
+
+#. placeholder {0}: connected.quota.used
+#. placeholder {1}: connected.quota.limit
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Connected. {0} of {1} aliases used."
+msgstr "연결됨. 별칭 {0}/{1} 사용됨."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Connecting a browser needs a master password. Turn one on in Settings → Security first."
+msgstr "브라우저를 연결하려면 마스터 비밀번호가 필요합니다. 먼저 설정 → 보안에서 활성화하세요."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Connecting continues in a window, which stays open while you switch to the desktop app."
+msgstr "연결은 창에서 계속되며, 데스크톱 앱으로 전환하는 동안 창이 열려 있습니다."
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Connecting to your other device…"
+msgstr "다른 기기에 연결 중…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Connecting…"
+msgstr "연결 중…"
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Content"
+msgstr "콘텐츠"
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "contents"
+msgstr "내용"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Continue"
+msgstr "계속"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Continue in a window"
+msgstr "창에서 계속"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Controls which URLs this entry will offer credentials for."
+msgstr "이 항목이 로그인 정보를 제공할 URL을 제어합니다."
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+#: packages/core/src/app/screens/Settings/components/SupportSection.tsx
+msgid "Copied"
+msgstr "복사됨"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Copied {copied}"
+msgstr "{copied} 복사됨"
+
+#: packages/core/src/app/components/AliasGenerator.tsx
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/components/PasswordGenerator.tsx
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Copy"
+msgstr "복사"
+
+#. placeholder {0}: item.label
+#. placeholder {0}: label.toLowerCase()
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/entry-modes/DetailField.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Copy {0}"
+msgstr "{0} 복사"
+
+#: packages/core/src/app/screens/Settings/components/SupportSection.tsx
+msgid "Copy address"
+msgstr "주소 복사"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Copy log"
+msgstr "로그 복사"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Copy previous password"
+msgstr "이전 비밀번호 복사"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Copy them anyway"
+msgstr "그래도 복사"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Copy verification code"
+msgstr "인증 코드 복사"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Copying into the desktop's vault…"
+msgstr "데스크톱 보관함으로 복사 중…"
+
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Copying your desktop app's vault…"
+msgstr "데스크톱 앱 보관함을 복사하는 중…"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Corn"
+msgstr "옥수수"
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Could not reach the desktop app."
+msgstr "데스크톱 앱에 연결할 수 없습니다."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Could not sync with the desktop app."
+msgstr "데스크톱 앱과 동기화할 수 없습니다."
+
+#. placeholder {0}: (e as Error).message
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Couldn't export the backup: {0}"
+msgstr "백업을 내보내지 못했습니다: {0}"
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Couldn't open this database."
+msgstr "이 데이터베이스를 열 수 없습니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Couldn't open this vault. The file may be missing or unreadable."
+msgstr "이 보관함을 열 수 없습니다. 파일이 없거나 읽을 수 없는 상태일 수 있습니다."
+
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Couldn't reach the transfer service on this device."
+msgstr "이 기기의 전송 서비스에 연결할 수 없습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Couldn't read that transfer."
+msgstr "해당 전송을 읽을 수 없습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Couldn't read this file."
+msgstr "이 파일을 읽을 수 없습니다."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Couldn't restore this backup."
+msgstr "이 백업을 복원할 수 없습니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Couldn't save the master password. Please try again."
+msgstr "마스터 비밀번호를 저장할 수 없습니다. 다시 시도해 주세요."
+
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+msgid "Couldn't unlock the vault."
+msgstr "보관함을 잠금 해제할 수 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Couldn't verify your key."
+msgstr "키를 확인할 수 없습니다."
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Couldn't verify your key. Try again."
+msgstr "키를 확인할 수 없습니다. 다시 시도해 주세요."
+
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
+msgid "Couldn't write the file."
+msgstr "파일에 기록할 수 없습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Couldn't write to the vault."
+msgstr "보관함에 기록할 수 없습니다."
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Create a new vault alongside your existing ones, with its own master password."
+msgstr "기존 보관함과 함께 자체 마스터 비밀번호를 사용하는 새 보관함을 만듭니다."
+
+#: packages/core/src/app/components/AliasGenerator.tsx
+msgid "Create alias"
+msgstr "별칭 생성"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Create an access key with read and write access to a bucket, then paste it below. For the bucket you can paste its full URL (https://host/bucket)."
+msgstr "버킷에 대한 읽기 및 쓰기 권한이 있는 액세스 키를 생성한 후 아래에 붙여넣으세요. 버킷은 전체 URL(https://host/bucket)을 붙여넣을 수 있습니다."
+
+#. placeholder {0}: descriptor.label
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Create an API key at {0}"
+msgstr "{0}에서 API 키 생성"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Create and store passkeys for other sites. While on, Bramble handles all passkey prompts in this browser."
+msgstr "다른 사이트의 패스키를 생성하고 저장합니다. 켜져 있으면 이 브라우저의 모든 패스키 요청을 Bramble이 처리합니다."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Create another vault"
+msgstr "다른 볼트 생성"
+
+#: packages/core/src/app/screens/VaultPicker/VaultPicker.tsx
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+msgid "Create new vault"
+msgstr "새 볼트 생성"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Create vault"
+msgstr "볼트 생성"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Create your vault"
+msgstr "볼트 생성하기"
+
+#. placeholder {0}: formatDateTime(entry.createdAt)
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Created {0}"
+msgstr "{0} 생성됨"
+
+#. placeholder {0}: formatDate(v.createdAt)
+#: packages/core/src/app/components/VaultChoiceList.tsx
+msgid "Created on {0}"
+msgstr "{0}에 생성됨"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Creating…"
+msgstr "생성 중…"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Credit or debit card"
+msgstr "신용카드 또는 체크카드"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Current password"
+msgstr "현재 비밀번호"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Current password is incorrect"
+msgstr "현재 비밀번호가 올바르지 않습니다"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Current recovery code"
+msgstr "현재 복구 코드"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Custom fields"
+msgstr "사용자 지정 필드"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "CVV"
+msgstr "CVV"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Daily"
+msgstr "매일"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Dark"
+msgstr "다크"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Default password manager"
+msgstr "기본 비밀번호 관리자"
+
+#: packages/core/src/app/bulk-actions/delete.tsx
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Delete"
+msgstr "삭제"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Delete entry"
+msgstr "항목 삭제"
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "Delete it"
+msgstr "삭제"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Delete this entry permanently?"
+msgstr "이 항목을 영구적으로 삭제하시겠습니까?"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Delete this entry?"
+msgstr "이 항목을 삭제하시겠습니까?"
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Delete this vault"
+msgstr "이 볼트 삭제"
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Delete vault"
+msgstr "볼트 삭제"
+
+#: packages/core/src/app/bulk-actions/delete.tsx
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Deleting…"
+msgstr "삭제 중…"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "Deselect all"
+msgstr "전체 선택 해제"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Desktop app"
+msgstr "데스크톱 앱"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Details"
+msgstr "세부 정보"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device name"
+msgstr "기기 이름"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Device passcode"
+msgstr "기기 암호"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Device sync"
+msgstr "기기 동기화"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Digits"
+msgstr "자릿수"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Disable master password"
+msgstr "마스터 비밀번호 비활성화"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Disable master password?"
+msgstr "마스터 비밀번호를 비활성화하시겠습니까?"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Disabling…"
+msgstr "비활성화 중…"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Disconnect"
+msgstr "연결 해제"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Disconnect this browser"
+msgstr "이 브라우저 연결 해제"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Disconnect this device from sync before turning off the master password."
+msgstr "마스터 비밀번호를 끄기 전에 이 기기를 동기화에서 연결 해제하세요."
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+msgid "Dismiss"
+msgstr "닫기"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Dog"
+msgstr "개"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Done"
+msgstr "완료"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "Done selecting"
+msgstr "선택 완료"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Done. Your old recovery code no longer works. Save this one now: it is shown only here, and it is the only way back in if you forget your master password."
+msgstr "완료. 이전 복구 코드는 더 이상 작동하지 않습니다. 지금 이 코드를 저장하세요: 이 화면에서만 표시되며, 마스터 비밀번호를 잊었을 때 다시 들어올 수 있는 유일한 방법입니다."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Double-check this. Bramble cannot test it, and a wrong domain gives you addresses that quietly go nowhere."
+msgstr "이 내용을 다시 확인하세요. Bramble은 이를 테스트할 수 없으며, 잘못된 도메인을 사용하면 조용히 어디로도 전달되지 않는 주소가 생성됩니다."
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Download"
+msgstr "다운로드"
+
+#. placeholder {0}: Math.round(fraction * 100)
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading {0}%"
+msgstr "다운로드 중 {0}%"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Downloading from {from}, {percent}%"
+msgstr "다운로드 중: {from}, {percent}%"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading the update"
+msgstr "업데이트 다운로드 중"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Downloading, {percent}%"
+msgstr "다운로드 중, {percent}%"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloading…"
+msgstr "다운로드 중…"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Downloads and restarts Bramble. Your vault is untouched."
+msgstr "Bramble을 다운로드하고 다시 시작합니다. 보관함은 변경되지 않습니다."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "DuckDuckGo has no API key page. Open the Autofill tab, then your browser's developer tools, click Generate Private Duck Address, and copy the token that follows authorization: Bearer in the Network tab."
+msgstr "DuckDuckGo에는 API 키 페이지가 없습니다. 자동 완성 탭을 연 다음 브라우저 개발자 도구에서 Generate Private Duck Address를 클릭하고, 네트워크 탭의 authorization: Bearer 다음에 오는 토큰을 복사하세요."
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Duplicate"
+msgstr "복제"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Duplicate entry"
+msgstr "항목 복제"
+
+#: packages/core/src/app/components/EntryRow.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Edit"
+msgstr "편집"
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Edit {modeLabel}"
+msgstr "{modeLabel} 편집"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Edit entry"
+msgstr "항목 편집"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Elephant"
+msgstr "코끼리"
+
+#: packages/core/src/app/routes/GeneratorRoute.tsx
+msgid "Email alias"
+msgstr "이메일 별칭"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Empty falls back to the standard set."
+msgstr "비어 있으면 표준 세트로 대체됩니다."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Enable autofill"
+msgstr "자동 완성 활성화"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Encrypted on your device"
+msgstr "기기에서 암호화됨"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Encrypting…"
+msgstr "암호화 중…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Endpoint"
+msgstr "엔드포인트"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Enter a new password"
+msgstr "새 비밀번호 입력"
+
+#. placeholder {0}: link.summary.name
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Enter the master password of {0}, the vault in your desktop app. This browser will use it too."
+msgstr "데스크톱 앱의 보관함인 {0}의 마스터 비밀번호를 입력하세요. 이 브라우저에서도 사용됩니다."
+
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Enter the master password of the vault in your desktop app. This browser will use it too."
+msgstr "데스크톱 앱의 보관함 마스터 비밀번호를 입력하세요. 이 브라우저에서도 사용됩니다."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Enter the master password shared with your other device."
+msgstr "다른 기기와 공유하는 마스터 비밀번호를 입력하세요."
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Enter the pairing code from your other device to sync its vault onto this one."
+msgstr "다른 기기의 페어링 코드를 입력하여 보관함을 이 기기로 동기화하세요."
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Enter the password for your {providerLabel} database"
+msgstr "{providerLabel} 데이터베이스의 비밀번호를 입력하세요."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Enter your current password"
+msgstr "현재 비밀번호 입력"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Enter your master password to authorize the new device. This proves the request came from you, not just a device that was already unlocked."
+msgstr "새 기기를 승인하려면 마스터 비밀번호를 입력하세요. 이를 통해 요청이 이미 잠금 해제된 기기가 아니라 본인에게서 온 것임을 확인할 수 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Enter your master password to connect a browser. This vault is copied to it, so the request has to come from you and not just from a device that was already unlocked."
+msgstr "브라우저를 연결하려면 마스터 비밀번호를 입력하세요. 이 보관함이 브라우저에 복사되므로 요청은 이미 잠금 해제된 기기가 아니라 본인에게서 온 것이어야 합니다."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Enter your master password to unlock your vault"
+msgstr "보관함을 잠금 해제하려면 마스터 비밀번호를 입력하세요."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Enter your Nextcloud WebDAV address, not the site you sign in to. Files, then Files settings, shows it at the bottom left; it looks like https://cloud.example.com/remote.php/dav/files/USERNAME/. Sign in with an app password, and write the backup folder below as a path, like /path/to/dir."
+msgstr "로그인하는 사이트가 아닌 Nextcloud WebDAV 주소를 입력하세요. 파일 앱에서 파일 설정을 열면 왼쪽 하단에 표시되며, https://cloud.example.com/remote.php/dav/files/USERNAME/와 같은 형태입니다. 앱 비밀번호로 로그인하고 아래 백업 폴더는 /path/to/dir와 같은 경로로 입력하세요."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Enter your recovery code"
+msgstr "복구 코드 입력"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Enter your recovery code to unlock. After signing in, generate a new one in Settings."
+msgstr "복구 코드를 입력하여 잠금 해제하세요. 로그인한 후 설정에서 새 복구 코드를 생성하세요."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Enter your WebDAV address and an app password for your account."
+msgstr "계정의 WebDAV 주소와 앱 비밀번호를 입력하십시오."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "eTLD+1 (default, matches all subdomains)"
+msgstr "eTLD+1(기본값, 모든 하위 도메인과 일치)"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Every selected entry already has this tag."
+msgstr "선택한 모든 항목에 이미 이 태그가 있습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Everything in that transfer is already in your vault, so there is nothing to import."
+msgstr "해당 전송의 모든 내용은 이미 보관함에 있으므로 가져올 항목이 없습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Everything in this file is already in your vault, so there is nothing to import."
+msgstr "이 파일의 모든 내용은 이미 보관함에 있으므로 가져올 항목이 없습니다."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Exact hostname (and port, if the URL has one)"
+msgstr "정확한 호스트 이름(URL에 포트가 있으면 포트 포함)"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Existing tags"
+msgstr "기존 태그"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Expires"
+msgstr "만료"
+
+#. placeholder {0}: mmss(secondsLeft)
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Expires in {0} · keep this window open until pairing finishes"
+msgstr "{0} 후 만료 · 페어링이 끝날 때까지 이 창을 열어 두십시오."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "expiry"
+msgstr "만료"
+
+#: packages/core/src/app/bulk-actions/export.tsx
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Export"
+msgstr "내보내기"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Export a backup"
+msgstr "백업 내보내기"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Export an encrypted backup"
+msgstr "암호화된 백업 내보내기"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Export as KeePass"
+msgstr "KeePass로 내보내기"
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Export as KeePass (.kdbx)"
+msgstr "KeePass(.kdbx)로 내보내기"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Export isn't available here."
+msgstr "여기서는 내보내기를 사용할 수 없습니다."
+
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "Export selection"
+msgstr "선택 항목 내보내기"
+
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "Export selection (.bramble)"
+msgstr "선택 항목 내보내기(.bramble)"
+
+#: packages/core/src/app/bulk-actions/export.tsx
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Exporting…"
+msgstr "내보내는 중…"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Face ID"
+msgstr "Face ID"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Failed"
+msgstr "실패"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Fair"
+msgstr "보통"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Fetches the latest version number from bramble.sh. Nothing from your vault is sent."
+msgstr "bramble.sh에서 최신 버전 번호를 가져옵니다. 보관함의 내용은 전송되지 않습니다."
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Field name"
+msgstr "필드 이름"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Files are read on this device only. Nothing is uploaded. Delete the export file once you're done."
+msgstr "파일은 이 기기에서만 읽습니다. 아무것도 업로드되지 않습니다. 완료한 후에는 내보내기 파일을 삭제하십시오."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Files over {LIMIT_MB} MB can't be attached."
+msgstr "{LIMIT_MB}MB를 초과하는 파일은 첨부할 수 없습니다."
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Filter by type"
+msgstr "유형별 필터"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Fingerprint"
+msgstr "지문"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Fire"
+msgstr "불"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Fish"
+msgstr "물고기"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Flag"
+msgstr "깃발"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Flower"
+msgstr "꽃"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Folder"
+msgstr "폴더"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Frequency"
+msgstr "빈도"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "General"
+msgstr "일반"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Generate"
+msgstr "생성"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Generate a different email address for every site, from an account you already have. Bramble only asks your provider for an address; it never handles the mail."
+msgstr "이미 보유한 계정을 사용하여 사이트마다 다른 이메일 주소를 생성합니다. Bramble은 제공업체에 주소만 요청할 뿐 메일을 처리하지 않습니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Generate a new code"
+msgstr "새 코드 생성"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Generate a one-time pairing code and listen for a device to join. No vault secrets in the code."
+msgstr "일회용 페어링 코드를 생성하고 기기가 페어링에 참여할 때까지 대기합니다. 코드에는 보관함 기밀이 포함되지 않습니다."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Generate another"
+msgstr "새로 생성"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Generate email alias"
+msgstr "이메일 별칭 생성"
+
+#: packages/core/src/app/components/PasswordGeneratorModal.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/routes/GeneratorRoute.tsx
+msgid "Generate password"
+msgstr "비밀번호 생성"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Generate strong password"
+msgstr "강력한 비밀번호 생성"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Generator"
+msgstr "생성기"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Gift"
+msgstr "선물"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Glasses"
+msgstr "안경"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Globe"
+msgstr "지구본"
+
+#: packages/core/src/app/components/ui/back-button.tsx
+msgid "Go back"
+msgstr "뒤로 가기"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Go to vault"
+msgstr "보관함으로 이동"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Guitar"
+msgstr "기타"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Hammer"
+msgstr "망치"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Hand your logins, codes and passkeys straight to another password app on this device. Attachments aren't sent, so keep a backup for those."
+msgstr "로그인 정보, 코드, 패스키를 이 기기의 다른 비밀번호 앱에 바로 전달하십시오. 첨부 파일은 전송되지 않으므로 해당 파일은 백업해 두십시오."
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Hand your logins, codes and passkeys straight to another password app on this device. Nothing is written to a file."
+msgstr "로그인 정보, 코드, 패스키를 이 기기의 다른 비밀번호 앱에 바로 전달하십시오. 파일에는 아무것도 기록되지 않습니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Hat"
+msgstr "모자"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Have a pairing code from another device? Add a vault and choose \"Join a device\" to sync its vault onto this one. Once enrolled, devices sync automatically in the background while unlocked, no button or window needed."
+msgstr "다른 기기에서 받은 페어링 코드가 있습니까? 보관함을 추가하고 '기기 연결'을 선택하여 그 보관함을 이 기기로 동기화하십시오. 등록 후에는 잠금 해제된 상태에서 백그라운드로 자동 동기화되며 버튼이나 창이 필요하지 않습니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Headphones"
+msgstr "헤드폰"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Heart"
+msgstr "하트"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Hidden"
+msgstr "숨김"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Hide authenticator key"
+msgstr "인증자 키 숨기기"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Hide card number"
+msgstr "카드 번호 숨기기"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Hide CVV"
+msgstr "CVV 숨기기"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Hide passphrase"
+msgstr "암호 문구 숨기기"
+
+#: packages/core/src/app/components/ui/password-field.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Hide password"
+msgstr "비밀번호 숨기기"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Hide previous password"
+msgstr "이전 비밀번호 숨기기"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Hide private key"
+msgstr "비공개 키 숨기기"
+
+#: packages/core/src/app/components/ui/secret-area.tsx
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Hide value"
+msgstr "값 숨기기"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Holds {passkeys} passkeys"
+msgstr "패스키 {passkeys}개 보유"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Holds a passkey"
+msgstr "패스키 1개 보유"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Horse"
+msgstr "말"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Hourglass"
+msgstr "모래시계"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Hyphen (-)"
+msgstr "하이픈(-)"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "I've saved it"
+msgstr "저장했습니다"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "I've saved it, continue"
+msgstr "저장했습니다. 계속하십시오"
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "If they differ, someone else is trying to join. Reject it there and start again with a new code."
+msgstr "코드가 일치하지 않으면 다른 사람이 연결을 시도하는 중입니다. 해당 기기에서 거부하고 새 코드로 다시 시작하십시오."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Immediate"
+msgstr "즉시"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Import"
+msgstr "가져오기"
+
+#. placeholder {0}: result.imported.length
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Import {0} items"
+msgstr "항목 {0}개 가져오기"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Import & backup"
+msgstr "가져오기 및 백업"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Import a backup"
+msgstr "백업 가져오기"
+
+#: packages/core/src/app/screens/Import/components/Header.tsx
+msgid "Import data"
+msgstr "데이터 가져오기"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Import from another manager"
+msgstr "다른 관리자에서 가져오기"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Import them anyway"
+msgstr "그래도 가져오기"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Imported {imported} items"
+msgstr "가져온 항목 {imported}개"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Importing…"
+msgstr "가져오는 중…"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "In the Bramble extension, press Link on the first screen, or open Settings → Desktop app. Both screens will then show the same symbols."
+msgstr "Bramble 확장 프로그램의 첫 화면에서 연결을 누르거나 설정 → 데스크톱 앱을 여세요. 그러면 두 화면에 같은 기호가 표시됩니다."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Include a number"
+msgstr "숫자 포함"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/hooks/useVault.tsx
+msgid "Incorrect master password"
+msgstr "마스터 비밀번호가 올바르지 않습니다"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Incorrect master password for this backup."
+msgstr "이 백업의 마스터 비밀번호가 올바르지 않습니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Incorrect recovery code"
+msgstr "복구 코드가 올바르지 않습니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Interrupted: Bramble was closed before this backup was confirmed. It will run again next time you open Bramble."
+msgstr "중단됨: 이 백업이 확인되기 전에 Bramble이 종료되었습니다. 다음에 Bramble을 열면 다시 실행됩니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Interrupted: Bramble was closed before this backup was confirmed. Tap Back up now to try again."
+msgstr "중단됨: 이 백업이 확인되기 전에 Bramble이 종료되었습니다. 다시 시도하려면 지금 백업을 탭하세요."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Is this your device?"
+msgstr "이 기기가 본인의 기기입니까?"
+
+#. placeholder {0}: approval.label
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "It calls itself \"{0}\". Only the symbols above prove who it is."
+msgstr "상대 기기는 자신을 \"{0}\"이라고 밝힙니다. 위의 기호만이 그 정체를 증명합니다."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "It holds {extra} passkeys the version shown doesn't."
+msgstr "표시된 버전에는 없는 패스키 {extra}개를 보유하고 있습니다."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "It holds {shownOnly} passkeys the other version doesn't."
+msgstr "다른 버전에는 없는 패스키 {shownOnly}개를 보유하고 있습니다."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "It holds a passkey the other version doesn't."
+msgstr "다른 버전에는 없는 패스키를 하나 보유하고 있습니다."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "It holds a passkey the version shown doesn't."
+msgstr "표시된 버전에는 없는 패스키를 하나 보유하고 있습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "item"
+msgstr "항목"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "items"
+msgstr "항목"
+
+#. placeholder {0}: filtered.length
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Items ({0})"
+msgstr "항목 ({0})"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Items with attachments"
+msgstr "첨부 파일이 있는 항목"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Its credentials were entered in another vault, so this one cannot open them. Edit the target and enter them again to back up now."
+msgstr "이 항목의 자격 증명은 다른 보관함에 입력되어 있어 이 보관함에서 열 수 없습니다. 지금 백업하려면 대상을 편집하고 다시 입력하세요."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "Its password is different from the version shown."
+msgstr "이 항목의 비밀번호는 표시된 버전과 다릅니다."
+
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Join a device"
+msgstr "기기 연결"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Join vault"
+msgstr "보관함 연결"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "KDBX export isn't available here."
+msgstr "KDBX 내보내기는 여기에서 사용할 수 없습니다."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "Keep both"
+msgstr "둘 다 유지"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Keep everything"
+msgstr "모두 유지"
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "Keep it"
+msgstr "이것 유지"
+
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Keep the desktop app open until this finishes."
+msgstr "이 작업이 끝날 때까지 데스크톱 앱을 열어 두세요."
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Keep the invite open on your other device while the vault transfers."
+msgstr "보관함이 전송되는 동안 다른 기기에서 초대를 열어 두세요."
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "Keep them separate"
+msgstr "별도로 유지"
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "Keep this one"
+msgstr "이것 유지"
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Keep this screen open until pairing finishes."
+msgstr "페어링이 끝날 때까지 이 화면을 열어 두세요."
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Keep this somewhere safe and offline. Anyone with this code can unlock your vault, and it's the only way back in if you forget your master password and lose access to your keys."
+msgstr "이 코드를 안전한 오프라인 장소에 보관하세요. 이 코드가 있는 사람은 누구나 보관함을 열 수 있으며, 마스터 비밀번호를 잊고 키에 접근할 수 없게 되었을 때 다시 들어갈 수 있는 유일한 방법입니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "KeePass master password"
+msgstr "KeePass 마스터 비밀번호"
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Kept in your vault, but hidden from the list and never offered for autofill."
+msgstr "보관함에 보관되지만 목록에서 숨겨지고 자동 완성에 제공되지 않습니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Key"
+msgstr "키"
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Key file (optional)"
+msgstr "키 파일(선택 사항)"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Keyboard suggestions"
+msgstr "키보드 추천"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Language"
+msgstr "언어"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last 10"
+msgstr "최근 10개"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last 100"
+msgstr "최근 100개"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last 30"
+msgstr "최근 30개"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last 5"
+msgstr "최근 5개"
+
+#. placeholder {0}: formatWhen(target.lastBackupAt)
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last backed up {0}"
+msgstr "마지막 백업: {0}"
+
+#. placeholder {0}: formatWhen(target.lastBackupAt)
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Last complete backup {0}"
+msgstr "마지막 전체 백업: {0}"
+
+#. placeholder {0}: relativeTime(lastSynced)
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Last synced {0}"
+msgstr "마지막 동기화: {0}"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Later"
+msgstr "나중에"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Latest only"
+msgstr "최신 항목만"
+
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+msgid "Leave a review"
+msgstr "리뷰 남기기"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Leave the credential fields blank to keep the ones you saved."
+msgstr "저장한 정보를 유지하려면 자격 증명 필드를 비워 두세요."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Leave unset for your account's default domain, or pick one of your own."
+msgstr "계정의 기본 도메인을 사용하려면 비워 두거나 직접 선택하세요."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Leave unset to use your provider account's own default."
+msgstr "공급자 계정의 기본값을 사용하려면 비워 두세요."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Length"
+msgstr "길이"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Light"
+msgstr "라이트"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Light bulb"
+msgstr "전구"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkBanner.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Link"
+msgstr "연결"
+
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkBanner.tsx
+msgid "Link it instead of making a new vault."
+msgstr "새 보관함을 만드는 대신 연결하세요."
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Link your desktop app"
+msgstr "데스크톱 앱 연결"
+
+#. placeholder {0}: formatDate(status.pairedAt)
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Linked {0}"
+msgstr "연결됨: {0}"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Linked to the Bramble desktop app."
+msgstr "Bramble 데스크톱 앱에 연결되었습니다."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Linking didn't finish. Link again."
+msgstr "연결이 완료되지 않았습니다. 다시 연결하세요."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Lion"
+msgstr "Lion"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Lock"
+msgstr "잠금"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock the vault and require autofill auth after inactivity"
+msgstr "비활성 시 보관함 잠금 및 자동 완성 인증 요구"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Lock vault"
+msgstr "보관함 잠금"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock vault after inactivity"
+msgstr "비활성 후 보관함 잠금"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Lock when the screen locks"
+msgstr "화면이 잠기면 잠금"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Locked"
+msgstr "잠김"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Login"
+msgstr "로그인"
+
+#. placeholder {0}: info.hostname
+#: packages/core/src/app/components/CornerSavedToast.tsx
+msgid "Login saved for {0}"
+msgstr "{0} 로그인 저장됨"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+msgid "Make Bramble your default password manager?"
+msgstr "Bramble을 기본 비밀번호 관리자로 설정하시겠습니까?"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+msgid "Make default"
+msgstr "기본으로 설정"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Master password"
+msgstr "마스터 비밀번호"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Master password set."
+msgstr "마스터 비밀번호가 설정되었습니다."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Master password updated."
+msgstr "마스터 비밀번호가 변경되었습니다."
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Matching tags"
+msgstr "일치하는 태그"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Mode"
+msgstr "모드"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Month (MM)"
+msgstr "월 (MM)"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Monthly"
+msgstr "매월"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Months run from 1 to 12."
+msgstr "월은 1부터 12까지입니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Moon"
+msgstr "달"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "More options"
+msgstr "추가 옵션"
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "Moves {browserName}'s entries and files into {desktopName}. Exact duplicates are skipped; near-duplicates are held for you to review."
+msgstr "{browserName}의 항목과 파일을 {desktopName}(으)로 이동합니다. 정확히 일치하는 중복 항목은 건너뛰고 유사한 항목은 검토를 위해 보류됩니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Mushroom"
+msgstr "버섯"
+
+#: packages/core/src/app/entry-modes/card.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Name"
+msgstr "이름"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Name A-Z"
+msgstr "이름 A-Z"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Name this key (optional)"
+msgstr "키 이름(선택 사항)"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Name Z-A"
+msgstr "이름 Z-A"
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "New {modeLabel}"
+msgstr "새 {modeLabel}"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "New password"
+msgstr "새 비밀번호"
+
+#. placeholder {0}: formatIn(retryIn)
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Next attempt {0}"
+msgstr "다음 시도 {0}"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "No archived items found matching your search."
+msgstr "검색어와 일치하는 보관된 항목이 없습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "No importable items were found in this database."
+msgstr "이 데이터베이스에서 가져올 수 있는 항목이 없습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "No importable items were found in this file."
+msgstr "이 파일에서 가져올 수 있는 항목이 없습니다."
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "No items found matching your search."
+msgstr "검색어와 일치하는 항목이 없습니다."
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "No logins at risk."
+msgstr "위험에 노출된 로그인이 없습니다."
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "No logins match."
+msgstr "일치하는 로그인이 없습니다."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "No QR code detected. Try again, or paste the code."
+msgstr "QR 코드를 감지하지 못했습니다. 다시 시도하거나 코드를 붙여넣으십시오."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "No QR code found on the page. Make sure it's visible, then retry, or paste the setup key."
+msgstr "페이지에서 QR 코드를 찾지 못했습니다. 코드가 보이는지 확인한 후 다시 시도하거나 설정 키를 붙여넣으십시오."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "No recovery code yet. Generate one as a backup way in."
+msgstr "아직 복구 코드가 없습니다. 백업 로그인 수단으로 하나를 생성하십시오."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "No save card on these sites. Remove to start prompting again."
+msgstr "이 사이트들에는 저장 카드가 없습니다. 다시 표시하려면 제거하십시오."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "No save card on this site. Remove to start prompting again."
+msgstr "이 사이트에는 저장 카드가 없습니다. 다시 표시하려면 제거하십시오."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "No security key registered on this vault."
+msgstr "이 볼트에 등록된 보안 키가 없습니다."
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "No transfer is waiting. Start one from the other app and pick {0}."
+msgstr "대기 중인 전송이 없습니다. 다른 앱에서 전송을 시작한 후 {0}을(를) 선택하십시오."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "No vault is selected."
+msgstr "선택된 볼트가 없습니다."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "None"
+msgstr "없음"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "None of the selected entries have this tag."
+msgstr "선택한 항목 중 이 태그가 있는 항목이 없습니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "None of your connected devices has it yet."
+msgstr "연결된 기기 중 어디에도 아직 이 항목이 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Nostr relay URL"
+msgstr "Nostr 릴레이 URL"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Not backed up yet"
+msgstr "아직 백업되지 않음"
+
+#: packages/core/src/app/components/backup-blocked.tsx
+msgid "Not backed up: this vault's attachments can't be listed while it's locked. Unlock it once to resume."
+msgstr "백업되지 않음: 이 볼트가 잠겨 있는 동안에는 첨부 파일을 나열할 수 없습니다. 재개하려면 볼트를 한 번 잠금 해제하십시오."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Not now"
+msgstr "나중에"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Not on this device yet. Waiting for a device that has it."
+msgstr "아직 이 기기에 없습니다. 이 항목이 있는 기기를 기다리고 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Not syncing: this device can't read its sync key right now. Lock and unlock to try again. If it keeps happening, disconnect and join again with a code from another device."
+msgstr "동기화되지 않음: 현재 이 기기에서 동기화 키를 읽을 수 없습니다. 잠근 후 잠금을 해제하여 다시 시도하십시오. 문제가 계속되면 연결을 해제한 후 다른 기기의 코드로 다시 연결하십시오."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Not syncing: your other devices no longer recognize this one. Disconnect, then join again with a code from another device."
+msgstr "동기화되지 않음: 다른 기기가 더 이상 이 기기를 인식하지 못합니다. 연결을 해제한 후 다른 기기의 코드로 다시 연결하십시오."
+
+#: packages/core/src/app/entry-modes/card.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Notes"
+msgstr "메모"
+
+#: packages/core/src/app/entry-modes/card.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Notes (optional)"
+msgstr "메모(선택 사항)"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Nothing is archived. Archived items are kept here, out of autofill."
+msgstr "보관된 항목이 없습니다. 보관된 항목은 자동 완성에서 제외되어 여기에 보관됩니다."
+
+#: packages/core/src/app/screens/Import/util/count-line.tsx
+msgid "Nothing to import"
+msgstr "가져올 항목 없음"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Nothing usable was handed over. Open the site's 2FA page and add the code from the login instead."
+msgstr "사용 가능한 정보가 전달되지 않았습니다. 대신 해당 사이트의 2FA 페이지를 열고 로그인 항목에서 코드를 추가하세요."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Nothing was linked."
+msgstr "연결된 항목이 없습니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Octopus"
+msgstr "Octopus"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Off"
+msgstr "끔"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Off. You unlock by tapping a key."
+msgstr "끔. 키를 탭하여 잠금 해제합니다."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Offer saved logins, cards, and generated passwords in a dropdown on the page. When off, copy from the vault instead."
+msgstr "저장된 로그인, 카드, 생성된 비밀번호를 페이지의 드롭다운에 제공합니다. 꺼져 있으면 보관함에서 복사합니다."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Offer to save logins"
+msgstr "로그인 저장 제안"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Older version on the other device? Compare this instead:"
+msgstr "다른 기기에 이전 버전이 있나요? 대신 이것을 비교하세요:"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "One-click sign-in for {name} is coming in a future update. For now, pick a provider under \"Bring your own storage\"."
+msgstr "{name}용 원클릭 로그인은 향후 업데이트에서 제공될 예정입니다. 지금은 \"자체 스토리지 가져오기\" 아래에서 제공업체를 선택하세요."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only {brand} can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "{brand}만 잠금을 해제할 수 있습니다. 얼굴 또는 지문을 추가하거나 제거하면 이 기능이 꺼지며 마스터 비밀번호로 다시 활성화해야 합니다."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only Face ID or a fingerprint can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "Face ID 또는 지문만 잠금을 해제할 수 있습니다. 얼굴 또는 지문을 추가하거나 제거하면 이 기능이 꺼지며 마스터 비밀번호로 다시 활성화해야 합니다."
+
+#. placeholder {0}: descriptor.label
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Only for a self-hosted {0}. Leave empty to use the hosted service."
+msgstr "자체 호스팅 {0}에만 사용됩니다. 비워 두면 호스팅 서비스를 이용합니다."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Only your passcode can unlock. Adding or removing a face or fingerprint turns this off, and you'll re-enable it with your master password."
+msgstr "기기 암호만 잠금을 해제할 수 있습니다. 얼굴 또는 지문을 추가하거나 제거하면 이 기능이 꺼지며 마스터 비밀번호로 다시 활성화해야 합니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Open"
+msgstr "열기"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Open {name}"
+msgstr "{name} 열기"
+
+#. placeholder {0}: picked.name
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Open <0>{0}</0> as the vault on this device. Enter its master password."
+msgstr "이 기기에서 <0>{0}</0>을(를) 보관함으로 여세요. 해당 마스터 비밀번호를 입력하세요."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Open an encrypted .bramble backup and make it the vault on this device."
+msgstr "암호화된 .bramble 백업을 열어 이 기기의 보관함으로 만드세요."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Open attachment"
+msgstr "첨부파일 열기"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Open Bramble on this computer, go to Settings and choose Connect a browser, then press Link here. Both screens will show the same symbols."
+msgstr "이 컴퓨터에서 Bramble을 열고 설정에서 브라우저 연결을 선택한 다음 여기에 연결을 누르세요. 두 화면에 같은 기호가 표시됩니다."
+
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Open Bramble on this computer, go to Settings and choose Connect a browser, then press Link. Both screens will show the same symbols."
+msgstr "이 컴퓨터에서 Bramble을 열고 설정에서 브라우저 연결을 선택한 다음 연결을 누르세요. 두 화면에 같은 기호가 표시됩니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Open Bramble on your other device and scan the code, or paste it there."
+msgstr "다른 기기에서 Bramble을 열고 코드를 스캔하거나 붙여넣으세요."
+
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Open database"
+msgstr "데이터베이스 열기"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Open Email Protection settings"
+msgstr "이메일 보호 설정 열기"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Open in window"
+msgstr "창에서 열기"
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Open it from the {0} popup and unlock it with its master password."
+msgstr "{0} 팝업에서 열고 해당 마스터 비밀번호로 잠금을 해제하세요."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Open that vault"
+msgstr "해당 보관함 열기"
+
+#: packages/core/src/app/components/OpenWebsiteLink.tsx
+msgid "Open website"
+msgstr "웹사이트 열기"
+
+#: packages/core/src/app/routes/VaultHomeRoute.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Import/components/KdbxUnlock.tsx
+msgid "Opening…"
+msgstr "여는 중…"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Optic ID"
+msgstr "Optic ID"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Optional (e.g. Restored)"
+msgstr "선택 사항(예: 복원됨)"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Optional (e.g. Work)"
+msgstr "선택 사항(예: 업무)"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Or add it to an existing login"
+msgstr "또는 기존 로그인에 추가"
+
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+msgid "Or something honest, either works. Reviews are how people find Bramble."
+msgstr "아니면 솔직한 내용도 괜찮습니다. 어느 쪽이든 괜찮습니다. 리뷰는 사람들이 Bramble을 발견하는 방법입니다."
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Other vendors"
+msgstr "기타 제공업체"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Overview"
+msgstr "개요"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Pair with another device"
+msgstr "다른 기기와 페어링"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Pairing code"
+msgstr "페어링 코드"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Pairing devices needs a master password"
+msgstr "기기를 페어링하려면 마스터 비밀번호가 필요합니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Pairing didn't complete."
+msgstr "페어링이 완료되지 않았습니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Pairing gives the new device your vault, so it has to be authorized with your master password. Turn one on in Security, then come back to add the device."
+msgstr "페어링하면 새 기기에 보관함이 제공되므로 마스터 비밀번호로 승인해야 합니다. 보안에서 기능을 켠 다음 다시 돌아와 기기를 추가하세요."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Panda"
+msgstr "판다"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Paperclip"
+msgstr "종이 클립"
+
+#. placeholder {0}: info.loginName
+#: packages/core/src/app/components/PasskeySavedToast.tsx
+msgid "Passkey added to {0}"
+msgstr "패스키가 {0}에 추가되었습니다"
+
+#: packages/core/src/hooks/usePendingHandoffs.tsx
+msgid "Passkey added to {loginName}"
+msgstr "패스키가 {loginName}에 추가되었습니다"
+
+#. placeholder {0}: info.loginName
+#: packages/core/src/app/components/PasskeySavedToast.tsx
+msgid "Passkey saved as {0}"
+msgstr "패스키가 {0}(으)로 저장되었습니다"
+
+#: packages/core/src/hooks/usePendingHandoffs.tsx
+msgid "Passkey saved as {loginName}"
+msgstr "패스키가 {loginName}(으)로 저장되었습니다"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Passkeys"
+msgstr "패스키"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Passphrase"
+msgstr "암호 문구"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Passphrase (optional)"
+msgstr "암호 문구(선택 사항)"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "password"
+msgstr "비밀번호"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Password"
+msgstr "비밀번호"
+
+#. placeholder {0}: formatDateTimeExact(lastChangedAt)
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Password changed {0}"
+msgstr "비밀번호 변경됨: {0}"
+
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Password for the file"
+msgstr "파일 비밀번호"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Password found in a known data breach"
+msgstr "알려진 데이터 유출에서 발견된 비밀번호"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Password strength"
+msgstr "비밀번호 강도"
+
+#. placeholder {0}: info.hostname
+#: packages/core/src/app/components/CornerSavedToast.tsx
+msgid "Password updated for {0}"
+msgstr "비밀번호 업데이트됨: {0}"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "passwords don't match"
+msgstr "비밀번호가 일치하지 않습니다"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Passwords don't match"
+msgstr "비밀번호가 일치하지 않습니다"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste code instead"
+msgstr "대신 코드 붙여넣기"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste the code from your other device's \"Add a device\" screen"
+msgstr "다른 기기의 '기기 추가' 화면에서 코드를 붙여넣으세요"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Paste the pairing code from your other device."
+msgstr "다른 기기의 페어링 코드를 붙여넣으세요"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Path prefix (optional)"
+msgstr "경로 접두사(선택 사항)"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Payment card"
+msgstr "결제 카드"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Pencil"
+msgstr "연필"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Penguin"
+msgstr "펭귄"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Period (.)"
+msgstr "마침표(.)"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Permission needed"
+msgstr "권한 필요"
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Pick a master password to protect your vault."
+msgstr "보관함을 보호할 마스터 비밀번호를 설정하세요"
+
+#: packages/core/src/app/bulk-actions/export.tsx
+msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file, so we don't keep a copy."
+msgstr "내보낸 파일에 사용할 비밀번호를 설정하세요. 이 비밀번호는 마스터 비밀번호와 별개이며 파일을 여는 유일한 방법이므로 복사본을 보관하지 않습니다."
+
+#: packages/core/src/app/screens/Settings/components/KdbxExportDialog.tsx
+msgid "Pick a password for the exported file. It's separate from your master password, and it's the only way to open the file: we don't keep a copy. Your attachments go with it. Passkeys don't yet, so keep a .bramble backup for those."
+msgstr "내보낸 파일에 사용할 비밀번호를 설정하세요. 이 비밀번호는 마스터 비밀번호와 별개이며 파일을 여는 유일한 방법입니다. 복사본은 보관하지 않습니다. 첨부 파일은 함께 내보내집니다. 패스키는 아직 함께 내보내지지 않으므로 패스키는 .bramble 백업으로 보관하세요."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Pig"
+msgstr "돼지"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Pin"
+msgstr "핀"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "PIN"
+msgstr "PIN"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Pizza"
+msgstr "피자"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Please enter your master password"
+msgstr "마스터 비밀번호를 입력하세요"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Point your camera at the code on your other device"
+msgstr "다른 기기에 표시된 코드에 카메라를 비추세요"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Popout to window to attach files"
+msgstr "파일 �부를 위해 창으로 분리"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Press Enter / submit the form right after the credentials are filled in."
+msgstr "자격 증명이 채워지면 바로 Enter 키를 누르거나 양식을 제출합니다."
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Press Enter or comma to add a tag. Press the left arrow to move into the tags you have already added, then Backspace to remove one. Press the down arrow for suggestions."
+msgstr "태그를 추가하려면 Enter 키 또는 쉼표를 누르세요. 이미 추가한 태그로 이동하려면 왼쪽 화살표 키를 누른 다음 백스페이스 키를 눌러 제거하세요. 제안을 보려면 아래쪽 화살표 키를 누르세요."
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "private key"
+msgstr "개인 키"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Private key"
+msgstr "개인 키"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Provider"
+msgstr "제공자"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Provider default"
+msgstr "기본 제공자"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Public / private key pair"
+msgstr "공개/개인 키 쌍"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "public key"
+msgstr "공개 키"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Public key"
+msgstr "공개 키"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Rabbit"
+msgstr "Rabbit"
+
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+msgid "Rate Bramble"
+msgstr "Bramble 평가하기"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Re-enter the password"
+msgstr "비밀번호 다시 입력"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Reading file…"
+msgstr "파일 읽는 중…"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Recently added"
+msgstr "최근 추가됨"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Recently updated"
+msgstr "최근 업데이트됨"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Recently used"
+msgstr "최근 사용됨"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Reconnect"
+msgstr "다시 연결"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Recovery code"
+msgstr "복구 코드"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Recovery code is incorrect"
+msgstr "복구 코드가 올바르지 않습니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Region"
+msgstr "지역"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Registering with this device takes one tap. A security key takes two: one to create the key, then one to unlock its secret."
+msgstr "이 기기로 등록하는 데는 탭 한 번이면 됩니다. 보안 키는 두 번이 필요합니다. 하나는 키를 만들 때, 다른 하나는 비밀을 잠금 해제할 때입니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Reject"
+msgstr "거부"
+
+#: packages/core/src/app/ErrorBoundary.tsx
+msgid "Reload"
+msgstr "다시 불러오기"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Remove"
+msgstr "제거"
+
+#. placeholder {0}: k.label
+#. placeholder {0}: nameOf(d) || "device"
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Remove {0}"
+msgstr "{0} 제거"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Remove {host} from never-save list"
+msgstr "저장 안 함 목록에서 {host} 제거"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Remove a tag"
+msgstr "태그 제거"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Remove attachment"
+msgstr "첨부 파일 제거"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Remove field"
+msgstr "필드 제거"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Remove passkey"
+msgstr "패스키 제거"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Remove tag"
+msgstr "태그 제거"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Remove tag {tag}"
+msgstr "태그 {tag} 제거"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Remove URL"
+msgstr "URL 제거"
+
+#. placeholder {0}: tags.length - 1
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Removed tag {removed}. {0} tags."
+msgstr "{removed} 태그를 제거했습니다. {0}개 태그."
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+#: packages/core/src/app/entry-modes/attachments.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Removing…"
+msgstr "제거 중…"
+
+#. placeholder {0}: nameOf(d) || "device"
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Rename {0}"
+msgstr "{0} 이름 변경"
+
+#. placeholder {0}: formatDateTimeExact(change.changedAt)
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Replaced {0}"
+msgstr "{0} 대체됨"
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Replaces code"
+msgstr "코드 대체"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Replaces the key everything in this vault is encrypted with. Worth doing if you believe a copy of the vault file has been exposed, since anything taken before cannot be opened with the new key."
+msgstr "이 저장소의 모든 것을 암호화하는 키를 대체합니다. 저장소 파일의 사본이 노출되었다고 생각된다면 그렇게 할 가치가 있습니다. 이전에 탈취된 어떤 항목도 새 키로는 열 수 없기 때문입니다."
+
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+msgid "Report an issue"
+msgstr "문제 신고"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Require master password to unlock"
+msgstr "잠금 해제에 마스터 비밀번호 필요"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Required to unlock your vault."
+msgstr "저장소를 잠금 해제하는 데 필요합니다."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Reset"
+msgstr "재설정"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Resetting invalidates your old code."
+msgstr "재설정하면 이전 코드가 무효화됩니다."
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Restore"
+msgstr "복원"
+
+#. placeholder {0}: picked.name
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Restore <0>{0}</0> as a new vault. Your existing vaults are left untouched. Enter its master password."
+msgstr "<0>{0}</0>을(를) 새 볼트로 복원합니다. 기존 볼트는 그대로 둡니다. 마스터 비밀번호를 입력하세요."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Restore a backup"
+msgstr "백업 복원"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Restore an encrypted .bramble backup. It's added as a new vault, so nothing here is replaced."
+msgstr "암호화된 .bramble 백업을 복원합니다. 새 볼트로 추가되므로 기존 항목은 대체되지 않습니다."
+
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Restore entry"
+msgstr "항목 복원"
+
+#: packages/core/src/app/screens/VaultSetup/components/ModeTabs.tsx
+msgid "Restore from backup"
+msgstr "백업에서 복원"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Restore vault"
+msgstr "볼트 복원"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Restoring…"
+msgstr "복원 중…"
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Reused"
+msgstr "재사용됨"
+
+#. placeholder {0}: provider.label
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Review what we found in your {0} export"
+msgstr "{0} 내보내기에서 발견한 내용을 검토하세요."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Robot"
+msgstr "로봇"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Rocket"
+msgstr "로켓"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Rooster"
+msgstr "수탉"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Rotate secret"
+msgstr "비밀 키 교체"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Rotate this vault's secret"
+msgstr "이 볼트의 비밀 키 교체"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Rotating the key isn't available yet for a vault with attachments."
+msgstr "키 교체는 첨부 파일이 있는 볼트에서 아직 사용할 수 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Rotating…"
+msgstr "교체 중…"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Rotation failed and nothing was changed. Unlock and try again."
+msgstr "키 교체에 실패했으며 변경된 내용이 없습니다. 잠금을 해제하고 다시 시도하세요."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Runs quietly in the menu bar so scheduled backups happen without you opening the app."
+msgstr "메뉴 막대에서 조용히 실행되어 앱을 열지 않아도 예약 백업이 진행됩니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Santa"
+msgstr "산타"
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Save"
+msgstr "저장"
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Save {modeLabel}"
+msgstr "{modeLabel} 저장"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Save a .kdbx you can open in KeePassXC or any KeePass app, under a password you pick."
+msgstr "KeePassXC 또는 모든 KeePass 앱에서 열 수 있는 .kdbx 파일을 선택한 비밀번호로 저장합니다."
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Save an encrypted .bramble copy of your vault. It still needs your master password to open."
+msgstr "볼트의 암호화된 .bramble 사본을 저장합니다. 열려면 마스터 비밀번호가 여전히 필요합니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "Save attachment"
+msgstr "첨부 파일 저장"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Save it somewhere safe and offline now. It's the only way back in if you forget your master password and lose your security keys, and we can't recover it for you."
+msgstr "지금 안전한 오프라인 위치에 저장하세요. 마스터 비밀번호를 잊고 보안 키를 분실한 경우 다시 들어올 수 있는 유일한 방법이며, 저희가 대신 복구해 드릴 수 없습니다."
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Save to a new login"
+msgstr "새 로그인에 저장"
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "Save your recovery code"
+msgstr "복구 코드 저장"
+
+#. placeholder {0}: formatDateTime(saved)
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "Saved {0}"
+msgstr "{0} 저장됨"
+
+#. placeholder {0}: u.label
+#. placeholder {1}: u.entryName
+#: packages/core/src/hooks/usePendingHandoffs.tsx
+msgid "Saved {0} to {1}"
+msgstr "{0}을(를) {1}에 저장했습니다."
+
+#. placeholder {0}: descriptor.label
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Saved. {0} can only be checked by creating an alias."
+msgstr "저장했습니다. {0}은(는) 별칭을 생성해야만 확인할 수 있습니다."
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Saving…"
+msgstr "저장 중…"
+
+#: packages/core/src/app/components/ReviewNudgeCard.tsx
+msgid "Say something nice?"
+msgstr "좋은 말을 남겨주세요."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Scan authenticator QR code from current webpage"
+msgstr "현재 웹페이지에서 인증자 QR 코드 스캔"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scan QR code"
+msgstr "QR 코드 스캔"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Scan QR code from current webpage"
+msgstr "현재 웹페이지에서 QR 코드 스캔"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scan QR code instead"
+msgstr "대신 QR 코드 스캔"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Scan the QR on a site's 2FA page, or paste an otpauth:// URI or setup key."
+msgstr "사이트의 2FA 페이지에서 QR을 스캔하거나 otpauth:// URI 또는 설정 키를 붙여넣으세요."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Scan this on your other device, or copy the code below. Keep it private: anyone who sees it while this window is open could try to join. You'll confirm a matching number on both devices before anything is sent."
+msgstr "다른 기기에서 이 코드를 스캔하거나 아래 코드를 복사하세요. 비밀로 유지하세요. 이 창이 열려 있는 동안 코드를 본 사람은 누구나 참여를 시도할 수 있습니다. 전송 전에 두 기기에서 일치하는 번호를 확인하게 됩니다."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Scanning…"
+msgstr "스캔 중…"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Scheduled backups only run while Bramble is running. Start it at login and they happen on their own, from the menu bar, without you opening the app."
+msgstr "예약 백업은 Bramble이 실행 중일 때만 실행됩니다. 로그인 시 시작하도록 설정하면 앱을 열지 않아도 메뉴 막대에서 자동으로 실행됩니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Scissors"
+msgstr "가위"
+
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll left"
+msgstr "왼쪽으로 스크롤"
+
+#: packages/core/src/app/components/ui/scroll-edges.tsx
+msgid "Scroll right"
+msgstr "오른쪽으로 스크롤"
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Search #{importedTag} to find them."
+msgstr "가져온 항목을 찾으려면 #{importedTag} 태그를 검색하세요."
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "Search logins"
+msgstr "로그인 항목 검색"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Search vault"
+msgstr "보관함 검색"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Secret access key"
+msgstr "비밀 액세스 키"
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Secure note"
+msgstr "보안 메모"
+
+#: packages/core/src/app/screens/Settings/components/SecuritySection.tsx
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Security"
+msgstr "보안"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Security key"
+msgstr "보안 키"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Security-key unlock failed (verifier mismatch)."
+msgstr "보안 키 잠금 해제에 실패했습니다(검증자 불일치)."
+
+#: packages/core/src/app/components/EntryRow.tsx
+msgid "Select {name}"
+msgstr "{name} 선택"
+
+#: packages/core/src/app/screens/VaultHome/SelectionBar.tsx
+msgid "Select all"
+msgstr "모두 선택"
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Select items"
+msgstr "항목 선택"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Send"
+msgstr "보내기"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Send to another app"
+msgstr "다른 앱으로 보내기"
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "Sending…"
+msgstr "보내는 중…"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Sends a 5-character SHA-1 prefix of each saved password to haveibeenpwned.com (k-anonymity)"
+msgstr "저장된 각 비밀번호의 SHA-1 5자 접두사를 haveibeenpwned.com에 전송합니다(k-익명성)."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Separator"
+msgstr "구분선"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Server URL"
+msgstr "서버 URL"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Set by a policy or another extension"
+msgstr "정책 또는 다른 확장 프로그램에 의해 설정됨"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Set password"
+msgstr "비밀번호 설정"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up {brand} on this device to use this."
+msgstr "이 기능을 사용하려면 이 기기에서 {brand}을(를) 설정하세요."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up a passcode on this device to use this."
+msgstr "이 기능을 사용하려면 이 기기에서 암호를 설정하세요."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Set up a vault"
+msgstr "보관함 설정"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Set up a vault to start saving your passwords, cards, and notes."
+msgstr "비밀번호, 카드, 메모를 저장하려면 보관함을 설정하세요."
+
+#: packages/core/src/app/components/AliasGenerator.tsx
+msgid "Set up aliases"
+msgstr "별칭 설정"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Set up Face ID or a fingerprint on this device to use this."
+msgstr "이 기능을 사용하려면 이 기기에서 Face ID 또는 지문을 설정하세요."
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "Set up your {0} vault first, then come back to import."
+msgstr "먼저 {0} 보관함을 설정한 다음 돌아와서 가져오세요."
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Set up your vault"
+msgstr "보관함 설정"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Settings"
+msgstr "설정"
+
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Settings sections"
+msgstr "설정 섹션"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Show a save / update card in the corner of the page when you sign in with credentials Vault doesn't have."
+msgstr "보관함에 없는 자격 증명으로 로그인할 때 페이지 모서리에 저장/업데이트 카드를 표시합니다."
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Show archived items"
+msgstr "보관된 항목 표시"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Show authenticator key"
+msgstr "인증자 키 표시"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Show card number"
+msgstr "카드 번호 표시"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Show CVV"
+msgstr "CVV 표시"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Show everything tagged {tag}"
+msgstr "{tag} 태그가 지정된 모든 항목 표시"
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Show items with attachments"
+msgstr "첨부 파일이 있는 항목 표시"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Show matching logins above the keyboard for one-tap autofill."
+msgstr "원탭 자동 완성을 위해 일치하는 로그인을 키보드 위에 표시합니다."
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Show passphrase"
+msgstr "암호 문구 표시"
+
+#: packages/core/src/app/components/ui/password-field.tsx
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Show password"
+msgstr "비밀번호 표시"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Show previous password"
+msgstr "이전 비밀번호 표시"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "Show private key"
+msgstr "개인 키 표시"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Show this entry in the autofill dropdown. When off, it's never auto-filled but stays in your vault."
+msgstr "이 항목을 자동 완성 드롭다운에 표시합니다. 끄면 자동 완성되지 않지만 보관함에는 그대로 남습니다."
+
+#: packages/core/src/app/components/ui/secret-area.tsx
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Show value"
+msgstr "값 표시"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Sign in and Bramble stores encrypted backups in its own {name} app folder. Only ciphertext is uploaded, so {name} can't read anything in your vault."
+msgstr "로그인하면 Bramble은 {name}에 있는 자체 앱 폴더에 암호화된 백업을 저장합니다. 오직 암호문만 업로드되므로 {name}에서는 보관함의 어떤 내용도 읽을 수 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Sites you've muted"
+msgstr "음소거한 사이트"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Smiley"
+msgstr "스마일리"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Some of it didn't copy, so the old vault is kept."
+msgstr "일부가 복사되지 않아 기존 보관함을 유지합니다."
+
+#: packages/core/src/app/ErrorBoundary.tsx
+msgid "Something went wrong"
+msgstr "문제가 발생했습니다"
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "Something went wrong after linking."
+msgstr "연동 후 문제가 발생했습니다."
+
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
+msgid "Something went wrong. Please try again."
+msgstr "문제가 발생했습니다. 다시 시도해 주세요."
+
+#: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
+msgid "Sort"
+msgstr "정렬"
+
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+msgid "Source code"
+msgstr "소스 코드"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Space"
+msgstr "공백"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Spanner"
+msgstr "스패너"
+
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "SSH key"
+msgstr "SSH 키"
+
+#. placeholder {0}: key.keyType
+#: packages/core/src/app/entry-modes/ssh-key.tsx
+msgid "SSH key · {0}"
+msgstr "SSH 키 · {0}"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Start at login"
+msgstr "로그인 시 시작"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Start Bramble at login"
+msgstr "로그인 시 Bramble 시작"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit Bramble. The key is only kept in memory, so the next start asks once."
+msgstr "잠그거나 Bramble을 종료할 때까지 잠금 해제 상태가 유지됩니다. 키는 메모리에만 보관되므로 다음 시작 시 한 번만 묻습니다."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or quit the browser. The key is only kept in memory, so the next start asks once."
+msgstr "잠그거나 브라우저를 종료할 때까지 잠금 해제 상태가 유지됩니다. 키는 메모리에만 보관되므로 다음 시작 시 한 번만 묻습니다."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Stays unlocked until you lock it or the app is closed. The key is only kept in memory, so the next start asks once."
+msgstr "잠그거나 앱을 닫을 때까지 잠금 해제 상태가 유지됩니다. 키는 메모리에만 보관되므로 다음 시작 시 한 번만 묻습니다."
+
+#: packages/core/src/app/screens/CreateEntry/EntryForm.tsx
+msgid "Still saving. This is taking longer than it should."
+msgstr "아직 저장 중입니다. 예상보다 오래 걸리고 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stop using the app"
+msgstr "앱 사용 중지"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Stops filling and unlocking through the desktop app on this browser. This vault keeps syncing with it, and nothing is deleted anywhere. To take this browser out of the vault entirely, remove it from the device list under Device sync."
+msgstr "이 브라우저에서 데스크톱 앱을 통한 자동 완성 및 잠금 해제를 중지합니다. 이 보관함은 계속 해당 앱과 동기화되며 어디에서도 항목이 삭제되지 않습니다. 이 브라우저를 보관함에서 완전히 제외하려면 기기 동기화 아래의 기기 목록에서 제거하세요."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Stops syncing this device and keeps it offline-only. Your entries stay here; your other devices aren't affected."
+msgstr "이 기기의 동기화를 중지하고 오프라인 전용으로 유지합니다. 항목은 이 기기에 그대로 남으며 다른 기기에는 영향을 주지 않습니다."
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Store sensitive text"
+msgstr "민감한 텍스트 저장"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Strawberry"
+msgstr "딸기"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Strength"
+msgstr "강도"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Strong"
+msgstr "강함"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Subdomain match"
+msgstr "하위 도메인 일치"
+
+#: packages/core/src/app/screens/Settings/components/SupportSection.tsx
+msgid "Support"
+msgstr "지원"
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Symbols to use"
+msgstr "사용할 기호"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/Settings/Settings.tsx
+msgid "Sync"
+msgstr "동기화"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Sync this vault to the Bramble extension and fill from it without unlocking twice."
+msgstr "이 보관함을 Bramble 확장 프로그램과 동기화하고 두 번 잠금 해제하지 않고도 자동 완성할 수 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "Sync with the desktop app"
+msgstr "데스크톱 앱과 동기화"
+
+#. placeholder {0}: devices.length
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Synced · {0} devices"
+msgstr "동기화됨 · 기기 {0}대"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "System"
+msgstr "시스템"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Tag"
+msgstr "태그"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Tag to remove"
+msgstr "제거할 태그"
+
+#: packages/core/src/app/bulk-actions/tags.tsx
+msgid "Tagging…"
+msgstr "태그 지정 중…"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "Tags"
+msgstr "태그"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Take a backup first, from Backups, so you have a copy that still opens."
+msgstr "먼저 백업에서 백업을 만들어 계속 열 수 있는 사본을 확보하십시오."
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+msgid "Tap to confirm"
+msgstr "탭하여 확인"
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "Tap to scan again"
+msgstr "탭하여 다시 스캔"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Tap to unlock"
+msgstr "탭하여 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Tap your key to unlock your vault"
+msgstr "키를 탭하여 보관함을 잠금 해제하십시오."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Tap your key…"
+msgstr "키를 탭하십시오…"
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Tap-to-unlock keys are removed from this vault and have to be added again. Your master password keeps working."
+msgstr "탭하여 잠금 해제 키는 이 보관함에서 제거되며 다시 추가해야 합니다. 마스터 비밀번호는 계속 사용할 수 있습니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Telephone"
+msgstr "전화"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "That does not look like a domain. Enter it on its own, like example.com, with no @ and no https://"
+msgstr "도메인처럼 보이지 않습니다. @와 https:// 없이 example.com처럼 단독으로 입력하십시오."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "That doesn't look like a Bramble backup (.bramble) file."
+msgstr "Bramble 백업(.bramble) 파일처럼 보이지 않습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That doesn't look like a Bramble export (.bramble) file."
+msgstr "Bramble 내보내기(.bramble) 파일처럼 보이지 않습니다."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "That isn't the right number of digits for this type of card."
+msgstr "이 카드 유형에 맞는 숫자 자릿수가 아닙니다."
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "That link is an authenticator export holding several accounts, not a setup code. Add each account from its own site instead."
+msgstr "이 링크는 설정 코드가 아니라 여러 계정이 담긴 인증자 내보내기입니다. 대신 각 계정을 해당 사이트에서 추가하십시오."
+
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "That link isn't an authenticator setup code Bramble can use. Counter-based (HOTP) codes aren't supported."
+msgstr "이 링크는 Bramble에서 사용할 수 있는 인증자 설정 코드가 아닙니다. 카운터 기반(HOTP) 코드는 지원되지 않습니다."
+
+#. placeholder {0}: vendor ?? "another authenticator app"
+#: packages/core/src/app/screens/TotpSetup/TotpSetup.tsx
+msgid "That link sets up {0}, so it holds no key to save. On the site, choose to use a different authenticator app, then use the code it offers."
+msgstr "이 링크는 {0} 설정용이므로 저장할 키가 없습니다. 해당 사이트에서 다른 인증자 앱을 사용하도록 선택한 다음 제공되는 코드를 사용하십시오."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That password didn't open the file."
+msgstr "해당 비밀번호로 파일을 열 수 없었습니다."
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+#: packages/core/src/hooks/useVault.tsx
+msgid "That password is incorrect."
+msgstr "해당 비밀번호가 올바르지 않습니다."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "That QR is an authenticator export holding several accounts, not a setup code. Add each account from its own site instead."
+msgstr "이 QR 코드는 설정 코드가 아니라 여러 계정이 담긴 인증자 내보내기입니다. 대신 각 계정을 해당 사이트에서 추가하십시오."
+
+#. placeholder {0}: totpScan.vendor ?? "another authenticator app"
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "That QR sets up {0}, so it holds no key to save. On the site, choose to use a different authenticator app, then scan the code it offers."
+msgstr "이 QR 코드는 {0} 설정용이므로 저장할 키가 없습니다. 해당 사이트에서 다른 인증자 앱을 사용하도록 선택한 다음 제공되는 코드를 스캔하십시오."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That transfer didn't contain anything we could import."
+msgstr "해당 전송에는 가져올 수 있는 항목이 없었습니다."
+
+#: packages/core/src/app/screens/Settings/components/DataSection.tsx
+msgid "That transfer didn't go through."
+msgstr "해당 전송이 완료되지 않았습니다."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "That year is outside the range cards use."
+msgstr "해당 연도는 카드에 사용되는 범위를 벗어납니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "That's a full vault backup. Restore it instead: it's added as a new vault, and nothing here is changed."
+msgstr "전체 보관함 백업입니다. 대신 복원하십시오. 새 보관함으로 추가되며 이 보관함은 변경되지 않습니다."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "The browser was not linked."
+msgstr "브라우저가 연결되지 않았습니다."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "The desktop app did not accept that code."
+msgstr "데스크톱 앱이 해당 코드를 수락하지 않았습니다."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "The desktop app didn't send its vault."
+msgstr "데스크톱 앱이 보관함을 전송하지 않았습니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "The desktop app is showing the same symbols and waiting for you to approve there. Approve only if they match."
+msgstr "데스크톱 앱에 동일한 기호가 표시되며 승인을 기다리고 있습니다. 기호가 일치할 때만 승인하십시오."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "The desktop app is still linked, but this browser's permission to talk to it was turned off."
+msgstr "데스크톱 앱은 계속 연결되어 있지만, 이 브라우저가 통신할 권한은 꺼져 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "The desktop app offered to share its vault with this browser. Enter the master password you use there."
+msgstr "데스크톱 앱이 이 브라우저와 보관함을 공유하도록 제안했습니다. 데스크톱 앱에서 사용하는 마스터 비밀번호를 입력하십시오."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "the desktop app's vault"
+msgstr "데스크톱 앱의 보관함"
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "The desktop app's vault did not open."
+msgstr "데스크톱 앱의 보관함이 열리지 않았습니다."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The desktop's vault already has a backup target, so this vault's weren't brought over."
+msgstr "데스크톱의 보관함에는 이미 백업 대상이 있으므로 이 보관함의 백업 대상은 가져오지 않았습니다."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The desktop's vault has its own email alias provider, so this vault's wasn't brought over."
+msgstr "데스크톱의 보관함에는 자체 이메일 별칭 제공자가 있으므로 이 보관함의 이메일 별칭 제공자는 가져오지 않았습니다."
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "The old vault stays"
+msgstr "이전 볼트 유지"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "The one you saved with Export a backup, or a cloud backup."
+msgstr "백업 내보내기 또는 클라우드 백업으로 저장한 버전입니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "The only new things in this file are attachments, which this browser can add only once it's linked to the Bramble desktop app."
+msgstr "이 파일에 새로 추가된 항목은 첨부 파일뿐이며, 이 브라우저는 Bramble 데스크톱 앱에 연결된 후에만 첨부 파일을 추가할 수 있습니다."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "The other version"
+msgstr "다른 버전"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "The signaling relay that introduces devices. Defaults to the hosted relay; point it at your own or any public Nostr relay."
+msgstr "기기를 연결해 주는 시그널링 릴레이입니다. 기본값은 호스팅 릴레이이며, 자체 릴레이 또는 공개 Nostr 릴레이를 지정할 수 있습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "The vault locked, so the attachments read from that file were cleared. Open it again to import them."
+msgstr "볼트가 잠겨 해당 파일에서 읽은 첨부 파일이 지워졌습니다. 다시 열어 가져오세요."
+
+#: packages/core/src/hooks/useCryptoErrorMessage.tsx
+msgid "The vault was locked or switched while that was in progress. Try again."
+msgstr "진행 중에 볼트가 잠기거나 전환되었습니다. 다시 시도하세요."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "The version shown"
+msgstr "표시된 버전"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Theme"
+msgstr "테마"
+
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "There's no vendor reset. Memorize this password and keep the recovery code you'll get next somewhere safe. If you lose both, your vault can't be recovered."
+msgstr "공급업체 초기화는 없습니다. 이 비밀번호를 외우고 다음에 받을 복구 코드를 안전한 곳에 보관하세요. 둘 다 잃으면 볼트를 복구할 수 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "These destinations belong to the vault you're in. Every vault keeps its own targets and its own backup folder."
+msgstr "이 대상은 현재 볼트에 속합니다. 각 볼트는 고유한 대상과 백업 폴더를 유지합니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "These versions changed while you were comparing them. Have another look."
+msgstr "비교하는 동안 이 버전들이 변경되었습니다. 다시 확인하세요."
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "They don't match"
+msgstr "일치하지 않음"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "They match"
+msgstr "일치함"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "They match, approve"
+msgstr "일치함, 승인"
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "They return to the list and become available for autofill again."
+msgstr "목록에 다시 표시되고 자동 완성에 다시 사용할 수 있습니다."
+
+#: packages/core/src/app/bulk-actions/archive.tsx
+msgid "They stay in your vault and in exports, but leave the list and are never offered for autofill. You can restore them at any time."
+msgstr "볼트와 내보내기에는 남지만 목록에서는 제외되며 자동 완성으로 제공되지 않습니다. 언제든지 복원할 수 있습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "They're in your vault now. For your safety, delete the export file you just imported, as it holds your passwords in plain text."
+msgstr "이제 볼트에 있습니다. 안전을 위해 방금 가져온 내보내기 파일을 삭제하세요. 해당 파일에는 비밀번호가 평문으로 저장되어 있습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "They're in your vault now. The transfer happened directly between the two apps, so there's no file to clean up."
+msgstr "이제 볼트에 있습니다. 두 앱 간에 직접 전송되었으므로 정리할 파일이 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This adds the desktop's vault to this browser as a separate one. Your existing vaults stay as they are."
+msgstr "데스크톱의 볼트를 이 브라우저에 별도 볼트로 추가합니다. 기존 볼트는 그대로 유지됩니다."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This authenticator key is invalid and can't generate codes."
+msgstr "이 인증자 키는 유효하지 않아 코드를 생성할 수 없습니다."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "This backup can't be read. It may be damaged, or not a Bramble backup."
+msgstr "이 백업을 읽을 수 없습니다. 손상되었거나 Bramble 백업이 아닐 수 있습니다."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "This backup has no master password, so it can't be restored here."
+msgstr "이 백업에는 마스터 비밀번호가 없어 여기서 복원할 수 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This browser already shares that vault with the desktop app. Opening it just switches you to it; the vault you are in now stays exactly as it is."
+msgstr "이 브라우저는 이미 데스크톱 앱과 해당 볼트를 공유합니다. 열면 해당 볼트로 전환될 뿐이며, 현재 볼트는 그대로 유지됩니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "This browser gets files only from the Bramble desktop app."
+msgstr "이 브라우저는 Bramble 데스크톱 앱에서만 파일을 받습니다."
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "This browser has {browserName} ({browserEntries} entries). The desktop app has {desktopName} ({desktopEntries} entries)."
+msgstr "이 브라우저에는 {browserName}({browserEntries}개 항목)이 있습니다. 데스크톱 앱에는 {desktopName}({desktopEntries}개 항목)이 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "This browser has {browserName} ({browserEntries} entries). The desktop app has {desktopName}."
+msgstr "이 브라우저에는 {browserName}({browserEntries}개 항목)이 있습니다. 데스크톱 앱에는 {desktopName}이 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/TwoVaultsPrompt.tsx
+msgid "This browser will unlock with the desktop app's master password."
+msgstr "이 브라우저는 데스크톱 앱의 마스터 비밀번호로 잠금 해제됩니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This browser's entries and files move into {desktopName}, and this browser will unlock with its master password."
+msgstr "이 브라우저의 항목과 파일이 {desktopName}으로 이동하며, 이 브라우저는 해당 마스터 비밀번호로 잠금 해제됩니다."
+
+#: packages/core/src/app/bulk-actions/delete.tsx
+msgid "This can't be undone, and the deletion syncs to your other devices."
+msgstr "이 작업은 되돌릴 수 없으며 삭제 사항이 다른 기기에 동기화됩니다."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "This code has expired."
+msgstr "이 코드는 만료되었습니다."
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "This copy of Bramble is kept up to date by your system's package manager. Updating your system updates Bramble with it."
+msgstr "이 Bramble 사본은 시스템 패키지 관리자를 통해 최신 상태로 유지됩니다. 시스템을 업데이트하면 Bramble도 함께 업데이트됩니다."
+
+#: packages/core/src/app/screens/VaultSetup/components/JoinCard.tsx
+msgid "This creates a new vault on this device and syncs it from your other device. Use the same master password as that device."
+msgstr "이 기기에 새 볼트를 만들고 다른 기기에서 동기화합니다. 해당 기기와 동일한 마스터 비밀번호를 사용하세요."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "This desktop app links with a code. Enter the one its Connect a browser screen shows."
+msgstr "이 데스크톱 앱은 코드로 연결합니다. 브라우저 연결 화면에 표시된 코드를 입력하세요."
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "This device"
+msgstr "이 기기"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "This device can't add devices right now: your other devices no longer recognize it. Disconnect, then join again with a code from another device."
+msgstr "이 기기는 지금 기기를 추가할 수 없습니다. 다른 기기가 더 이상 이 기기를 인식하지 않습니다. 연결을 해제한 다음 다른 기기의 코드로 다시 연결하세요."
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "this device only"
+msgstr "이 기기만"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This domain and its subdomains"
+msgstr "이 도메인 및 하위 도메인"
+
+#: packages/core/src/app/entry-modes/tags.tsx
+msgid "This entry has as many tags as it can hold."
+msgstr "이 항목에는 더 이상 태그를 추가할 수 없습니다."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "This entry was changed on two devices before they synced."
+msgstr "이 항목은 동기화 전에 두 기기에서 변경되었습니다."
+
+#: packages/core/src/app/entry-modes/attachments.tsx
+msgid "This entry was deleted on another device, so the file wasn't attached."
+msgstr "이 항목은 다른 기기에서 삭제되어 파일이 첨부되지 않았습니다."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "This entry was deleted on one device and changed on another before they synced."
+msgstr "이 항목은 동기화되기 전에 한 기기에서 삭제되고 다른 기기에서 변경되었습니다."
+
+#. placeholder {0}: res.skipped
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "This file held {0} {noun}, but none matched a supported format."
+msgstr "이 파일에는 {0} {noun}이(가) 들어 있었지만 지원되는 형식과 일치하는 항목이 없습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "This file is too large to import ({sizeMb} MB; max {MAX_IMPORT_FILE_MB} MB)."
+msgstr "이 파일은 너무 커서 가져올 수 없습니다({sizeMb}MB, 최대 {MAX_IMPORT_FILE_MB}MB)."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This login has a passkey"
+msgstr "이 로그인에는 패스키가 있습니다."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "This password appeared in a known data breach."
+msgstr "이 비밀번호는 알려진 데이터 유출에서 발견되었습니다."
+
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "This removes the vault from this device. Synced copies on your other devices aren't affected, and this can't be undone here. Confirm to continue."
+msgstr "이 작업을 수행하면 이 기기에서 보관함이 제거됩니다. 다른 기기의 동기화된 사본은 영향을 받지 않으며 이 작업은 여기에서 되돌릴 수 없습니다. 계속하려면 확인하십시오."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This vault already syncs with the desktop app."
+msgstr "이 보관함은 이미 데스크톱 앱과 동기화됩니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "This vault has no master password to change."
+msgstr "이 보관함에는 변경할 마스터 비밀번호가 없습니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "This vault has no password set."
+msgstr "이 보관함에는 설정된 비밀번호가 없습니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "This vault has no recovery code."
+msgstr "이 보관함에는 복구 코드가 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "This vault syncs with the desktop app."
+msgstr "이 보관함은 데스크톱 앱과 동기화됩니다."
+
+#: packages/core/src/app/hooks/useDesktopLink.tsx
+msgid "This vault's entries didn't copy into the desktop's vault. They are still in the old vault."
+msgstr "이 보관함의 항목이 데스크톱의 보관함에 복사되지 않았습니다. 항목은 이전 보관함에 그대로 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "This vault's folder: {folder}"
+msgstr "이 보관함의 폴더: {folder}"
+
+#: packages/core/src/app/components/ui/file-password-dialog.tsx
+msgid "Those passwords don't match."
+msgstr "비밀번호가 일치하지 않습니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Thumbs up"
+msgstr "엄지척"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Timeout"
+msgstr "시간 초과"
+
+#: packages/core/src/app/entry-modes/note.tsx
+msgid "Title"
+msgstr "제목"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle autofill on web pages"
+msgstr "웹 페이지 자동 완성 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle Bramble passkey provider"
+msgstr "Bramble 패스키 제공자 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle breach checks"
+msgstr "유출 확인 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle confirm passkeys once per unlock"
+msgstr "잠금 해제마다 한 번 패스키 확인 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle default password manager"
+msgstr "기본 비밀번호 관리자 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle keyboard suggestions"
+msgstr "키보드 제안 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle lock when the screen locks"
+msgstr "화면이 잠길 때 잠금 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle offer to save logins"
+msgstr "로그인 저장 제안 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Toggle passcode fallback"
+msgstr "기기 암호로 대체 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Toggle start at login"
+msgstr "로그인 시 시작 켜기/끄기"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Toggle unlock on open"
+msgstr "열 때 자동 잠금 해제 켜기/끄기"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Too many failed attempts. Unlock your device with its passcode first, or use your master password."
+msgstr "실패한 시도가 너무 많습니다. 먼저 기기 암호로 기기를 잠금 해제하거나 마스터 비밀번호를 사용하십시오."
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Total Items"
+msgstr "총 항목"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Touch ID"
+msgstr "Touch ID"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Train"
+msgstr "기차"
+
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Transferring between apps needs iOS 26."
+msgstr "앱 간 전송에는 iOS 26이 필요합니다."
+
+#: packages/core/src/hooks/useExchangeAvailability.tsx
+msgid "Transferring between apps needs iOS 26. This device is on iOS {version}."
+msgstr "앱 간 전송에는 iOS 26이 필요합니다. 이 기기는 iOS {version}입니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Transferring to another app isn't available here."
+msgstr "여기에서 다른 앱으로 전송할 수 없습니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Tree"
+msgstr "나무"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Trophy"
+msgstr "트로피"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Trumpet"
+msgstr "트럼펫"
+
+#: packages/core/src/app/ErrorBoundary.tsx
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Try again"
+msgstr "다시 시도"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "TURN / ICE servers URL"
+msgstr "TURN / ICE 서버 URL"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Turn on master password"
+msgstr "마스터 비밀번호 켜기"
+
+#: packages/core/src/app/components/DefaultManagerCard.tsx
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Turns off the browser's own password manager"
+msgstr "브라우저의 자체 비밀번호 관리자를 끕니다."
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Turtle"
+msgstr "거북이"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Type"
+msgstr "유형"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Umbrella"
+msgstr "우산"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Under Connected apps & API tokens, create a token with only Masked Email ticked, so it cannot read your mail. Fastmail shows the token's name on every address it makes, so name it Bramble."
+msgstr "연결된 앱 및 API 토큰 아래에서 Masked Email만 선택된 토큰을 만드세요. 그래야 메일을 읽을 수 없습니다. Fastmail은 만드는 모든 주소에 토큰 이름을 표시하므로 이름을 Bramble로 지정하세요."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Underscore (_)"
+msgstr "밑줄(_)"
+
+#: packages/core/src/app/components/SasDisplay.tsx
+msgid "Unicorn"
+msgstr "유니콘"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+msgid "Unlock"
+msgstr "잠금 해제"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Unlock on open"
+msgstr "열 때 잠금 해제"
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before adding a key."
+msgstr "키를 추가하기 전에 보관함을 잠금 해제하세요."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before changing the master password."
+msgstr "마스터 비밀번호를 변경하기 전에 보관함을 잠금 해제하세요."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before disabling the master password."
+msgstr "마스터 비밀번호를 비활성화하기 전에 보관함을 잠금 해제하세요."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before enabling biometric unlock."
+msgstr "생체 인식 잠금 해제를 활성화하기 전에 보관함을 잠금 해제하세요."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before generating a recovery code."
+msgstr "복구 코드를 생성하기 전에 보관함을 잠금 해제하세요."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before rotating."
+msgstr "키를 교체하기 전에 보관함을 잠금 해제하세요."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Unlock the vault before setting a master password."
+msgstr "마스터 비밀번호를 설정하기 전에 보관함을 잠금 해제하세요."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock Vault"
+msgstr "보관함 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with biometrics"
+msgstr "생체 인식으로 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Face ID"
+msgstr "Face ID로 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with master password"
+msgstr "마스터 비밀번호로 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Optic ID"
+msgstr "Optic ID로 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with passcode"
+msgstr "암호로 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with recovery code"
+msgstr "복구 코드로 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Touch ID"
+msgstr "Touch ID로 잠금 해제"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Unlock with Windows Hello"
+msgstr "Windows Hello로 잠금 해제"
+
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+msgid "Unlock your vault to import into it"
+msgstr "가져오려면 보관함을 잠금 해제하세요."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using {brand}, instead of your master password."
+msgstr "마스터 비밀번호 대신 {brand}(으)로 보관함을 잠금 해제하세요."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using {brand}."
+msgstr "{brand}(으)로 보관함을 잠금 해제하세요."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using Face ID or a fingerprint, instead of your master password."
+msgstr "마스터 비밀번호 대신 Face ID 또는 지문으로 보관함을 잠금 해제하세요."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using Face ID or a fingerprint."
+msgstr "Face ID 또는 지문으로 보관함을 잠금 해제하세요."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using your passcode, instead of your master password."
+msgstr "마스터 비밀번호 대신 암호로 보관함을 잠금 해제하세요."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Unlock your vault using your passcode."
+msgstr "암호로 보관함을 잠금 해제하세요."
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Unlocking counts as confirming it's you until the vault locks."
+msgstr "잠금 해제는 보관함이 잠길 때까지 본인 확인으로 간주됩니다."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Import/components/UnlockGate.tsx
+msgid "Unlocking…"
+msgstr "잠금 해제 중…"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Unnamed device"
+msgstr "이름 없는 기기"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Unsigned"
+msgstr "서명되지 않음"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Until app closes"
+msgstr "앱 종료 시까지"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Until Bramble quits"
+msgstr "Bramble 종료 시까지"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Until browser closes"
+msgstr "브라우저를 닫을 때까지"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Update and restart"
+msgstr "업데이트 및 재시작"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Update Bramble"
+msgstr "Bramble 업데이트"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Update failed: {error}"
+msgstr "업데이트 실패: {error}"
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "Update now"
+msgstr "지금 업데이트"
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Update password"
+msgstr "비밀번호 업데이트"
+
+#. placeholder {0}: formatDateTime(entry.updatedAt)
+#: packages/core/src/app/screens/EntryDetail/EntryDetail.tsx
+msgid "Updated {0}"
+msgstr "{0} 업데이트됨"
+
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Updates"
+msgstr "업데이트"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Use {currentSite}"
+msgstr "{currentSite} 사용"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Use a different language from your system"
+msgstr "시스템 언어와 다른 언어 사용"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Use Bramble for passkeys"
+msgstr "Bramble을 패스키에 사용"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Use current site"
+msgstr "현재 사이트 사용"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Use digits only."
+msgstr "숫자만 사용하십시오."
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Use light, dark, or match your system"
+msgstr "라이트, 다크 또는 시스템 설정에 맞춤"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Use only digits, spaces or dashes."
+msgstr "숫자, 공백 또는 대시만 사용하십시오."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Use password"
+msgstr "비밀번호 사용"
+
+#: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
+msgid "Use the vault from the Bramble desktop app on this computer."
+msgstr "이 컴퓨터의 Bramble 데스크톱 앱에서 보관함을 사용하십시오."
+
+#: packages/core/src/app/screens/EntryDetail/ConflictBanner.tsx
+msgid "Use this one"
+msgstr "이 항목 사용"
+
+#: packages/core/src/app/components/ui/weak-password-notice.tsx
+msgid "Use this password anyway"
+msgstr "그래도 이 비밀번호 사용"
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Use Touch ID or Windows Hello instead of typing your master password."
+msgstr "마스터 비밀번호를 입력하는 대신 Touch ID 또는 Windows Hello를 사용하십시오."
+
+#: packages/core/src/app/screens/Settings/components/TapToUnlockSection.tsx
+msgid "Use Touch ID, Windows Hello or a security key like a YubiKey instead of typing your master password."
+msgstr "마스터 비밀번호를 입력하는 대신 Touch ID, Windows Hello 또는 YubiKey와 같은 보안 키를 사용하십시오."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Use your master password instead"
+msgstr "대신 마스터 비밀번호를 사용하십시오."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "Use your recovery code instead"
+msgstr "대신 복구 코드를 사용하십시오."
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "username"
+msgstr "사용자 이름"
+
+#: packages/core/src/app/entry-modes/login.tsx
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Username"
+msgstr "사용자 이름"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Username or email"
+msgstr "사용자 이름 또는 이메일"
+
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkBanner.tsx
+msgid "Using Bramble desktop?"
+msgstr "Bramble 데스크톱을 사용 중이십니까?"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Value"
+msgstr "값"
+
+#: packages/core/src/app/OptionsApp.tsx
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Vault added"
+msgstr "보관함 추가됨"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/PasswordCard.tsx
+msgid "Vault name"
+msgstr "보관함 이름"
+
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Vault ready"
+msgstr "보관함 준비됨"
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Vault restored"
+msgstr "보관함 복원됨"
+
+#: packages/core/src/app/OptionsApp.tsx
+msgid "Vault unlocked"
+msgstr "보관함 잠금 해제됨"
+
+#: packages/core/src/app/screens/Settings/components/CombineResult.tsx
+msgid "Vaults combined"
+msgstr "보관함 병합됨"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "verification code"
+msgstr "인증 코드"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Verification code (TOTP)"
+msgstr "인증 코드(TOTP)"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Verifying…"
+msgstr "인증 중…"
+
+#: packages/core/src/app/screens/Settings/components/AboutSection.tsx
+msgid "Version"
+msgstr "버전"
+
+#. placeholder {0}: found.version
+#: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
+msgid "Version {0} is available"
+msgstr "버전 {0} 사용 가능"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Very strong"
+msgstr "매우 강함"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Very weak"
+msgstr "매우 약함"
+
+#: packages/core/src/app/entry-modes/custom-fields.tsx
+msgid "Visible"
+msgstr "표시"
+
+#. placeholder {0}: linkPending.label
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Waiting for {0}…"
+msgstr "{0} 대기 중…"
+
+#: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
+msgid "Waiting for {finishing} to finish linking…"
+msgstr "{finishing} 연결을 마칠 때까지 대기 중…"
+
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Waiting for a device to join…"
+msgstr "기기 참여 대기 중…"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+#: packages/core/src/app/screens/VaultSetup/components/DesktopLinkCard.tsx
+msgid "Waiting for the desktop app…"
+msgstr "데스크톱 앱 대기 중…"
+
+#: packages/core/src/app/routes/PasskeyVerifyRoute.tsx
+#: packages/core/src/app/screens/Auth/Auth.tsx
+#: packages/core/src/app/screens/Settings/components/DeleteVaultSection.tsx
+msgid "Waiting for your key…"
+msgstr "키 대기 중…"
+
+#: packages/core/src/app/components/ui/password-strength-meter.tsx
+msgid "Weak"
+msgstr "약함"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "WebDAV URL"
+msgstr "WebDAV URL"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Website"
+msgstr "웹사이트"
+
+#: packages/core/src/app/components/AliasGenerator.tsx
+msgid "Website (optional)"
+msgstr "웹사이트(선택 사항)"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Website URL"
+msgstr "웹사이트 URL"
+
+#: packages/core/src/app/entry-modes/login.tsx
+msgid "Websites"
+msgstr "웹사이트"
+
+#: packages/core/src/app/screens/Settings/components/BackupSection.tsx
+msgid "Weekly"
+msgstr "매주"
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Welcome to {appName}"
+msgstr "{appName}에 오신 것을 환영합니다"
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Windows Hello"
+msgstr "Windows Hello"
+
+#: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
+msgid "Wipe copied passwords after"
+msgstr "복사한 비밀번호 자동 삭제"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Word aliases include the site's name, which is easier to recognise but tells anyone who sees the address where you used it. UUID aliases reveal nothing."
+msgstr "단어 별칭에는 사이트 이름이 포함되어 알아보기 쉽지만, 주소를 보는 사람이면 누구에게나 사용처가 드러납니다. UUID 별칭은 아무것도 드러내지 않습니다."
+
+#: packages/core/src/app/components/PasswordGenerator.tsx
+msgid "Words"
+msgstr "단어"
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Words are easier to read aloud; characters are shorter."
+msgstr "단어는 소리 내어 읽기 쉽고 문자는 더 짧습니다."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Working…"
+msgstr "작업 중…"
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Write the year as YY or YYYY."
+msgstr "연도를 YY 또는 YYYY로 입력하세요."
+
+#: packages/core/src/app/entry-modes/card.tsx
+msgid "Year (YY)"
+msgstr "연도(YY)"
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "You already share this vault"
+msgstr "이 보관함을 이미 공유하고 있습니다."
+
+#: packages/core/src/app/update-prompt-copy.tsx
+msgid "You are running the latest version ({version})."
+msgstr "최신 버전({version})을 사용 중입니다."
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/OptionsApp.tsx
+msgid "You can close this tab and use the {0} popup."
+msgstr "이 탭을 닫고 {0} 팝업을 사용할 수 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
+msgid "You have two vaults"
+msgstr "보관함이 두 개 있습니다."
+
+#: packages/core/src/app/screens/Import/ImportShell.tsx
+msgid "You need a vault before you can import into it"
+msgstr "가져오려면 먼저 보관함이 필요합니다."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "You unlocked with your recovery code. If you've forgotten your master password, change it here."
+msgstr "복구 코드로 잠금을 해제했습니다. 마스터 비밀번호를 잊으셨다면 여기에서 변경하세요."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "You unlocked with your recovery code. You can set a master password here."
+msgstr "복구 코드로 잠금을 해제했습니다. 여기에서 마스터 비밀번호를 설정할 수 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "You used your recovery code. You can reset it now so the old one stops working."
+msgstr "복구 코드를 사용했습니다. 이전 코드가 더 이상 작동하지 않도록 지금 재설정할 수 있습니다."
+
+#: packages/core/src/app/components/RecoveryCodeDisplay.tsx
+msgid "You won't be able to see this code again."
+msgstr "이 코드를 다시 볼 수 없습니다."
+
+#: packages/core/src/app/screens/Settings/components/MasterPasswordSection.tsx
+msgid "You'll unlock this vault by tapping a key only. If you lose access to all of them, your recovery code is the only way back in. There's no master password to fall back on."
+msgstr "이 보관함은 키를 탭해서만 잠금을 해제하게 됩니다. 모든 키에 접근할 수 없게 되면 복구 코드가 유일한 복구 방법입니다. 대신 사용할 마스터 비밀번호는 없습니다."
+
+#: packages/core/src/hooks/useVault.tsx
+msgid "Your attachments weren't sent. They're still here, and in your backups."
+msgstr "첨부 파일이 전송되지 않았습니다. 첨부 파일은 여기와 백업에 그대로 남아 있습니다."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Your backup is now the vault on this device."
+msgstr "이제 백업이 이 기기의 보관함입니다."
+
+#. placeholder {0}: shell.appName
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Your backup is now the vault on this device. You can close this tab and use the {0} popup."
+msgstr "이제 백업이 이 기기의 보관함입니다. 이 탭을 닫고 {0} 팝업을 사용할 수 있습니다."
+
+#: packages/core/src/app/screens/Restore/RestoreShell.tsx
+msgid "Your backup was added as a new vault. Open it from the vault list and unlock it with its master password."
+msgstr "백업이 새 보관함으로 추가되었습니다. 보관함 목록에서 연 다음 해당 마스터 비밀번호로 잠금을 해제하세요."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your biometric enrolment changed, so this device's saved key was discarded. Unlock with your master password to set it up again."
+msgstr "생체 인증 등록 정보가 변경되어 이 기기에 저장된 키가 폐기되었습니다. 다시 설정하려면 마스터 비밀번호로 잠금을 해제하세요."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your browser may ask for access to your vault file when you unlock."
+msgstr "잠금을 해제하면 브라우저가 보관함 파일에 대한 접근 권한을 요청할 수 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
+msgid "Your device passcode can also unlock this vault."
+msgstr "기기 암호로도 이 보관함을 잠금 해제할 수 있습니다."
+
+#: packages/core/src/app/screens/Settings/components/AliasSection.tsx
+msgid "Your domain"
+msgstr "내 도메인"
+
+#: packages/core/src/app/screens/Settings/components/RecoveryCodeSection.tsx
+msgid "Your new recovery code"
+msgstr "새 복구 코드"
+
+#: packages/core/src/app/screens/VaultSetup/VaultSetup.tsx
+msgid "Your other device is showing the same symbols. Confirm it there only if they match these."
+msgstr "다른 기기에도 동일한 기호가 표시됩니다. 여기에 표시된 기호와 일치하는 경우에만 해당 기기에서 확인하십시오."
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Your other devices can no longer read this vault. Pair each of them again from Device sync."
+msgstr "이제 다른 기기에서는 이 보관함을 더 이상 읽을 수 없습니다. 기기 동기화에서 각 기기를 다시 페어링하십시오."
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Your other devices stop being able to read this vault. They all share the key being replaced, so each one has to be paired again from Device sync."
+msgstr "다른 기기에서는 이 보관함을 더 이상 읽을 수 없게 됩니다. 모든 기기가 교체되는 키를 공유하므로 각 기기를 기기 동기화에서 다시 페어링해야 합니다."
+
+#: packages/core/src/app/screens/Settings/components/RotateSecretSection.tsx
+msgid "Your recovery code stops working. A new one is shown once, right after, and you will need to save it."
+msgstr "복구 코드가 더 이상 작동하지 않게 됩니다. 새 코드는 그 직후에 한 번만 표시되며 저장해야 합니다."
+
+#: packages/core/src/app/screens/VaultHome/VaultHome.tsx
+msgid "Your vault is empty. Add your first item."
+msgstr "보관함이 비어 있습니다. 첫 번째 항목을 추가하십시오."
+
+#: packages/core/src/app/screens/Auth/Auth.tsx
+msgid "Your vault stays on this device, encrypted with AES-256-GCM. Keep your master password and recovery code somewhere safe."
+msgstr "보관함은 이 기기에 AES-256-GCM으로 암호화된 상태로 보관됩니다. 마스터 비밀번호와 복구 코드를 안전한 곳에 보관하십시오."

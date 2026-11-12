@@ -7,6 +7,10 @@
 		"message": "Verrouiller Bramble",
 		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
 	},
+	"cmdFillLogin": {
+		"message": "Remplir l'identifiant",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts. Fills the saved login for the page."
+	},
 	"notNow": {
 		"message": "Pas maintenant",
 		"description": "Dismiss button on the save / passkey corner prompt."
@@ -138,6 +142,14 @@
 	"vaultLockedUnlockHint": {
 		"message": "Cliquez pour déverrouiller dans une fenêtre",
 		"description": "Sub-text under 'Vault locked' in the autofill dropdown."
+	},
+	"newLoginTitle": {
+		"message": "Nouvel identifiant",
+		"description": "Last row of the autofill dropdown under a site's saved logins. Opens Bramble's form to save another login for this site."
+	},
+	"newLoginUse": {
+		"message": "Enregistrer un autre identifiant pour ce site",
+		"description": "Second line of the New login row in the autofill dropdown."
 	},
 	"suggestPasswordUse": {
 		"message": "Utilisez le mot de passe suggéré",

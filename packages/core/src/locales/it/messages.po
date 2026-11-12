@@ -1135,6 +1135,10 @@ msgstr "Collega {name}"
 msgid "Connect a browser"
 msgstr "Collegare un browser"
 
+#: packages/core/src/app/components/AliasGenerator.tsx
+msgid "Connect an alias provider to create addresses here."
+msgstr "Colleghi un provider di alias per creare indirizzi qui."
+
 #: packages/core/src/app/screens/Settings/components/DesktopLinkSection.tsx
 msgid "Connected"
 msgstr "Connesso"
@@ -1211,6 +1215,7 @@ msgstr "Copiato {copied}"
 #~ msgid "Copies {browserName}'s entries and files into {desktopName}. Exact duplicates are skipped; near-duplicates are held for you to review."
 #~ msgstr "Copia le voci e i file di {browserName} in {desktopName}. I duplicati esatti vengono saltati; i quasi duplicati vengono trattenuti per la revisione."
 
+#: packages/core/src/app/components/AliasGenerator.tsx
 #: packages/core/src/app/components/EntryRow.tsx
 #: packages/core/src/app/components/PasswordGenerator.tsx
 #: packages/core/src/app/components/RecoveryCodeDisplay.tsx
@@ -1337,6 +1342,10 @@ msgstr "Non è stato possibile scrivere nel vault."
 #: packages/core/src/app/screens/VaultSetup/components/SetupHeader.tsx
 msgid "Create a new vault alongside your existing ones, with its own master password."
 msgstr "Crea un nuovo vault accanto a quelli esistenti, con la propria password principale."
+
+#: packages/core/src/app/components/AliasGenerator.tsx
+msgid "Create alias"
+msgstr "Creare un alias"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Create an access key with read and write access to a bucket, then paste it below. For the bucket you can paste its full URL (https://host/bucket)."
@@ -1613,6 +1622,10 @@ msgstr "Modifica elemento"
 msgid "Elephant"
 msgstr "Elefante"
 
+#: packages/core/src/app/routes/GeneratorRoute.tsx
+msgid "Email alias"
+msgstr "Alias email"
+
 #: packages/core/src/app/screens/Settings/components/AliasSection.tsx
 #~ msgid "Email aliases"
 #~ msgstr ""
@@ -1888,6 +1901,10 @@ msgstr "Genera password"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Generate strong password"
 msgstr "Genera una password sicura"
+
+#: packages/core/src/app/layouts/AppLayout.tsx
+msgid "Generator"
+msgstr "Generatore"
 
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
 #~ msgid "Getting on with Bramble?"
@@ -2243,6 +2260,10 @@ msgstr "Suggerimenti per la tastiera"
 #: packages/core/src/app/screens/VaultHome/VaultSearchBar.tsx
 #~ msgid "Keys"
 #~ msgstr "Chiavi"
+
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Language"
+msgstr "Lingua"
 
 #: packages/core/src/app/screens/Settings/components/BackupSection.tsx
 msgid "Last 10"
@@ -2899,8 +2920,8 @@ msgid "Password found in a known data breach"
 msgstr "Password trovato in una violazione di dati nota"
 
 #: packages/core/src/app/layouts/AppLayout.tsx
-msgid "Password generator"
-msgstr "Generatore di password"
+#~ msgid "Password generator"
+#~ msgstr "Generatore di password"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Password strength"
@@ -3506,6 +3527,10 @@ msgstr "Configura un vault"
 #: packages/core/src/app/screens/Auth/Auth.tsx
 msgid "Set up a vault to start saving your passwords, cards, and notes."
 msgstr "Configuri una cassaforte per iniziare a salvare le sue password, le sue carte e le sue note."
+
+#: packages/core/src/app/components/AliasGenerator.tsx
+msgid "Set up aliases"
+msgstr "Configurare alias"
 
 #: packages/core/src/app/screens/Settings/components/BiometricSection.tsx
 msgid "Set up Face ID or a fingerprint on this device to use this."
@@ -4523,6 +4548,10 @@ msgstr "Aggiornamenti"
 msgid "Use {currentSite}"
 msgstr "Usare {currentSite}"
 
+#: packages/core/src/app/screens/Settings/components/AppearanceSection.tsx
+msgid "Use a different language from your system"
+msgstr "Usi una lingua diversa da quella di sistema."
+
 #: packages/core/src/app/screens/Settings/components/GeneralSection.tsx
 msgid "Use Bramble for passkeys"
 msgstr "Usa Bramble per le chiavi di accesso"
@@ -4699,6 +4728,10 @@ msgstr "URL WebDAV"
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Website"
 msgstr "Sito web"
+
+#: packages/core/src/app/components/AliasGenerator.tsx
+msgid "Website (optional)"
+msgstr "Sito web (facoltativo)"
 
 #: packages/core/src/app/entry-modes/login.tsx
 msgid "Website URL"

@@ -12,6 +12,7 @@ export const LOCALES = [
 	{ code: "fr", name: "French", appStore: "fr-FR", android: "fr" },
 	{ code: "pt-BR", name: "Brazilian Portuguese", appStore: "pt-BR", android: "pt-rBR" },
 	{ code: "it", name: "Italian", appStore: "it", android: "it" },
+	{ code: "ko", name: "Korean", appStore: "ko", android: "ko" },
 ];
 
 const ROOT = resolve(import.meta.dirname, "../..");

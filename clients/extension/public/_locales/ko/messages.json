@@ -1,0 +1,190 @@
+{
+	"extDescription": {
+		"message": "로컬 우선 방식의 암호화된 비밀번호 관리자입니다. 클라우드 데이터베이스가 없습니다.",
+		"description": "Chrome Web Store / extension description shown under the name."
+	},
+	"cmdLockVault": {
+		"message": "Bramble 잠그기",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
+	},
+	"cmdFillLogin": {
+		"message": "로그인 정보 채우기",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts. Fills the saved login for the page."
+	},
+	"notNow": {
+		"message": "나중에",
+		"description": "Dismiss button on the save / passkey corner prompt."
+	},
+	"toggleShow": {
+		"message": "표시",
+		"description": "Reveal the captured password in the save-login card."
+	},
+	"toggleHide": {
+		"message": "숨기기",
+		"description": "Hide the revealed password in the save-login card."
+	},
+	"menuNeverForSite": {
+		"message": "이 사이트에서는 사용 안 함",
+		"description": "Overflow-menu action: stop offering to save logins on this site."
+	},
+	"fieldUsername": {
+		"message": "사용자 이름",
+		"description": "Field label in the save-login card."
+	},
+	"fieldPassword": {
+		"message": "비밀번호",
+		"description": "Field label in the save-login card."
+	},
+	"fieldAccount": {
+		"message": "계정",
+		"description": "Field label showing the account name in the update / passkey card."
+	},
+	"saveNewLogin": {
+		"message": "새 로그인 저장",
+		"description": "Title of the card offering to save a newly captured login."
+	},
+	"actionSave": {
+		"message": "저장",
+		"description": "Primary button: save the captured login."
+	},
+	"actionUnlockAndSave": {
+		"message": "잠금 해제 및 저장",
+		"description": "Primary button when the vault is locked: unlock, then save."
+	},
+	"updateExistingTitle": {
+		"message": "기존 로그인을 업데이트하시겠습니까?",
+		"description": "Card title when several saved logins could be updated."
+	},
+	"updateSavedTitle": {
+		"message": "저장된 로그인을 업데이트하시겠습니까?",
+		"description": "Card title when one saved login could be updated."
+	},
+	"actionUpdate": {
+		"message": "업데이트",
+		"description": "Primary button: update the saved login with the new password."
+	},
+	"actionUnlockAndUpdate": {
+		"message": "잠금 해제 및 업데이트",
+		"description": "Primary button when the vault is locked: unlock, then update."
+	},
+	"saveAsNew": {
+		"message": "새로 저장",
+		"description": "Secondary button: save as a separate login instead of updating."
+	},
+	"saveAsNewHint": {
+		"message": "업데이트하는 대신 별도의 로그인으로 저장",
+		"description": "Tooltip for the 'Save as new' button."
+	},
+	"passkeySignInWhich": {
+		"message": "어떤 패스키로 로그인하시겠습니까?",
+		"description": "Passkey card title when the site offers a choice of passkeys."
+	},
+	"passkeyUseTitle": {
+		"message": "패스키를 사용하시겠습니까?",
+		"description": "Passkey card title when signing in with a single passkey."
+	},
+	"passkeyAddToTitle": {
+		"message": "이 패스키를 추가할 대상…",
+		"description": "Passkey card title: choose which saved login to attach a new passkey to."
+	},
+	"passkeyAddTitle": {
+		"message": "패스키를 추가하시겠습니까?",
+		"description": "Passkey card title when adding a passkey to an existing login."
+	},
+	"passkeySaveTitle": {
+		"message": "패스키를 저장하시겠습니까?",
+		"description": "Passkey card title when saving a brand-new passkey."
+	},
+	"passkeyUnlockUseNote": {
+		"message": "이 사이트에서 패스키를 사용하려면 Bramble을 잠금 해제하세요.",
+		"description": "Explains the locked passkey sign-in prompt."
+	},
+	"passkeyUnlockSaveNote": {
+		"message": "이 사이트에 패스키를 저장하려면 Bramble을 잠금 해제하세요.",
+		"description": "Explains the locked passkey save prompt."
+	},
+	"passkeyRequestedBy": {
+		"message": "요청한 곳",
+		"description": "Label in the passkey card naming the site that asked, when it isn't the page the card is shown on (an embedded frame)."
+	},
+	"passkeyAddsTo": {
+		"message": "추가 대상",
+		"description": "Label showing which login a new passkey will be attached to."
+	},
+	"passkeyCreateNewLogin": {
+		"message": "새 로그인 생성",
+		"description": "Option to attach the passkey to a brand-new login instead of an existing one."
+	},
+	"passkeyUse": {
+		"message": "패스키 사용",
+		"description": "Primary button: sign in with the passkey."
+	},
+	"passkeyAdd": {
+		"message": "패스키 추가",
+		"description": "Primary button: attach the passkey to a login."
+	},
+	"passkeySave": {
+		"message": "패스키 저장",
+		"description": "Primary button: save the new passkey."
+	},
+	"passkeyUnlockUse": {
+		"message": "잠금 해제 및 사용",
+		"description": "Primary button when locked: unlock, then sign in with the passkey."
+	},
+	"passkeyUnlockAdd": {
+		"message": "잠금 해제 및 추가",
+		"description": "Primary button when locked: unlock, then attach the passkey."
+	},
+	"vaultLocked": {
+		"message": "보관함 잠김",
+		"description": "Autofill dropdown row shown when the vault is locked."
+	},
+	"vaultLockedUnlockHint": {
+		"message": "클릭하여 창에서 잠금 해제",
+		"description": "Sub-text under 'Vault locked' in the autofill dropdown."
+	},
+	"newLoginTitle": {
+		"message": "새 로그인",
+		"description": "Last row of the autofill dropdown under a site's saved logins. Opens Bramble's form to save another login for this site."
+	},
+	"newLoginUse": {
+		"message": "이 사이트에 다른 로그인 저장",
+		"description": "Second line of the New login row in the autofill dropdown."
+	},
+	"suggestPasswordUse": {
+		"message": "제안된 비밀번호 사용",
+		"description": "Sub-text under the generated password in the autofill dropdown; the row fills a strong password on signup forms."
+	},
+	"suggestPasswordRegenerate": {
+		"message": "다른 비밀번호 생성",
+		"description": "Accessible label for the regenerate button on the suggested-password row."
+	},
+	"pickerUseKeyboard": {
+		"message": "이 페이지에서 채우려면 ↓ 키와 Enter 키를 사용하세요.",
+		"description": "Shown in the autofill dropdown when a click was refused because the browser could not confirm the list is fully visible (something on the page covers or filters it). The arrow-key and Enter path still works."
+	},
+	"aliasUse": {
+		"message": "새 이메일 별칭 사용",
+		"description": "Sub-text on the email-alias row in the autofill dropdown; the row creates a fresh forwarding address at the user's alias provider and fills it into a signup form."
+	},
+	"aliasTitle": {
+		"message": "이메일 별칭",
+		"description": "Title of the email-alias row in the autofill dropdown."
+	},
+	"aliasWorking": {
+		"message": "별칭 생성 중...",
+		"description": "Shown on the email-alias row while the request to the alias provider is in flight."
+	},
+	"aliasFailed": {
+		"message": "별칭을 생성할 수 없습니다",
+		"description": "Shown on the email-alias row when the alias provider rejected the request. The provider's own explanation is shown beneath as plain text."
+	},
+	"aliasRetry": {
+		"message": "다시 시도",
+		"description": "Accessible label for the retry button on a failed email-alias row."
+	},
+	"cardUsedHere": {
+		"message": "여기에서 사용됨",
+		"description": "Badge on the autofill dropdown row for the card already filled elsewhere on this page (a hosted-fields checkout asks once per frame)."
+	}
+}

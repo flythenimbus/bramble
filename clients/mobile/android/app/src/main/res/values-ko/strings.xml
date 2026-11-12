@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="af_unlock_title">마스터 비밀번호를 입력하여 보관함을 잠금 해제하세요.</string>
+    <string name="af_unlock_biometrics">생체 인증으로 잠금 해제</string>
+    <string name="af_master_password">마스터 비밀번호</string>
+    <string name="af_unlock_vault">보관함 잠금 해제</string>
+    <string name="af_biometric_prompt_title">Bramble 잠금 해제</string>
+    <string name="af_err_enter_password">마스터 비밀번호를 입력하세요.</string>
+    <string name="af_err_biometrics_changed">생체 인증 정보가 변경되었습니다. 마스터 비밀번호를 사용하세요.</string>
+    <string name="af_err_no_password">이 보관함에는 마스터 비밀번호가 없습니다.</string>
+    <string name="af_err_incorrect_password">마스터 비밀번호가 올바르지 않습니다.</string>
+    <string name="af_err_unlock_failed">잠금 해제 실패</string>
+    <string name="af_err_load_logins">로그인 항목을 불러오지 못했습니다.</string>
+    <string name="af_cancel">취소</string>
+    <string name="af_search_logins">로그인 항목 검색</string>
+    <string name="af_empty_no_logins">저장된 로그인 항목이 아직 없습니다.\nBramble에서 하나 추가하세요.</string>
+    <string name="af_empty_no_match">“%s”에 해당하는 로그인 항목이 없습니다.</string>
+    <string name="af_section_for">“%s”에 대해</string>
+    <string name="af_section_matches">일치 항목</string>
+    <string name="af_section_no_matches">“%s”에 대한 일치 항목이 없습니다.</string>
+    <string name="af_section_other_logins">다른 로그인 항목</string>
+    <string name="af_section_logins_count">로그인 항목(%d)</string>
+    <string name="af_no_name">(이름 없음)</string>
+    <string name="af_use_password">비밀번호 사용</string>
+    <string name="af_err_biometric_prepare">생체 인증 잠금 해제를 준비하지 못했습니다.</string>
+    <string name="af_err_biometric_crypto">생체 인증 암호화에 실패했습니다.</string>
+    <string name="af_ds_unlock">자동 완성을 위해 잠금 해제</string>
+    <string name="af_ds_show_all_logins">모든 로그인 항목 표시</string>
+    <string name="af_ds_search_vault">보관함 검색</string>
+    <string name="af_ds_show_all">모두 표시</string>
+    <string name="af_assoc_title">Bramble에 저장하시겠습니까?</string>
+    <string name="af_assoc_message_app">Bramble이 여기에서 자동으로 제공하도록 %1$s 앱을 “%2$s”에 추가하시겠습니까?</string>
+    <string name="af_assoc_message_web">Bramble이 여기에서 자동으로 제공하도록 %1$s 항목을 “%2$s”에 추가하시겠습니까?</string>
+    <string name="af_assoc_save">자동 완성 및 저장</string>
+    <string name="af_assoc_just">자동 완성만</string>
+    <string name="transfer_channel_name">업로드</string>
+    <string name="transfer_notification_title">업로드 완료 중</string>
+    <string name="transfer_notification_text">Bramble은 완료될 때까지 백그라운드에서 계속 실행됩니다.</string>
+</resources>

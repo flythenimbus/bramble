@@ -7,6 +7,10 @@
 		"message": "Bloquear Bramble",
 		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
 	},
+	"cmdFillLogin": {
+		"message": "Preencher login",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts. Fills the saved login for the page."
+	},
 	"notNow": {
 		"message": "Não agora",
 		"description": "Dismiss button on the save / passkey corner prompt."
@@ -138,6 +142,14 @@
 	"vaultLockedUnlockHint": {
 		"message": "Clique para desbloquear em uma janela",
 		"description": "Sub-text under 'Vault locked' in the autofill dropdown."
+	},
+	"newLoginTitle": {
+		"message": "Novo login",
+		"description": "Last row of the autofill dropdown under a site's saved logins. Opens Bramble's form to save another login for this site."
+	},
+	"newLoginUse": {
+		"message": "Salvar outro login para este site",
+		"description": "Second line of the New login row in the autofill dropdown."
 	},
 	"suggestPasswordUse": {
 		"message": "Use a senha sugerida",

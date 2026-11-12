@@ -33,6 +33,12 @@
             "state": "translated",
             "value": "Adicionar %@ a “%@” para o Bramble oferecer aqui automaticamente?"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@을(를) “%@”에 추가하여 Bramble이 여기에서 자동으로 제공하도록 하시겠습니까?"
+          }
         }
       }
     },
@@ -72,6 +78,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Todos os itens"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 항목"
           }
         }
       }
@@ -113,6 +125,12 @@
             "state": "translated",
             "value": "O Bramble não possui chave de acesso para este site."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bramble에 이 사이트용 패스키가 없습니다."
+          }
         }
       }
     },
@@ -152,6 +170,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cancelar"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "취소"
           }
         }
       }
@@ -193,6 +217,12 @@
             "state": "translated",
             "value": "Escolher uma chave de acesso"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "패스키 선택"
+          }
         }
       }
     },
@@ -227,6 +257,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cancella ricerca"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "검색 지우기"
           }
         }
       }
@@ -268,6 +304,12 @@
             "state": "translated",
             "value": "Não foi possível carregar os logins"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로그인 정보를 불러오지 못했습니다."
+          }
         }
       }
     },
@@ -307,6 +349,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Não foi possível ler a chave salva."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 키를 읽지 못했습니다."
           }
         }
       }
@@ -348,6 +396,12 @@
             "state": "translated",
             "value": "Insira sua senha mestra para desbloquear o cofre"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보관함을 잠금 해제하려면 마스터 비밀번호를 입력하십시오."
+          }
         }
       }
     },
@@ -388,6 +442,12 @@
             "state": "translated",
             "value": "Insira sua senha mestra."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마스터 비밀번호를 입력하십시오."
+          }
         }
       }
     },
@@ -424,6 +484,12 @@
           }
         },
         "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
+          }
+        },
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "Face ID"
@@ -468,6 +534,12 @@
             "state": "translated",
             "value": "Face ID ou código de acesso"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID 또는 암호"
+          }
         }
       }
     },
@@ -507,6 +579,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preencher e salvar"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자동 완성 및 저장"
           }
         }
       }
@@ -548,6 +626,12 @@
             "state": "translated",
             "value": "Para %@"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@용"
+          }
         }
       }
     },
@@ -587,6 +671,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Senha mestra incorreta"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마스터 비밀번호가 올바르지 않습니다."
           }
         }
       }
@@ -628,6 +718,12 @@
             "state": "translated",
             "value": "Itens (%lld)"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "항목(%lld개)"
+          }
         }
       }
     },
@@ -667,6 +763,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apenas preencher"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자동 완성만"
           }
         }
       }
@@ -708,6 +810,12 @@
             "state": "translated",
             "value": "Senha Mestra"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마스터 비밀번호"
+          }
         }
       }
     },
@@ -748,6 +856,12 @@
             "state": "translated",
             "value": "Correspondências"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일치 항목"
+          }
         }
       }
     },
@@ -782,6 +896,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nessun accesso corrispondente a %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 일치하는 로그인 정보가 없습니다."
           }
         }
       }
@@ -823,6 +943,12 @@
             "state": "translated",
             "value": "Nenhuma credencial salva ainda.\nAdicione uma no Bramble."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 로그인 정보가 아직 없습니다.\nBramble에서 추가하십시오."
+          }
         }
       }
     },
@@ -862,6 +988,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhuma correspondência para %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 대한 일치 항목이 없습니다."
           }
         }
       }
@@ -903,6 +1035,12 @@
             "state": "translated",
             "value": "Nenhuma chave de acesso encontrada"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "패스키를 찾을 수 없습니다."
+          }
         }
       }
     },
@@ -943,6 +1081,12 @@
             "state": "translated",
             "value": "OK"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "확인"
+          }
         }
       }
     },
@@ -977,6 +1121,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Risultati (%lld)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "결과(%lld개)"
           }
         }
       }
@@ -1018,6 +1168,12 @@
             "state": "translated",
             "value": "Salvar no Bramble?"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bramble에 저장하시겠습니까?"
+          }
         }
       }
     },
@@ -1052,6 +1208,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cerca accessi"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로그인 정보 검색"
           }
         }
       }
@@ -1093,6 +1255,12 @@
             "state": "translated",
             "value": "Mostrar todos os itens (%lld mais)"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 항목 표시(%lld개 더)"
+          }
         }
       }
     },
@@ -1127,6 +1295,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "A chave salva deste dispositivo está desatualizada. Digite sua senha mestra."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 기기의 저장된 키가 오래되었습니다. 마스터 비밀번호를 입력하십시오."
           }
         }
       }
@@ -1168,6 +1342,12 @@
             "state": "translated",
             "value": "Este cofre não possui senha mestra ou ainda não sincronizou. Abra o Bramble, desbloqueie-o uma vez e tente novamente."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 보관함에는 마스터 비밀번호가 없거나 동기화되지 않았습니다. Bramble을 열어 한 번 잠금 해제한 후 다시 시도하십시오."
+          }
         }
       }
     },
@@ -1204,6 +1384,12 @@
           }
         },
         "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touch ID"
+          }
+        },
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "Touch ID"
@@ -1248,6 +1434,12 @@
             "state": "translated",
             "value": "Touch ID ou código de acesso"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touch ID 또는 암호"
+          }
         }
       }
     },
@@ -1287,6 +1479,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desbloquear Bramble"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bramble 잠금 해제"
           }
         }
       }
@@ -1328,6 +1526,12 @@
             "state": "translated",
             "value": "Desbloquear Cofre"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보관함 잠금 해제"
+          }
         }
       }
     },
@@ -1367,6 +1571,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desbloquear com %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 사용하여 잠금 해제"
           }
         }
       }
@@ -1408,6 +1618,12 @@
             "state": "translated",
             "value": "Seu cadastro biométrico mudou. Abra o Bramble e ative o desbloqueio biométrico novamente."
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "생체 인증 등록 정보가 변경되었습니다. Bramble을 열고 생체 인증 잠금 해제를 다시 켜십시오."
+          }
         }
       }
     },
@@ -1447,6 +1663,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Biometria"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "생체 인증"
           }
         }
       }
@@ -1488,6 +1710,12 @@
             "state": "translated",
             "value": "Biometria ou senha de acesso"
           }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "생체 인증 또는 암호"
+          }
         }
       }
     },
@@ -1522,6 +1750,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Código"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "암호"
           }
         }
       }

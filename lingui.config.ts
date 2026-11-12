@@ -6,7 +6,7 @@ import { formatter } from "@lingui/format-po";
 // `compile` turns them into runtime JS. New locales: add the code here, re-extract.
 export default defineConfig({
 	sourceLocale: "en",
-	locales: ["en", "de", "es", "fr", "pt-BR", "it"],
+	locales: ["en", "de", "es", "fr", "pt-BR", "it", "ko"],
 	catalogs: [
 		{
 			path: "<rootDir>/packages/core/src/locales/{locale}/messages",

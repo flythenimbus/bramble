@@ -30,6 +30,7 @@ const CATALOGS: &[(&str, &str)] = &[
     ("es", include_str!("../locales/es.json")),
     ("fr", include_str!("../locales/fr.json")),
     ("it", include_str!("../locales/it.json")),
+    ("ko", include_str!("../locales/ko.json")),
     ("pt-BR", include_str!("../locales/pt-BR.json")),
 ];
 
