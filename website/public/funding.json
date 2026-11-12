@@ -1,0 +1,89 @@
+{
+	"$schema": "https://fundingjson.org/schema/v1.1.0.json",
+	"version": "v1.1.0",
+	"entity": {
+		"type": "organisation",
+		"role": "owner",
+		"name": "Bramble",
+		"email": "support@bramble.sh",
+		"description": "Bramble is an independent, bootstrapped team building a free and open source password manager. We take no venture capital and sell no user data. The apps are free and have no ads, and the only income so far is donations. Funding pays for maintainer time and independent security audits.",
+		"webpageUrl": {
+			"url": "https://bramble.sh"
+		}
+	},
+	"projects": [
+		{
+			"guid": "bramble",
+			"name": "Bramble",
+			"description": "A password manager that syncs between your devices without storing your vault on a server. There is no account to make and no central database to breach. Devices sync peer-to-peer, end-to-end encrypted, and every key derivation, encryption and decryption runs in one Rust core, compiled to WebAssembly for the browser and to a native library for iOS and Android. Bramble runs as a browser extension for Firefox and Chromium browsers, a desktop app for macOS and Linux, and apps for iOS and Android with native system autofill, biometric unlock and passkeys. It imports from the major password managers, exports encrypted backups, and can schedule encrypted backups to storage the user already owns (Dropbox, S3-compatible buckets, WebDAV).",
+			"webpageUrl": {
+				"url": "https://bramble.sh"
+			},
+			"repositoryUrl": {
+				"url": "https://github.com/bramble-sh/bramble",
+				"wellKnown": "https://github.com/bramble-sh/bramble/blob/main/.well-known/funding-manifest-urls"
+			},
+			"licenses": ["spdx:GPL-3.0-only", "spdx:AGPL-3.0-only"],
+			"tags": [
+				"password-manager",
+				"privacy",
+				"security",
+				"cryptography",
+				"browser-extensions",
+				"mobile",
+				"ios",
+				"android",
+				"linux",
+				"productivity"
+			]
+		}
+	],
+	"funding": {
+		"channels": [
+			{
+				"guid": "bank",
+				"type": "bank",
+				"address": "",
+				"description": "Bank transfer. Email support@bramble.sh for details."
+			},
+			{
+				"guid": "ko-fi",
+				"type": "payment-provider",
+				"address": "https://ko-fi.com/bramble_sh",
+				"description": "Donations through Ko-fi."
+			}
+		],
+		"plans": [
+			{
+				"guid": "maintainer-time",
+				"status": "active",
+				"name": "Maintainer time",
+				"description": "One year of maintainer time across the browser extension, desktop, iOS and Android apps: security fixes, platform updates, issue triage and releases.",
+				"amount": 50000,
+				"currency": "USD",
+				"frequency": "yearly",
+				"channels": ["bank"]
+			},
+			{
+				"guid": "security-audit",
+				"status": "active",
+				"name": "Independent security audit",
+				"description": "A third-party audit of the Rust crypto core, the vault format and device sync, with the report published after fixes ship.",
+				"amount": 50000,
+				"currency": "USD",
+				"frequency": "one-time",
+				"channels": ["bank"]
+			},
+			{
+				"guid": "goodwill",
+				"status": "active",
+				"name": "Any amount",
+				"description": "Give whatever you like to support the project.",
+				"amount": 0,
+				"currency": "USD",
+				"frequency": "other",
+				"channels": ["ko-fi", "bank"]
+			}
+		]
+	}
+}
