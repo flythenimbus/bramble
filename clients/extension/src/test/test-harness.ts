@@ -59,7 +59,8 @@ export interface BackgroundHarness {
 	/** Dispatch a runtime message; resolves with { handled, resp } when sendResponse fires. */
 	send: (message: AnyMsg, sender?: any) => Promise<{ handled: boolean; resp: any }>;
 	fireAlarm: (name: string) => void;
-	fireCommand: (command: string) => void;
+	/** Chrome passes the tab the shortcut was pressed in as the second argument. */
+	fireCommand: (command: string, tab?: { id?: number }) => void;
 	fireIdle: (state: string) => void;
 	fireStorageChanged: (changes: Record<string, unknown>, area: string) => void;
 	/** A tab navigating (`{ url }`) or closing: what ends a card carry. */
@@ -120,6 +121,8 @@ interface HarnessState {
 	windowsCreated: AnyMsg[];
 	windowsRemoved: number[];
 	listeners: Record<string, ((...args: any[]) => any) | undefined>;
+	/** commands.onCommand takes several listeners: the lock and fill shortcuts register apart. */
+	commandListeners: ((command: string, tab?: { id?: number }) => void)[];
 	/** storage.onChanged also permits multiple listeners (vek/session plus background policy). */
 	storageChangedListeners: Array<(changes: Record<string, unknown>, area: string) => void>;
 	/** tabs.onUpdated / onRemoved take several listeners too: the desktop link watches the active
@@ -240,6 +243,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		windowsCreated: [],
 		windowsRemoved: [],
 		listeners: {},
+		commandListeners: [],
 		storageChangedListeners: [],
 		tabListeners: { updated: [], removed: [] },
 		messageListeners: [],
@@ -403,7 +407,7 @@ function makeChrome(opts: ChromeMockOptions): { chrome: any; state: HarnessState
 		commands: {
 			onCommand: {
 				addListener: (fn: any) => {
-					state.listeners.command = fn;
+					state.commandListeners.push(fn);
 				},
 			},
 		},
@@ -447,7 +451,9 @@ export async function loadBackground(opts: ChromeMockOptions = {}): Promise<Back
 		state,
 		send,
 		fireAlarm: (name) => state.listeners.alarm?.({ name }),
-		fireCommand: (command) => state.listeners.command?.(command),
+		fireCommand: (command, tab) => {
+			for (const listener of state.commandListeners) listener(command, tab);
+		},
 		fireIdle: (s) => state.listeners.idle?.(s),
 		fireStorageChanged: (changes, area2) => {
 			for (const listener of state.storageChangedListeners) listener(changes, area2);

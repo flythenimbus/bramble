@@ -30,6 +30,7 @@ import {
 	onDesktopFillRequest,
 	reportActiveTab,
 } from "./desktop-link";
+import { shortcutGrantLive, spendShortcutGrant } from "./fill-shortcut";
 import {
 	armLaunchGrant,
 	LAUNCH_VIEW_GRACE_MS,
@@ -719,7 +720,10 @@ async function autofillQuery(
 	try {
 		// Master switch (Settings -> General). Enforced here rather than only in the page: a content
 		// script is not a trusted context, so the answer a page gets must not depend on it asking.
-		if (!(await getAutofillEnabled())) return { ok: true, data: disabledResult() };
+		// Or the fill shortcut, pressed in this tab: the browser alone delivers it (fill-shortcut.ts).
+		if (!(await getAutofillEnabled()) && !shortcutGrantLive(sender.tab?.id)) {
+			return { ok: true, data: disabledResult() };
+		}
 		await hydrateAutofillIndexFromDisk();
 		const hasLogin = message.hasLogin !== false;
 		const hasCard = message.hasCard === true;
@@ -773,7 +777,9 @@ async function autofillSelect(
 	// The switch again: an open dropdown from before it was turned off, or an orphaned content
 	// script, must not be able to fill. Nothing here says why - a page learns no more than
 	// "unavailable" from any other refusal.
-	if (!(await getAutofillEnabled())) return { ok: false, error: "unavailable" };
+	if (!(await getAutofillEnabled()) && !shortcutGrantLive(sender.tab?.id)) {
+		return { ok: false, error: "unavailable" };
+	}
 	try {
 		await hydrateAutofillIndexFromDisk();
 		await scheduleAutoLock();
@@ -782,6 +788,7 @@ async function autofillSelect(
 		authorizeFill(message.payload.entryId, page.hostname, effectivePort(page));
 		const payload = fetchFill(message.payload.entryId);
 		rememberCardCarry(payload.kind, message.payload.entryId, sender.tab?.id);
+		spendShortcutGrant(sender.tab?.id);
 		// The user chose for this tab, so a launch must not fill over it later.
 		if (payload.kind === "login" && !message.payload.otpOnly && sender.tab?.id !== undefined) {
 			spendLaunchGrant(sender.tab.id);

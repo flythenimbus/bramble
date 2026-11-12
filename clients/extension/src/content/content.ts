@@ -781,6 +781,39 @@ function launchTopCheck(size: { frameWidth: number; frameHeight: number }): {
 	};
 }
 
+/**
+ * The fill shortcut (#215): fill this page's one matching login, or show the list when several
+ * match. Every frame of the tab gets it; only the one holding focus answers. Asked fresh rather
+ * than from the cache: with "Autofill on web pages" off this frame holds nothing, and the
+ * background answers only because the shortcut was just pressed in this tab (fill-shortcut.ts).
+ */
+async function fillFromShortcut(): Promise<void> {
+	if (!document.hasFocus() || deepActiveElement() instanceof HTMLIFrameElement) return;
+	invalidatePageFields();
+	const fields = getPageFields().login;
+	const into = [focusedCandidate(), fields.username, fields.password].find(
+		(field): field is HTMLInputElement =>
+			!!field && isRendered(field) && currentTargetKind(field) === "login",
+	);
+	if (!into) return;
+	const response = await safeRequest<AutofillQueryResponse>({
+		type: "AUTOFILL_QUERY",
+		hasLogin: true,
+		hasCard: false,
+		hasOtp: false,
+	});
+	if (!response?.ok || !isQueryResult(response.data)) return;
+	const { logins, locked, disabled } = response.data;
+	if (locked || disabled || logins.length === 0) return;
+	if (logins.length === 1) {
+		selectMatch(logins[0]?.id ?? "", false, false, into);
+		return;
+	}
+	silenceAutoOpen = false;
+	into.focus();
+	showMatchesFor(logins, into);
+}
+
 function focusedCandidate(): HTMLInputElement | null {
 	const focused = deepActiveElement();
 	return focused instanceof HTMLInputElement && isCandidate(getPageFields(), focused)
@@ -1230,6 +1263,12 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		dropRelayed();
 		fillForm(fill.username ?? "", fill.password, false, into);
 		if (fill.totp) fillOtp(fill.totp);
+		sendResponse({ ok: true });
+		return false;
+	}
+
+	if (message?.type === "AUTOFILL_SHORTCUT") {
+		void fillFromShortcut();
 		sendResponse({ ok: true });
 		return false;
 	}

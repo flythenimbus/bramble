@@ -252,6 +252,22 @@ view of the vault. Capturing new logins has its own toggle ("Offer to save login
 `DESKTOP_FILL` is exempt as well: that is a credential the user picked in the desktop app,
 aimed at this page, and silently dropping it would leave that action unexplained.
 
+### The fill shortcut
+
+**Fill login** (`fill-login`, Ctrl+Shift+L, Cmd+Shift+L on a Mac, rebindable at
+`chrome://extensions/shortcuts`) fills the page's login, and is the way to fill with the
+switch off (#215). Only the browser delivers a command, so pressing it is the user's intent
+the way a dropdown pick is. `fill-shortcut.ts` arms a grant for that tab, bound to the
+unlocked session and good for 30 seconds, and sends `AUTOFILL_SHORTCUT` to the tab. While
+it lives, `AUTOFILL_QUERY` and `AUTOFILL_SELECT` from that tab pass the switch; the first
+select spends it, a lock or the tab closing ends it, and no other tab gains anything.
+Locked, the shortcut opens the unlock view instead and arms nothing.
+
+Every frame gets the message, and only the frame holding focus answers (one whose focused
+element isn't an iframe). It asks afresh, since with the switch off it holds no result,
+then fills the one matching login like a pick, or shows the list when several match. The
+host check in `authorizeFill` applies as for any pick.
+
 ## When the content script looks at the page again
 
 An SPA can swap a login form in without a navigation, so a `childList`

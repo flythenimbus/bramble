@@ -7,6 +7,10 @@
 		"message": "Lock Bramble",
 		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts."
 	},
+	"cmdFillLogin": {
+		"message": "Fill login",
+		"description": "Keyboard-shortcut command label shown in chrome://extensions/shortcuts. Fills the saved login for the page."
+	},
 	"notNow": {
 		"message": "Not now",
 		"description": "Dismiss button on the save / passkey corner prompt."

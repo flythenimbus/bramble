@@ -46,6 +46,10 @@
 		}
 	],
 	"commands": {
+		"fill-login": {
+			"suggested_key": { "default": "Ctrl+Shift+L", "mac": "Command+Shift+L" },
+			"description": "__MSG_cmdFillLogin__"
+		},
 		"lock-vault": {
 			"description": "__MSG_cmdLockVault__"
 		}
