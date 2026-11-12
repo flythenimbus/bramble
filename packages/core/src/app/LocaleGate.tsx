@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { type ReactNode, useEffect, useState } from "react";
-import { activateLocale, defaultLocale, resolveLocale } from "../i18n";
+import { activateLocale, defaultLocale, localeFor, rememberSystemTag } from "../i18n";
 
 /**
  * Activates the right catalog before first paint, then provides it to the tree.
@@ -9,7 +9,8 @@ import { activateLocale, defaultLocale, resolveLocale } from "../i18n";
  * — `<Trans>`/`useLingui` throw without an I18nProvider, which blanks the screen.
  *
  * `preferredLocale` is the host-detected BCP-47 tag (mobile passes Capacitor's
- * Device language); falls back to navigator.language, then the source locale.
+ * Device language); falls back to navigator.language, then the source locale. A language
+ * chosen in Settings wins over all of them (#163).
  */
 export function LocaleGate({
 	preferredLocale,
@@ -24,7 +25,8 @@ export function LocaleGate({
 	useEffect(() => {
 		const tag =
 			preferredLocale ?? (typeof navigator !== "undefined" ? navigator.language : undefined);
-		activateLocale(resolveLocale(tag))
+		rememberSystemTag(tag);
+		activateLocale(localeFor(tag))
 			.catch(() => activateLocale(defaultLocale))
 			.finally(() => setReady(true));
 	}, [preferredLocale]);
