@@ -46,3 +46,4 @@ its author agrees to the permission. Authors who have agreed are listed here:
 - ashishgogula
 - daflyinbed
 - omnizs38
+- ruizlenato
