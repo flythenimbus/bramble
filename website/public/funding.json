@@ -6,7 +6,7 @@
 		"role": "owner",
 		"name": "Bramble",
 		"email": "support@bramble.sh",
-		"description": "Bramble is an independent, bootstrapped team building a free and open source password manager. We take no venture capital and sell no user data. The apps are free and have no ads, and the only income so far is donations. Funding pays for maintainer time and independent security audits.",
+		"description": "Bramble is an independent, bootstrapped team in Toronto, Canada, building a free and open source password manager. We take no venture capital and sell no user data. The apps are free and have no ads, and the only income so far is donations. Funding pays for maintainer time and independent security audits.",
 		"webpageUrl": {
 			"url": "https://bramble.sh"
 		}
@@ -15,7 +15,7 @@
 		{
 			"guid": "bramble",
 			"name": "Bramble",
-			"description": "A password manager that syncs between your devices without storing your vault on a server. There is no account to make and no central database to breach. Devices sync peer-to-peer, end-to-end encrypted, and every key derivation, encryption and decryption runs in one Rust core, compiled to WebAssembly for the browser and to a native library for iOS and Android. Bramble runs as a browser extension for Firefox and Chromium browsers, a desktop app for macOS and Linux, and apps for iOS and Android with native system autofill, biometric unlock and passkeys. It imports from the major password managers, exports encrypted backups, and can schedule encrypted backups to storage the user already owns (Dropbox, S3-compatible buckets, WebDAV).",
+			"description": "A password manager that syncs between your devices without storing your vault on a server. There is no account to make and no central database to breach. Devices sync peer-to-peer, end-to-end encrypted, and every key derivation, encryption and decryption runs in one Rust core, compiled to WebAssembly for the browser and to a native library for iOS and Android. Bramble runs as a browser extension for Firefox and Chromium browsers, a desktop app for macOS and Linux, and apps for iOS and Android with native system autofill, biometric unlock and passkeys. It imports from the major password managers, exports encrypted backups, and can schedule encrypted backups to storage the user already owns (Dropbox, S3-compatible buckets, WebDAV). It has more than 7,500 installs and about 5,000 weekly active users on the Chrome Web Store alone. Bramble has no telemetry, so these counts come from the app stores' own dashboards.",
 			"webpageUrl": {
 				"url": "https://bramble.sh"
 			},
