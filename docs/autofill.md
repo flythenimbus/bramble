@@ -265,8 +265,10 @@ Locked, the shortcut opens the unlock view instead and arms nothing.
 
 Every frame gets the message, and only the frame holding focus answers (one whose focused
 element isn't an iframe). It asks afresh, since with the switch off it holds no result,
-then fills the one matching login like a pick, or shows the list when several match. The
-host check in `authorizeFill` applies as for any pick.
+then fills one login like a pick: the first whose username starts with what is in the
+username field, else whose name does, else the site's first (`shortcutPick`). So typing
+"ab" and pressing it fills that account. The host check in `authorizeFill` applies as for
+any pick.
 
 ### The new-login row
 

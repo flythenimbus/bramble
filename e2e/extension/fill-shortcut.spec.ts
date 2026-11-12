@@ -5,8 +5,8 @@ import { expect, test } from "./fixtures";
 import { backgroundWorker, createVault, openPopup, seedExampleLogin } from "./helpers";
 
 // Two ways to act on a site's logins besides picking one: the fill shortcut (#215), Ctrl+Shift+L
-// (Cmd+Shift+L on a Mac), which fills the page's login, also with "Autofill on web pages" off, and
-// shows the list when several match; and the dropdown's New login row (#213).
+// (Cmd+Shift+L on a Mac), which fills the site's first login, or the first whose username starts
+// with what is typed, also with "Autofill on web pages" off; and the dropdown's New login row (#213).
 //
 // A synthetic key press never reaches Chrome's extension shortcuts, so the test dispatches the
 // command to the background's real listener, with the real tab, as the browser would.
@@ -83,7 +83,7 @@ test("it fills with Autofill on web pages off", async ({ context, extensionId })
 	await expect(page.locator("#pass")).toHaveValue("s3cr3t-pw-01");
 });
 
-test("it shows the list when several logins match, and fills nothing", async ({
+test("with several logins it fills the first, or the one whose username starts with what's typed", async ({
 	context,
 	extensionId,
 }) => {
@@ -100,9 +100,22 @@ test("it shows the list when several logins match, and fills nothing", async ({
 
 	const page = await openSite(context);
 	await pressShortcut(context);
-	await expect.poll(() => pickerFrame(page), { timeout: 10_000 }).toBeDefined();
-	await expect(pickerFrame(page)?.getByText("Second Login") ?? page.locator("none")).toBeVisible();
-	await expect(page.locator("#pass")).toHaveValue("");
+	await expect(page.locator("#pass")).toHaveValue(/^(s3cr3t-pw-01|another-pw-02)$/);
+	const first = await page.locator("#user").inputValue();
+
+	// Typed "bo": bob's login, whichever came first.
+	await page.reload();
+	await page.locator("#user").fill("bo");
+	await pressShortcut(context);
+	await expect(page.locator("#user")).toHaveValue("bob@example.com");
+	await expect(page.locator("#pass")).toHaveValue("another-pw-02");
+
+	// Typed "al": alice's.
+	await page.reload();
+	await page.locator("#user").fill("al");
+	await pressShortcut(context);
+	await expect(page.locator("#user")).toHaveValue("alice@example.com");
+	expect(["alice@example.com", "bob@example.com"]).toContain(first);
 });
 
 // #213: under a site's logins, a row that opens Bramble's form to save another one, with the site

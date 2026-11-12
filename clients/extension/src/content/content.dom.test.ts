@@ -730,6 +730,71 @@ describe("content: strong-password suggestion on signup", () => {
 	});
 });
 
+// #215: the fill shortcut fills the site's first login, or the first whose username starts with
+// what is typed in the username field.
+describe("content: the fill shortcut", () => {
+	const logins = [
+		{ id: "1", name: "Example", secondary: "alice@example.com" },
+		{ id: "2", name: "Example", secondary: "bob@example.com" },
+		{ id: "3", name: "Zed's", secondary: "zed@example.com" },
+	];
+
+	beforeEach(() => {
+		safeRequest.mockClear();
+		pendingQueryResponses.length = 0;
+		pendingSelectResponses.length = 0;
+		vi.spyOn(document, "hasFocus").mockReturnValue(true);
+		// jsdom has no layout; the shortcut only fills a field that is drawn.
+		vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+			width: 200,
+			height: 24,
+			top: 0,
+			left: 0,
+			right: 200,
+			bottom: 24,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect);
+		document.body.innerHTML = `
+			<form>
+				<input id="user" type="email" name="email" autocomplete="username" />
+				<input id="pass" type="password" name="password" autocomplete="current-password" />
+			</form>`;
+		invalidatePageFields();
+	});
+
+	async function press(typed = ""): Promise<string | undefined> {
+		(document.getElementById("user") as HTMLInputElement).value = typed;
+		send({ type: "AUTOFILL_SHORTCUT" });
+		await Promise.resolve();
+		send({ type: "AUTOFILL_MATCHES", payload: result({ logins }) });
+		await vi.waitFor(() =>
+			expect(safeRequest).toHaveBeenCalledWith(
+				expect.objectContaining({ type: "AUTOFILL_SELECT" }),
+			),
+		);
+		const select = safeRequest.mock.calls
+			.map(([m]) => m as { type?: string; payload?: { entryId?: string } })
+			.find((m) => m.type === "AUTOFILL_SELECT");
+		return select?.payload?.entryId;
+	}
+
+	it("fills the site's first login", async () => {
+		expect(await press()).toBe("1");
+	});
+
+	it("fills the first whose username starts with what is typed", async () => {
+		expect(await press("bo")).toBe("2");
+	});
+
+	it("falls back to the name, then the first, when no username starts with it", async () => {
+		expect(await press("zed's")).toBe("3");
+		safeRequest.mockClear();
+		expect(await press("nobody")).toBe("1");
+	});
+});
+
 // #213: a login field's matches end with a row to save another login for the site.
 describe("content: the new-login row", () => {
 	beforeEach(() => {

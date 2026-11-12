@@ -785,10 +785,24 @@ function launchTopCheck(size: { frameWidth: number; frameHeight: number }): {
 }
 
 /**
- * The fill shortcut (#215): fill this page's one matching login, or show the list when several
- * match. Every frame of the tab gets it; only the one holding focus answers. Asked fresh rather
- * than from the cache: with "Autofill on web pages" off this frame holds nothing, and the
- * background answers only because the shortcut was just pressed in this tab (fill-shortcut.ts).
+ * The login the fill shortcut takes: the first whose username starts with what is in the username
+ * field, else whose name does, else the site's first. Typing "ab" then pressing it fills that one.
+ */
+function shortcutPick(logins: MatchSummary[], typed: string): MatchSummary | undefined {
+	const prefix = typed.trim().toLowerCase();
+	const starts = (text: string) => text.toLowerCase().startsWith(prefix);
+	if (prefix) {
+		const match = logins.find((l) => starts(l.secondary)) ?? logins.find((l) => starts(l.name));
+		if (match) return match;
+	}
+	return logins[0];
+}
+
+/**
+ * The fill shortcut (#215): fill this page's login, the one `shortcutPick` chooses. Every frame of
+ * the tab gets it; only the one holding focus answers. Asked fresh rather than from the cache: with
+ * "Autofill on web pages" off this frame holds nothing, and the background answers only because the
+ * shortcut was just pressed in this tab (fill-shortcut.ts).
  */
 async function fillFromShortcut(): Promise<void> {
 	if (!document.hasFocus() || deepActiveElement() instanceof HTMLIFrameElement) return;
@@ -807,14 +821,9 @@ async function fillFromShortcut(): Promise<void> {
 	});
 	if (!response?.ok || !isQueryResult(response.data)) return;
 	const { logins, locked, disabled } = response.data;
-	if (locked || disabled || logins.length === 0) return;
-	if (logins.length === 1) {
-		selectMatch(logins[0]?.id ?? "", false, false, into);
-		return;
-	}
-	silenceAutoOpen = false;
-	into.focus();
-	showMatchesFor(logins, into, { newLogin: true });
+	if (locked || disabled) return;
+	const pick = shortcutPick(logins, fields.username?.value ?? "");
+	if (pick) selectMatch(pick.id, false, false, into);
 }
 
 function focusedCandidate(): HTMLInputElement | null {
