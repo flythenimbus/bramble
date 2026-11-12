@@ -60,7 +60,6 @@ type NavRow =
 	| { kind: "alias" }
 	| { kind: "suggest" }
 	| { kind: "match"; id: string }
-	| { kind: "newLogin" }
 	| { kind: "locked" };
 let rows: NavRow[] = [];
 let highlight = -1;
@@ -226,6 +225,8 @@ const STYLE = `
 	.tp-alias-busy { opacity: 0.75; cursor: default; }
 	.tp-alias-error .tp-user { color: var(--tp-danger, #dc2626); }
 	.tp-spin { animation: tp-spin 0.9s linear infinite; }
+	.tp-new-login { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 12px; border: 0; border-top: 1px solid var(--tp-border); background: none; color: var(--tp-muted); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+	.tp-new-login:hover { color: var(--tp-foreground); }
 	.tp-hint { padding: 8px 12px; color: var(--tp-muted); font-size: 12px; }
 	@keyframes tp-spin { to { transform: rotate(360deg); } }
 	.tp-avatar-suggest svg { width: 20px; height: 20px; }
@@ -334,18 +335,14 @@ function suggestRow(password: string): string {
 	`;
 }
 
-/** Twin of content/html/dropdown-new-login.ts. Both must change together; see template-parity. */
+/** Twin of content/html/dropdown-new-login.ts. Both must change together; see template-parity.
+ * A small link, not a row: clicked, never reached by the arrow keys, so Enter never opens a window. */
 function newLoginRow(): string {
 	return html`
-		<div class="tp-item tp-new-login" data-tp-new-login="1" role="option">
-			<div class="tp-avatar tp-avatar-suggest">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
-			</div>
-			<div class="tp-text">
-				<span class="tp-name">${t("newLoginTitle")}</span>
-				<span class="tp-user">${t("newLoginUse")}</span>
-			</div>
-		</div>
+		<button type="button" class="tp-new-login" data-tp-new-login="1">
+			<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+			${t("newLoginTitle")}
+		</button>
 	`;
 }
 
@@ -440,7 +437,6 @@ function activate(i: number): void {
 	if (row.kind === "match") post({ type: "UI_PICK", entryId: row.id, otpOnly });
 	else if (row.kind === "suggest") post({ type: "UI_USE_SUGGESTED" });
 	else if (row.kind === "alias") post({ type: "UI_USE_ALIAS" });
-	else if (row.kind === "newLogin") post({ type: "UI_NEW_LOGIN" });
 	else post({ type: "UI_POPOUT" });
 }
 
@@ -531,10 +527,7 @@ function handleInbound(msg: Inbound | undefined): void {
 				rows.push({ kind: "match", id: m.id });
 				body.push(matchRow(m, m.id === msg.carriedId));
 			}
-			if (msg.newLogin) {
-				rows.push({ kind: "newLogin" });
-				body.push(newLoginRow());
-			}
+			if (msg.newLogin) body.push(newLoginRow());
 			render(body.join(""));
 			settledAt = performance.now();
 			post({ type: "UI_HIGHLIGHT", active: false });

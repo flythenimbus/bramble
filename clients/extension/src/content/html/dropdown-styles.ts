@@ -126,6 +126,24 @@ export const dropdownStyles = html`
 			.tp-item:hover .tp-launch {
 				color: var(--tp-foreground);
 			}
+			.tp-new-login {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				width: 100%;
+				padding: 6px 12px;
+				border: 0;
+				border-top: 1px solid var(--tp-border);
+				background: none;
+				color: var(--tp-muted);
+				font: inherit;
+				font-size: 12px;
+				text-align: left;
+				cursor: pointer;
+			}
+			.tp-new-login:hover {
+				color: var(--tp-foreground);
+			}
 			.tp-avatar-suggest {
 				background: var(--tp-primary);
 				color: var(--tp-on-primary);

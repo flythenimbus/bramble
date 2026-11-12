@@ -553,8 +553,7 @@ function flushPendingRender(): void {
 			? 1
 			: render.matches.length +
 				(render.suggest ? 1 : 0) +
-				(render.alias && render.alias.state !== "busy" ? 1 : 0) +
-				(render.newLogin ? 1 : 0);
+				(render.alias && render.alias.state !== "busy" ? 1 : 0);
 	if (render.kind === "matches") {
 		postToUi({
 			type: "RENDER_MATCHES",

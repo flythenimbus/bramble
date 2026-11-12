@@ -830,6 +830,17 @@ describe("content: the new-login row", () => {
 		});
 		expect(removePicker).toHaveBeenCalled();
 	});
+	it("is only on the username field", () => {
+		const pass = document.getElementById("pass") as HTMLInputElement;
+		pass.focus();
+		send({ type: "VAULT_LOCK_STATE", payload: { locked: false } });
+		send({
+			type: "AUTOFILL_MATCHES",
+			payload: result({ logins: [{ id: "1", name: "Example", secondary: "user@example.com" }] }),
+		});
+		expect(showMatches.mock.calls.at(-1)?.[1]).toBe(pass);
+		expect(showMatches.mock.calls.at(-1)?.[2]).toBeUndefined();
+	});
 });
 
 describe("content: username filter on login picker", () => {

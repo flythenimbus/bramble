@@ -628,8 +628,12 @@ function showLoginPicker(field: HTMLInputElement, logins: MatchSummary[]): void 
 		removePicker();
 		return;
 	}
-	// Under the site's logins, a way to save another one (#213).
-	showMatchesFor(visible, field, { newLogin: true });
+	// Under the site's logins, a way to save another one (#213), where accounts are chosen.
+	showMatchesFor(
+		visible,
+		field,
+		field === getPageFields().login.username ? { newLogin: true } : undefined,
+	);
 }
 
 /**

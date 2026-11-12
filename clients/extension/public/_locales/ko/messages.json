@@ -147,10 +147,6 @@
 		"message": "새 로그인",
 		"description": "Last row of the autofill dropdown under a site's saved logins. Opens Bramble's form to save another login for this site."
 	},
-	"newLoginUse": {
-		"message": "이 사이트에 다른 로그인 저장",
-		"description": "Second line of the New login row in the autofill dropdown."
-	},
 	"suggestPasswordUse": {
 		"message": "제안된 비밀번호 사용",
 		"description": "Sub-text under the generated password in the autofill dropdown; the row fills a strong password on signup forms."

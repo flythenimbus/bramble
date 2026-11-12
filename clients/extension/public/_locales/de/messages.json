@@ -147,10 +147,6 @@
 		"message": "Neues Login erstellen",
 		"description": "Last row of the autofill dropdown under a site's saved logins. Opens Bramble's form to save another login for this site."
 	},
-	"newLoginUse": {
-		"message": "Weiteres Login für diese Website speichern",
-		"description": "Second line of the New login row in the autofill dropdown."
-	},
 	"suggestPasswordUse": {
 		"message": "Vorgeschlagenes Passwort verwenden",
 		"description": "Sub-text under the generated password in the autofill dropdown; the row fills a strong password on signup forms."

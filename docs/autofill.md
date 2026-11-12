@@ -272,8 +272,10 @@ any pick.
 
 ### The new-login row
 
-A login field's matches end with **New login** (#213), so a site that already has logins
-can get another without leaving the page for the popup. It fills nothing: the row sends
+A username field's matches end with a small **New login** link (#213), so a site that already
+has logins can get another without leaving the page for the popup. Only on the username field,
+where accounts are chosen, and only on a click: the arrow keys skip it, so Enter never opens a
+window. It fills nothing: the link sends
 `POPOUT_OPEN` with `reason: "new-login"`, and the background opens the create form at
 `/vault/new/login` itself. A page names a reason, never a route. The form reads the site
 from the tab behind the pop-out (`getCurrentTabOrigin`) and names the login after its host.
