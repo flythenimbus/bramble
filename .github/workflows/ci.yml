@@ -406,18 +406,25 @@ jobs:
       # The .deb carries the APT keyring, which is how a new signing key reaches installed machines
       # before it ever signs anything (docs/apt-releases.md). A wrong relative path in
       # bundle.linux.deb.files would leave it out, and nothing would notice until a rotation
-      # stranded every user, so the bytes are compared against the committed file.
-      - name: Assert the .deb ships the APT keyring
+      # stranded every user, so the bytes are compared against the committed file. Its postinst
+      # puts it where Signed-By looks, and remove must leave it there, or `apt update` breaks.
+      - name: Assert the .deb installs the APT keyring and remove keeps it
         run: |
           set -euo pipefail
           deb="$(echo clients/desktop/src-tauri/target/release/bundle/deb/*.deb)"
           [ -f "$deb" ] || { echo "::error::no .deb at $deb"; exit 1; }
+          committed=clients/desktop/apt/bramble-keyring.asc
+          keyring=/usr/share/keyrings/bramble-keyring.asc
           out="$(mktemp -d)"
           dpkg-deb -x "$deb" "$out"
-          shipped="$out/usr/share/keyrings/bramble-keyring.asc"
-          [ -f "$shipped" ] || { echo "::error::$deb does not ship /usr/share/keyrings/bramble-keyring.asc"; exit 1; }
-          cmp "$shipped" clients/desktop/apt/bramble-keyring.asc
-          echo "ok: the .deb ships the committed keyring"
+          cmp "$out/usr/share/bramble/bramble-keyring.asc" "$committed"
+          sudo apt-get install -y --no-install-recommends "./$deb"
+          cmp "$keyring" "$committed"
+          sudo apt-get remove -y bramble
+          [ -f "$keyring" ] || { echo "::error::apt remove deleted $keyring"; exit 1; }
+          sudo apt-get purge -y bramble
+          [ ! -e "$keyring" ] || { echo "::error::apt purge left $keyring"; exit 1; }
+          echo "ok: install writes the committed keyring, remove keeps it, purge deletes it"
 
   desktop-windows:
     name: Desktop (Windows installer)

@@ -20,9 +20,9 @@ system.
 Those same three commands are what the download box on the front page hands a Linux visitor, from
 `website/src/downloads.ts`. Change them here and change them there.
 
-The first command only matters for the first install: the `bramble` package ships that same
-keyring and owns the file afterwards, which is what makes a signing key replaceable at all. See
-[The keyring, and how a key is rotated](#the-keyring-and-how-a-key-is-rotated).
+The first command only matters for the first install: the `bramble` package ships that same keyring
+and rewrites the file on every install and upgrade, which is what makes a signing key replaceable at
+all. See [The keyring, and how a key is rotated](#the-keyring-and-how-a-key-is-rotated).
 
 ## Why a repository rather than a `.deb` on the release page
 
@@ -119,11 +119,12 @@ generated on-card with no off-card backup, `ykman openpgp keys set-touch sig on`
 
 ### The keyring, and how a key is rotated
 
-`clients/desktop/apt/bramble-keyring.asc` is the committed public keyring. It is served
-as `keys.asc` for new installs **and shipped inside the `.deb`** at the same path the install
-snippet writes (`bundle.linux.deb.files` in `tauri.conf.json`), so it reaches existing users
-through a normal package upgrade rather than only at install time. dpkg takes over the file the
-snippet left there and owns it from then on.
+`clients/desktop/apt/bramble-keyring.asc` is the committed public keyring. It is served as
+`keys.asc` for new installs **and shipped inside the `.deb`** at `/usr/share/bramble/`
+(`bundle.linux.deb.files` in `tauri.conf.json`), so it reaches existing users through a normal
+package upgrade rather than only at install time. The package's postinst
+(`clients/desktop/apt/postinst`) copies it over the file the snippet wrote, on every install and
+upgrade.
 
 That is the only mechanism this repository has for replacing a key, and the reason it exists is
 that apt trusts the signature on the index and nothing else. Note what it does not do: it only
@@ -152,9 +153,15 @@ signatures keep verifying.
 asserts the `.deb` ships exactly these bytes, because a keyring that quietly stops being delivered
 is invisible right up until the rotation that needed it.
 
-One consequence worth knowing: `apt remove bramble` takes the keyring with it, since the package
-owns the file. `apt update` then reports the repository as unsigned until the user also removes
-`/etc/apt/sources.list.d/bramble.sources`.
+The package copies the keyring rather than shipping it at `/usr/share/keyrings/`, because dpkg
+deletes every file a package owns on `apt remove`, while `bramble.sources` is the user's and stays.
+Up to 0.17.0 the package did own it, so `apt remove bramble` left a source with no keyring and every
+`apt update` after it failed with "The repository ... is not signed" (some apt versions add `GPG:
+add_keyblock_resource 33587281`, gpg's code for "no such file", others `NO_PUBKEY`). Now remove
+keeps both, so `apt install bramble` works again, and `apt purge bramble` deletes both
+(`clients/desktop/apt/postrm`), keeping the keyring only if some other source still names it. CI
+installs, removes and purges the `.deb` to hold all of that. A machine already in that state needs
+the first install command again.
 
 ### Tools
 

@@ -1,0 +1,15 @@
+#!/bin/sh
+# Purge takes the repository and its keyring together: a source without its keyring breaks
+# `apt update`. A keyring something else still names is left alone.
+set -e
+
+if [ "$1" = purge ]; then
+	sources=/etc/apt/sources.list.d/bramble.sources
+	keyring=/usr/share/keyrings/bramble-keyring.asc
+	if [ -f "$sources" ] && grep -q '^URIs: https://apt.bramble.sh$' "$sources"; then
+		rm -f "$sources"
+	fi
+	if ! grep -rqs "$keyring" /etc/apt/sources.list /etc/apt/sources.list.d; then
+		rm -f "$keyring"
+	fi
+fi

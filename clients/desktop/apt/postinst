@@ -1,0 +1,8 @@
+#!/bin/sh
+# Copied rather than shipped at this path, so `apt remove` keeps it alongside bramble.sources.
+# See docs/apt-releases.md.
+set -e
+
+if [ "$1" = configure ]; then
+	install -D -m 0644 /usr/share/bramble/bramble-keyring.asc /usr/share/keyrings/bramble-keyring.asc
+fi

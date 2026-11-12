@@ -67,8 +67,10 @@
 				"section": "utils",
 				"priority": "optional",
 				"files": {
-					"/usr/share/keyrings/bramble-keyring.asc": "../apt/bramble-keyring.asc"
-				}
+					"/usr/share/bramble/bramble-keyring.asc": "../apt/bramble-keyring.asc"
+				},
+				"postInstallScript": "../apt/postinst",
+				"postRemoveScript": "../apt/postrm"
 			}
 		},
 		"windows": {
