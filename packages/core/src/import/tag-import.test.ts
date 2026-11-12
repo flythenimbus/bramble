@@ -14,8 +14,8 @@ describe("tagImport (#209)", () => {
 	it("tags every imported item", () => {
 		const out = tagImport([login("a"), login("b")], [], day);
 		expect(out.items.map((i) => i.tags)).toEqual([
-			["imported-2026-11-09"],
-			["imported-2026-11-09"],
+			["imported-2026-11-09-0000"],
+			["imported-2026-11-09-0000"],
 		]);
 	});
 

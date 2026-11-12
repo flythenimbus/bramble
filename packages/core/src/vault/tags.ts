@@ -58,10 +58,12 @@ export function normalizeTags(raw: unknown): string[] | undefined {
 	return out.length > 0 ? out : undefined;
 }
 
-/** The tag an import adds to what it creates, so a merge's new entries can be found (#209). */
+/** The tag an import adds to what it creates, so a merge's new entries can be found (#209). The time
+ * tells two imports on one day apart; `#imported-<day>` still finds both, since tags match by prefix. */
 export function importTag(now: Date): string {
 	const pad = (n: number) => String(n).padStart(2, "0");
-	return `imported-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	return `imported-${day}-${pad(now.getHours())}${pad(now.getMinutes())}`;
 }
 
 /** Each item with the import tag appended; an entry already at the tag cap keeps its own. */

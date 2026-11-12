@@ -92,14 +92,23 @@ describe("allTags", () => {
 describe("import tag (#209)", () => {
 	const day = new Date(2026, 10, 9, 23, 30);
 
-	it("names the local day of the import", () => {
-		expect(importTag(day)).toBe("imported-2026-11-09");
+	it("names the local day and time of the import", () => {
+		expect(importTag(day)).toBe("imported-2026-11-09-2330");
+		expect(importTag(new Date(2026, 0, 2, 3, 4))).toBe("imported-2026-01-02-0304");
+	});
+
+	// Two imports on one day get their own tags, and `#imported-2026-11-09` still finds both:
+	// the tag filter matches the start of a tag.
+	it("tells two imports on one day apart, under one day prefix", () => {
+		const later = importTag(new Date(2026, 10, 9, 23, 45));
+		expect(later).not.toBe(importTag(day));
+		expect(later.startsWith("imported-2026-11-09")).toBe(true);
 	});
 
 	it("adds it after an entry's own tags", () => {
 		const [a, b] = withImportTag([entry("a", ["work"]), entry("b")], day);
-		expect(a?.tags).toEqual(["work", "imported-2026-11-09"]);
-		expect(b?.tags).toEqual(["imported-2026-11-09"]);
+		expect(a?.tags).toEqual(["work", "imported-2026-11-09-2330"]);
+		expect(b?.tags).toEqual(["imported-2026-11-09-2330"]);
 	});
 
 	it("never pushes out a tag the entry already had", () => {
