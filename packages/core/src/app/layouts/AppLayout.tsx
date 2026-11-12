@@ -88,8 +88,8 @@ export function AppLayout() {
 								variant="ghost"
 								size="icon"
 								onClick={() => navigate({ to: "/generator" })}
-								aria-label={t`Password generator`}
-								title={t`Password generator`}
+								aria-label={t`Generator`}
+								title={t`Generator`}
 							>
 								<Dices className="w-4 h-4" />
 							</Button>

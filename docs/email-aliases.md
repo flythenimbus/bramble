@@ -27,6 +27,12 @@ recipients already live. A password manager that half-mirrors an alias
 inventory is worse than one that does not mirror it at all, because the half
 that is stale is indistinguishable from the half that is not.
 
+**Three places create one**, all by an explicit click: the @ button on a login's username
+field, the alias row in the page dropdown on a signup form's email box, and the generator
+screen's **Email alias** section (#120), for an address needed before there is a login. The
+last takes an optional website, for the description, and keeps no record of what it made:
+the address is shown and copied, and the provider is where it lives.
+
 ## The providers
 
 Each is a single authenticated POST once discovery is done. What differs is the

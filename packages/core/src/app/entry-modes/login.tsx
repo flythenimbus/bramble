@@ -22,7 +22,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import type { SubdomainMatchMode } from "../../adapters/autofill";
-import { AliasError } from "../../aliases";
+import { aliasErrorMessage, aliasSiteOf } from "../../aliases";
 import { usePlatform } from "../../context/PlatformContext";
 import { useAliasProvider } from "../../hooks/useAliasProvider";
 import { usePrefs } from "../../hooks/usePrefs";
@@ -143,32 +143,13 @@ function LoginFields({ initialBreach }: EntryFieldsProps) {
 			// The site the alias is for, so it is identifiable in the provider's dashboard later and,
 			// on SimpleLogin, legible in the address itself. The first URL is the entry's own idea of
 			// where it is used; a name that is not a URL tells us nothing a provider can use.
-			const first = getValues("urls")?.[0]?.value?.trim();
-			let site: string | undefined;
-			try {
-				site = first
-					? new URL(/^https?:/i.test(first) ? first : `https://${first}`).hostname
-					: undefined;
-			} catch {
-				site = undefined;
-			}
-			setValue("username", await aliases.generate(site), {
+			setValue("username", await aliases.generate(aliasSiteOf(getValues("urls")?.[0]?.value)), {
 				shouldDirty: true,
 				shouldValidate: true,
 			});
 			setAliasState({ kind: "idle" });
 		} catch (e) {
-			setAliasState({
-				kind: "error",
-				// The provider's own words, when it gave any, are what say whether this is a bad key,
-				// a spent allowance or a plan that does not include aliases. Rendered as plain text.
-				message:
-					e instanceof AliasError && e.providerMessage
-						? `${e.message} ${e.providerMessage}`
-						: e instanceof Error
-							? e.message
-							: String(e),
-			});
+			setAliasState({ kind: "error", message: aliasErrorMessage(e) });
 		}
 	};
 

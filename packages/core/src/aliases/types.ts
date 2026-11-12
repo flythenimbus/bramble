@@ -132,3 +132,13 @@ export interface AliasClient {
 	/** The domains this account may create under, including any the user brought themselves. */
 	domains?(): Promise<AliasDomains>;
 }
+
+/**
+ * What to show when creating an alias failed. The provider's own words, when it gave any, are what
+ * say whether this is a bad key, a spent allowance or a plan that does not include aliases. Render
+ * it as plain text: part of it is the provider's.
+ */
+export function aliasErrorMessage(e: unknown): string {
+	if (e instanceof AliasError && e.providerMessage) return `${e.message} ${e.providerMessage}`;
+	return e instanceof Error ? e.message : String(e);
+}

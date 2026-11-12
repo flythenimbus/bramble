@@ -52,6 +52,7 @@ export {
 	type SimpleLoginConfig,
 	type SimpleLoginMode,
 } from "./simplelogin";
+export { aliasSiteOf } from "./site";
 export {
 	type AliasAccount,
 	type AliasClient,
@@ -62,6 +63,7 @@ export {
 	type AliasProviderId,
 	type AliasRequest,
 	type AliasResult,
+	aliasErrorMessage,
 } from "./types";
 
 /**
