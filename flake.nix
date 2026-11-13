@@ -1,5 +1,5 @@
-# A Nix package for the desktop app, so NixOS users can install Bramble without waiting on
-# nixpkgs.
+# A Nix package for the desktop app, so Linux and Apple Silicon users can install Bramble
+# without waiting on nixpkgs.
 #
 # Deliberately a flake in this repository rather than a nixpkgs submission, at least first:
 # nixpkgs is not a channel you publish to, it is one you submit to, and a fix would then reach
@@ -22,11 +22,12 @@
   outputs =
     { self, nixpkgs }:
     let
-      # Linux only: the desktop app is a Tauri/webkit2gtk binary, and the macOS build is signed
-      # and notarised through a completely different pipeline (docs/release-signing.md).
+      # Linux uses WebKitGTK; Apple Silicon uses WKWebView in a native .app bundle.
+      # Signed and notarised macOS releases remain a separate distribution channel.
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "aarch64-darwin"
       ];
       forEachSystem = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
@@ -46,6 +47,8 @@
 
       # `nix flake check` builds the package, which is the only check worth having here: the
       # failure this guards against is the derivation drifting away from the repository.
-      checks = forEachSystem (pkgs: { bramble = self.packages.${pkgs.system}.bramble; });
+      checks = forEachSystem (pkgs: {
+        bramble = self.packages.${pkgs.stdenv.hostPlatform.system}.bramble;
+      });
     };
 }
