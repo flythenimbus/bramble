@@ -56,10 +56,21 @@ class TrustedBrowsersTest {
         val json = TrustedBrowsers.allowlistJson()
         assertTrue(json.startsWith("{\"apps\":["))
         assertTrue(json.contains("\"cert_fingerprint_sha256\""))
-        for ((pkg, fingerprints) in TrustedBrowsers.BROWSERS) {
+        for ((pkg, fingerprints) in TrustedBrowsers.BROWSERS + TrustedBrowsers.PASSKEY_RELAYS) {
             assertTrue("missing $pkg", json.contains("\"package_name\":\"$pkg\""))
             for (fp in fingerprints) assertTrue("missing fingerprint $fp for $pkg", json.contains(fp))
         }
+    }
+
+    @Test
+    fun playServicesVouchesForPasskeyOriginsButNeverForAutofill() {
+        // A passkey QR code scanned from another device reaches us through Play Services; without
+        // it, create fails and sign-in finds nothing. It is no browser, so autofill must not
+        // believe its webDomain.
+        val gms = "com.google.android.gms"
+        assertEquals(4, TrustedBrowsers.PASSKEY_RELAYS[gms]?.size)
+        assertTrue(TrustedBrowsers.allowlistJson().contains("\"package_name\":\"$gms\""))
+        assertFalse(TrustedBrowsers.BROWSERS.containsKey(gms))
     }
 
     @Test
@@ -85,7 +96,7 @@ class TrustedBrowsersTest {
         // Catch a typo'd fingerprint (wrong length / bad chars) that would silently break a browser.
         val fingerprint = Regex("^([0-9A-F]{2}:){31}[0-9A-F]{2}$")
         assertTrue("the allow-list must not be empty", TrustedBrowsers.BROWSERS.isNotEmpty())
-        for ((pkg, fingerprints) in TrustedBrowsers.BROWSERS) {
+        for ((pkg, fingerprints) in TrustedBrowsers.BROWSERS + TrustedBrowsers.PASSKEY_RELAYS) {
             assertFalse("$pkg has no fingerprints", fingerprints.isEmpty())
             for (fp in fingerprints) {
                 assertTrue("$pkg fingerprint malformed: $fp", fingerprint.matches(fp))

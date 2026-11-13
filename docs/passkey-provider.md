@@ -195,6 +195,10 @@ work below.
 `TrustedBrowsers.allowlistJson()`, built from the same `BROWSERS` map the autofill service uses to
 decide whether to honour a caller-supplied `webDomain`, so there is one source of truth for "is this
 really that browser" (there is no `res/raw/privileged_browsers.json`; an earlier draft planned one).
+`PASSKEY_RELAYS` adds Google Play Services for the passkey origin only: a passkey QR code scanned
+from another device (hybrid) reaches the provider through it, with the site's origin and the other
+device's clientDataHash. Without it a create fails and a sign-in lists nothing. It never joins
+`BROWSERS`, so autofill keeps ignoring its `webDomain`.
 
 Two different things stop a browser passkey working, at two different stages, and they look nothing
 alike. **Diagnose in this order** - most of a day went into rediscovering that the second one is

@@ -77,6 +77,19 @@ object TrustedBrowsers {
             setOf("06:66:53:58:EF:D8:BA:05:BE:23:6A:47:A1:2C:B0:95:8D:7D:75:DD:93:9D:77:C2:B3:1F:53:98:53:7E:BD:C5"),
     )
 
+    // Privileged callers that are not browsers, trusted for a passkey request's origin only, never
+    // for an autofill webDomain. Google Play Services relays the request when a passkey QR code on
+    // another device is scanned (hybrid). Release keys from the GPM privileged-apps list.
+    val PASSKEY_RELAYS: Map<String, Set<String>> = mapOf(
+        "com.google.android.gms" to
+            setOf(
+                "7C:E8:3C:1B:71:F3:D5:72:FE:D0:4C:8D:40:C5:CB:10:FF:75:E6:D8:7D:9D:F6:FB:D5:3F:04:68:C2:90:50:53",
+                "D2:2C:C5:00:29:9F:B2:28:73:A0:1A:01:0D:E1:C8:2F:BE:4D:06:11:19:B9:48:14:DD:30:1D:AB:50:CB:76:78",
+                "F0:FD:6C:5B:41:0F:25:CB:25:C3:B5:33:46:C8:97:2F:AE:30:F8:EE:74:11:DF:91:04:80:AD:6B:2D:60:DB:83",
+                "19:75:B2:F1:71:77:BC:89:A5:DF:F3:1F:9E:64:A6:CA:E2:81:A5:3D:C1:D1:D5:9B:1D:14:7F:E1:C8:2A:FA:00",
+            ),
+    )
+
     /** A browser of any kind (allow-listed, or a caller that can VIEW arbitrary web
      * pages, like ROLE_BROWSER's VIEW + BROWSABLE check): a package association would make
      * every page in such a caller match. Errs toward "browser", which only costs the prompt. */
@@ -104,12 +117,12 @@ object TrustedBrowsers {
     }
 
     /** The allow-list as the JSON string `CallingAppInfo.getOrigin()` expects (Google's GPM
-     * privileged-apps format), built from BROWSERS so there is a single source of truth. The
-     * package names and fingerprints contain no JSON-special characters, so plain concatenation is
-     * safe. Used by the passkey provider to decide whether to trust a caller-supplied origin. */
+     * privileged-apps format), built from BROWSERS and PASSKEY_RELAYS. The package names and
+     * fingerprints contain no JSON-special characters, so plain concatenation is safe. Used by the
+     * passkey provider to decide whether to trust a caller-supplied origin. */
     fun allowlistJson(): String {
         val apps =
-            BROWSERS.entries.joinToString(",") { (pkg, fingerprints) ->
+            (BROWSERS + PASSKEY_RELAYS).entries.joinToString(",") { (pkg, fingerprints) ->
                 val signatures =
                     fingerprints.joinToString(",") {
                         """{"build":"release","cert_fingerprint_sha256":"$it"}"""
