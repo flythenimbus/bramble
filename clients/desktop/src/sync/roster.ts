@@ -365,14 +365,19 @@ async function startRoster(): Promise<void> {
 	}
 }
 
+/** A start in progress. `rosterSessions` is only filled at the end of one, so without this two
+ * callers in quick succession each started a full set, and the first set ran on unowned. */
+let starting: Promise<void> | null = null;
+
 /** Start ongoing sync if it is not running and this vault is in a group. */
-export async function maybeStartRosterSync(): Promise<void> {
-	if (rosterSessions.length > 0) return;
-	try {
-		await startRoster();
-	} catch (e) {
-		report(`sync error: ${(e as Error).message}`);
-	}
+export function maybeStartRosterSync(): Promise<void> {
+	if (rosterSessions.length > 0) return Promise.resolve();
+	starting ??= startRoster()
+		.catch((e) => report(`sync error: ${(e as Error).message}`))
+		.finally(() => {
+			starting = null;
+		});
+	return starting;
 }
 
 export function stopRosterSync(): void {
@@ -409,13 +414,24 @@ export async function retargetActiveVault(next: string | null): Promise<void> {
  * at boot; returns an unsubscribe.
  */
 export function initRosterSync(): () => void {
-	return onVaultStateChange((locked) => {
+	const unlocked = () => {
+		void publishSyncIdentity();
+		void maybeStartRosterSync();
+	};
+	const off = onVaultStateChange((locked) => {
 		if (locked) stopRosterSync();
-		else {
-			void publishSyncIdentity();
-			void maybeStartRosterSync();
-		}
+		else unlocked();
 	});
+	// A window that opens onto a vault already unlocked sees no unlock event: the key lives in the
+	// Rust process, which outlives the window. On Wayland every reopen is this case, because
+	// closing destroys the window (lifetime.rs).
+	void desktopCrypto
+		.isLocked()
+		.then((locked) => {
+			if (!locked) unlocked();
+		})
+		.catch(() => {});
+	return off;
 }
 
 /**

@@ -29,6 +29,8 @@ const h = vi.hoisted(() => ({
 	/** Links the app was asked to end, and whether it should refuse the next one. */
 	ended: [] as { linkKey: string; vaultId: string }[],
 	endFails: false,
+	/** What the Rust side answers to "is the vault locked?". */
+	locked: true,
 }));
 
 vi.mock("./link-peers", async (importOriginal) => ({
@@ -120,6 +122,7 @@ vi.mock("../adapters/crypto", () => ({
 	desktopCrypto: {
 		encryptWithVek: async () => ({ iv: "AAAA", ciphertext: "BBBB" }),
 		decryptWithVek: async () => JSON.stringify({ entries: [], tombstones: [] }),
+		isLocked: async () => h.locked,
 	},
 }));
 
@@ -195,6 +198,7 @@ beforeEach(() => {
 	h.applyRemote = async () => {};
 	h.ended.length = 0;
 	h.endFails = false;
+	h.locked = true;
 	vi.stubGlobal("crypto", { randomUUID: () => "id", getRandomValues: (a: Uint8Array) => a });
 });
 
@@ -403,6 +407,49 @@ describe("lock state", () => {
 		h.rosterOpts = null;
 		h.stateListener?.(false);
 		await vi.waitFor(() => expect(h.rosterOpts).not.toBeNull());
+	});
+});
+
+describe("a window that opens onto an unlocked vault", () => {
+	// The VEK lives in the Rust process, which outlives the window. On Wayland closing the window
+	// destroys it and the tray builds a new one (lifetime.rs), so the new window finds the vault
+	// already unlocked and never sees an unlock event: sync stayed off until a lock and unlock (#228).
+	it("starts sync without waiting for an unlock", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		h.locked = false;
+		const mod = await loadRoster();
+		mod.initRosterSync();
+
+		await vi.waitFor(() => expect(h.rosterOpts).not.toBeNull());
+	});
+
+	it("starts nothing while the vault is locked", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadRoster();
+		mod.initRosterSync();
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(h.rosterOpts).toBeNull();
+	});
+
+	it("starts one set of sessions when an unlock lands during that check", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		h.locked = false;
+		const mod = await loadRoster();
+		mod.initRosterSync();
+		h.stateListener?.(false);
+		await vi.waitFor(() => expect(h.blobStarts.length).toBeGreaterThan(0));
+		await new Promise((r) => setTimeout(r, 50));
+
+		// One relay session and one link session, not two of each with the first pair orphaned.
+		expect(h.starts).toHaveLength(2);
+		expect(h.blobStarts).toHaveLength(1);
 	});
 });
 
