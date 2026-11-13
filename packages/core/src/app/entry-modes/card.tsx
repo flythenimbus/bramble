@@ -338,6 +338,6 @@ export const cardMode: EntryMode = {
 	searchText: (entry) => {
 		const card = entry as CardEntryData;
 		const brand = card.brand ?? cardBrand(card.number) ?? "";
-		return `${card.name} ${card.cardholderName} ${brand} ${lastFour(card.number)}`.toLowerCase();
+		return `${card.cardholderName} ${brand} ${lastFour(card.number)}`.toLowerCase();
 	},
 };

@@ -73,8 +73,6 @@ export const noteMode: EntryMode = {
 		};
 	},
 
-	searchText: (entry) => {
-		const note = entry as NoteEntryData;
-		return `${note.name} ${note.notes ?? ""}`.toLowerCase();
-	},
+	// A note is its name and text, which every type's search covers.
+	searchText: () => "",
 };

@@ -22,6 +22,13 @@ export function toListItem(
 ): VaultListItem {
 	const mode = getEntryMode(entry.type);
 	const view = mode.row(entry);
+	// Ranked in this order while searching (vault-search.ts). Tags join the free text as well as
+	// driving the `#tag` filter, so a plain "work" finds the entries tagged work.
+	const searchTiers = [
+		entry.name,
+		`${mode.searchText(entry)} ${(entry.tags ?? []).join(" ")}`,
+		`${entry.notes ?? ""} ${customFieldsSearchText(entry.customFields)}`,
+	].map((tier) => tier.toLowerCase());
 	return {
 		...view,
 		id: entry.id,
@@ -32,10 +39,8 @@ export function toListItem(
 		// Custom fields are shared across all modes, so they fold into copy actions and search
 		// text here rather than in each descriptor.
 		copyItems: [...view.copyItems, ...customFieldsCopyItems(entry.customFields)],
-		// Tags join the free-text haystack as well as driving the `#tag` filter, so a plain
-		// "work" finds the entries tagged work without the user having to know the syntax.
-		searchText:
-			`${mode.searchText(entry)} ${customFieldsSearchText(entry.customFields)} ${(entry.tags ?? []).join(" ")}`.toLowerCase(),
+		searchText: searchTiers.join(" "),
+		searchTiers,
 		createdAt: entry.createdAt,
 		updatedAt: entry.updatedAt,
 		lastUsedAt: entry.lastUsedAt,

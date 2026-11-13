@@ -249,6 +249,6 @@ export const sshKeyMode: EntryMode = {
 
 	searchText: (entry) => {
 		const key = entry as SshKeyEntry;
-		return `${key.name} ${key.keyType ?? ""} ${key.publicKey}`.toLowerCase();
+		return `${key.keyType ?? ""} ${key.publicKey}`.toLowerCase();
 	},
 };

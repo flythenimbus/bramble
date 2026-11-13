@@ -73,7 +73,8 @@ export interface EntryMode {
 	// Optional warning banner above the detail card.
 	detailAlert?(entry: Entry): { title: string; body: string } | null;
 
-	// Vault-list row projection + the text the search box matches against.
+	// Vault-list row projection + what the search box matches besides the name and notes, which
+	// every type has (list-item.ts): username, websites, card or key details.
 	row(entry: Entry): EntryRowView;
 	searchText(entry: Entry): string;
 }

@@ -47,6 +47,8 @@ export interface VaultListItem {
 	launchUrl?: string;
 	// Lowercased text the search box matches against.
 	searchText: string;
+	// The same text by rank: name, then username and the like, then notes and custom fields.
+	searchTiers?: readonly string[];
 	createdAt?: number;
 	updatedAt?: number;
 	lastUsedAt?: number;

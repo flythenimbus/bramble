@@ -63,8 +63,10 @@ export interface SearchableEntry {
 	id: string;
 	name: string;
 	type: EntryType;
-	/** Pre-lowercased haystack (name, username, urls, custom fields, ...). */
+	/** Pre-lowercased haystack (name, username, urls, notes, custom fields, ...). */
 	searchText: string;
+	/** `searchText` split by rank, best first: name, then username and the like, then notes. */
+	searchTiers?: readonly string[];
 	createdAt?: number;
 	updatedAt?: number;
 	lastUsedAt?: number;
@@ -199,7 +201,20 @@ export function filterAndSortEntries<T extends SearchableEntry>(
 		return text.every((tok) => item.searchText.includes(tok));
 	});
 	const cmp = COMPARATORS[search.sort];
-	if (!matchedIds?.size) return filtered.sort(cmp);
-	const rank = (i: SearchableEntry) => (matchedIds.has(i.id) ? 0 : 1);
-	return filtered.sort((a, b) => rank(a) - rank(b) || cmp(a, b));
+	const tiers = new Map(filtered.map((item) => [item.id, matchTier(item, text)]));
+	const tier = (i: SearchableEntry) => tiers.get(i.id) ?? 0;
+	const matched = (i: SearchableEntry) => (matchedIds?.has(i.id) ? 0 : 1);
+	return filtered.sort((a, b) => tier(a) - tier(b) || matched(a) - matched(b) || cmp(a, b));
+}
+
+/** How well an item matches, 0 best: the weakest tier any word is found in. 0 with no words. */
+function matchTier(item: SearchableEntry, words: string[]): number {
+	const tiers = item.searchTiers;
+	if (!tiers || words.length === 0) return 0;
+	return Math.max(
+		...words.map((word) => {
+			const at = tiers.findIndex((t) => t.includes(word));
+			return at === -1 ? tiers.length : at;
+		}),
+	);
 }

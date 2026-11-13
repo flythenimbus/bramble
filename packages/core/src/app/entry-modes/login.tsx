@@ -927,6 +927,6 @@ export const loginMode: EntryMode = {
 	searchText: (entry) => {
 		const login = entry as LoginEntry;
 		// Include every URL so search hits on any covered site, not just the first.
-		return `${login.name} ${login.username} ${login.urls.join(" ")}`.toLowerCase();
+		return `${login.username} ${login.urls.join(" ")}`.toLowerCase();
 	},
 };

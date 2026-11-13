@@ -90,6 +90,23 @@ describe("toListItem", () => {
 		const item = toListItem(login({ customFields: [{ key: "PIN", value: "1234" }] }), true);
 		expect(item.searchText).toContain("pin");
 	});
+
+	it("searches a login's notes, ranked after its name and username", () => {
+		const item = toListItem(
+			login({
+				name: "Bank",
+				username: "me@bank.com",
+				notes: "Branch 42",
+				customFields: [{ key: "PIN", value: "1234" }],
+			}),
+			true,
+		);
+		expect(item.searchText).toContain("branch 42");
+		expect(item.searchTiers?.[0]).toBe("bank");
+		expect(item.searchTiers?.[1]).toContain("me@bank.com");
+		expect(item.searchTiers?.[2]).toContain("branch 42");
+		expect(item.searchTiers?.[2]).toContain("pin");
+	});
 });
 
 const card = (over: Partial<Extract<Entry, { type: "card" }>> = {}): Entry => ({

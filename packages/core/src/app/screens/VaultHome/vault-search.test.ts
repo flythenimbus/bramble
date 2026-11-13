@@ -220,6 +220,31 @@ describe("filterAndSortEntries", () => {
 		).toEqual(["Gitea", "GitHub", "GitLab"]);
 	});
 
+	const tiered = (name: string, identity: string, notes: string) =>
+		item({
+			name,
+			searchText: `${name} ${identity} ${notes}`.toLowerCase(),
+			searchTiers: [name.toLowerCase(), identity, notes],
+		});
+
+	it("ranks a name match first, then username and the like, then notes", () => {
+		const items = [
+			tiered("Alpha", "", "acme vpn notes"),
+			tiered("Bravo", "ops@acme.io", ""),
+			tiered("Zulu Acme", "", ""),
+		];
+		const names = (q: string) => filterAndSortEntries(items, search({ q })).map((i) => i.name);
+		expect(names("acme")).toEqual(["Zulu Acme", "Bravo", "Alpha"]);
+		// No query, no ranking: the chosen sort alone.
+		expect(names("")).toEqual(["Alpha", "Bravo", "Zulu Acme"]);
+	});
+
+	it("ranks by the weakest place any word is found", () => {
+		const items = [tiered("Acme", "", "vpn"), tiered("Acme VPN", "", "")];
+		const result = filterAndSortEntries(items, search({ q: "acme vpn" }));
+		expect(result.map((i) => i.name)).toEqual(["Acme VPN", "Acme"]);
+	});
+
 	it("ignores an empty matchedIds set", () => {
 		const items = [item({ name: "B" }), item({ name: "A" })];
 		expect(
