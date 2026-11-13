@@ -400,15 +400,32 @@ pub fn install_all(root: &Path, proxy: &Path) -> Vec<&'static str> {
     installed
 }
 
-/// Whether Firefox is installed. Linux has two places to look: `~/.mozilla/firefox`, and
-/// `mozilla/firefox` under XDG_CONFIG_HOME for a profile Firefox created there.
+/// Firefox-family installs on Linux that read their host manifests from `~/.mozilla` (#218):
+/// Snap and Flatpak builds through the native messaging portal, which looks there on the host,
+/// and Zen and Floorp installed natively. Relative to the home directory.
+#[cfg(target_os = "linux")]
+const FIREFOX_FAMILY: &[&str] = &[
+    FIREFOX_PROFILES,
+    "snap/firefox/common/.mozilla/firefox",
+    ".var/app/org.mozilla.firefox",
+    ".var/app/app.zen_browser.zen",
+    ".var/app/one.ablaze.floorp",
+    ".var/app/io.gitlab.librewolf-community",
+    ".var/app/net.waterfox.waterfox",
+    ".zen",
+    ".floorp",
+];
+
+/// Whether Firefox is installed. On Linux that is any of `FIREFOX_FAMILY`, or `mozilla/firefox`
+/// under XDG_CONFIG_HOME for a profile Firefox created there.
 #[cfg(target_os = "macos")]
 fn firefox_present(home: &Path, _config: &Path) -> bool {
     home.join(FIREFOX_PROFILES).is_dir()
 }
 #[cfg(target_os = "linux")]
 fn firefox_present(home: &Path, config: &Path) -> bool {
-    home.join(FIREFOX_PROFILES).is_dir() || config.join("mozilla/firefox").is_dir()
+    FIREFOX_FAMILY.iter().any(|dir| home.join(dir).is_dir())
+        || config.join("mozilla/firefox").is_dir()
 }
 
 /// Install Firefox's manifest if Firefox is present, returning whether it was written.
@@ -1023,6 +1040,26 @@ mod tests {
             .path()
             .join("mozilla/native-messaging-hosts")
             .exists());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_flatpak_or_snap_firefox_or_a_fork_still_gets_the_dot_mozilla_manifest() {
+        for dir in [
+            "snap/firefox/common/.mozilla/firefox",
+            ".var/app/app.zen_browser.zen",
+            ".zen",
+        ] {
+            let home = root_with(&[dir]);
+            assert!(
+                install_firefox(home.path(), home.path(), Path::new("/tmp/bramble-proxy")),
+                "{dir}"
+            );
+            assert_eq!(
+                read_firefox_manifest(home.path())["path"],
+                "/tmp/bramble-proxy"
+            );
+        }
     }
 
     #[test]
