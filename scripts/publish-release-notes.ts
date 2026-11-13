@@ -518,6 +518,8 @@ async function publish(file: string): Promise<void> {
 	publishPost(email.post, email.subject);
 	await buttondown("/emails", {
 		method: "POST",
+		// Buttondown refuses an API key's first send without it.
+		headers: { "X-Buttondown-Live-Dangerously": "true" },
 		body: JSON.stringify({
 			subject: email.subject,
 			body: email.body,
