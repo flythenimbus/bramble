@@ -21,6 +21,8 @@ class AutofillLogin(
     val hostnames: List<String>,
     val apps: List<String> = emptyList(),
     val appCertHashes: Map<String, String> = emptyMap(),
+    /** "exact" or "subdomain" narrows which pages the login matches; null is the default. */
+    val subdomainMatch: String? = null,
 )
 
 // One stored passkey (provider role) extracted from a login entry's `passkeys[]`. All base64
@@ -129,6 +131,7 @@ object VaultReader {
                     hostnames = hostnamesOf(urls),
                     apps = appIdsOf(urls),
                     appCertHashes = appCertHashesOf(urls),
+                    subdomainMatch = data.optString("subdomainMatch", "").ifEmpty { null },
                 )
             )
         }
@@ -298,13 +301,23 @@ object VaultReader {
     }
 
     // A login matches the page if any of its hostnames equals a requested host or is a
-    // subdomain either way (login.github.com ~ github.com). Mirrors iOS matchesRequested.
+    // subdomain either way (login.github.com ~ github.com), unless the login narrows that
+    // (hostMatches). Mirrors iOS matchesRequested.
     fun matches(login: AutofillLogin, requestedHosts: List<String>): Boolean {
         if (requestedHosts.isEmpty()) return false
         val services = login.hostnames.map { normalizeHost(it) }.filter { it.isNotEmpty() }
         return services.any { s ->
-            requestedHosts.any { w -> s == w || s.endsWith(".$w") || w.endsWith(".$s") }
+            requestedHosts.any { w -> hostMatches(s, w, login.subdomainMatch) }
         }
+    }
+
+    // One saved host against one page host, both normalized, under the login's subdomain match
+    // setting: "exact" is that host only, "subdomain" adds the hosts under it. Mirrors iOS
+    // hostMatches.
+    fun hostMatches(saved: String, page: String, mode: String?): Boolean = when (mode) {
+        "exact" -> saved == page
+        "subdomain" -> saved == page || page.endsWith(".$saved")
+        else -> saved == page || saved.endsWith(".$page") || page.endsWith(".$saved")
     }
 
     // How closely hosts fit the requested ones, lower first, for ordering what a page is offered

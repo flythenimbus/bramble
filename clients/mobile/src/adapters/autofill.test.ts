@@ -119,6 +119,19 @@ describe("setIndex one-time-code identities", () => {
 	});
 });
 
+describe("setIndex login bundle", () => {
+	// The iOS provider narrows its matches with it, as the extension does.
+	it("carries a login's subdomain match setting", async () => {
+		await mobileAutofill.setIndex([
+			login({ subdomainMatch: "exact" }),
+			login({ id: "e2", hostnames: ["gitlab.com"] }),
+		]);
+		const [exact, unset] = JSON.parse(lastSync().ciphertext);
+		expect(exact.subdomainMatch).toBe("exact");
+		expect(unset).not.toHaveProperty("subdomainMatch");
+	});
+});
+
 describe("setIndex passkey bundle", () => {
 	// The credential provider evaluates PRF from this bundle; without the secrets it can't answer.
 	it("carries a passkey's PRF secrets into the encrypted passkey bundle", async () => {

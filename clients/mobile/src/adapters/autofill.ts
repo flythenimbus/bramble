@@ -143,6 +143,8 @@ export const mobileAutofill: AutofillAdapter = {
 					username: e.username,
 					password: e.password,
 					services: e.hostnames,
+					// Absent means the default; the extension narrows matching for "exact" and "subdomain".
+					subdomainMatch: e.subdomainMatch,
 					// The TOTP seed, for one-time-code AutoFill. Rides the VEK-encrypted bundle
 					// like the password; the extension generates the digits itself.
 					totp: e.totp,

@@ -144,6 +144,22 @@ class AutofillLogicTest {
     }
 
     @Test
+    fun `a login's subdomain match setting narrows the pages it is offered on`() {
+        // Unset (or the extension's "etld1"): parent or child, either way.
+        assertTrue(VaultReader.hostMatches("example.com", "stats.example.com", null))
+        assertTrue(VaultReader.hostMatches("stats.example.com", "example.com", "etld1"))
+        assertFalse(VaultReader.hostMatches("example.org", "example.com", null))
+        // "exact": that host only.
+        assertTrue(VaultReader.hostMatches("example.com", "example.com", "exact"))
+        assertFalse(VaultReader.hostMatches("example.com", "stats.example.com", "exact"))
+        assertFalse(VaultReader.hostMatches("stats.example.com", "example.com", "exact"))
+        // "subdomain": that host and the hosts under it, never its parent.
+        assertTrue(VaultReader.hostMatches("example.com", "stats.example.com", "subdomain"))
+        assertFalse(VaultReader.hostMatches("stats.example.com", "example.com", "subdomain"))
+        assertFalse(VaultReader.hostMatches("ample.com", "example.com", "subdomain"))
+    }
+
+    @Test
     fun `app matching is exact package equality, never a domain inference`() {
         val entry = login("Instagram", "me@x.y", "instagram.com")
         assertFalse(VaultReader.matchesApp(entry, "com.instagram.android"))

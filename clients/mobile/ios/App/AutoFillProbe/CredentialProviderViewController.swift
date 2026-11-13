@@ -23,6 +23,8 @@ private struct Cred: Identifiable, Decodable {
 	/// The TOTP key (otpauth URI or bare base32), for one-time-code AutoFill. Optional: absent
 	/// from bundles written by an older app build, and from logins with no 2FA.
 	let totp: String?
+	/// "exact" or "subdomain" narrows which pages the login matches; absent is the default.
+	let subdomainMatch: String?
 }
 
 private struct Slot {
@@ -1306,12 +1308,24 @@ class CredentialProviderViewController: ASCredentialProviderViewController {
 	}
 
 	// A login matches the page if any of its (normalized) hostnames equals the requested
-	// host or is a subdomain either way (login.github.com ~ github.com).
+	// host or is a subdomain either way (login.github.com ~ github.com), unless the login
+	// narrows that (hostMatches).
 	private func matchesRequested(_ c: Cred) -> Bool {
 		guard !pendingHosts.isEmpty else { return false }
 		let services = c.services.map { normalizeHost($0) }.filter { !$0.isEmpty }
 		return services.contains { s in
-			pendingHosts.contains { w in s == w || s.hasSuffix("." + w) || w.hasSuffix("." + s) }
+			pendingHosts.contains { w in Self.hostMatches(s, w, c.subdomainMatch) }
+		}
+	}
+
+	// One saved host against one page host, both normalized, under the login's subdomain match
+	// setting: "exact" is that host only, "subdomain" adds the hosts under it. Mirrors Android's
+	// VaultReader.hostMatches.
+	static func hostMatches(_ saved: String, _ page: String, _ mode: String?) -> Bool {
+		switch mode {
+		case "exact": return saved == page
+		case "subdomain": return saved == page || page.hasSuffix("." + saved)
+		default: return saved == page || saved.hasSuffix("." + page) || page.hasSuffix("." + saved)
 		}
 	}
 
