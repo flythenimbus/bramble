@@ -1,7 +1,14 @@
 What's new in this release:
 
-- Locking the app now locks AutoFill too, so it asks again before filling.
-- Sync now works with more self-hosted relays.
-- Better text contrast and clearer focus outlines.
+- Choose the app's language in Settings. Korean is new.
+- Create an email alias from the generator, without making a login first.
+- Duplicate an entry from its detail screen.
+- Reused passwords now count as At Risk, with a Reused badge.
+- More two-factor setup links work, including Steam Guard.
+- Imports tag what they add with the date and time.
+- AutoFill follows each login's subdomain match setting.
+- The vault list keeps its place when you go back from an entry.
+- Sync reconnects more reliably.
+- Security updates to the libraries the app is built on.
 
 No account, no cloud. Everything stays on your devices.

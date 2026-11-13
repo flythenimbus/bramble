@@ -1,7 +1,14 @@
 Novedades de esta versión:
 
-- Al bloquear la aplicación también se bloquea AutoFill, por lo que vuelve a solicitar confirmación antes de rellenar.
-- La sincronización ahora funciona con más relés autoalojados.
-- Mejor contraste del texto y contornos de enfoque más claros.
+- Elija el idioma de la aplicación en Configuración. Se añade el coreano.
+- Cree un alias de correo electrónico desde el generador, sin crear antes un inicio de sesión.
+- Duplique una entrada desde su pantalla de detalles.
+- Las contraseñas reutilizadas ahora cuentan como «En riesgo», con la insignia «Reutilizada».
+- Ahora funcionan más enlaces de configuración de autenticación de dos factores, incluido Steam Guard.
+- Las importaciones etiquetan lo que añaden con la fecha y la hora.
+- La función AutoFill respeta la configuración de coincidencia de subdominio de cada inicio de sesión.
+- La lista de la caja fuerte conserva su posición al regresar desde una entrada.
+- La sincronización se reconecta de forma más fiable.
+- Actualizaciones de seguridad de las bibliotecas en las que se basa la aplicación.
 
 Sin cuenta, sin nube. Todo permanece en sus dispositivos.

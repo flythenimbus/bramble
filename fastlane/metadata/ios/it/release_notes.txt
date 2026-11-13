@@ -1,7 +1,14 @@
 Novità in questa versione:
 
-- Bloccare l'app ora blocca anche AutoFill, che richiede di nuovo l'autorizzazione prima di compilare.
-- La sincronizzazione ora funziona con più relay self-hosted.
-- Contrasto del testo migliorato e contorni di focus più chiari.
+- Scegliere la lingua dell'app in Impostazioni. Il coreano è una novità.
+- Creare un alias email dal generatore, senza creare prima un accesso.
+- Duplicare una voce dalla schermata dei dettagli.
+- Le password riutilizzate ora sono considerate A Rischio, con il badge Riutilizzata.
+- Ora funzionano più link di configurazione a due fattori, incluso Steam Guard.
+- Le importazioni etichettano gli elementi aggiunti con data e ora.
+- AutoFill rispetta l'impostazione di corrispondenza del sottodominio di ciascun accesso.
+- L'elenco della cassaforte mantiene la posizione quando si torna indietro da una voce.
+- La sincronizzazione si riconnette in modo più affidabile.
+- Aggiornamenti di sicurezza per le librerie su cui si basa l'app.
 
 Nessun account, nessun cloud. Tutto rimane sui suoi dispositivi.

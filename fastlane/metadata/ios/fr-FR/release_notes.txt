@@ -1,7 +1,14 @@
 Nouveautés de cette version :
 
-- Le verrouillage de l’application verrouille désormais aussi AutoFill, qui redemande confirmation avant de remplir.
-- La synchronisation fonctionne désormais avec plus de relais auto-hébergés.
-- Meilleur contraste du texte et contours de focus plus nets.
+- Choisissez la langue de l’application dans Paramètres. Le coréen est disponible.
+- Créez un alias d’e-mail depuis le générateur, sans avoir à créer d’abord un identifiant.
+- Dupliquez une entrée depuis son écran de détails.
+- Les mots de passe réutilisés apparaissent désormais dans « Risqué », avec un badge « Réutilisé ».
+- Davantage de liens de configuration de l’authentification à deux facteurs fonctionnent, notamment Steam Guard.
+- Les imports étiquettent ce qu’ils ajoutent avec la date et l’heure.
+- Le remplissage automatique respecte le réglage de correspondance de sous-domaine de chaque identifiant.
+- La liste du coffre conserve sa position lorsque vous revenez d’une entrée.
+- La synchronisation se reconnecte de façon plus fiable.
+- Mises à jour de sécurité des bibliothèques sur lesquelles repose l’application.
 
 Pas de compte, pas de cloud. Tout reste sur vos appareils.

@@ -1,7 +1,14 @@
 Neu in dieser Version:
 
-- Durch das Sperren der App wird jetzt auch AutoFill gesperrt, sodass vor dem Ausfüllen erneut nachgefragt wird.
-- Synchronisierung funktioniert jetzt mit mehr selbst gehosteten Relays.
-- Besserer Textkontrast und klarere Fokusumrandungen.
+- Wählen Sie die Sprache der App in den Einstellungen. Koreanisch ist neu.
+- Erstellen Sie einen E-Mail-Alias über den Generator, ohne zuerst ein Login anzulegen.
+- Duplizieren Sie einen Eintrag über seinen Detailbildschirm.
+- Wiederverwendete Passwörter erscheinen jetzt unter „Risiko besteht“, mit dem Hinweis „Wiederverwendet“.
+- Weitere Einrichtungslinks für Zwei-Faktor-Authentifizierung funktionieren, einschließlich Steam Guard.
+- Importe kennzeichnen hinzugefügte Einträge mit Datum und Uhrzeit.
+- AutoFill berücksichtigt die Subdomain-Abgleichseinstellung jedes Logins.
+- Die Tresorliste behält ihre Position, wenn Sie von einem Eintrag zurückkehren.
+- Die Synchronisierung stellt die Verbindung zuverlässiger wieder her.
+- Sicherheitsupdates für die Bibliotheken, auf denen die App basiert.
 
 Kein Konto, keine Cloud. Alles bleibt auf Ihren Geräten.

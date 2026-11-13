@@ -1,7 +1,14 @@
-Novidades desta versão:
+O que há de novo nesta versão:
 
-- Bloquear o app agora também bloqueia o AutoFill, então ele solicita novamente antes de preencher.
-- A sincronização agora funciona com mais relés auto-hospedados.
-- Melhor contraste de texto e contornos de foco mais nítidos.
+- Escolha o idioma do app em Configurações. O coreano foi adicionado.
+- Crie um alias de e-mail a partir do gerador, sem precisar criar um login antes.
+- Duplique uma entrada na tela de detalhes.
+- Senhas reutilizadas agora contam como Em Risco, com o selo Reutilizada.
+- Mais links de configuração de dois fatores funcionam, incluindo o Steam Guard.
+- As importações marcam o que adicionam com data e hora.
+- O preenchimento automático segue a configuração de correspondência de subdomínio de cada login.
+- A lista do cofre mantém sua posição ao voltar de uma entrada.
+- A sincronização se reconecta de forma mais confiável.
+- Atualizações de segurança nas bibliotecas usadas pelo app.
 
-Sem conta, sem nuvem. Tudo permanece nos seus dispositivos.
+Sem conta, sem nuvem. Tudo fica nos seus dispositivos.
