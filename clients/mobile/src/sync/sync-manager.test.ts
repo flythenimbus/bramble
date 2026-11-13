@@ -20,6 +20,20 @@ const h = vi.hoisted(() => ({
 	stateListener: null as ((locked: boolean) => void) | null,
 	// Swapped per test to drive what a "merge" does.
 	applyRemote: async (_port: unknown, _payload: unknown, _opts?: unknown): Promise<void> => {},
+	/** The enroll host's options, from the last invite. */
+	enrollOpts: null as Record<string, (...a: never[]) => unknown> | null,
+	/** The native crypto bridge, as far as an invite and an admission use it. */
+	syncCrypto: {
+		export_vek: async () => "vek",
+		roster_admission_sign: async () => "admission-sig",
+	},
+}));
+
+vi.mock("@core/sync/transport/enroll-host", () => ({
+	startEnroll: async (_role: string, opts: Record<string, (...a: never[]) => unknown>) => {
+		h.enrollOpts = opts;
+		return { stop() {} };
+	},
 }));
 
 vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true } }));
@@ -112,7 +126,7 @@ vi.mock("../adapters/vault-session", () => ({
 	},
 }));
 
-vi.mock("../native-crypto", () => ({ nativeSyncCrypto: () => ({}) }));
+vi.mock("../native-crypto", () => ({ nativeSyncCrypto: h.syncCrypto }));
 // Both the Noise and the roster-signing keypair come from here; returning a stored pair keeps
 // startRoster off the wasm generation path, which isn't what these tests are about.
 vi.mock("../secure-storage", () => ({
@@ -176,6 +190,7 @@ beforeEach(() => {
 	h.blobPokes = 0;
 	h.stateListener = null;
 	h.applyRemote = async () => {};
+	h.enrollOpts = null;
 	vi.stubGlobal("crypto", { randomUUID: () => "id", getRandomValues: (a: Uint8Array) => a });
 });
 
@@ -347,5 +362,55 @@ describe("activeVaultId resolution", () => {
 		await startSession(mod);
 
 		expect(h.rosterOpts).not.toBeNull();
+	});
+});
+
+describe("the first device to join", () => {
+	const hlc = (node: string) => ({ wall: 1000, counter: 0, node });
+	const INVITER = {
+		id: "inviter-id",
+		publicKey: "P",
+		label: "Inviter",
+		addedAt: 0,
+		hlc: hlc("inviter-id"),
+	};
+	const JOINER = {
+		id: "joiner-id",
+		publicKey: "joinerPub",
+		label: "Joiner",
+		addedAt: 0,
+		hlc: hlc("joiner-id"),
+	};
+
+	it("is rostered and syncing at once, not after the next unlock", async () => {
+		// Sync starts on unlock, and only for a vault already in a group. A first pairing makes the
+		// group, so without this a phone that invited its first device synced nothing until it was
+		// locked and unlocked again (the desktop's version of this was e74e6e6e).
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		h.meta.set(`sync.group:${VAULT_A}`, {
+			groupKey: "k",
+			roster: { devices: [INVITER], revoked: [] },
+		});
+		const mod = await loadManager();
+		mod.initRosterSync();
+		await mod.startEnrollInvite({
+			relayUrl: "ws://localhost:7400",
+			groupKeyB64: "k",
+			psk: "psk",
+			roster: { devices: [INVITER], revoked: [] },
+			entries: { entries: [], tombstones: [] },
+			admission: { password: "pw", saltB64: "salt", adminId: "inviter-id" },
+		});
+		expect(h.rosterOpts).toBeNull();
+
+		h.enrollOpts?.onEnrolled?.(JSON.stringify(JOINER) as never);
+
+		await vi.waitFor(() => expect(h.rosterOpts).not.toBeNull());
+		const group = h.meta.get(`sync.group:${VAULT_A}`) as {
+			roster: { devices: { id: string; admission?: { by: string; sig: string } }[] };
+		};
+		const joiner = group.roster.devices.find((d) => d.id === "joiner-id");
+		expect(joiner?.admission).toEqual({ by: "inviter-id", sig: "admission-sig" });
 	});
 });

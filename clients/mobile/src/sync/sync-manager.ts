@@ -26,6 +26,7 @@ import {
 } from "@core/index";
 import { blobArrived } from "@core/sync/blob-arrivals";
 import { answerBlobStatus } from "@core/sync/blob-status";
+import { addDevice, canonicalRosterEntry, mayEnroll, RosterEntrySchema } from "@core/sync/roster";
 import { syncKeyFor, vaultSyncGroups } from "@core/sync/sync-keys";
 import {
 	type BlobSyncSession,
@@ -252,9 +253,14 @@ export async function startEnrollInvite(opts: {
 	entries: EntriesPayload;
 	passwordCheck?: { saltB64: string; slotIdB64: string; verifierB64: string };
 	recoverySlots?: WireRecoverySlot[];
+	/** Lets this module admit the joiner itself rather than relying on the UI. See admitJoiner. */
+	admission?: Admission;
 }): Promise<void> {
 	const wasm = await loadSyncCrypto();
 	const { privateKey, publicKey } = await deviceKeypair();
+	// Pinned now, like the VEK below: the roster this enrollment writes to is the vault being
+	// shared, not whichever one is active by the time the joiner arrives.
+	const vaultId = await activeVaultId();
 	// Capture the VEK NOW, while the user is demonstrably in the vault they're sharing. An invite
 	// stays open for as long as the QR code is up, and the key here is process-global: reading it
 	// at send time (the old ambient export_vek() fallback in sendBundle) would ship whichever vault
@@ -290,8 +296,59 @@ export async function startEnrollInvite(opts: {
 		devicePrivB64: privateKey,
 		wasm,
 		report,
-		onEnrolled: (entryJson) => emit({ kind: "enrolled", entryJson }),
+		// Roster the joiner here FIRST, then tell the UI (it makes the same write), then start sync.
+		// Sync starts on unlock, and only for a vault already in a group; a first pairing is what
+		// makes the group, so without this nothing synced until the next lock and unlock.
+		onEnrolled: (entryJson) => {
+			void (async () => {
+				if (vaultId) await admitJoiner(vaultId, opts.admission, entryJson);
+				emit({ kind: "enrolled", entryJson });
+				await maybeStartRosterSync();
+			})();
+		},
 	});
+}
+
+/** The inviter's material for admitting a joiner: a re-entered password and who is admitting. */
+interface Admission {
+	password: string;
+	saltB64: string;
+	adminId: string;
+}
+
+/**
+ * Admission-sign a freshly joined device and add it to this vault's roster, as the desktop app's
+ * host does. Idempotent with the UI's own write: Ed25519 is deterministic over the same canonical
+ * entry and the roster merge is a union. Reported, not thrown: the enrollment itself succeeded.
+ */
+async function admitJoiner(
+	vaultId: string,
+	admission: Admission | undefined,
+	entryJson: string,
+): Promise<void> {
+	try {
+		const entry = RosterEntrySchema.parse(JSON.parse(entryJson));
+		const admitted = admission
+			? {
+					...entry,
+					admission: {
+						by: admission.adminId,
+						sig: await syncAdmissionSign(
+							admission.password,
+							admission.saltB64,
+							canonicalRosterEntry(entry),
+						),
+					},
+				}
+			: entry;
+		const key = syncKeyFor(GROUP_KEY, vaultId);
+		const group = await mobileStorage.getMeta<GroupConfig>(key);
+		if (!group || !mayEnroll(group.roster, admitted)) return;
+		await mobileStorage.setMeta(key, { ...group, roster: addDevice(group.roster, admitted) });
+		emit({ kind: "roster" });
+	} catch (e) {
+		report(`sync: could not add the new device to the roster (${(e as Error).message})`);
+	}
 }
 
 export async function startEnrollJoin(opts: {
