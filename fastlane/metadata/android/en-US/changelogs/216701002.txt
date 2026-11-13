@@ -1,0 +1,16 @@
+What's new in this release:
+
+- Choose the app's language in Settings. Korean is new.
+- Create an email alias from the generator, without making a login first.
+- Duplicate an entry from its detail screen.
+- Save an attachment to your phone.
+- Passkeys now work when you scan a QR code shown on another device.
+- Reused passwords now count as At Risk, with a Reused badge.
+- More two-factor setup links work, including Steam Guard.
+- Imports tag what they add with the date and time.
+- AutoFill follows each login's subdomain match setting.
+- The vault list keeps its place when you go back from an entry.
+- Sync reconnects more reliably.
+- Security updates to the libraries the app is built on.
+
+No account, no cloud. Everything stays on your devices.
