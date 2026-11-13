@@ -146,7 +146,10 @@ async function openPasskeyEntry(
 	await openPopup(popup, extensionId);
 	await expectUnlocked(popup);
 	await popup.getByLabel(/Search vault/i).fill("webauthn");
+	// The row's badge keys off entry.passkeys, so seeing it means the credential is really stored.
+	await expect(popup.getByRole("img", { name: /Holds a passkey/ })).toBeVisible();
 	await popup.getByText(PASSKEY_LABEL).first().click();
+	await expect(popup.getByRole("heading", { name: PASSKEY_LABEL })).toBeVisible();
 	return popup;
 }
 
@@ -176,9 +179,7 @@ for (const [label, file] of [
 		await expect(page.getByRole("heading", { name: /Imported \d+ items?/i })).toBeVisible();
 
 		const popup = await openPasskeyEntry(context, extensionId);
-		// The badge keys off entry.passkeys, so seeing it means the credential is really stored.
-		await expect(popup.getByLabel(/passkey/i).first()).toBeVisible();
-		// And the raw attributes are gone: leaving them would keep a plaintext copy of the
+		// The raw attributes are gone: leaving them would keep a plaintext copy of the
 		// private key in a custom field beside the credential that already holds it.
 		await expect(popup.getByText(/KPEX_PASSKEY/)).toHaveCount(0);
 	});
@@ -244,6 +245,7 @@ test("imports a passkey from a database KeePassXC itself wrote", async ({
 		.getByText(/webauthn\.io \(Passkey\)/)
 		.first()
 		.click();
+	await expect(popup.getByRole("heading", { name: /webauthn\.io \(Passkey\)/ })).toBeVisible();
 	await expect(popup.getByText(/KPEX_PASSKEY/)).toHaveCount(0);
 });
 
