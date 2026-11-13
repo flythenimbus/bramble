@@ -75,6 +75,8 @@ export interface MeshOptions {
 const RECONNECT_BASE_MS = 1000;
 /** The ceiling, so an offline machine retries about twice a minute rather than never. */
 const RECONNECT_MAX_MS = 30_000;
+/** Candidates kept per peer while its offer is on the way: a connection gathers a handful. */
+const MAX_EARLY_CANDIDATES = 32;
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 const short = (pubkey: string): string => pubkey.slice(0, 8);
@@ -138,6 +140,8 @@ class Mesh {
 	private readonly known = new Set<string>();
 	/** Peers the caller skipped. See PeerSession.skip. */
 	private readonly skipped = new Set<string>();
+	/** Candidates that arrived before the offer they belong to, by peer. See routeSignal. */
+	private readonly early = new Map<string, PeerSignal[]>();
 	private socket!: WebSocket;
 	private client!: SignalingClient;
 	private epoch = 0;
@@ -413,6 +417,14 @@ class Mesh {
 		if (!peer) {
 			// Only an offer bootstraps a responder, but candidates arriving during its
 			// ICE request must wait for that same peer rather than being discarded.
+			if (signal.kind === "candidate" && !this.pendingPeers.has(remote)) {
+				// Or ahead of the offer itself: the native engine (iOS, the Linux desktop) reports a
+				// candidate while its setLocalDescription is still returning, so it goes out first.
+				const held = this.early.get(remote) ?? [];
+				if (held.length < MAX_EARLY_CANDIDATES) held.push(signal);
+				this.early.set(remote, held);
+				return;
+			}
 			if (signal.kind !== "offer" && !this.pendingPeers.has(remote)) return;
 			this.known.add(remote);
 			try {
@@ -422,7 +434,13 @@ class Mesh {
 				return;
 			}
 		}
-		if (!this.stopped) await peer?.handleSignal(signal);
+		if (this.stopped) return;
+		await peer?.handleSignal(signal);
+		if (signal.kind === "offer") {
+			const held = this.early.get(remote) ?? [];
+			this.early.delete(remote);
+			for (const candidate of held) if (!this.stopped) await peer?.handleSignal(candidate);
+		}
 	}
 
 	private makePeer(remote: string, initiator: boolean): Promise<Peer | undefined> {

@@ -219,6 +219,23 @@ describe("ICE credentials for new peer connections", () => {
 		expect(fetchIce).toHaveBeenCalledTimes(1);
 	});
 
+	it("keeps a candidate that arrives ahead of its offer", async () => {
+		// The native engine (iOS, the Linux desktop) reports a candidate while its setLocalDescription
+		// is still returning, so that candidate goes out before the offer. Dropped, ICE fell back on
+		// whatever the peers could learn from each other's checks.
+		await start(async () => []);
+		const candidate: PeerSignal = { kind: "candidate", candidate: { candidate: "early ICE" } };
+		const offer: PeerSignal = { kind: "offer", sdp: "remote offer" };
+		await deliver(candidate);
+		await deliver(offer);
+
+		await vi.waitFor(() => expect(createPeer).toHaveBeenCalledTimes(1));
+		const peer = vi.mocked(createPeer).mock.results[0]!.value;
+		await vi.waitFor(() => expect(peer.handleSignal).toHaveBeenCalledTimes(2));
+		expect(peer.handleSignal).toHaveBeenNthCalledWith(1, offer);
+		expect(peer.handleSignal).toHaveBeenNthCalledWith(2, candidate);
+	});
+
 	describe("an offer from a peer it already holds", () => {
 		// An offer only ever comes from a connection the other side has just started, so whatever is
 		// held for that peer is over. Issue #205: applying it to a closed one fails, and no answer goes
