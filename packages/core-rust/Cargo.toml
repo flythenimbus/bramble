@@ -41,13 +41,15 @@ native = ["dep:snow", "dep:k256"]
 # provider and Lockdown-Mode-safe (JIT-free) main-app crypto. Inherits snow/k256 from
 # `native` so sync handshake + nostr run natively on device (no WASM under Lockdown Mode).
 ffi = ["native", "dep:uniffi", "dep:serde_json"]
-# Native WebRTC data channel (iOS only): iOS WKWebView on the capacitor:// scheme has
-# no RTCPeerConnection, so the P2P sync transport runs on the pure-Rust `webrtc` crate
-# behind a uniffi bridge + a JS shim. Implies ffi (the exports are uniffi). Excluded from
-# wasm (webrtc-rs won't target wasm32) and from the Android build (its WebView has WebRTC),
-# so only the iOS staticlib pays the size. `dep:webrtc` suppresses the implicit same-name
-# feature, letting this richer feature own the name. See docs/p2p-sync.md.
-webrtc = ["ffi", "dep:webrtc", "dep:tokio", "dep:serde_json"]
+# Native WebRTC data channel, for webviews with no RTCPeerConnection: iOS WKWebView on the
+# capacitor:// scheme, and WebKitGTK on Linux (built without WebRTC by every major distro).
+# The P2P sync transport runs on the pure-Rust `webrtc` crate behind a JS shim. Excluded
+# from wasm (webrtc-rs won't target wasm32) and from Android (its WebView has WebRTC).
+# `webrtc-native` is the engine with no binding layer, for the desktop app, which calls it
+# directly; `webrtc` adds the uniffi exports for iOS. `dep:webrtc` suppresses the implicit
+# same-name feature, letting `webrtc` own the name. See docs/p2p-sync.md.
+webrtc-native = ["native", "dep:webrtc", "dep:tokio", "dep:serde_json", "dep:rustls"]
+webrtc = ["ffi", "webrtc-native"]
 
 [dependencies]
 # --- vault crypto core (compiled into both binding layers) ---
@@ -69,10 +71,13 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 # --- Native FFI binding layer (optional) ---
 uniffi = { version = "0.31", optional = true }
 
-# --- Native WebRTC data channel (iOS only, `webrtc` feature) ---
+# --- Native WebRTC data channel (`webrtc-native`: iOS and the Linux desktop) ---
 # Pure-Rust WebRTC (ICE/DTLS/SCTP); interops with browser data channels. tokio drives
 # its async runtime; serde_json parses the ICE-server list + ICE candidates.
 webrtc = { version = "0.17", optional = true }
+# Named only to choose rustls's process-wide crypto provider (see webrtc.rs). Already in the tree
+# through webrtc-rs's DTLS, with these same features.
+rustls = { version = "0.23", optional = true, default-features = false, features = ["std", "ring"] }
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "time", "sync"], optional = true }
 serde_json = { version = "1", optional = true }
 

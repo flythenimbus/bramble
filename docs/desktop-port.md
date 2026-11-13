@@ -550,7 +550,7 @@ and mobile builds never pay for them, exactly as `webrtc` is gated for iOS.
 Require per-signature approval (biometric where available). The pitch: private keys never touch disk
 unencrypted and every use is explicitly approved.
 
-## Sync transport: the webview's own WebRTC, on macOS
+## Sync transport: the webview's own WebRTC, on macOS and Windows
 
 The plan here was to reuse the `webrtc` cargo feature (webrtc-rs), already device-proven on iOS,
 on the assumption that desktop webviews have inconsistent WebRTC support. **That assumption was
@@ -566,8 +566,35 @@ same snake_case names `@core/sync` calls, each one an `invoke` of a Rust command
 usual camelCase deliberately, because `@core/sync` was written against those names and renaming
 would only add a layer whose job is to undo the rename.
 
-Windows (WebView2, Chromium) is near-certain to work the same way; WebKitGTK is the open
-question `[unverified]`, and it is where webrtc-rs would come back if it comes back at all.
+Windows (WebView2, Chromium) is near-certain to work the same way. WebKitGTK does not.
+
+### Linux: native WebRTC, as on iOS
+
+WebKitGTK has no `RTCPeerConnection`, and no setting adds one. Checked in Docker on 2026-11-13
+with a GTK page and `WebKitSettings:enable-webrtc` both off and on, gstreamer's webrtcbin and nice
+installed: Debian 12 (2.50.6, the one the AppImage bundles), Debian 13 (2.54.0), Ubuntu 24.04 and
+26.04 (2.52.6), Fedora 45 (2.54.2). Undefined everywhere, and none of WebKit's 465 runtime
+features is a peer connection switch, so every distribution compiles it out. Until this was
+fixed a Linux desktop reached every device through relay-forward, could exchange files only with
+a browser on the same machine, and logged `found, but it needs a WebRTC connection` every 30
+seconds for each device's file session (issues #224 and #228).
+
+So the vault window runs on the engine the iOS app uses, the way iOS does:
+
+- `packages/core-rust/src/webrtc.rs` (webrtc-rs) under `webrtc-native`, the engine with no binding
+  layer. iOS's `webrtc` feature adds the uniffi exports on top. The desktop depends on it for
+  Linux only, so the macOS and Windows binaries don't carry it.
+- `src-tauri/src/native_webrtc.rs` wraps each call as a command, run on a blocking thread (each
+  can wait out its 15 s deadline), and forwards the engine's events to the vault window as one
+  `native-webrtc` event.
+- `src/native-webrtc.ts` installs `@core/sync/transport/native-rtc`, the shim iOS uses too, only
+  when the webview has no `RTCPeerConnection`, before anything starts sync. It first closes any
+  peers left by an earlier window: on Wayland closing the window destroys it, and the engine
+  lives on in this process.
+
+The engine resolves no mDNS candidates (disabled, as on iOS), so two devices on one LAN with
+no STUN or TURN, one of them a browser hiding its addresses behind `.local` names, may not
+connect directly. The hosted relay hands out STUN and TURN, which covers it.
 
 **The release CSP has to allow the relay.** `connect-src` starts at `'self' ipc:
 http://ipc.localhost`, which blocks the relay WebSocket and the ICE-servers fetch. WebKit reports
@@ -1421,9 +1448,9 @@ TargetNotFound rather than no update. It is keyed under both arches instead.
    notarized, and the whole Linux channel is signed too (see [apt-releases.md](apt-releases.md)).
    `[the zero-prompt claim is still unobserved: it needs one signed build to be updated over
    another and the keychain to stay quiet, which no release has yet exercised]`
-6. ~~**webrtc-rs interop with the extension's browser WebRTC on desktop.**~~ Retired by not
-   happening: macOS WKWebView has its own WebRTC, so desktop talks to peers with the same browser
-   APIs the extension does. Returns only if WebKitGTK turns out to lack them.
+6. ~~**webrtc-rs interop with the extension's browser WebRTC on desktop.**~~ Retired on macOS
+   and Windows, whose webviews have their own WebRTC. It came back for Linux, whose WebKitGTK
+   lacks it: see [Linux: native WebRTC, as on iOS](#linux-native-webrtc-as-on-ios).
 
 ## Proposed plan
 

@@ -18,6 +18,7 @@ import { onVaultStateChange } from "./adapters/vault-session";
 import { startAutoLock } from "./auto-lock";
 import { startBackupSchedule } from "./backup";
 import { forwardConsoleToLog } from "./log-forward";
+import { installNativeWebRtc } from "./native-webrtc";
 import { initRosterSync } from "./sync/roster";
 import { listenForMenuUpdateCheck, promptForUpdateOnLaunch } from "./updates-prompt";
 import { installWindowShortcuts, syncTrayTheme } from "./window-chrome";
@@ -105,6 +106,8 @@ void (async () => {
 	forwardConsoleToLog();
 	// Settings' "About" row reads this synchronously, so resolve it before the first render.
 	await resolveAppVersion();
+	// Before anything can start sync: the transport checks for WebRTC once. Linux only in effect.
+	await installNativeWebRtc().catch((e) => console.error("[sync] native WebRTC unavailable:", e));
 	// Ctrl-W / Ctrl-Q, and a tray icon that stays visible against the panel. Both are no-ops on
 	// macOS, where the menu and the template icon already do the job. See ./window-chrome.
 	installWindowShortcuts();

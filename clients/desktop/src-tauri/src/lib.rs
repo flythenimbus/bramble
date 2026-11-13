@@ -20,6 +20,9 @@ mod ipc;
 mod lifetime;
 mod manifest;
 mod menu;
+// WebKitGTK has no WebRTC; see the module.
+#[cfg(target_os = "linux")]
+mod native_webrtc;
 mod net;
 mod pairing;
 mod secure_store;
@@ -352,6 +355,26 @@ pub fn run() {
             stream::stream_finish,
             stream::stream_abort,
             net::http_send,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_create_peer,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_create_data_channel,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_create_offer,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_create_answer,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_set_local_description,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_set_remote_description,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_add_ice_candidate,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_send,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_close,
+            #[cfg(target_os = "linux")]
+            native_webrtc::webrtc_close_all,
             sync_crypto::sync_handshake_generate_keypair,
             sync_crypto::sync_handshake_start_initiator,
             sync_crypto::sync_handshake_start_responder,

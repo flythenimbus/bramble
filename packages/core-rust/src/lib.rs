@@ -82,12 +82,12 @@ pub mod handshake;
 // runs in the webview (which has WebRTC) while the crypto stays in this process.
 #[cfg(any(feature = "wasm", feature = "native"))]
 pub mod nostr;
-// Native WebRTC data channel: iOS only (its WKWebView on capacitor:// has no
-// RTCPeerConnection). Pure-Rust webrtc-rs behind uniffi; gated by `webrtc` (which
-// implies ffi). Excluded from the wasm build (webrtc-rs won't target wasm32) and the
-// Android build (its WebView has WebRTC). See docs/p2p-sync.md.
-#[cfg(feature = "webrtc")]
-mod webrtc;
+// Native WebRTC data channel, for webviews with no RTCPeerConnection: iOS (through uniffi,
+// the `webrtc` feature) and the Linux desktop (called directly, `webrtc-native`). Excluded
+// from wasm (webrtc-rs won't target wasm32) and Android (its WebView has WebRTC). See
+// docs/p2p-sync.md.
+#[cfg(feature = "webrtc-native")]
+pub mod webrtc;
 
 // The two binding layers are mutually exclusive: each owns the bare public names
 // (`generate_vek`, ...), so enabling both would collide. wasm-pack uses `wasm`; the

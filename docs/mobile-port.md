@@ -86,6 +86,9 @@ ground truth of what exists.
   Swift via a uniffi callback interface, and a `NativeWebRTC` Capacitor plugin forwards them to the
   shim. **Verified on device:** iOS pairs with the extension over the native channel and the Noise
   handshake + vault transfer complete. Closes the last gap for iOS sync.
+  The shim now lives in `@core/sync/transport/native-rtc`, shared with the Linux desktop app
+  (whose WebKitGTK lacks WebRTC too); `native-webrtc.ts` here is the Capacitor plugin's bridge to it.
+  See desktop-port.md, "Linux: native WebRTC, as on iOS".
 - **Phase 2 — biometric + secure storage + layout: MOSTLY DONE.** Secure-storage substrate
   (`@aparajita/capacitor-secure-storage`, SPM-verified) is in and holds the sync device
   keypair (out of plaintext Preferences). A safe-area/`dvh` layout pass + spacing/pill polish

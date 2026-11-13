@@ -2606,6 +2606,7 @@ dependencies = [
  "k256",
  "p256",
  "quick-xml",
+ "rustls",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

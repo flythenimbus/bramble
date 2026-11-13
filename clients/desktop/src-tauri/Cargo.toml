@@ -147,6 +147,12 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+# The native WebRTC engine, which only Linux needs: WebKitGTK is built without WebRTC, while
+# macOS and Windows webviews have their own. See src/native_webrtc.rs.
+vault-crypto = { path = "../../../packages/core-rust", default-features = false, features = [
+    "native",
+    "webrtc-native",
+] }
 # Both Linux backends, chosen at RUNTIME (see secure_store::tier): Secret Service where a
 # session bus offers one, else kernel keyutils, which needs no daemon and works headless. Not the
 # crate's `linux-native-sync-persistent` combo, which writes to keyutils AND Secret Service and

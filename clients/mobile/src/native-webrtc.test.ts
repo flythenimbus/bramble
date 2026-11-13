@@ -1,45 +1,51 @@
 import { describe, expect, it, vi } from "vitest";
 
+// The shim itself is tested in @core (native-rtc.test.ts); this is the Capacitor plugin's side.
+const listeners = new Map<string, (data: Record<string, unknown>) => void>();
 const native = {
 	createPeer: vi.fn(async () => ({ value: 1 })),
 	createDataChannel: vi.fn(async () => {}),
 	send: vi.fn(async () => {}),
 	close: vi.fn(async () => {}),
-	addListener: vi.fn(async () => ({ remove: async () => {} })),
+	addListener: vi.fn(async (name: string, cb: (data: Record<string, unknown>) => void) => {
+		listeners.set(name, cb);
+		return { remove: async () => {} };
+	}),
 };
+let platform = "android";
 vi.mock("@capacitor/core", () => ({
-	Capacitor: { getPlatform: () => "ios" },
+	Capacitor: { getPlatform: () => platform },
 	registerPlugin: () => native,
 }));
 
 const { installNativeWebRtc } = await import("./native-webrtc");
-installNativeWebRtc();
-type Channel = { send(d: string): void; onclose: (() => void) | null; readyState: string };
-const PeerConnection = (globalThis as { RTCPeerConnection?: unknown })
-	.RTCPeerConnection as new (c: {
-	iceServers: unknown[];
-}) => { createDataChannel(label: string): Channel };
+const g = globalThis as { RTCPeerConnection?: unknown };
 
-describe("native WebRTC shim: send", () => {
-	it("closes the channel when the native side gives up on a send", async () => {
-		native.send.mockRejectedValueOnce(new Error("send: timed out"));
-		const channel = new PeerConnection({ iceServers: [] }).createDataChannel("sync");
-		const closed = vi.fn();
-		channel.onclose = closed;
-		channel.send("envelope");
-		await vi.waitFor(() => expect(closed).toHaveBeenCalledOnce());
-		expect(channel.readyState).toBe("closed");
+type Channel = { send(d: string): void; onmessage: ((e: { data: string }) => void) | null };
+
+describe("native WebRTC on iOS", () => {
+	it("leaves RTCPeerConnection alone off iOS", () => {
+		installNativeWebRtc();
+		expect(g.RTCPeerConnection).toBeUndefined();
+		expect(native.addListener).not.toHaveBeenCalled();
 	});
 
-	it("leaves the channel alone when a send goes through", async () => {
-		const channel = new PeerConnection({ iceServers: [] }).createDataChannel("sync");
-		const closed = vi.fn();
-		channel.onclose = closed;
+	it("speaks the plugin's call shapes and hears its events", async () => {
+		platform = "ios";
+		installNativeWebRtc();
+		const PC = g.RTCPeerConnection as new (c: {
+			iceServers: unknown[];
+		}) => { createDataChannel(label: string): Channel };
+		const channel = new PC({ iceServers: [] }).createDataChannel("sync");
 		channel.send("envelope");
 		await vi.waitFor(() =>
 			expect(native.send).toHaveBeenLastCalledWith({ peer: 1, data: "envelope" }),
 		);
-		await new Promise((r) => setTimeout(r, 10));
-		expect(closed).not.toHaveBeenCalled();
+		expect(native.createDataChannel).toHaveBeenCalledWith({ peer: 1, label: "sync" });
+
+		const got: string[] = [];
+		channel.onmessage = (e) => got.push(e.data);
+		listeners.get("message")?.({ peer: 1, data: "hello" });
+		expect(got).toEqual(["hello"]);
 	});
 });

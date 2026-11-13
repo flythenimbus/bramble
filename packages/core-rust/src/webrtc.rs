@@ -1,18 +1,19 @@
-//! Native WebRTC data channel for iOS, behind the `webrtc` feature.
+//! Native WebRTC data channel, for webviews that have no `RTCPeerConnection`.
 //!
-//! iOS WKWebView on the `capacitor://` scheme exposes no `RTCPeerConnection`, so the
-//! shared @core sync transport (built on the browser WebRTC API) dies on device. This
-//! backs that API with the pure-Rust `webrtc` crate (ICE/DTLS/SCTP), exposed through the
-//! existing uniffi pipeline; a JS shim installed only on iOS re-creates the browser
-//! `RTCPeerConnection`/`RTCDataChannel` surface so the transport runs unchanged and still
-//! interops with the extension's browser WebRTC. Android's WebView already has WebRTC, so
-//! this is iOS-only and excluded from the Android build. See docs/p2p-sync.md.
+//! iOS WKWebView on the `capacitor://` scheme exposes none, and neither does WebKitGTK on
+//! Linux, which every major distribution builds without WebRTC. The shared @core sync
+//! transport is built on the browser API, so this backs it with the pure-Rust `webrtc` crate
+//! (ICE/DTLS/SCTP), and a JS shim re-creates the `RTCPeerConnection`/`RTCDataChannel`
+//! surface over it (@core/sync/transport/native-rtc). The transport then runs unchanged and
+//! still interops with browser WebRTC. iOS reaches this through uniffi (the `webrtc`
+//! feature); the desktop app calls it directly from its commands (`webrtc-native`). See
+//! docs/p2p-sync.md.
 //!
 //! Peers live in a registry keyed by a u32 handle (mirrors handshake.rs); the JS shim
 //! holds the handle. webrtc-rs is async, so a global multi-thread tokio runtime drives it:
 //! request/response calls `block_on` (bounded by `CALL_DEADLINE`), fire-and-forget calls
 //! `spawn`. Connection events (ICE candidates, channel open/message, state) flow back through
-//! a uniffi callback interface the Swift plugin implements.
+//! an observer the host implements: the Swift plugin, or the desktop's event emitter.
 //!
 //! The module is named `webrtc` while the crate dependency is also `webrtc`; inside here
 //! the crate is reached via the leading-colon path `::webrtc::` to disambiguate.
@@ -41,11 +42,11 @@ use crate::CryptoError;
 
 // ---- events to the foreign side (callback interface) ----
 
-/// Connection events delivered to the foreign side; the Swift NativeWebRTC plugin
-/// implements this and forwards each to JS via `notifyListeners`. Every call carries the
-/// peer handle so one observer fans out to many peers. Fire-and-forget: the impl must
-/// return promptly (it only posts to the webview), since these fire on runtime threads.
-#[uniffi::export(callback_interface)]
+/// Connection events delivered to the host, which forwards each to its webview: the Swift
+/// NativeWebRTC plugin via `notifyListeners`, the desktop app as a window event. Every call
+/// carries the peer handle so one observer fans out to many peers. Fire-and-forget: the impl
+/// must return promptly (it only posts to the webview), since these fire on runtime threads.
+#[cfg_attr(feature = "webrtc", uniffi::export(callback_interface))]
 pub trait WebRtcObserver: Send + Sync {
     /// A gathered local ICE candidate, JSON `{candidate, sdpMid, sdpMLineIndex}`.
     fn on_ice_candidate(&self, peer: u32, candidate_json: String);
@@ -189,10 +190,22 @@ fn wire_data_channel(peer: u32, observer: &Arc<dyn WebRtcObserver>, dc: &Arc<RTC
 
 // ---- core (binding-agnostic) ----
 
+/// webrtc-rs's DTLS takes rustls's process-wide crypto provider, which rustls infers only when
+/// exactly one backend is compiled in. A host that also links aws-lc-rs (the desktop app does,
+/// through its HTTP client) has two, and the DTLS task panicked right after ICE connected, so no
+/// channel ever opened. Install ring, the backend DTLS is built with, unless the host chose one.
+fn ensure_crypto_provider() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 fn create_peer_core(
     ice_servers_json: String,
     observer: Arc<dyn WebRtcObserver>,
 ) -> Result<u32, CryptoError> {
+    ensure_crypto_provider();
     let ice_servers = parse_ice_servers(&ice_servers_json)?;
     let pc = within(CALL_DEADLINE, "new peer connection", async move {
         // Disable mDNS: iOS multicast needs a special entitlement, so a .local candidate
@@ -367,11 +380,11 @@ fn close_core(peer: u32) {
     }
 }
 
-// ---- uniffi exports (iOS only; no wasm twin, webrtc-rs is native-only) ----
+// ---- exports: uniffi on iOS, plain calls for the desktop; no wasm twin ----
 
 /// Create a peer connection with the given ICE servers (the app's `RTCIceServer[]` as
 /// JSON). Returns a u32 handle the shim keys everything else on.
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_create_peer(
     ice_servers_json: String,
     observer: Box<dyn WebRtcObserver>,
@@ -380,32 +393,32 @@ pub fn webrtc_create_peer(
 }
 
 /// Initiator: create the "sync" data channel before making the offer.
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_create_data_channel(peer: u32, label: String) -> Result<(), CryptoError> {
     create_data_channel_core(peer, label)
 }
 
 /// Create an SDP offer; held pending until set_local_description applies it.
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_create_offer(peer: u32) -> Result<String, CryptoError> {
     create_offer_core(peer)
 }
 
 /// Create an SDP answer; held pending until set_local_description applies it.
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_create_answer(peer: u32) -> Result<String, CryptoError> {
     create_answer_core(peer)
 }
 
 /// Apply the pending local offer/answer (the shim passes the SDP it received, but we
 /// apply the exact description object we created, so the arg is implicit).
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_set_local_description(peer: u32) -> Result<(), CryptoError> {
     set_local_description_core(peer)
 }
 
 /// Apply the remote offer/answer.
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_set_remote_description(
     peer: u32,
     sdp_type: String,
@@ -415,21 +428,30 @@ pub fn webrtc_set_remote_description(
 }
 
 /// Add a remote ICE candidate (JSON `{candidate, sdpMid, sdpMLineIndex}`).
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_add_ice_candidate(peer: u32, candidate_json: String) -> Result<(), CryptoError> {
     add_ice_candidate_core(peer, candidate_json)
 }
 
 /// Send a text message over the data channel.
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_send(peer: u32, data: String) -> Result<(), CryptoError> {
     send_core(peer, data)
 }
 
 /// Close the peer connection and drop the handle.
-#[uniffi::export]
+#[cfg_attr(feature = "webrtc", uniffi::export)]
 pub fn webrtc_close(peer: u32) {
     close_core(peer)
+}
+
+/// Close every peer. For a host whose webview was rebuilt: the new page holds none of the
+/// handles, so whatever the old one left open has no owner. Not exported to iOS.
+pub fn webrtc_close_all() {
+    let ids: Vec<u32> = registry().lock().unwrap().peers.keys().copied().collect();
+    for id in ids {
+        close_core(id);
+    }
 }
 
 #[cfg(test)]
@@ -477,6 +499,103 @@ mod tests {
     fn parse_ice_servers_empty_is_ok() {
         assert!(parse_ice_servers("").unwrap().is_empty());
         assert!(parse_ice_servers("[]").unwrap().is_empty());
+    }
+
+    use std::sync::mpsc;
+    use std::time::Instant;
+
+    #[derive(Debug, PartialEq, Clone)]
+    enum Seen {
+        Candidate(String),
+        Open,
+        Message(String),
+        State(String),
+    }
+
+    /// The peer registry is process-wide and close_all empties it, so tests that make peers
+    /// take turns.
+    static PEERS: Mutex<()> = Mutex::new(());
+
+    /// Records what each peer reports, as the webview's shim would receive it.
+    struct Recorder(Mutex<mpsc::Sender<(u32, Seen)>>);
+
+    impl Recorder {
+        fn note(&self, peer: u32, seen: Seen) {
+            let _ = self.0.lock().unwrap().send((peer, seen));
+        }
+    }
+
+    impl WebRtcObserver for Recorder {
+        fn on_ice_candidate(&self, peer: u32, candidate_json: String) {
+            self.note(peer, Seen::Candidate(candidate_json));
+        }
+        fn on_ice_gathering_complete(&self, _peer: u32) {}
+        fn on_data_channel_open(&self, peer: u32) {
+            self.note(peer, Seen::Open);
+        }
+        fn on_data_channel(&self, _peer: u32) {}
+        fn on_message(&self, peer: u32, data: String) {
+            self.note(peer, Seen::Message(data));
+        }
+        fn on_connection_state(&self, peer: u32, state: String) {
+            self.note(peer, Seen::State(format!("pc {state}")));
+        }
+        fn on_ice_connection_state(&self, peer: u32, state: String) {
+            self.note(peer, Seen::State(format!("ice {state}")));
+        }
+    }
+
+    /// Wait for `want`, handing every ICE candidate to the other peer meanwhile.
+    fn pump(rx: &mpsc::Receiver<(u32, Seen)>, a: u32, b: u32, want: &mut Vec<(u32, Seen)>) {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !want.is_empty() {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let (peer, seen) = rx
+                .recv_timeout(left)
+                .unwrap_or_else(|_| panic!("timed out waiting for {want:?}"));
+            eprintln!("peer {peer}: {seen:?}");
+            match seen {
+                Seen::Candidate(json) => {
+                    let other = if peer == a { b } else { a };
+                    webrtc_add_ice_candidate(other, json).unwrap();
+                }
+                Seen::State(_) => {}
+                other => want.retain(|w| *w != (peer, other.clone())),
+            }
+        }
+    }
+
+    #[test]
+    fn two_peers_open_a_channel_through_the_public_calls() {
+        // The calls the desktop's commands make, with no uniffi in the build.
+        let _turn = PEERS.lock().unwrap_or_else(|e| e.into_inner());
+        let (tx, rx) = mpsc::channel();
+        let observer = || Box::new(Recorder(Mutex::new(tx.clone())));
+        let a = webrtc_create_peer("[]".into(), observer()).unwrap();
+        let b = webrtc_create_peer("[]".into(), observer()).unwrap();
+        webrtc_create_data_channel(a, "sync".into()).unwrap();
+        let offer = webrtc_create_offer(a).unwrap();
+        webrtc_set_local_description(a).unwrap();
+        webrtc_set_remote_description(b, "offer".into(), offer).unwrap();
+        let answer = webrtc_create_answer(b).unwrap();
+        webrtc_set_local_description(b).unwrap();
+        webrtc_set_remote_description(a, "answer".into(), answer).unwrap();
+
+        pump(&rx, a, b, &mut vec![(a, Seen::Open), (b, Seen::Open)]);
+        webrtc_send(a, "ping".into()).unwrap();
+        pump(&rx, a, b, &mut vec![(b, Seen::Message("ping".into()))]);
+        webrtc_close(a);
+        webrtc_close(b);
+    }
+
+    #[test]
+    fn close_all_drops_every_peer() {
+        // A rebuilt webview owns none of the peers its predecessor left behind.
+        let _turn = PEERS.lock().unwrap_or_else(|e| e.into_inner());
+        let (tx, _rx) = mpsc::channel();
+        let p = webrtc_create_peer("[]".into(), Box::new(Recorder(Mutex::new(tx)))).unwrap();
+        webrtc_close_all();
+        assert!(get_peer(p).is_err());
     }
 
     #[test]
