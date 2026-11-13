@@ -18,7 +18,8 @@ keywords:
   - Incorrect master password
   - Couldn't verify your key. Try again.
   - user verification
-updatedDate: 2026-11-07
+  - Confirm passkeys once per unlock
+updatedDate: 2026-11-12
 ---
 
 ## Check these first
@@ -37,6 +38,8 @@ Some sites ask Bramble to check it's really you each time you use a passkey. Whe
 This is expected. Enter your master password and choose **Confirm**. If your vault has no master password, choose **Use security key**.
 
 If your vault was locked when you started, unlocking counts as that check, so Bramble doesn't ask twice.
+
+To be asked less in the browser extension, open **Settings → General** and turn on **Confirm passkeys once per unlock**. Unlocking then counts as confirming it's you until your vault locks.
 
 To unlock less often, choose a longer **Auto-lock timeout**. See [How auto-lock works](/docs/auto-lock).
 

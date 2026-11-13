@@ -27,7 +27,11 @@ keywords:
   - linking failed
   - link doesn't work
   - desktop app won't connect
-updatedDate: 2026-11-07
+  - Flatpak
+  - Snap
+  - Zen
+  - xdg-native-messaging-proxy
+updatedDate: 2026-11-12
 ---
 
 ## Check these first
@@ -35,6 +39,14 @@ updatedDate: 2026-11-07
 - The desktop app is open, unlocked, and showing the **Connect a browser** window.
 - Both the desktop app and the extension are up to date.
 - If you installed the browser after the desktop app, quit and reopen the desktop app.
+
+## Flatpak or Snap browsers on Linux
+
+Firefox, Zen and other Firefox-based browsers installed as a Flatpak or Snap reach the desktop app through your system's native messaging proxy.
+
+1. Install `xdg-native-messaging-proxy` from your distribution.
+2. In the browser, open `about:config` and set `widget.use-xdg-desktop-portal.native-messaging-proxy` to `2`.
+3. Restart the browser, then quit and reopen the desktop app.
 
 ## Messages in the extension
 

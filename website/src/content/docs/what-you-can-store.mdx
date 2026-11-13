@@ -42,8 +42,12 @@ keywords:
   - This password appeared in a known data breach.
   - Add New
   - At Risk
+  - Reused
+  - reused password
+  - Steam Guard
+  - Duplicate
   - Archived items
-updatedDate: 2026-11-07
+updatedDate: 2026-11-12
 ---
 
 ## Kinds of item
@@ -52,7 +56,7 @@ Choose **Add New** above your list, then pick one:
 
 | Item | What it holds |
 | --- | --- |
-| **Login** | Websites, a username or email, a password, an **Authenticator key (TOTP)** for two-factor codes, passkeys and notes. |
+| **Login** | Websites, a username or email, a password, an **Authenticator key (TOTP)** for two-factor codes (Steam Guard too), passkeys and notes. |
 | **Payment card** | Cardholder name, card number, expiry date, CVV and notes. |
 | **Secure note** | A title and any text. |
 | **SSH key** | A public key, a private key, its passphrase and notes. |
@@ -62,6 +66,8 @@ Any item can also hold:
 - **Custom fields**: choose **Add field** for things like security questions or account numbers. Make a field **Hidden** to mask its value.
 - **Tags**: see below.
 - Files: see [Attach files to an entry](/docs/file-attachments).
+
+To copy an item, open it and choose **Duplicate**. The copy leaves out passkeys.
 
 ## Organise with tags
 
@@ -91,6 +97,6 @@ Archive an item to keep it without seeing it every day. Archived items stay in y
 
 The **Overview** above your list counts **Total Items**, **At Risk** and **Strong**. Choose a count to list those items.
 
-**At Risk** shows logins whose password is in a known data breach. To turn this on, open **Settings → General** and turn on **Check passwords for breaches**. It's off by default. Bramble sends only the first 5 characters of a hash of each password to haveibeenpwned.com, never the password itself.
+**At Risk** shows logins whose password another login also uses, marked **Reused**, or whose password is in a known data breach. Bramble finds reused passwords on your device. The breach check is off by default: open **Settings → General** and turn on **Check passwords for breaches**. Bramble sends only the first 5 characters of a hash of each password to haveibeenpwned.com, never the password itself.
 
 A breached login shows **This password appeared in a known data breach.** Change the password on that site, then update it in Bramble. The [password generator](/docs/password-generator) can make a new one.

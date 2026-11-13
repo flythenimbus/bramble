@@ -15,6 +15,9 @@ keywords:
   - keep me logged in
   - stay logged in
   - never lock
+  - Until browser closes
+  - Until Bramble quits
+  - Until app closes
   - lock on sleep
   - lock when computer locks
   - lock shortcut
@@ -32,7 +35,7 @@ keywords:
   - hide app preview
   - multitasking screen
   - asks for password every time
-updatedDate: 2026-11-08
+updatedDate: 2026-11-12
 ---
 
 Auto-lock clears your vault's key from memory after a while, so someone who picks up your device can't open your vault. You set it separately on each device.
@@ -45,7 +48,7 @@ Open **Settings → General** and pick an **Auto-lock timeout**:
 | --- | --- |
 | **Immediate** | As soon as you stop using Bramble: when you close the last Bramble popup or window in your browser, or leave the app on your phone. Not in the desktop app. |
 | **5 minutes**, **15 minutes**, **30 minutes**, **1 hour** | After that long without activity. |
-| **Never** | Only when you lock it, or quit the browser or app. |
+| **Until browser closes**, **Until Bramble quits** or **Until app closes** | Only when you lock it, or quit the browser, the desktop app or the phone app. |
 
 The default is **15 minutes**.
 
@@ -86,7 +89,7 @@ Time your computer spends asleep counts as inactivity.
 
 In Chrome and other Chromium browsers, **Lock when the screen locks** is in **Settings → General** and is on by default. It locks your vault when your computer's screen locks, whatever the timeout.
 
-To stay unlocked through screen locks, choose **Never** and turn this off.
+To stay unlocked through screen locks, choose **Until browser closes** and turn this off.
 
 </div>
 <div slot="mobile">
@@ -98,7 +101,7 @@ Locking your phone counts as leaving Bramble. With **Immediate**, your vault loc
 
 ## When you close Bramble
 
-Bramble keeps your vault's key only in memory. Whenever Bramble starts again, it asks you to unlock once, even with **Never**.
+Bramble keeps your vault's key only in memory. Whenever Bramble starts again, it asks you to unlock once, even with no timeout.
 
 <PlatformTabs>
 <div slot="extension">
@@ -130,7 +133,7 @@ Autofill on your phone follows the same setting, with its own timer:
 
 - **Immediate**: you unlock for every fill.
 - A timeout: after you unlock once, autofill fills without asking until that long passes without a fill.
-- **Never**: after you unlock once, autofill stops asking.
+- **Until app closes**: after you unlock once, autofill stops asking.
 
 To make autofill ask every time, choose **Immediate**.
 

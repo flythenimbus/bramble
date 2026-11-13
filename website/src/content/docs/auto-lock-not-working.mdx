@@ -1,6 +1,6 @@
 ---
 title: Why does my vault lock too soon, or not at all?
-description: What locks your vault even with Never, and what keeps it unlocked past your timeout.
+description: What locks your vault even with no timeout, and what keeps it unlocked past your timeout.
 section: unlock
 kind: question
 order: 2
@@ -14,6 +14,9 @@ keywords:
   - stays unlocked overnight
   - never locks
   - Never still locks
+  - Until browser closes
+  - Until Bramble quits
+  - Until app closes
   - keeps locking
   - locks too often
   - asks for master password every time
@@ -24,7 +27,7 @@ keywords:
   - Lock vault after inactivity
   - Stays unlocked until you lock it or quit the browser
   - Stays unlocked until you lock it or the app is closed
-updatedDate: 2026-11-08
+updatedDate: 2026-11-12
 ---
 
 ## Check these first
@@ -34,7 +37,7 @@ updatedDate: 2026-11-08
 
 ## It locks when I don't expect it to
 
-### Bramble asks once after a restart, even with Never
+### Bramble asks once after a restart, even with no timeout
 
 Bramble keeps your vault's key only in memory. Quitting the browser, quitting the desktop app or swiping the app away from your recent apps ends that, and so does your phone closing Bramble in the background. **Never** only means no timer. To make this quicker, turn on Face ID, a fingerprint, Touch ID or Windows Hello with **Unlock on open**. See [Ways to unlock your vault](/docs/unlock-methods).
 
@@ -70,7 +73,7 @@ A linked browser unlocks through the desktop app, so lock the desktop app when y
 
 ### Autofill on your phone still fills
 
-Phone autofill keeps its own timer, set by **Auto-lock timeout**. Locking the app locks autofill too. With **Never**, autofill stays unlocked until you lock the app. To make autofill ask every time, choose **Immediate**.
+Phone autofill keeps its own timer, set by **Auto-lock timeout**. Locking the app locks autofill too. With **Until app closes**, autofill stays unlocked until you lock the app. To make autofill ask every time, choose **Immediate**.
 
 ## Still not right?
 
