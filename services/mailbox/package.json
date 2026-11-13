@@ -18,7 +18,7 @@
 		"@vault/core": "workspace:*",
 		"better-sqlite3": "^13.0.3",
 		"drizzle-orm": "^0.45.4",
-		"hono": "^4.13.14",
+		"hono": "^4.13.18",
 		"zod": "^4.6.7"
 	},
 	"devDependencies": {
