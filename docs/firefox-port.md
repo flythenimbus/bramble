@@ -345,6 +345,10 @@ differs from Chrome.
   fixing issue #59 and deliberately not done: the two scripts are 0.6KB and 3.8KB, so the per-frame
   saving is noise next to what that issue was about, and getting `document_start` + `world: "MAIN"`
   wrong here fails *silently* (every ceremony passes through to the native authenticator).
+- **Security keys.** A `"cross-platform"` `create()` goes to the browser, so a hardware key can be
+  enrolled with the provider on. Chrome's proxy has no passthrough, so this is Firefox only. A
+  `get()` carries no attachment, so signing in with a key Bramble does not hold still ends in the
+  provider's `NotAllowedError`.
 
 **Scoped out of v1:** `mediation: "conditional"` (passkey autofill in the field dropdown) passes
 through to native.
