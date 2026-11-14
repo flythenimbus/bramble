@@ -78,7 +78,7 @@ export type CeremonyRequest = CeremonyCreateRequest | CeremonyGetRequest;
  *   specific login, or omitted to let automatic placement decide.
  */
 export type CeremonyDecision =
-	| { approved: false }
+	| { approved: false; passthrough?: true }
 	| {
 			approved: true;
 			userVerified: boolean;
@@ -167,7 +167,7 @@ async function approve(
 /**
  * get(): confirm + unlock, then pick which stored passkey to sign in with. One match
  * signs in directly; several (multiple accounts on the site) show a picker. Returns the
- * chosen credentialId; `undefined` when none match (handleGet maps that to NotAllowedError).
+ * chosen credentialId.
  */
 export async function runGetCeremony(
 	req: CeremonyGetRequest,
@@ -178,11 +178,10 @@ export async function runGetCeremony(
 	const { startedLocked, entries } = opened;
 	const matches = findPasskeys(entries, req.rpId, req.allowCredentials);
 
-	// No stored passkey for this site: confirm generically if we didn't already (locked
-	// path), then let handleGet map the absent credentialId to NotAllowedError.
+	// Still ask first, so the answer can't tell a page what the vault holds.
 	if (matches.length === 0) {
 		if (!startedLocked && !(await host.showCard({})).approved) return { approved: false };
-		return { approved: true, userVerified: startedLocked, credentialId: undefined };
+		return { approved: false, passthrough: true };
 	}
 
 	// The locked path already confirmed via the unlock card, so a single match just proceeds.
@@ -323,7 +322,7 @@ export async function handleCreate(
 	requestId: number,
 	requestDetailsJson: string,
 	caller: RequestCaller,
-): Promise<chrome.webAuthenticationProxy.CreateResponseDetails> {
+): Promise<chrome.webAuthenticationProxy.CreateResponseDetails & { passthrough?: true }> {
 	try {
 		const opts = parseCreationOptions(requestDetailsJson);
 		const { rpId } = resolveRpId(caller.origin, opts.rpId);
@@ -339,7 +338,10 @@ export async function handleCreate(
 			origin: caller.origin,
 			needsVerification: needsVerification(opts),
 		});
-		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
+		if (!decision.approved) {
+			if (decision.passthrough) return { requestId, passthrough: true };
+			throw new WebAuthnError("NotAllowedError", "user declined");
+		}
 
 		const entries = await deps.loadEntries();
 		// excludeCredentials lists what the RP already holds FOR THE ACCOUNT BEING ENROLLED, so
@@ -411,7 +413,7 @@ export async function handleGet(
 	requestId: number,
 	requestDetailsJson: string,
 	caller: RequestCaller,
-): Promise<chrome.webAuthenticationProxy.GetResponseDetails> {
+): Promise<chrome.webAuthenticationProxy.GetResponseDetails & { passthrough?: true }> {
 	try {
 		const opts = parseRequestOptions(requestDetailsJson);
 		const { rpId } = resolveRpId(caller.origin, opts.rpId);
@@ -426,7 +428,10 @@ export async function handleGet(
 			needsVerification: needsVerification(opts),
 			allowCredentials: allowStd.length ? allowStd : undefined,
 		});
-		if (!decision.approved) throw new WebAuthnError("NotAllowedError", "user declined");
+		if (!decision.approved) {
+			if (decision.passthrough) return { requestId, passthrough: true };
+			throw new WebAuthnError("NotAllowedError", "user declined");
+		}
 		const allow = decision.credentialId
 			? [decision.credentialId]
 			: allowStd.length

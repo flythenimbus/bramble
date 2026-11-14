@@ -310,6 +310,18 @@ describe("in-flight requests during a pause", () => {
 	});
 });
 
+describe("a request that isn't Bramble's", () => {
+	it("fails, since Chrome's proxy has no passthrough", async () => {
+		const m = await load();
+		await m.initWebauthnProxy();
+		const { handleGet } = await import("./webauthn-proxy");
+		vi.mocked(handleGet).mockResolvedValueOnce({ requestId: 5, passthrough: true });
+		h.fire.get?.({ requestId: 5, requestDetailsJson: stamped() });
+		await new Promise((r) => setTimeout(r, 0));
+		expect(h.completed).toEqual([{ requestId: 5, kind: "get", error: "not allowed" }]);
+	});
+});
+
 describe("binding a request to the page that made it", () => {
 	const settle = () => new Promise((r) => setTimeout(r, 0));
 

@@ -30,7 +30,9 @@ type TransportResult =
 function toTransportResult(details: {
 	error?: { name: string; message: string };
 	responseJson?: string;
+	passthrough?: true;
 }): TransportResult {
+	if (details.passthrough) return { passthrough: true };
 	if (details.error) return { error: { name: details.error.name, message: details.error.message } };
 	if (details.responseJson) return { responseJson: details.responseJson };
 	return { error: { name: "NotAllowedError", message: "no passkey response" } };

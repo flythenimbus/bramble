@@ -345,6 +345,14 @@ differs from Chrome.
   fixing issue #59 and deliberately not done: the two scripts are 0.6KB and 3.8KB, so the per-frame
   saving is noise next to what that issue was about, and getting `document_start` + `world: "MAIN"`
   wrong here fails *silently* (every ceremony passes through to the native authenticator).
+- **Security keys.** A `"cross-platform"` `create()` goes to the browser, so a hardware key can be
+  enrolled with the provider on. Chrome's proxy has no passthrough, so this is Firefox only. A
+  `get()` carries no attachment, so it reaches the key only when Bramble passes it on (below).
+- **Declined requests.** A request Bramble does not complete goes to the browser: one whose card
+  the user dismissed, always before anything is saved, and a `get()` for which the vault holds no
+  passkey, once the user has answered Bramble's card. A card that times out, a request made while
+  another is open, an unlock that never finishes, and a declined confirm-it's-you still end in
+  `NotAllowedError`. Chrome, with no passthrough, fails them all.
 
 **Scoped out of v1:** `mediation: "conditional"` (passkey autofill in the field dropdown) passes
 through to native.

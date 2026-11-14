@@ -70,7 +70,9 @@ function install(): void {
 	const createOverride = async (
 		options?: CredentialCreationOptions,
 	): Promise<Credential | null> => {
-		if (!options?.publicKey || !canIntercept()) return nativeCreate(options);
+		const roaming =
+			options?.publicKey?.authenticatorSelection?.authenticatorAttachment === "cross-platform";
+		if (!options?.publicKey || roaming || !canIntercept()) return nativeCreate(options);
 		let result: TransportResult;
 		try {
 			result = await roundtrip("create", serializeCreateOptions(options.publicKey));
