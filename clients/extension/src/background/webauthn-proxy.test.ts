@@ -148,6 +148,14 @@ describe("handleCreate", () => {
 		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
 	});
 
+	it("passes through a ceremony that isn't Bramble's, minting nothing", async () => {
+		const ceremony = vi.fn(async () => ({ approved: false, passthrough: true }));
+		const d = deps({ ceremony: ceremony as unknown as CeremonyFn });
+		const res = await handleCreate(d, 1, createJson(), caller("https://github.com"));
+		expect(res).toEqual({ requestId: 1, passthrough: true });
+		expect(d.crypto.passkeyMakeCredential).not.toHaveBeenCalled();
+	});
+
 	it("attaches to the login the ceremony picked", async () => {
 		const d = deps({
 			loadEntries: vi.fn(async () => githubEntries),
@@ -216,6 +224,14 @@ describe("handleGet", () => {
 			allowCredentials: [],
 			...over,
 		});
+
+	it("passes through a ceremony that isn't Bramble's, signing nothing", async () => {
+		const ceremony = vi.fn(async () => ({ approved: false, passthrough: true }));
+		const d = deps({ ceremony: ceremony as unknown as CeremonyFn });
+		const res = await handleGet(d, 1, getJson(), caller("https://github.com"));
+		expect(res).toEqual({ requestId: 1, passthrough: true });
+		expect(d.crypto.passkeyGetAssertion).not.toHaveBeenCalled();
+	});
 
 	it("asserts with the chosen passkey and returns an authentication response", async () => {
 		const d = deps({
@@ -648,13 +664,10 @@ describe("runGetCeremony", () => {
 		expect(cards[0]?.passkeyChoices?.map((c) => c.label)).toEqual(["octocat"]); // account shown
 	});
 
-	it("no match -> approved with no credentialId (handleGet maps to NotAllowedError)", async () => {
-		const { h } = host({ entries: [] });
-		expect(await runGetCeremony(req, h)).toEqual({
-			approved: true,
-			userVerified: false,
-			credentialId: undefined,
-		});
+	it("no match -> one generic card, then passes through", async () => {
+		const { h, cards } = host({ entries: [] });
+		expect(await runGetCeremony(req, h)).toEqual({ approved: false, passthrough: true });
+		expect(cards).toEqual([{}]);
 	});
 
 	it("multiple matches -> picker; chosen credentialId returned", async () => {

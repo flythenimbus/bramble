@@ -8,6 +8,31 @@ vi.mock("./webauthn-proxy", () => ({ handleCreate: vi.fn(), handleGet: vi.fn() }
 
 import { senderCaller } from "./webauthn-content-transport";
 
+describe("WEBAUTHN_CREATE on Firefox", () => {
+	it("sends the page to its native authenticator when Bramble passes the request on", async () => {
+		vi.resetModules();
+		vi.doMock("../platform-api", () => ({ api: {} }));
+		vi.doMock("./webauthn-provider", () => ({
+			depsForTab: vi.fn(),
+			isProviderEnabled: () => true,
+		}));
+		vi.doMock("./webauthn-proxy", () => ({
+			handleCreate: async () => ({ requestId: 0, passthrough: true }),
+			handleGet: vi.fn(),
+		}));
+		const { on } = await import("./router");
+		vi.mocked(on).mockClear();
+		await import("./webauthn-content-transport");
+		const handler = vi.mocked(on).mock.calls.find(([type]) => type === "WEBAUTHN_CREATE")?.[1];
+		const tab = { id: 4, url: "https://shop.example/" } as chrome.tabs.Tab;
+		const res = await handler?.(
+			{ payload: {} },
+			{ frameId: 0, origin: "https://shop.example", tab },
+		);
+		expect(res?.data).toEqual({ passthrough: true });
+	});
+});
+
 describe("senderCaller (which Firefox frames the provider serves)", () => {
 	const tab = { id: 4, url: "https://shop.example/checkout" } as chrome.tabs.Tab;
 

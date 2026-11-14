@@ -104,7 +104,11 @@ function serve(kind: Kind, req: { requestId: number; requestDetailsJson: string 
 		// Gone means a pause already failed it; completing again throws "Invalid sender".
 		if (!inFlight.delete(req.requestId)) return;
 		try {
-			await complete(kind, details);
+			// Chrome's proxy can't hand a request back to the browser.
+			await complete(
+				kind,
+				"passthrough" in details ? { requestId: req.requestId, error: NOT_ALLOWED } : details,
+			);
 		} catch (e) {
 			// A malformed responseJson rejects here; error the request so the page's call fails
 			// fast instead of hanging forever ("nothing happens").

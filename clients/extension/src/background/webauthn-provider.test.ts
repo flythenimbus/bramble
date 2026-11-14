@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CeremonyHost } from "./webauthn-proxy";
 
 // The passkey-provider enabled flag: one in-memory boolean that gates both deliveries (Chrome's
 // attach, Firefox's content transport). Both ways it used to end up disagreeing with reality (a
@@ -20,9 +21,7 @@ const h = vi.hoisted(() => ({
 	/** Settles the running ceremony, so a test can hold one mid-flight. */
 	releaseCeremony: undefined as (() => void) | undefined,
 	/** What the mocked get ceremony does with its host (default: wait for releaseCeremony). */
-	runGet: undefined as
-		| ((host: { verifyUser: () => Promise<boolean>; unlockVerifies: boolean }) => Promise<unknown>)
-		| undefined,
+	runGet: undefined as ((host: CeremonyHost) => Promise<unknown>) | undefined,
 	/** The stored "Confirm passkeys once per unlock" pref. */
 	confirmOnce: false,
 	/** App routes the provider opened in a detached window, and the handlers marked extension-only. */
@@ -30,6 +29,8 @@ const h = vi.hoisted(() => ({
 	extensionOnly: new Set<unknown>(),
 	/** Detached windows the provider closed. */
 	closedWindows: [] as number[],
+	/** promptIds of the cards the provider showed, in order. */
+	cards: [] as string[],
 }));
 
 vi.mock("./prefs", () => ({
@@ -59,7 +60,12 @@ vi.mock("./popout", () => ({
 vi.mock("../platform-api", () => ({
 	api: {
 		runtime: { sendMessage: async () => {} },
-		tabs: { query: async () => [], sendMessage: async () => {} },
+		tabs: {
+			query: async () => [],
+			sendMessage: async (_tab: number, m: { payload: { promptId: string } }) => {
+				h.cards.push(m.payload.promptId);
+			},
+		},
 		action: {},
 		windows: {
 			create: async () => ({ id: 1 }),
@@ -82,10 +88,7 @@ vi.mock("./session", () => ({ vaultLocked: () => false }));
 
 vi.mock("./webauthn-proxy", () => ({
 	runCreateCeremony: async () => ({ approved: false }),
-	runGetCeremony: (
-		_req: unknown,
-		host: { verifyUser: () => Promise<boolean>; unlockVerifies: boolean },
-	) =>
+	runGetCeremony: (_req: unknown, host: CeremonyHost) =>
 		h.runGet
 			? h.runGet(host)
 			: new Promise((resolve) => {
@@ -103,6 +106,7 @@ async function load() {
 	h.confirmOnce = false;
 	h.openedPaths = [];
 	h.closedWindows = [];
+	h.cards = [];
 	h.extensionOnly.clear();
 	const mod = await import("./webauthn-provider");
 	mod.setProviderApplyHook(async (enabled) => {
@@ -315,5 +319,31 @@ describe("confirm it's you", () => {
 			await flush();
 			expect(h.openedPaths).toHaveLength(opened + 1);
 		});
+	});
+});
+
+describe("a passkey card the user dismisses", () => {
+	const req = { kind: "get" as const, rpId: "example.com", origin: "https://example.com" };
+	const oneCard = async (host: CeremonyHost) => ({ approved: (await host.showCard({})).approved });
+	afterEach(() => vi.useRealTimers());
+
+	it("passes the request through", async () => {
+		const m = await load();
+		h.runGet = oneCard;
+		const pending = m.depsForTab(1).ceremony(req);
+		await new Promise((r) => setTimeout(r, 0));
+		await h.handlers.get("PASSKEY_PROMPT_RESPONSE")?.({
+			payload: { promptId: h.cards[0], approved: false },
+		});
+		expect(await pending).toEqual({ approved: false, passthrough: true });
+	});
+
+	it("unlike one nobody answers", async () => {
+		vi.useFakeTimers();
+		const m = await load();
+		h.runGet = oneCard;
+		const pending = m.depsForTab(1).ceremony(req);
+		await vi.advanceTimersByTimeAsync(150_000);
+		expect(await pending).toEqual({ approved: false });
 	});
 });

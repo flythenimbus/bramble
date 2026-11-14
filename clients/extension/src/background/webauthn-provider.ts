@@ -38,7 +38,7 @@ import {
 // backstop: the page must never give up while a ceremony could still save a passkey.
 const CEREMONY_DEADLINE_MS = 150_000;
 
-type PromptReply = { approved: boolean; choice?: string };
+type PromptReply = { approved: boolean; choice?: string; dismissed?: boolean };
 // In-flight passkey cards keyed by promptId; resolved by PASSKEY_PROMPT_RESPONSE.
 const pendingPrompts = new Map<string, (reply: PromptReply) => void>();
 
@@ -183,17 +183,23 @@ function cornerCeremonyForTab(tabId: number, requestGone: () => boolean): Ceremo
 			// Snapshot the lock state up front so the ceremony's locked-branch UX (confirm card
 			// then unlock) is decided once, not re-read mid-flow.
 			const startedLocked = vaultLocked();
+			let dismissed = false;
 			const host: CeremonyHost = {
 				isLocked: () => startedLocked,
 				ensureUnlocked: () => ensureUnlocked(remaining()),
 				unlockVerifies: await getPasskeyConfirmOncePerUnlock(),
 				verifyUser: () => verifyUser(req, remaining(), requestGone),
 				loadEntries: loadDecryptedEntries,
-				showCard: (opts) => showCard(tabId, cardPayload(req, opts), remaining()),
+				showCard: async (opts) => {
+					const reply = await showCard(tabId, cardPayload(req, opts), remaining());
+					dismissed = !!reply.dismissed;
+					return reply;
+				},
 			};
 			const decision = await (req.kind === "create"
 				? runCreateCeremony(req, host)
 				: runGetCeremony(req, host));
+			if (!decision.approved && dismissed) return { approved: false, passthrough: true };
 			if (decision.approved && decision.userVerified && requestGone()) {
 				retryGrant = { origin: req.origin, rpId: req.rpId, until: Date.now() + RETRY_GRANT_MS };
 			}
@@ -262,7 +268,7 @@ on("PASSKEY_PROMPT_RESPONSE", async (message) => {
 	const resolve = pendingPrompts.get(promptId);
 	if (resolve) {
 		pendingPrompts.delete(promptId);
-		resolve({ approved: !!approved, choice });
+		resolve({ approved: !!approved, choice, dismissed: !approved });
 	}
 	return { ok: true, data: null };
 });
