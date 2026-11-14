@@ -17,7 +17,9 @@ die() {
 	exit 1
 }
 
-NIX=(nix --extra-experimental-features "nix-command flakes")
+# Sandboxed, as on NixOS. This image defaults to no sandbox, where the build sees its CA bundle and
+# passes where a user's build fails (#229). No fallback: a sandbox that cannot start must fail.
+NIX=(nix --extra-experimental-features "nix-command flakes" --option sandbox true --option sandbox-fallback false)
 
 # Copied out of the read-only mount: the build needs a writable tree, and a stale node_modules or
 # target/ from the host would be both wrong for this platform and enormous to copy.

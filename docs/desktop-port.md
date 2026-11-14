@@ -1225,7 +1225,9 @@ nix build github:bramble-sh/bramble      # or `nix run`
 ```
 
 and it exposes `overlays.default` for a system configuration. `pnpm run test:nix` builds it in a
-container and asserts the result, the way `test:apt` does for the Debian package.
+container and asserts the result, the way `test:apt` does for the Debian package. It turns the
+Nix sandbox on, which the `nixos/nix` image leaves off: unsandboxed, the build saw the image's CA
+bundle and passed while users' builds failed (#229).
 
 **A flake here rather than a nixpkgs submission, at least first.** nixpkgs is not a channel you
 publish to, it is one you submit to: a fix reaches users when a committer merges and Hydra builds,

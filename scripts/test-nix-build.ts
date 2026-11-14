@@ -37,6 +37,8 @@ try {
 		[
 			"run",
 			"--rm",
+			// The Nix sandbox needs mount namespaces, which an unprivileged container refuses.
+			"--privileged",
 			"-v",
 			`${STORE_VOLUME}:/nix`,
 			// Read-only, and the script copies out of it: a Nix build needs a writable tree, and
