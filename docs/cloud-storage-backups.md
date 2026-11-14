@@ -1014,7 +1014,7 @@ One WebDAV client reaches the self-hosted and privacy ecosystem.
 | pCloud | hosted WebDAV |
 | Filen, Internxt | WebDAV only through a **local** server run by their desktop app or CLI (verified November 2026). Both are end-to-end encrypted, so their servers cannot serve plain files; `local.webdav.filen.io` and `webdav.local.internxt.com` resolve to 127.0.0.1. Usable only on a computer running that app, never on mobile. See [Folder targets](#folder-targets-desktop-and-ios). |
 
-## OAuth one-click providers (Dropbox only)
+## OAuth one-click providers (Dropbox; Google Drive planned)
 
 For mainstream users who don't have S3 keys or a WebDAV server, the "Easiest" tile
 offers sign-in-with-your-account. It uses OAuth 2.0 with PKCE as a **public client**
@@ -1070,17 +1070,16 @@ token.
 out `Retry-After`, or 1s, 2s, 4s without one, at most three times; a longer wait is left to
 the next scheduled run.
 
-**Why Dropbox is the only OAuth tile.** Google Drive and OneDrive were both evaluated
+**Why Dropbox was the only OAuth tile.** Google Drive and OneDrive were both evaluated
 and dropped, because neither offers Dropbox's true-public-client experience:
 
 - **Google Drive**: Google's Web application client (the only type `launchWebAuthFlow`
-  can use) *requires* a `client_secret` at the token exchange even with PKCE (confirmed:
-  omitting it returns `"client_secret is missing"`), and so does its Desktop client. A
-  secret can't ship in a client-side extension, so a Bramble-owned client would need a
-  server-side broker that sees every refresh token. The only secret-less Google path is
-  `chrome.identity.getAuthToken`, which is Chrome-only, needs the user signed in to Chrome,
-  and keeps the tokens itself. So Google Drive is a bring-your-own-client tile instead; see
-  [Google Drive: the user's own OAuth client](#google-drive-the-users-own-oauth-client).
+  can use on Chrome) *requires* a `client_secret` at the token exchange even with PKCE
+  (confirmed: omitting it returns `"client_secret is missing"`), and a Web client's secret
+  can't ship. The only secret-less Google path is `chrome.identity.getAuthToken`, which is
+  Chrome-only, needs the user signed in to Chrome, and keeps the tokens itself. Revisited
+  November 2026: a **Desktop app** client also needs its secret, but Google allows shipping
+  that one, so Google Drive is planned after all; see [Google Drive](#google-drive).
 - **OneDrive** — technically the closest fit (public/native client, *no* secret, long-lived
   refresh token, app-folder scope). Dropped only because registering the Entra app now
   requires an Azure directory, and Azure signup demands a credit card. Revisit if that
@@ -1091,42 +1090,80 @@ Everyone else (pCloud, Fastmail, Yandex, Koofr) is already reachable via the Web
 and Backblaze / R2 / Storj / Wasabi / iDrive / MinIO via S3, so no other OAuth work is
 warranted. Filen and Internxt are not: their WebDAV is a local server (see the WebDAV table).
 
-## Google Drive: the user's own OAuth client
+## Google Drive
 
-Decided November 2026, not built. The user creates an OAuth client in their own Google
-Cloud project and pastes its ID and secret into Bramble, the way rclone works (rclone
-retires its shared client ID during 2026 and tells everyone to make their own). The secret
-is the user's, not one we ship, so it is stored like an S3 secret (VEK-wrapped, or in the
-OS store on desktop) and the code exchange sends it alongside PKCE. No Bramble server, no
-Bramble-registered Google app, no brand verification. It sits with the S3 and WebDAV tiles
-(bring your own credentials), not beside Dropbox's one click.
+Decided November 2026, not built. Two ways to connect, one code path: a one-click tile on
+**Bramble's own client**, and the **user's own client** under Advanced. Both use a Google
+**Desktop app** client, so the flows are identical and only the client ID and secret differ.
+No Bramble server sits in the token path; tokens go device to Google.
+
+### One click: Bramble's own client
+
+Bramble registers one Desktop app client. Google treats an installed app's secret as not
+secret ("installed apps cannot keep secrets"), so shipping it is allowed, unlike a Web
+application client's.
+
+- **Into the build from a CI secret, not the repo.** It is readable in every shipped bundle,
+  which is fine for this client type, but it stays out of GitHub secret scanning, which knows
+  Google's `GOCSPX-` prefix.
+- **Not served from bramble.sh.** The extension is open source, so anyone can fetch the same
+  URL: serving it hides nothing. It would only buy rotation without a release, at the cost of
+  a bramble.sh request on every connect.
+- **Why a known secret is low risk here.** A Desktop client redirects only to loopback, which
+  only a process on the user's own machine receives; PKCE ties each code to the device that
+  started the sign-in; `drive.file` reaches only Bramble's own ciphertext. The real risk is
+  availability: if Google disabled the client, every user's Drive backups would stop at once.
+  Reconnect errors and the user's own client are the fallback. Expect security reports about
+  a "hardcoded Google secret"; this section is the answer.
+- **Google verification.** Brand verification only: app name, logo, a homepage and privacy
+  policy on bramble.sh, and bramble.sh verified as ours. `drive.file` is non-sensitive, so no
+  scope review or security assessment. Published "In production" (Testing caps users and
+  expires refresh tokens after 7 days).
+
+How the code comes back, per platform:
+
+| Client | Client type | Redirect |
+|---|---|---|
+| Desktop app | Desktop | Rust listens on a random `127.0.0.1` port (a Desktop client accepts any port) |
+| Firefox | Desktop | `launchWebAuthFlow` with `http://127.0.0.1/mozoauth2/<subdomain of getRedirectURL()>`, allowed since Firefox 86. Not yet tried against Google. |
+| Chrome | Desktop | `launchWebAuthFlow` takes only `chromiumapp.org`, so open the consent page in a normal tab redirecting to `http://127.0.0.1:<random port>/`, read the code from the tab's URL under an optional `http://127.0.0.1/*` host permission asked for at connect, and close the tab (the page itself never loads). Unproven; the new permission needs a CWS Privacy justification. |
+| iOS | iOS (no secret) | `ASWebAuthenticationSession` with the reversed-client-ID scheme |
+| Android | Desktop | in-app loopback listener plus a Custom Tab. Off-label: Google stopped loopback for Android-type clients, and its Android path wants Play Services, which Bramble does not use. |
+
+### Advanced: the user's own client
+
+For users who would rather not use Bramble's client, and the fallback if Google ever disables
+ours. The user creates a Desktop app client in their own Google Cloud project and pastes its
+ID and secret into Bramble, the way rclone works (rclone retires its shared client ID during
+2026 and tells everyone to make their own). The secret is the user's, so it is stored like an
+S3 secret (VEK-wrapped, or in the OS store on desktop).
 
 - **Not an API key, not a service account.** An API key reaches public data only. A service
   account has no storage quota on a personal Google account, so its uploads fail.
-- **Scope `drive.file`**: Bramble sees only the files it created. Non-sensitive, so no
-  security assessment.
 - **Setup, about ten minutes in the Cloud Console, no card.** Create a project, enable the
-  Drive API, set the app name and support email, audience External (a Workspace user may
-  pick Internal), create a Web application client, paste the redirect URIs Bramble lists,
-  copy the ID and secret into Bramble. The help article walks it with screenshots.
+  Drive API, set the app name and support email, audience External (a Workspace user may pick
+  Internal), create a Desktop app client, copy the ID and secret into Bramble. A Desktop
+  client needs no redirect URIs pasted. iOS needs a second, iOS-type client with Bramble's
+  bundle ID. The help article walks it with screenshots.
 - **Publish to "In production", or backups stop after a week.** An External app left in
-  Testing gets refresh tokens that expire after 7 days. A refresh failing with
-  `invalid_grant` shows Reconnect, like any other credential failure. Google may show a
-  "hasn't verified this app" screen at sign-in (unconfirmed for a `drive.file`-only app);
-  it is the user's own app, so they continue.
-- **Redirects: one Web application client for every platform.** The extension's
-  `chromiumapp.org` and `allizom.org` URLs (as for Dropbox), and a fixed
-  `http://127.0.0.1:<port>` loopback for desktop (a Web client matches the port exactly).
-  Mobile needs an in-app loopback listener or an `https://bramble.sh/...` callback that
-  universal links / App Links catch before it reaches the server; undecided.
-- **The storage client** mirrors `dropbox.ts`: find or create one folder, resumable upload
-  in `PART_SIZE` parts (a multiple of 256 KiB, as Drive requires), `files.list` scoped to
-  that folder, `alt=media` download, delete. Drive allows two files with one name, so `put`
-  checks for the key first or retention would see duplicates.
-- **Per platform.** The extension needs only a form for the ID and secret: its connect
-  already exists. Desktop and mobile wait on OAuth connect there (`connectBackupOAuth` is
-  extension-only today); desktop mints access tokens in Rust, since its credentials never
-  enter the webview. That same work brings Dropbox to desktop and mobile.
+  Testing gets refresh tokens that expire after 7 days. A refresh failing with `invalid_grant`
+  shows Reconnect, like any other credential failure. Google may show a "hasn't verified this
+  app" screen at sign-in (unconfirmed for a `drive.file`-only app); it is the user's own app,
+  so they continue.
+
+### Both
+
+- **Scope `drive.file`**: Bramble sees only the files it created.
+- **`OAuthProviderMeta` grows a client secret**, sent with PKCE at the code exchange and every
+  refresh: Bramble's from the build, or the target's own.
+- **The storage client** mirrors `dropbox.ts`: find or create one folder, resumable upload in
+  `PART_SIZE` parts (a multiple of 256 KiB, as Drive requires), `files.list` scoped to that
+  folder, `alt=media` download, delete. Drive allows two files with one name, so `put` checks
+  for the key first or retention would see duplicates.
+- **Per platform.** The extension's connect exists but redirects to `getRedirectURL()`, so it
+  gains the loopback variants above. Desktop and mobile wait on OAuth connect there
+  (`connectBackupOAuth` is extension-only today); desktop mints access tokens in Rust, since
+  its credentials never enter the webview. That same work brings Dropbox to desktop and mobile.
 
 ## Folder targets (desktop and iOS)
 
@@ -1213,22 +1250,24 @@ The mechanism above is platform plumbing; the adapters below are the reach.
    capability on the platform that reads the at-rest blob. Device-local config,
    content-hash object naming, keep-last-N retention, and the Back up now button.
    This proves the pipe end to end and, in one shot, covers Backblaze / Storj /
-   Wasabi / R2 / MinIO and Nextcloud / ownCloud / Fastmail / Filen / Internxt.
+   Wasabi / R2 / MinIO and Nextcloud / ownCloud / Fastmail.
 2. **Extension automatic scheduling.** The `chrome.alarms` poke and on-unlock
    triggers, the decision rule, and skip-if-unchanged.
 3. **Mobile automatic (opportunistic).** The same client and config, fired on
    resume and unlock. Native background scheduling deferred.
 4. **OAuth consumer provider (Dropbox).** Built and live: PKCE public client,
    refresh-token creds, app-folder REST client, connect run in the background service
-   worker (`shell.connectBackupOAuth`). Dropbox is the only OAuth tile; Google Drive and
-   OneDrive were evaluated and dropped (see "Why Dropbox is the only OAuth tile" above).
+   worker (`shell.connectBackupOAuth`). Google Drive and OneDrive were evaluated and
+   dropped (see "Why Dropbox was the only OAuth tile" above); Google Drive returns in step 7.
    MEGA and Proton stay deferred (Proton "planned once its SDK stabilizes").
 5. **Desktop folder target.** iCloud, Google Drive, OneDrive, Proton, Filen and Internxt on
    the desktop in one target, with no accounts or servers. See
    [Folder targets](#folder-targets-desktop-and-ios).
 6. **iOS iCloud container.**
-7. **Google Drive with the user's own OAuth client** on the extension, then OAuth connect on
-   desktop and mobile, which brings Dropbox and Google Drive there.
+7. **Google Drive**: Bramble's own Desktop app client as one click, the user's own under
+   Advanced. Register the client and pass brand verification first. Extension first (Firefox
+   loopback, Chrome tab capture), then OAuth connect on desktop and mobile, which brings
+   Dropbox there too. See [Google Drive](#google-drive).
 8. **Filen native target: deferred**, like MEGA.
 
 Because the payload is already ciphertext, the user-facing promise (the provider
@@ -1240,7 +1279,7 @@ never sees anything readable) holds for every backend, not only the private ones
 - [pCloud API docs](https://docs.pcloud.com/)
 - [Filen (GitHub org)](https://github.com/FilenCloudDienste), [Filen CLI WebDAV and S3 server](https://docs.filen.io/docs/cli/webdav-and-s3-server/)
 - [Internxt WebDAV / rclone](https://internxt.com/webdav-rclone), [Internxt WebDAV is a local server](https://blog.internxt.com/internxt-webdav/)
-- Google Drive: [OAuth 2.0 (7-day Testing tokens)](https://developers.google.com/identity/protocols/oauth2), [Drive auth and `drive.file`](https://developers.google.com/drive/about-auth), [rclone: your own client ID](https://rclone.org/drive/), [rclone retiring its shared client ID](https://forum.rclone.org/t/google-drive-and-google-photos-users-action-required/54005)
+- Google Drive: [OAuth 2.0 (7-day Testing tokens)](https://developers.google.com/identity/protocols/oauth2), [Drive auth and `drive.file`](https://developers.google.com/drive/about-auth), [rclone: your own client ID](https://rclone.org/drive/), [rclone retiring its shared client ID](https://forum.rclone.org/t/google-drive-and-google-photos-users-action-required/54005), [loopback still supported for desktop apps](https://developers.google.com/identity/protocols/oauth2/resources/loopback-migration), [Firefox loopback redirect (86+)](https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/identity/launchWebAuthFlow), ["installed apps cannot keep secrets"](https://blog.sentry.security/oauth-2-0-client-credentials-misuse-in-public-apps/)
 - iCloud: [CloudKit Web Services reference](https://developer.apple.com/library/archive/documentation/DataManagement/Conceptual/CloudKitWebServicesReference/SettingUpWebServices.html), [rclone iCloud Drive backend](https://rclone.org/iclouddrive/)
 - [MEGA C++ SDK](https://github.com/meganz/sdk)
 - [Backblaze B2 S3-compatible API](https://www.backblaze.com/docs/cloud-storage-s3-compatible-api)
