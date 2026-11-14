@@ -19,6 +19,17 @@ Pages serves them at the clean `/privacy` and `/support` paths (the canonical
 URLs) and redirects the legacy `bramble.sh/privacy.html` /
 `bramble.sh/support.html` URLs to them, so both keep working.
 
+## Version endpoints
+
+- `/desktop/latest.json`: the desktop updater manifest, a static file the release writes.
+- `/android/latest.json`: the newest Android release (version, `pub_date`, APK `url`, `sha256`,
+  `size`, `release_url`), from GitHub (`functions/android/`).
+- `/ios/latest.json`: the version live on the App Store (version, `pub_date`, `notes`, `url`,
+  `minimum_os`), from Apple's lookup API (`functions/ios/`). A build in TestFlight or review is
+  not live, so it doesn't show here.
+
+Both functions cache upstream for an hour and serve the last good copy if the upstream fails.
+
 ## Docs (`/docs`)
 
 Each article is one MDX file, `src/content/docs/<slug>.mdx`, served at `/docs/<slug>`. Replies

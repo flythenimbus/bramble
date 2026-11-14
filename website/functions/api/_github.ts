@@ -1,3 +1,5 @@
+import { edgeCached } from "./_cache";
+
 // One cached view of every GitHub release, shared by the badge and redirect endpoints.
 // Underscore-prefixed, so Pages treats this as a module rather than a route.
 
@@ -15,7 +17,14 @@ export type DownloadPlatform = "android" | "macos" | "linux";
 /** Platforms that are released under their own tag, and so have a version. */
 export type ReleasePlatform = "android" | "desktop" | "windows";
 
-export type Latest = { tag: string; version: string; url: string };
+/** `url` is the release page; `installer` is the file itself, where the platform has one. */
+export type Latest = {
+	tag: string;
+	version: string;
+	url: string;
+	publishedAt?: string;
+	installer?: { url: string; sha256?: string; size?: number };
+};
 
 export type Snapshot = {
 	downloads: Record<DownloadPlatform, number>;
@@ -25,8 +34,15 @@ export type Snapshot = {
 type Release = {
 	tag_name?: string;
 	html_url?: string;
+	published_at?: string;
 	draft?: boolean;
-	assets?: Array<{ name?: string; download_count?: number }>;
+	assets?: Array<{
+		name?: string;
+		download_count?: number;
+		browser_download_url?: string;
+		digest?: string;
+		size?: number;
+	}>;
 };
 
 export const REPO = "bramble-sh/bramble";
@@ -48,32 +64,11 @@ const TAGS: Record<ReleasePlatform, RegExp> = {
 	windows: /^(.+)-windows$/i,
 };
 
-// Refetch after an hour; keep the last good numbers for a month to serve if GitHub is unhappy.
-const FRESH_MS = 60 * 60 * 1000;
-const STALE_SECONDS = 30 * 24 * 60 * 60;
-const CACHE_KEY = "https://bramble.sh/__cache/releases";
+// v2: a cached v1 snapshot has no installer, so it is not read back as one.
+const CACHE_KEY = "https://bramble.sh/__cache/releases-v2";
 
-/** Edge-cached, refreshed hourly, falling back to the stale copy when GitHub fails. */
-export async function snapshot(env: Env): Promise<Snapshot | null> {
-	const cache = (caches as any).default as Cache;
-	const key = new Request(CACHE_KEY);
-	const hit = await cache.match(key);
-	const cached = hit ? ((await hit.json()) as { stored: number; snapshot: Snapshot }) : null;
-	if (cached && Date.now() - cached.stored < FRESH_MS) return cached.snapshot;
-
-	try {
-		const fresh = await readReleases(env);
-		await cache.put(
-			key,
-			new Response(JSON.stringify({ stored: Date.now(), snapshot: fresh }), {
-				headers: { "Cache-Control": `public, max-age=${STALE_SECONDS}` },
-			}),
-		);
-		return fresh;
-	} catch {
-		return cached?.snapshot ?? null;
-	}
-}
+export const snapshot = (env: Env): Promise<Snapshot | null> =>
+	edgeCached(CACHE_KEY, () => readReleases(env));
 
 async function readReleases(env: Env): Promise<Snapshot> {
 	const result: Snapshot = { downloads: { android: 0, macos: 0, linux: 0 }, latest: {} };
@@ -97,10 +92,24 @@ async function readReleases(env: Env): Promise<Snapshot> {
 			for (const platform of Object.keys(TAGS) as ReleasePlatform[]) {
 				const version = release.tag_name?.match(TAGS[platform])?.[1];
 				if (version && !result.latest[platform]) {
+					const file =
+						platform in INSTALLERS
+							? release.assets?.find(
+									(a) => a.name && INSTALLERS[platform as DownloadPlatform].test(a.name),
+								)
+							: undefined;
 					result.latest[platform] = {
 						tag: release.tag_name as string,
 						version,
 						url: release.html_url ?? RELEASES_URL,
+						publishedAt: release.published_at,
+						installer: file?.browser_download_url
+							? {
+									url: file.browser_download_url,
+									sha256: file.digest?.replace(/^sha256:/, ""),
+									size: file.size,
+								}
+							: undefined,
 					};
 				}
 			}
