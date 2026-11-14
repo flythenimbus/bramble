@@ -1266,10 +1266,12 @@ Five things about the derivation are worth knowing before changing it:
   inherited: the wrapper would push our copy of the library onto the browser and file manager
   that `tauri-plugin-opener` spawns, ahead of their own `DT_RUNPATH`. `e2e/nix/build-test.sh`
   asserts the RUNPATH entry resolves, since `ldd` by construction cannot see a `dlopen`.
-- **The check phase needs CA roots.** The sandbox has none, and reqwest's rustls verifier refuses
-  to build a client without them, even for the plain-HTTP loopback server in `stream.rs`'s upload
-  test. That test then failed with "the request ended before its body was sent", which hid the
-  real error (#229). `nativeCheckInputs = [ cacert ]` points `SSL_CERT_FILE` at a CA bundle.
+- **The check phase runs in the sandbox: no CA roots, no network.** reqwest's rustls verifier
+  refuses to build a client without CA roots, even for the plain-HTTP loopback server in
+  `stream.rs`'s upload test, which then failed with "the request ended before its body was sent"
+  (#229). `nativeCheckInputs = [ cacert ]` points `SSL_CERT_FILE` at a CA bundle. With only a
+  loopback interface, the WebRTC engine gathers no candidates, so `native_webrtc`'s two-peer test
+  can never connect; `checkFlags` skips it.
 
 Users who would rather not build anything can run the published AppImage with
 `programs.appimage.enable`, which needs nothing from us.

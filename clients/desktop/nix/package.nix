@@ -121,6 +121,8 @@ rustPlatform.buildRustPackage (finalAttrs: {
   # The sandbox has no CA roots, and reqwest builds no client without them, even for the
   # plain-HTTP upload test in stream.rs. cacert's hook sets SSL_CERT_FILE.
   nativeCheckInputs = [ cacert ];
+  # Nor a network: with only loopback, the WebRTC engine gathers no candidates to connect on.
+  checkFlags = [ "--skip=native_webrtc::tests::the_engine_opens_a_channel_in_this_apps_build" ];
 
   meta = {
     description = "Offline-first password manager with direct device-to-device sync";
