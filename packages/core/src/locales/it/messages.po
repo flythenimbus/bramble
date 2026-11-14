@@ -1533,6 +1533,7 @@ msgstr "Disconnetta questo dispositivo dalla sincronizzazione prima di disattiva
 
 #: packages/core/src/app/components/DefaultManagerCard.tsx
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
+#: packages/core/src/app/components/UpdateCard.tsx
 msgid "Dismiss"
 msgstr "Ignorare"
 
@@ -4527,6 +4528,7 @@ msgstr "Aggiornare Bramble"
 msgid "Update failed: {error}"
 msgstr "Aggiornamento non riuscito: {error}"
 
+#: packages/core/src/app/components/UpdateCard.tsx
 #: packages/core/src/app/update-prompt-copy.tsx
 msgid "Update now"
 msgstr "Aggiornare ora"
@@ -4677,6 +4679,8 @@ msgid "Version"
 msgstr "Versione"
 
 #. placeholder {0}: found.version
+#. placeholder {0}: update.version
+#: packages/core/src/app/components/UpdateCard.tsx
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Version {0} is available"
 msgstr "Versione {0} disponibile"

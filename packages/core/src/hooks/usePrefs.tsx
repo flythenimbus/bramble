@@ -8,6 +8,7 @@ import {
 	useState,
 } from "react";
 import { type AliasConfig, isAliasConfig } from "../aliases";
+import { type AppUpdateState, normalizeAppUpdateState } from "../app/app-update";
 import {
 	freshReviewNudgeState,
 	normalizeReviewNudgeState,
@@ -74,6 +75,10 @@ export const PREF_ALIAS_PROVIDER = "pref.aliasProvider";
 // and deliberately not synced: it describes this install's relationship with its store listing, and
 // a phone and a browser are listed in different stores. See app/review-nudge.ts.
 export const PREF_REVIEW_NUDGE = "pref.reviewNudge";
+// Mobile only: look for a newer version once a day, and what the last look found. See
+// app/app-update.ts. The desktop keeps its own switch in its updater (shell.updates).
+const PREF_UPDATE_CHECK = "pref.updateCheck";
+const PREF_APP_UPDATE = "pref.appUpdate";
 
 export const DEFAULT_AUTOLOCK_MINUTES = 15;
 // Off by default: the breach check is the app's only network egress (k-anonymous
@@ -92,6 +97,8 @@ export const DEFAULT_LOCK_ON_SCREEN_LOCK = true;
 const DEFAULT_STATS_COLLAPSED = false;
 const DEFAULT_AUTOSTART_PROMPT_DISMISSED = false;
 const DEFAULT_DEFAULT_MANAGER_PROMPT_DISMISSED = false;
+// On, like the desktop's: a fix that reaches nobody fixes nothing.
+const DEFAULT_UPDATE_CHECK = true;
 
 /** Resolved user preferences with their defaults. */
 export interface Prefs {
@@ -126,6 +133,10 @@ export interface Prefs {
 	aliasProvider: AliasConfig | null;
 	// Usage counters and ask history behind the store-review nudge.
 	reviewNudge: ReviewNudgeState;
+	// Mobile: check bramble.sh for a newer version.
+	updateCheck: boolean;
+	// Mobile: the last check's result and the version the notice was closed for.
+	appUpdate: AppUpdateState;
 }
 
 /** Each pref's storage key. A map rather than a ternary chain: the type makes it exhaustive, so
@@ -149,6 +160,8 @@ const META_KEYS: Record<keyof Prefs, string> = {
 	generator: PREF_GENERATOR,
 	aliasProvider: PREF_ALIAS_PROVIDER,
 	reviewNudge: PREF_REVIEW_NUDGE,
+	updateCheck: PREF_UPDATE_CHECK,
+	appUpdate: PREF_APP_UPDATE,
 };
 
 /**
@@ -197,6 +210,9 @@ const PREF_SCOPE: Record<keyof Prefs, PrefScope> = {
 	// Device: which store this install came from is a fact about the app on this machine, and the
 	// counters are of sessions on it. Syncing it would have a phone's usage spend a browser's asks.
 	reviewNudge: "device",
+	// Device: they describe this install's version, not the vault.
+	updateCheck: "device",
+	appUpdate: "device",
 };
 
 const VAULT_SCOPED = (Object.keys(PREF_SCOPE) as (keyof Prefs)[]).filter(
@@ -258,6 +274,8 @@ const DEFAULT_PREFS: Prefs = {
 	// describes an install with no history rather than one dating from the epoch, which would
 	// read as old enough to ask immediately.
 	reviewNudge: freshReviewNudgeState(Date.now()),
+	updateCheck: DEFAULT_UPDATE_CHECK,
+	appUpdate: {},
 };
 
 export interface UsePrefs {
@@ -356,7 +374,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 		}));
 		void (async () => {
 			if (retireLegacy) await retireLegacyFlatPrefs(storage);
-			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q] = await Promise.all([
+			const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s] = await Promise.all([
 				storage.getMeta<number>(PREF_AUTOLOCK_MINUTES),
 				storage.getMeta<boolean>(PREF_BREACH_CHECK),
 				storage.getMeta<number>(PREF_CLIPBOARD_SECONDS),
@@ -384,6 +402,8 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				storage.getMeta<unknown>(PREF_REVIEW_NUDGE),
 				storage.getMeta<boolean>(PREF_DEFAULT_MANAGER_PROMPT_DISMISSED),
 				storage.getMeta<boolean>(PREF_PASSKEY_CONFIRM_ONCE),
+				storage.getMeta<boolean>(PREF_UPDATE_CHECK),
+				storage.getMeta<unknown>(PREF_APP_UPDATE),
 			]);
 			if (cancelled) return;
 			// One `now` for the read: a fresh install's clock starts here rather than at whichever
@@ -416,6 +436,8 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 				reviewNudge: normalizeReviewNudgeState(o, now),
 				defaultManagerPromptDismissed:
 					typeof p === "boolean" ? p : DEFAULT_DEFAULT_MANAGER_PROMPT_DISMISSED,
+				updateCheck: typeof r === "boolean" ? r : DEFAULT_UPDATE_CHECK,
+				appUpdate: normalizeAppUpdateState(s),
 			}));
 			setLoaded(true);
 		})();

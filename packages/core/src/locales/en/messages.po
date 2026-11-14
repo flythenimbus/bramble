@@ -1533,6 +1533,7 @@ msgstr "Disconnect this device from sync before turning off the master password.
 
 #: packages/core/src/app/components/DefaultManagerCard.tsx
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
+#: packages/core/src/app/components/UpdateCard.tsx
 msgid "Dismiss"
 msgstr "Dismiss"
 
@@ -4527,6 +4528,7 @@ msgstr "Update Bramble"
 msgid "Update failed: {error}"
 msgstr "Update failed: {error}"
 
+#: packages/core/src/app/components/UpdateCard.tsx
 #: packages/core/src/app/update-prompt-copy.tsx
 msgid "Update now"
 msgstr "Update now"
@@ -4677,6 +4679,8 @@ msgid "Version"
 msgstr "Version"
 
 #. placeholder {0}: found.version
+#. placeholder {0}: update.version
+#: packages/core/src/app/components/UpdateCard.tsx
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Version {0} is available"
 msgstr "Version {0} is available"

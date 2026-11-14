@@ -48,6 +48,7 @@ comments point here instead of repeating it.
 | [email-aliases.md](email-aliases.md) | Plan: per-site email aliases from Addy.io, SimpleLogin and Fastmail (Forward Email deferred, paid-only), why plain `fetch` reaches them from every platform while Firefox Relay and DuckDuckGo cannot be, and why an alias suggestion cannot be pre-generated the way a password is , and a catch-all-domain provider that needs no account and makes the address locally |
 | [firefox-port.md](firefox-port.md) | Firefox MV3 port feasibility and the filesystem-sync gap P2P sync fills |
 | [mobile-port.md](mobile-port.md) | Capacitor mobile port feasibility; native autofill + biometric-unlock constraints |
+| [mobile-update-notice.md](mobile-update-notice.md) | The mobile apps' once-a-day version check: the vault-list card, App Store vs GitHub APK, and the Settings switch |
 | [desktop-port.md](desktop-port.md) | Plan: Tauri 2 desktop app; the spotlight mini app, browser IPC over native messaging, auto-type, SSH agent |
 | [desktop-link-onboarding.md](desktop-link-onboarding.md) | Plan: link the desktop app from the setup screen and end with one vault (combine or keep separate); one emoji check and no code, all over the local link; each browser vault pairs with one desktop vault; security review |
 | [windows-release-checklist.md](windows-release-checklist.md) | What CI and a scripted install already cover on Windows, and the human checklist for a release: SmartScreen, tray, autostart, browser pairing, updater, both uninstall answers |

@@ -5,9 +5,9 @@ import { SITE } from "@/consts";
 
 <LegalLayout
 	title="Privacy Policy"
-	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its network use is limited to optional, off-by-default features you control (a password breach check, peer-to-peer sync between your own devices, encrypted backups to a storage provider you choose, and email aliases from a provider you already use), plus an update check in the desktop app that you can turn off."
+	description="Bramble is a local-first password manager. It stores everything encrypted on your device. Its network use is limited to optional, off-by-default features you control (a password breach check, peer-to-peer sync between your own devices, encrypted backups to a storage provider you choose, and email aliases from a provider you already use), plus an update check in the desktop and mobile apps that you can turn off."
 	path="/privacy"
-	meta="Effective date: 1 November 2026"
+	meta="Effective date: 13 November 2026"
 >
 	<p class="lead">
 		<strong>The short version:</strong> Bramble is a local-first password manager, available as a
@@ -16,8 +16,8 @@ import { SITE } from "@/consts";
 		on your device, encrypted. Bramble makes network connections only for a few optional features
 		that are off by default and that you turn on yourself: a password breach check, peer-to-peer
 		sync between your own devices, encrypted backups to a storage provider you choose, and email
-		aliases from a provider you already use. The one exception is the desktop app, which checks for
-		updates when it opens; you can turn that off. None of these ever exposes your passwords or your
+		aliases from a provider you already use. The one exception is a check for updates in the desktop
+		and mobile apps; you can turn that off. None of these ever exposes your passwords or your
 		vault in a form that Bramble, a provider, or anyone else could read. Details below.
 	</p>
 
@@ -67,20 +67,24 @@ import { SITE } from "@/consts";
 
 	<h2>Network connections, in full</h2>
 	<p>
-		The browser extension and the mobile apps work entirely offline by default, and their updates
-		come through the store or app store you installed them from. There are four features that make
-		network connections, all optional and all off until you turn them on: the password breach check,
-		device sync, cloud backups, and email aliases. The desktop app adds one more, on by default: a
-		check for updates when it opens. They are described next. Bramble makes no other network
-		requests.
+		The browser extension works entirely offline by default, and its updates come through the store
+		you installed it from. There are four features that make network connections, all optional and
+		all off until you turn them on: the password breach check, device sync, cloud backups, and email
+		aliases. The desktop and mobile apps add one more, on by default: a check for updates. They are
+		described next. Bramble makes no other network requests.
 	</p>
 
-	<h2>Update checks (desktop app)</h2>
+	<h2>Update checks (desktop and mobile apps)</h2>
 	<p>
 		The desktop app is installed directly rather than from a store, so it looks for new versions
 		itself. A few seconds after it opens, it downloads a small file from bramble.sh that names the
 		latest version. You can turn this off in Settings → About, under Updates, with "Check for updates when
 		Bramble opens"; you can still check by hand from the same place, or from the app menu.
+	</p>
+	<p>
+		The mobile apps do the same at most once a day, so they can tell you when a newer version is
+		out. The iPhone app's file names the version live on the App Store, which bramble.sh reads from
+		Apple, so your phone does not contact Apple for it. The same Settings switch turns it off.
 	</p>
 	<ul>
 		<li>
@@ -90,9 +94,11 @@ import { SITE } from "@/consts";
 		</li>
 		<li>
 			<strong>Nothing installs without you.</strong> If a newer version exists, Bramble asks before
-			doing anything. If you agree, it downloads the update from Bramble's releases on GitHub and
-			checks it against a signature built into the app before applying it, so a tampered download
-			is refused.
+			doing anything. If you agree, the desktop app downloads the update from Bramble's releases on
+			GitHub and checks it against a signature built into the app before applying it, so a tampered
+			download is refused. On iPhone, Bramble opens its App Store page. On Android, it opens the
+			update's download from GitHub in your browser, and Android installs it only if it is signed
+			with the same key as the Bramble you have.
 		</li>
 		<li>
 			<strong>Not every install checks.</strong> On Linux, copies installed from a package (such as

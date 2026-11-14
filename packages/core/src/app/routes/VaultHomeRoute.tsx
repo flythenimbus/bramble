@@ -9,6 +9,8 @@ import { reusedPasswordIds } from "../../vault/password-reuse";
 import { allTags } from "../../vault/tags";
 import { DefaultManagerCard } from "../components/DefaultManagerCard";
 import { ReviewNudgeCard } from "../components/ReviewNudgeCard";
+import { UpdateCard } from "../components/UpdateCard";
+import { useAppUpdate } from "../hooks/useAppUpdate";
 import { useDefaultPasswordManager } from "../hooks/useDefaultPasswordManager";
 import { useReviewNudge } from "../hooks/useReviewNudge";
 import { toListItem } from "../screens/VaultHome/list-item";
@@ -75,6 +77,7 @@ export function VaultHomeRoute() {
 	// asks) and usually null. Entries are the whole vault, archived included: an archived entry
 	// is still one this person put there, which is all the signal is measuring.
 	const reviewNudge = useReviewNudge(entries.length);
+	const appUpdate = useAppUpdate();
 	const defaultManager = useDefaultPasswordManager();
 	const offerDefaultManager =
 		prefsLoaded && !prefs.defaultManagerPromptDismissed && defaultManager?.state === "browser";
@@ -142,8 +145,11 @@ export function VaultHomeRoute() {
 			statsCollapsed={prefs.statsCollapsed}
 			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}
 			initialScrollOffset={scrollEntry?.scrollY}
+			// The update first: it may carry a security fix.
 			nudge={
-				reviewNudge ? (
+				appUpdate ? (
+					<UpdateCard update={appUpdate} />
+				) : reviewNudge ? (
 					<ReviewNudgeCard nudge={reviewNudge} />
 				) : offerDefaultManager ? (
 					<DefaultManagerCard

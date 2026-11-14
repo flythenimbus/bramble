@@ -113,7 +113,7 @@ export function Settings() {
 				{tab === "about" && (
 					<>
 						<AboutSection />
-						{/* Renders itself away where the host cannot update itself. */}
+						{/* Renders itself away on the extension. */}
 						<UpdatesSection />
 						<SupportSection />
 					</>

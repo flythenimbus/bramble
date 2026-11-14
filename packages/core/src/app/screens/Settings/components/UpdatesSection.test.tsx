@@ -4,7 +4,12 @@ import { I18nProvider } from "@lingui/react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Platform, PlatformProvider } from "../../../../context/PlatformContext";
+import { PrefsProvider } from "../../../../hooks/usePrefs";
 import { UpdatesSection } from "./UpdatesSection";
+
+vi.mock("../../../../hooks/useVaultRegistry", () => ({
+	useVaultRegistry: () => ({ activeId: undefined, vaults: [], ready: true }),
+}));
 
 // The desktop can be told to update from two places: this section, and the native dialog shown at
 // launch. That second one is why progress is subscribed rather than local state — a section that
@@ -142,5 +147,46 @@ describe("UpdatesSection", () => {
 
 		const toggle = await screen.findByRole("button", { name: /when bramble opens/i });
 		expect(toggle.getAttribute("aria-pressed")).toBe("false");
+	});
+});
+
+// Mobile cannot update itself; the section is only the switch for the update notice.
+describe("UpdatesSection on mobile", () => {
+	function mountMobile(store: Map<string, unknown>) {
+		const storage = {
+			getMeta: async (k: string) => store.get(k),
+			setMeta: async (k: string, v: unknown) => void store.set(k, v),
+			removeMeta: async (k: string) => void store.delete(k),
+		};
+		const platform = { target: "android", shell: {}, storage } as unknown as Platform;
+		render(
+			<I18nProvider i18n={i18n}>
+				<PlatformProvider platform={platform}>
+					<PrefsProvider>
+						<UpdatesSection />
+					</PrefsProvider>
+				</PlatformProvider>
+			</I18nProvider>,
+		);
+	}
+
+	it("is on by default and saves turning it off", async () => {
+		const store = new Map<string, unknown>();
+		mountMobile(store);
+		const toggle = await screen.findByRole("button", { name: /when bramble opens/i });
+		expect(toggle.getAttribute("aria-pressed")).toBe("true");
+
+		await act(async () => {
+			fireEvent.click(toggle);
+		});
+
+		expect(store.get("pref.updateCheck")).toBe(false);
+		expect(toggle.getAttribute("aria-pressed")).toBe("false");
+	});
+
+	it("offers no manual check, which has nothing to install", async () => {
+		mountMobile(new Map());
+		await screen.findByRole("button", { name: /when bramble opens/i });
+		expect(screen.queryByRole("button", { name: /^check$/i })).toBeNull();
 	});
 });

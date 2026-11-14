@@ -2,21 +2,23 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Download, RefreshCw, Rocket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../../../context/PlatformContext";
+import { usePrefs } from "../../../../hooks/usePrefs";
+import { UPDATE_MANIFEST_URL } from "../../../app-update";
 import { Button } from "../../../components/ui/button";
 import { Row, Section, Toggle } from "./primitives";
 
 /**
  * Check for and install a new version of the app.
  *
- * Renders itself away where the host cannot update itself, which is everywhere but the desktop: a
- * store-distributed extension is updated by the store.
+ * Renders itself away on the extension, which its store updates. Mobile gets only the switch for
+ * its update notice (app/app-update.ts).
  *
  * Manual on purpose, for now. Downloading and applying a binary is the one thing here that should
  * not happen because a window happened to be open, and a background updater for a password manager
  * wants a settled answer on when it may restart the app.
  */
 export function UpdatesSection() {
-	const { shell } = usePlatform();
+	const { shell, target } = usePlatform();
 	const { t } = useLingui();
 	const [state, setState] = useState<"idle" | "checking" | "installing">("idle");
 	const [found, setFound] = useState<{ version: string; notes?: string } | null>(null);
@@ -45,6 +47,7 @@ export function UpdatesSection() {
 	// having no update story at all. Everywhere else (the extension, mobile) there is genuinely
 	// nothing to report, because the store does it.
 	if (!shell.updates) {
+		if (UPDATE_MANIFEST_URL[target]) return <MobileUpdateCheck />;
 		if (!shell.updatesManagedExternally?.()) return null;
 		return (
 			<Section icon={<RefreshCw className="w-4 h-4 text-primary" />} title={t`Updates`}>
@@ -167,6 +170,28 @@ export function UpdatesSection() {
 					<Trans>Update failed: {error}</Trans>
 				</p>
 			)}
+		</Section>
+	);
+}
+
+/** Mobile: the store or GitHub has the update; this only decides whether the app looks. */
+function MobileUpdateCheck() {
+	const { prefs, loaded, update } = usePrefs();
+	const { t } = useLingui();
+	if (!loaded) return null;
+	return (
+		<Section icon={<RefreshCw className="w-4 h-4" />} title={t`Updates`}>
+			<Row
+				icon={<Rocket className="w-4 h-4 text-primary" />}
+				title={t`Check for updates when Bramble opens`}
+				subtitle={t`Fetches the latest version number from bramble.sh. Nothing from your vault is sent.`}
+			>
+				<Toggle
+					checked={prefs.updateCheck}
+					label={t`Check for updates when Bramble opens`}
+					onChange={(on) => void update("updateCheck", on)}
+				/>
+			</Row>
 		</Section>
 	);
 }
