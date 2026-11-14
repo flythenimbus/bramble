@@ -337,6 +337,12 @@ differs from Chrome.
   trust boundary; a page can at most craft a request for its own origin.
 - **Timing.** Both content scripts run at `document_start`; a wedged bridge falls back to the native
   authenticator so a page's WebAuthn never hangs or breaks.
+- **Capability answers.** A site decides whether to offer a passkey from
+  `isUserVerifyingPlatformAuthenticatorAvailable()` and `getClientCapabilities()`. Chrome asks the
+  provider (`onIsUvpaaRequest`); Firefox answers itself, false on Linux, so the site hides the option
+  ([bug 1987454](https://bugzilla.mozilla.org/show_bug.cgi?id=1987454)). The override answers true
+  exactly where the background would serve a create, and gives the browser's answer otherwise.
+  `isConditionalMediationAvailable()` is left alone, since conditional requests pass through.
 - **Disabled / passthrough.** The override is always injected, so when the provider is off (or the
   origin is one we won't serve, e.g. a cross-origin child frame) the background replies `passthrough`
   and the shim calls the captured native method. Firefox therefore has **no all-or-nothing
