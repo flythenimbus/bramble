@@ -6,6 +6,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: @lingui/cli\n"
 "Language: ko\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
 
 #. placeholder {0}: result.warnings.length - 8
 #: packages/core/src/app/screens/Import/ImportShell.tsx
@@ -1383,6 +1389,7 @@ msgstr "마스터 비밀번호를 끄기 전에 이 기기를 동기화에서 �
 
 #: packages/core/src/app/components/DefaultManagerCard.tsx
 #: packages/core/src/app/components/ReviewNudgeCard.tsx
+#: packages/core/src/app/components/UpdateCard.tsx
 msgid "Dismiss"
 msgstr "닫기"
 
@@ -3395,6 +3402,10 @@ msgstr "사용할 기호"
 msgid "Sync"
 msgstr "동기화"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Sync now"
+msgstr "지금 동기화"
+
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Sync this vault to the Bramble extension and fill from it without unlocking twice."
 msgstr "이 보관함을 Bramble 확장 프로그램과 동기화하고 두 번 잠금 해제하지 않고도 자동 완성할 수 있습니다."
@@ -4075,6 +4086,7 @@ msgstr "Bramble 업데이트"
 msgid "Update failed: {error}"
 msgstr "업데이트 실패: {error}"
 
+#: packages/core/src/app/components/UpdateCard.tsx
 #: packages/core/src/app/update-prompt-copy.tsx
 msgid "Update now"
 msgstr "지금 업데이트"
@@ -4217,6 +4229,8 @@ msgid "Version"
 msgstr "버전"
 
 #. placeholder {0}: found.version
+#. placeholder {0}: update.version
+#: packages/core/src/app/components/UpdateCard.tsx
 #: packages/core/src/app/screens/Settings/components/UpdatesSection.tsx
 msgid "Version {0} is available"
 msgstr "버전 {0} 사용 가능"

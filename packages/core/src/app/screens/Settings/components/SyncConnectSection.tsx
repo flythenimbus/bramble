@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { useNavigate } from "@tanstack/react-router";
-import { Check, Copy, Pencil, Plus, Trash2, Unplug, Wifi, X } from "lucide-react";
+import { Check, Copy, Pencil, Plus, RefreshCw, Trash2, Unplug, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCan, usePlatform } from "../../../../context/PlatformContext";
@@ -27,6 +27,7 @@ import { PasswordField } from "../../../components/ui/password-field";
 import { TextField } from "../../../components/ui/text-field";
 import { useDeviceNames } from "../../../hooks/useDeviceNames";
 import { Row, Section } from "./primitives";
+import { deviceNamer, fullStamp, shortStamp } from "./sync-log";
 
 const inputClass =
 	"w-full px-3 py-1.5 text-xs font-mono rounded-lg border border-input-border bg-transparent focus:outline-none focus:border-primary";
@@ -35,6 +36,13 @@ interface SyncGroup {
 	groupKey: string;
 	roster: RosterPayload;
 }
+
+/** One line of the sync log, and when it was logged. */
+interface LogLine {
+	at: number;
+	text: string;
+}
+const logLine = (text: string): LogLine => ({ at: Date.now(), text });
 
 const fingerprint = (publicKey: string): string => publicKey.replace(/[^a-z0-9]/gi, "").slice(0, 6);
 const addedOn = (ms: number): string => formatDate(ms);
@@ -136,9 +144,10 @@ export function SyncConnectSection() {
 	const [gatePassword, setGatePassword] = useState("");
 	const [gateError, setGateError] = useState<string | null>(null);
 	const [gateBusy, setGateBusy] = useState(false);
-	const [log, setLog] = useState<string[]>([]);
+	const [log, setLog] = useState<LogLine[]>([]);
 	const logRef = useRef<HTMLDivElement>(null);
 	const [logCopied, setLogCopied] = useState(false);
+	const [syncingNow, setSyncingNow] = useState(false);
 
 	// Group membership (source of truth for "are we paired, and with whom"). undefined
 	// while loading so we don't flash the onboarding UI over an existing group.
@@ -233,7 +242,10 @@ export function SyncConnectSection() {
 	// Stream transport status into the log for the panel's lifetime so enrollment
 	// progress shows on both sides. The inviter's connection happens after its pairing
 	// modal is dismissed, so a modal- or action-scoped subscription would miss it.
-	useEffect(() => shell.onSyncStatus((s) => setLog((prev) => [...prev, s])), [shell]);
+	useEffect(
+		() => shell.onSyncStatus((text, at) => setLog((prev) => [...prev, { at, text }])),
+		[shell],
+	);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: scroll to newest on each line
 	useEffect(() => {
@@ -242,7 +254,10 @@ export function SyncConnectSection() {
 
 	const copyLog = async () => {
 		try {
-			await navigator.clipboard.writeText(log.join("\n"));
+			// Without device names: copies go into public bug reports.
+			await navigator.clipboard.writeText(
+				log.map((l) => `${fullStamp(l.at)} ${l.text}`).join("\n"),
+			);
 			setLogCopied(true);
 			setTimeout(() => setLogCopied(false), 1500);
 		} catch {
@@ -252,11 +267,11 @@ export function SyncConnectSection() {
 
 	// TODO(i18n): note()/run() labels and ✅ messages below feed the hidden debug log
 	// (its render is commented out), so they're left untranslated for now.
-	const note = (line: string) => setLog((prev) => [...prev, line]);
+	const note = (line: string) => setLog((prev) => [...prev, logLine(line)]);
 	// Status streaming is a panel-lifetime subscription (below); here we just reset the
 	// log to the action's label and surface a thrown failure.
 	const run = async (label: string, fn: () => Promise<void>) => {
-		setLog([label]);
+		setLog([logLine(label)]);
 		try {
 			await fn();
 		} catch (e) {
@@ -334,6 +349,8 @@ export function SyncConnectSection() {
 	const sortedDevices = [...devices].sort((a, b) =>
 		a.publicKey === myPub ? -1 : b.publicKey === myPub ? 1 : b.addedAt - a.addedAt,
 	);
+	const nameInLog = deviceNamer(devices.map((d) => ({ publicKey: d.publicKey, name: nameOf(d) })));
+	const now = Date.now();
 
 	const addDevice = (password: string) =>
 		run("creating pairing code…", async () => {
@@ -385,6 +402,17 @@ export function SyncConnectSection() {
 			note(`error: ${(e as Error).message}`);
 		}
 	};
+	const syncNow = async () => {
+		setSyncingNow(true);
+		note("sync now: restarting");
+		try {
+			await shell.syncNow?.();
+		} catch (e) {
+			note(`error: ${(e as Error).message}`);
+		} finally {
+			setSyncingNow(false);
+		}
+	};
 	const disconnect = () =>
 		run("disconnecting…", async () => {
 			setConfirmDisconnect(false);
@@ -410,7 +438,8 @@ export function SyncConnectSection() {
 						{log.map((line, i) => (
 							// biome-ignore lint/suspicious/noArrayIndexKey: append-only status log
 							<div key={i} className="text-muted-foreground break-words">
-								{line}
+								<span className="text-muted-foreground/60">{shortStamp(line.at, now)}</span>{" "}
+								<span>{nameInLog(line.text)}</span>
 							</div>
 						))}
 					</div>
@@ -456,6 +485,18 @@ export function SyncConnectSection() {
 								<Trans>Waiting for a device to join…</Trans>
 							)}
 						</span>
+						{paired && !notSyncing && shell.syncNow && (
+							<Button
+								variant="secondary"
+								size="sm"
+								onClick={syncNow}
+								disabled={syncingNow}
+								className="ml-auto shrink-0 gap-1.5"
+							>
+								<RefreshCw className={`w-3.5 h-3.5 ${syncingNow ? "animate-spin" : ""}`} />{" "}
+								<Trans>Sync now</Trans>
+							</Button>
+						)}
 					</div>
 
 					{lastSynced && (

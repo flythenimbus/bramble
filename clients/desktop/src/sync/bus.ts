@@ -6,26 +6,28 @@
 
 import type { SyncEvent } from "@core/index";
 
-const statusSubs = new Set<(s: string) => void>();
+const statusSubs = new Set<(s: string, at: number) => void>();
 const eventSubs = new Set<(e: SyncEvent) => void>();
 
 /** Recent status, replayed to a late subscriber. Sync starts on unlock, long before anyone opens
  * Settings, and a panel that mounted afterwards would otherwise show nothing at all. */
-const statusHistory: string[] = [];
+const statusHistory: { status: string; at: number }[] = [];
 
 export function report(s: string): void {
-	statusHistory.push(s);
+	const at = Date.now();
+	statusHistory.push({ status: s, at });
 	if (statusHistory.length > 50) statusHistory.shift();
-	for (const cb of statusSubs) cb(s);
+	for (const cb of statusSubs) cb(s, at);
 }
 
 export function emit(e: SyncEvent): void {
 	for (const cb of eventSubs) cb(e);
 }
 
-export function onSyncStatus(cb: (s: string) => void): () => void {
+/** Each line comes with the epoch ms it was logged at, replayed ones included. */
+export function onSyncStatus(cb: (s: string, at: number) => void): () => void {
 	statusSubs.add(cb);
-	for (const s of statusHistory) cb(s);
+	for (const line of statusHistory) cb(line.status, line.at);
 	return () => statusSubs.delete(cb);
 }
 

@@ -380,6 +380,17 @@ export function maybeStartRosterSync(): Promise<void> {
 	return starting;
 }
 
+/**
+ * "Sync now": what an unlock does, without the lock. Every peer is dropped and found again. A start
+ * still under way is let finish first, so its sessions are the ones replaced rather than kept.
+ */
+export async function restartRosterSync(): Promise<void> {
+	if (await desktopCrypto.isLocked()) throw new Error("the vault is locked");
+	await starting;
+	stopRosterSync();
+	await maybeStartRosterSync();
+}
+
 export function stopRosterSync(): void {
 	for (const session of rosterSessions) session.stop();
 	rosterSessions = [];

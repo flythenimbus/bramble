@@ -17,6 +17,7 @@ import {
 	onSyncEvent,
 	onSyncStatus,
 	resetSyncState,
+	restartSync,
 	retargetActiveVault,
 	signRoster,
 	startEnrollInvite,
@@ -185,6 +186,7 @@ export const mobileShell: ShellAdapter = {
 	// this a fresh vault inherited the old group and reconnected to the old mesh. See sync-manager.
 	resetSyncState,
 	onSyncStatus,
+	syncNow: restartSync,
 	syncDevicePublicKey,
 	// Roster-entry signing + password-authority admission (Item A). Once these are present the
 	// shared core signs own entries + admission-signs joiners automatically. See docs/p2p-sync-revocation-hardening.md.

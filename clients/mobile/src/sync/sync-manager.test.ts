@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
 	meta: new Map<string, unknown>(),
 	blobWrites: [] as { vaultId: string | undefined }[],
 	rosterOpts: null as Record<string, (...a: never[]) => unknown> | null,
+	rosterStarts: 0,
 	sessionStops: 0,
 	/** The file session's options, and what was done to it. */
 	blobStarts: [] as Record<string, unknown>[],
@@ -22,6 +23,8 @@ const h = vi.hoisted(() => ({
 	applyRemote: async (_port: unknown, _payload: unknown, _opts?: unknown): Promise<void> => {},
 	/** The enroll host's options, from the last invite. */
 	enrollOpts: null as Record<string, (...a: never[]) => unknown> | null,
+	/** What the native side answers to "is the vault locked?". */
+	locked: false,
 	/** The native crypto bridge, as far as an invite and an admission use it. */
 	syncCrypto: {
 		export_vek: async () => "vek",
@@ -67,6 +70,7 @@ vi.mock("@core/vault-format", async (importOriginal) => ({
 vi.mock("@core/sync/transport/roster-sync", () => ({
 	startRosterSync: async (opts: Record<string, (...a: never[]) => unknown>) => {
 		h.rosterOpts = opts;
+		h.rosterStarts++;
 		return {
 			stop: () => {
 				h.sessionStops++;
@@ -115,6 +119,7 @@ vi.mock("../adapters/crypto", () => ({
 	mobileCrypto: {
 		encryptWithVek: async () => ({ iv: "AAAA", ciphertext: "BBBB" }),
 		decryptWithVek: async () => JSON.stringify({ entries: [], tombstones: [] }),
+		isLocked: async () => h.locked,
 	},
 }));
 
@@ -184,6 +189,7 @@ beforeEach(() => {
 	h.meta.clear();
 	h.blobWrites.length = 0;
 	h.rosterOpts = null;
+	h.rosterStarts = 0;
 	h.sessionStops = 0;
 	h.blobStarts.length = 0;
 	h.blobStops = 0;
@@ -191,6 +197,7 @@ beforeEach(() => {
 	h.stateListener = null;
 	h.applyRemote = async () => {};
 	h.enrollOpts = null;
+	h.locked = false;
 	vi.stubGlobal("crypto", { randomUUID: () => "id", getRandomValues: (a: Uint8Array) => a });
 });
 
@@ -362,6 +369,74 @@ describe("activeVaultId resolution", () => {
 		await startSession(mod);
 
 		expect(h.rosterOpts).not.toBeNull();
+	});
+});
+
+// Issue #230: what an unlock does, without having to lock first.
+describe("sync now", () => {
+	async function running() {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadManager();
+		await startSession(mod);
+		await vi.waitFor(() => expect(h.blobStarts).toHaveLength(1));
+		return mod;
+	}
+
+	it("drops every session and starts a fresh set", async () => {
+		const mod = await running();
+		await mod.restartSync();
+
+		expect(h.sessionStops).toBe(1);
+		expect(h.blobStops).toBe(1);
+		expect(h.rosterStarts).toBe(2);
+		expect(h.blobStarts).toHaveLength(2);
+	});
+
+	it("touches nothing while the vault is locked", async () => {
+		const mod = await running();
+		h.locked = true;
+
+		await expect(mod.restartSync()).rejects.toThrow("the vault is locked");
+		expect(h.sessionStops).toBe(0);
+		expect(h.rosterStarts).toBe(1);
+	});
+
+	it("restarts a start that is still under way, rather than leaving it be", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadManager();
+		mod.initRosterSync();
+		h.stateListener?.(false);
+		await mod.restartSync();
+		await new Promise((r) => setTimeout(r, 50));
+
+		// One session replaced by one more, not two running with the first orphaned.
+		expect(h.rosterStarts).toBe(2);
+		expect(h.sessionStops).toBe(1);
+		expect(h.blobStarts).toHaveLength(2);
+		expect(h.blobStops).toBe(1);
+	});
+});
+
+// Issue #230: the Settings panel usually opens long after sync started, so a replayed line must
+// keep the time it was logged, not the replay's.
+describe("sync status", () => {
+	it("hands over each line with the time it was logged, also to a late subscriber", async () => {
+		const mod = await loadManager();
+		vi.useFakeTimers({ toFake: ["Date"], now: 1_000 });
+		try {
+			await mod.stopSync();
+			vi.setSystemTime(5_000);
+			const seen: [string, number][] = [];
+			mod.onSyncStatus((status, at) => seen.push([status, at]));
+
+			expect(seen).toEqual([["disconnected", 1_000]]);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 

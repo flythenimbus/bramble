@@ -163,6 +163,42 @@ describe("maybeStartSync (per-vault)", () => {
 	});
 });
 
+// Issue #230: what an unlock does, without having to lock first.
+describe("restartSync", () => {
+	/** Load ./sync with vault `vaultId` active, opened, and (unless `locked`) holding its key. */
+	async function load(vaultId: string, { locked = false } = {}) {
+		stubChrome(seedTwoVaults(), {
+			[ACTIVE_VAULT_SESSION_KEY]: vaultId,
+			"sync.openedVault": vaultId,
+			...(locked ? {} : { [`vault.vek:${vaultId}`]: "vek" }),
+		});
+		const sync = await loadSync();
+		await (await import("./vek-store")).vekStoreHydration;
+		return sync;
+	}
+	const sent = () =>
+		sendToOffscreen.mock.calls.map((c) => c[0]).filter((m) => m.type?.startsWith("SYNC_"));
+
+	it("stops this vault's sessions and starts them again, leaving a pairing alone", async () => {
+		const sync = await load("a");
+		await sync.maybeStartSync();
+		sendToOffscreen.mockClear();
+
+		await sync.restartSync();
+
+		expect(sent().map((m) => m.type)).toEqual(["SYNC_ROSTER_STOP", "SYNC_ROSTER_SYNC"]);
+		expect(sent()[0]?.payload).toEqual({ keepVaultId: null });
+		expect(sent()[1]?.payload?.vaultId).toBe("a");
+	});
+
+	it("touches nothing while the vault is locked", async () => {
+		const sync = await load("a", { locked: true });
+
+		await expect(sync.restartSync()).rejects.toThrow("the vault is locked");
+		expect(sent()).toEqual([]);
+	});
+});
+
 /** Two vaults, each in its own sync group with its own device keypair. */
 const seedTwoVaults = () => ({
 	[VAULT_REGISTRY_KEY]: two,

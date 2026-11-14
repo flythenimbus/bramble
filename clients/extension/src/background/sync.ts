@@ -381,6 +381,25 @@ export async function stopSync({
 	await stopInFlight;
 }
 
+/**
+ * "Sync now": what an unlock does, without the lock. Every peer is dropped and found again; a
+ * pairing in progress is left alone (a roster stop, not a disconnect).
+ */
+export async function restartSync(): Promise<void> {
+	const vekEpoch = vekStore.vekMutationSnapshot();
+	if (vekStore.activeVaultLocked()) throw new Error("the vault is locked");
+	await stopSync({ keepVaultId: null });
+	await maybeStartSync(vekEpoch);
+}
+
+on(
+	"SYNC_RESTART",
+	extensionOnly(async () => {
+		await restartSync();
+		return { ok: true };
+	}),
+);
+
 /** The active vault moved: stop any roster session serving another vault, even one this worker didn't start. */
 export function retargetSync(activeVaultId: string | null): void {
 	if (syncRunning && syncVaultId === activeVaultId) return;

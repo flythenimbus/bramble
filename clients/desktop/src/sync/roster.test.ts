@@ -410,6 +410,54 @@ describe("lock state", () => {
 	});
 });
 
+// Issue #230: what an unlock does, without having to lock first.
+describe("sync now", () => {
+	async function running() {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadRoster();
+		await startSession(mod);
+		await vi.waitFor(() => expect(h.blobStarts).toHaveLength(1));
+		h.locked = false;
+		return mod;
+	}
+
+	it("drops every session and starts a fresh set", async () => {
+		const mod = await running();
+		await mod.restartRosterSync();
+
+		expect(h.sessionStops).toBe(2);
+		expect(h.blobStops).toBe(1);
+		expect(h.starts).toHaveLength(4);
+		expect(h.blobStarts).toHaveLength(2);
+	});
+
+	it("touches nothing while the vault is locked", async () => {
+		const mod = await running();
+		h.locked = true;
+
+		await expect(mod.restartRosterSync()).rejects.toThrow("the vault is locked");
+		expect(h.sessionStops).toBe(0);
+		expect(h.starts).toHaveLength(2);
+	});
+
+	it("restarts a start that is still under way, rather than leaving it be", async () => {
+		h.meta.set(VAULT_REGISTRY_KEY, registry(VAULT_A));
+		h.meta.set("active-vault", VAULT_A);
+		enrol(VAULT_A);
+		const mod = await loadRoster();
+		mod.initRosterSync();
+		h.locked = false;
+		h.stateListener?.(false);
+		await mod.restartRosterSync();
+
+		expect(h.sessionStops).toBe(2);
+		expect(h.starts).toHaveLength(4);
+		expect(h.blobStarts).toHaveLength(2);
+	});
+});
+
 describe("a window that opens onto an unlocked vault", () => {
 	// The VEK lives in the Rust process, which outlives the window. On Wayland closing the window
 	// destroys it and the tray builds a new one (lifetime.rs), so the new window finds the vault

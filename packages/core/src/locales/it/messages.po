@@ -3739,6 +3739,10 @@ msgstr "Simboli da utilizzare"
 msgid "Sync"
 msgstr "Sincronizzazione"
 
+#: packages/core/src/app/screens/Settings/components/SyncConnectSection.tsx
+msgid "Sync now"
+msgstr "Sincronizzare ora"
+
 #: packages/core/src/app/screens/Settings/components/BrowserPairingSection.tsx
 msgid "Sync this vault to the Bramble extension and fill from it without unlocking twice."
 msgstr "Sincronizzi questo vault con l’estensione Bramble e compili i dati da esso senza sbloccare due volte."

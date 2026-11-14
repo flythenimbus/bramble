@@ -284,14 +284,21 @@ export const extensionShell: ShellAdapter = {
 		const parsed = PendingEnrollApprovalSchema.safeParse(res.data ?? null);
 		return parsed.success ? parsed.data : null;
 	},
-	onSyncStatus(callback: (status: string) => void) {
+	onSyncStatus(callback: (status: string, at: number) => void) {
 		const handler = (msg: { type?: string; payload?: unknown } | undefined) => {
 			if (msg?.type !== "SYNC_STATUS") return;
 			const parsed = SyncStatusMsgSchema.safeParse(msg.payload);
-			if (parsed.success) callback(parsed.data.status);
+			if (parsed.success) callback(parsed.data.status, parsed.data.at ?? Date.now());
 		};
 		api.runtime.onMessage.addListener(handler);
 		return () => api.runtime.onMessage.removeListener(handler);
+	},
+	async syncNow() {
+		const res = (await api.runtime.sendMessage({ type: "SYNC_RESTART" })) as
+			| { ok: boolean; error?: string }
+			| undefined;
+		if (!res) throw new Error("no response from sync host (reload the extension?)");
+		if (!res.ok) throw new Error(res.error ?? "sync host error");
 	},
 	async syncDevicePublicKey() {
 		const res = (await api.runtime.sendMessage({ type: "SYNC_DEVICE_PUBKEY" })) as

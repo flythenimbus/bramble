@@ -148,6 +148,7 @@ export const SyncEventMsgSchema = z.object({
 });
 export type SyncEventMsg = z.infer<typeof SyncEventMsgSchema>;
 
-/** offscreen -> popup broadcast: a human-readable status line for the dev panel. */
-export const SyncStatusMsgSchema = z.object({ status: z.string() });
+/** offscreen -> popup broadcast: a human-readable status line for the dev panel, and the epoch ms
+ * it was logged at. */
+export const SyncStatusMsgSchema = z.object({ status: z.string(), at: z.number().optional() });
 export type SyncStatusMsg = z.infer<typeof SyncStatusMsgSchema>;

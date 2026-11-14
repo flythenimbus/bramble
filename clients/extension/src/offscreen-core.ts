@@ -336,7 +336,7 @@ function settleApproval(approved: boolean): void {
  * unlike the panel log, which the popup drops when it closes during cross-browser enrollment. */
 function reportSyncStatus(status: string): void {
 	console.log("[bramble:sync]", status);
-	const payload: SyncStatusMsg = { status };
+	const payload: SyncStatusMsg = { status, at: Date.now() };
 	void api.runtime.sendMessage({ type: "SYNC_STATUS", payload }).catch(() => {});
 }
 

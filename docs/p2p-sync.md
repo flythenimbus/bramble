@@ -389,6 +389,26 @@ that failed before anything held it, and a connection that hasn't opened after 6
 offer for a peer already held starts a new connection, since an offer only comes from a connection
 the other side just started. Issue #205.
 
+**Sync now restarts by hand.** Settings, Sync has a **Sync now** button (issue #230) that does what an
+unlock does, without the lock: it stops this vault's sessions and starts them again, so every peer is
+dropped and found afresh. A pairing in progress is left alone (the extension sends a roster stop, not
+a disconnect). A start still under way is let finish first, so its sessions are the ones replaced
+rather than kept running beside the new ones. It refuses while the vault is locked.
+
+## The sync log
+
+Settings, Sync shows the transport's status lines (issue #230). Each host stamps a line when it is
+logged (`report` in the desktop's `sync/bus.ts` and mobile's `sync-manager.ts`, `reportSyncStatus`
+in the extension's offscreen), so a line replayed to a panel that opened later keeps its own time.
+The extension keeps no history, so its panel shows only what was logged since it opened. The panel
+shows the time alone for today's lines and the date as well for older ones.
+
+A device's key prefix in a line gets the device's name after it, the same name the device list shows
+(`deviceNamer` in `sync-log.ts`). Relay session ids, the 8 hex characters in `peer 09d03287 found`,
+stay bare: each is a fresh key per session, and which device holds it is unknown until the Noise
+handshake. **Copy log** keeps full dates but leaves the names out, because copies get pasted into
+public bug reports.
+
 ## Merge engine: entry-level, keeping concurrent versions
 
 ### Stamps

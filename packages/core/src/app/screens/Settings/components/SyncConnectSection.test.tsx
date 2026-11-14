@@ -53,10 +53,11 @@ function mount(
 		group?: unknown;
 		syncDevicePublicKey?: () => Promise<string>;
 		synced?: SyncedSettingsAccess;
+		syncNow?: () => Promise<void>;
 	} = {},
 ) {
 	const listeners: ((e: SyncEvent) => void)[] = [];
-	const statusListeners: ((s: string) => void)[] = [];
+	const statusListeners: ((s: string, at: number) => void)[] = [];
 	const approveEnrollment = vi.fn(async (_approved: boolean) => {});
 	const platform = {
 		target: "desktop",
@@ -65,10 +66,11 @@ function mount(
 				listeners.push(cb);
 				return () => {};
 			},
-			onSyncStatus: (cb: (s: string) => void) => {
+			onSyncStatus: (cb: (s: string, at: number) => void) => {
 				statusListeners.push(cb);
 				return () => {};
 			},
+			syncNow: opts.syncNow,
 			getPendingEnrollApproval: async () => null,
 			approveEnrollment,
 			stopEnrollInvite: async () => {},
@@ -97,9 +99,9 @@ function mount(
 		act(() => {
 			for (const cb of listeners) cb(e);
 		});
-	const status = (s: string) =>
+	const status = (s: string, at = Date.now()) =>
 		act(() => {
-			for (const cb of statusListeners) cb(s);
+			for (const cb of statusListeners) cb(s, at);
 		});
 	return { emit, status, approveEnrollment };
 }
@@ -190,18 +192,53 @@ describe("the sync status", () => {
 
 // People send this log with bug reports, and the desktop app lets nothing be selected by default.
 describe("the sync log", () => {
-	it("copies every line with the button in its corner", async () => {
+	it("copies every line, dated, with the button in its corner", async () => {
 		const writeText = vi.fn(async (_text: string) => {});
 		Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 		const { status } = mount({ group: groupOf("me", "peer") });
-		status("relay connected (nostr.example.com)");
-		status("ignored bad-signature event from b941d388");
+		status("relay connected (nostr.example.com)", new Date(2025, 0, 2, 3, 4, 5).getTime());
+		status("ignored bad-signature event from b941d388", new Date(2025, 0, 2, 3, 4, 6).getTime());
 
 		fireEvent.click(await screen.findByRole("button", { name: "Copy log" }));
 
 		expect(writeText).toHaveBeenCalledWith(
-			"relay connected (nostr.example.com)\nignored bad-signature event from b941d388",
+			"2025-01-02 03:04:05 relay connected (nostr.example.com)\n" +
+				"2025-01-02 03:04:06 ignored bad-signature event from b941d388",
 		);
+	});
+
+	// Issue #230: a log with no times could cover a minute or an hour.
+	it("shows when each line was logged, with the date only for an earlier day", async () => {
+		const { status } = mount({ group: groupOf("me", "peer") });
+		status("relay connected (nostr.example.com)");
+		status("reconnecting to the relay…", new Date(2025, 0, 2, 3, 4, 5).getTime());
+
+		const today = await screen.findByText("relay connected (nostr.example.com)");
+		expect(today.previousElementSibling?.textContent).toMatch(/^\d\d:\d\d:\d\d$/);
+		const earlier = screen.getByText("reconnecting to the relay…");
+		expect(earlier.previousElementSibling?.textContent).toBe("2025-01-02 03:04:05");
+	});
+
+	// Issue #230: a device in the group should be called by its name, not just its key.
+	it("names the devices it mentions on screen, but not in a copy", async () => {
+		const writeText = vi.fn(async (_text: string) => {});
+		Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+		const PEER = "tG/Lnb18xYz+abcdefghijklmnopqrstuvwxyz012345=";
+		const { status } = mount({
+			group: {
+				groupKey: "g",
+				roster: {
+					devices: [device("me"), { ...device(PEER), label: "Alice's iPad" }],
+					revoked: [],
+				},
+			},
+		});
+		status("synced with tG/Lnb18 ✅", new Date(2025, 0, 2, 3, 4, 5).getTime());
+
+		expect(await screen.findByText("synced with tG/Lnb18 (Alice's iPad) ✅")).toBeTruthy();
+		// Copies end up in public bug reports.
+		fireEvent.click(screen.getByRole("button", { name: "Copy log" }));
+		expect(writeText).toHaveBeenCalledWith("2025-01-02 03:04:05 synced with tG/Lnb18 ✅");
 	});
 
 	it("can be selected on the desktop", async () => {
@@ -215,6 +252,52 @@ describe("the sync log", () => {
 		mount({ group: groupOf("me", "peer") });
 		await screen.findByText("Synced · 2 devices");
 		expect(screen.queryByRole("button", { name: "Copy log" })).toBeNull();
+	});
+});
+
+// Issue #230: the only way to retry was to lock and unlock.
+describe("sync now", () => {
+	it("restarts sync, and can't be pressed again until that's done", async () => {
+		let finish = () => {};
+		const syncNow = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+		mount({ group: groupOf("me", "peer"), syncNow });
+
+		const button = (await screen.findByRole("button", { name: "Sync now" })) as HTMLButtonElement;
+		fireEvent.click(button);
+		expect(syncNow).toHaveBeenCalledTimes(1);
+		expect(button.disabled).toBe(true);
+
+		await act(async () => finish());
+		expect(button.disabled).toBe(false);
+	});
+
+	it("says in the log when the restart fails", async () => {
+		mount({
+			group: groupOf("me", "peer"),
+			syncNow: async () => {
+				throw new Error("unlock this vault first");
+			},
+		});
+		fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+		expect(await screen.findByText("error: unlock this vault first")).toBeTruthy();
+	});
+
+	it("isn't offered with no other device to sync with", async () => {
+		mount({ group: groupOf("me"), syncNow: async () => {} });
+		await screen.findByText("Waiting for a device to join…");
+		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
+	});
+
+	it("isn't offered while this device can't sync", async () => {
+		mount({ group: groupOf("old-me", "peer"), syncNow: async () => {} });
+		await screen.findByText(/no longer recognize this one/);
+		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
+	});
+
+	it("isn't offered where the app can't restart sync", async () => {
+		mount({ group: groupOf("me", "peer") });
+		await screen.findByText("Synced · 2 devices");
+		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
 	});
 });
 

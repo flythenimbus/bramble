@@ -204,8 +204,12 @@ export interface ShellAdapter {
 	 * host must stop listening the moment the window closes, but an already-paired device adding
 	 * a third one must not lose its live sync to do it (which is what stopSyncSpike would cost). */
 	stopEnrollInvite?(): Promise<void>;
-	/** Subscribe to the sync host's status lines (shown in the dev panel). Returns an unsubscribe function. */
-	onSyncStatus(callback: (status: string) => void): () => void;
+	/** Subscribe to the sync host's status lines (shown in the dev panel), each with the epoch ms it
+	 * was logged at. Returns an unsubscribe function. */
+	onSyncStatus(callback: (status: string, at: number) => void): () => void;
+	/** "Sync now": restart this vault's ongoing sync, as an unlock does. Every peer is dropped and
+	 * found again; a pairing in progress is left alone. Rejects while locked. */
+	syncNow?(): Promise<void>;
 	/** This device's Noise static public key (base64), for the roster and pairing code. Generated + persisted on first call. */
 	syncDevicePublicKey(): Promise<string>;
 	/** This device's Ed25519 roster-signing verify key (base64), for authenticated roster entries

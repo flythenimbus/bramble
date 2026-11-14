@@ -16,7 +16,12 @@ import {
 	syncDevicePublicKey,
 	syncSigningPublicKey,
 } from "../sync/keys";
-import { ACTIVE_VAULT_KEY, retargetActiveVault, rosterChangedHere } from "../sync/roster";
+import {
+	ACTIVE_VAULT_KEY,
+	restartRosterSync,
+	retargetActiveVault,
+	rosterChangedHere,
+} from "../sync/roster";
 import {
 	approveEnrollment,
 	getPendingEnrollApproval,
@@ -176,6 +181,7 @@ export const desktopShell: ShellAdapter = {
 	stopEnrollInvite,
 	onSyncStatus,
 	onSyncEvent,
+	syncNow: restartRosterSync,
 	startEnrollInvite,
 	startEnrollJoin,
 	approveEnrollment,

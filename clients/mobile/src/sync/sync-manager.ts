@@ -183,23 +183,25 @@ export async function syncAdmissionSign(
 	return wasm.roster_admission_sign(password, saltB64, canonical);
 }
 
-const statusSubs = new Set<(s: string) => void>();
+const statusSubs = new Set<(s: string, at: number) => void>();
 const eventSubs = new Set<(e: SyncEvent) => void>();
 // Ring buffer of recent status so a panel that mounts after sync started (e.g. it
 // starts on unlock, before Settings is opened) still shows the current state.
-const statusHistory: string[] = [];
+const statusHistory: { status: string; at: number }[] = [];
 const report = (s: string) => {
-	statusHistory.push(s);
+	const at = Date.now();
+	statusHistory.push({ status: s, at });
 	if (statusHistory.length > 50) statusHistory.shift();
-	for (const cb of statusSubs) cb(s);
+	for (const cb of statusSubs) cb(s, at);
 };
 const emit = (e: SyncEvent) => {
 	for (const cb of eventSubs) cb(e);
 };
 
-export function onSyncStatus(cb: (s: string) => void): () => void {
+/** Each line comes with the epoch ms it was logged at, replayed ones included. */
+export function onSyncStatus(cb: (s: string, at: number) => void): () => void {
 	statusSubs.add(cb);
-	for (const s of statusHistory) cb(s); // replay recent lines to a fresh subscriber
+	for (const line of statusHistory) cb(line.status, line.at); // replay recent lines to a fresh subscriber
 	return () => statusSubs.delete(cb);
 }
 export function onSyncEvent(cb: (e: SyncEvent) => void): () => void {
@@ -577,13 +579,25 @@ async function startRoster(): Promise<void> {
 	}
 }
 
+/** The latest start. `rosterSession` is only set at the end of one, so a restart waits on this. */
+let lastStart: Promise<void> = Promise.resolve();
+
 async function maybeStartRosterSync(): Promise<void> {
 	if (rosterSession) return; // already running
-	try {
-		await startRoster();
-	} catch (e) {
-		report(`sync error: ${(e as Error).message}`);
-	}
+	const run = startRoster().catch((e) => report(`sync error: ${(e as Error).message}`));
+	lastStart = run;
+	await run;
+}
+
+/**
+ * "Sync now": what an unlock does, without the lock. Every peer is dropped and found again. A start
+ * still under way is let finish first, so its session is the one replaced rather than kept.
+ */
+export async function restartSync(): Promise<void> {
+	if (await mobileCrypto.isLocked()) throw new Error("the vault is locked");
+	await lastStart;
+	stopRosterSync();
+	await maybeStartRosterSync();
 }
 
 function stopRosterSync(): void {
