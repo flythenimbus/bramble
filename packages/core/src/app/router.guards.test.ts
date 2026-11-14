@@ -100,6 +100,90 @@ describe("route guards", () => {
 	});
 });
 
+// A lock mid-session (mobile's default "Immediately" fires on every trip to another app)
+// bounces to the unlock screen; unlocking should land back on the screen it interrupted.
+describe("unlock returns to the interrupted screen", () => {
+	const open: VaultSlice = { isLocked: false, ready: true, entries: [login("abc")] };
+
+	async function lockThenUnlock(path: string, unlocked: VaultSlice = open) {
+		const router = await load(path, open);
+		const set = async (vault: VaultSlice) => {
+			router.update({
+				context: { vault: { unlockedWithRecoveryCode: false, ...vault }, registry: undefined },
+			});
+			await router.invalidate();
+		};
+		await set({ ...open, isLocked: true });
+		const locked = router.state.location.pathname;
+		await set(unlocked);
+		return { router, locked };
+	}
+
+	it("returns to Settings on the same tab", async () => {
+		const { router, locked } = await lockThenUnlock("/settings?tab=sync");
+		expect(locked).toBe("/");
+		expect(router.state.location.pathname).toBe("/settings");
+		expect(router.state.location.search).toMatchObject({ tab: "sync" });
+	});
+
+	it("returns to an open entry", async () => {
+		const { router } = await lockThenUnlock("/vault/abc");
+		expect(router.state.location.pathname).toBe("/vault/abc");
+	});
+
+	it("falls back to the list when the entry is gone after unlock", async () => {
+		const { router } = await lockThenUnlock("/vault/abc", { ...open, entries: [] });
+		expect(router.state.location.pathname).toBe("/vault");
+	});
+
+	it("never returns to the passkey confirm, a one-shot window (#187)", async () => {
+		const { router } = await lockThenUnlock("/passkey-verify?id=req-1&rp=github.com");
+		expect(router.state.location.pathname).toBe("/vault");
+	});
+
+	it("still lands a recovery-code unlock on the master password", async () => {
+		const { router } = await lockThenUnlock("/generator", {
+			...open,
+			unlockedWithRecoveryCode: true,
+		});
+		expect(router.state.location.pathname).toBe("/settings");
+		expect(router.state.location.search).toMatchObject({ tab: "security" });
+	});
+
+	// The redirects replace history entries, and scroll restoration keys by entry by default.
+	it("keeps the list's search and its scroll key", async () => {
+		const router = await load("/vault?q=bank", open);
+		const key = () => router.options.getScrollRestorationKey?.(router.state.location);
+		const before = key();
+		const set = async (vault: VaultSlice) => {
+			router.update({
+				context: { vault: { unlockedWithRecoveryCode: false, ...vault }, registry: undefined },
+			});
+			await router.invalidate();
+		};
+		await set({ ...open, isLocked: true });
+		await set(open);
+		expect(router.state.location.search).toMatchObject({ q: "bank" });
+		expect(before).toBeDefined();
+		expect(key()).toBe(before);
+	});
+
+	// Pushing the list afresh (a save) must not inherit the old offset; going back does.
+	it("gives a freshly pushed list its own scroll key", async () => {
+		const router = await load("/vault", open);
+		const key = () => router.options.getScrollRestorationKey?.(router.state.location);
+		const first = key();
+		await router.navigate({ to: "/vault/new/$type", params: { type: "login" } });
+		await router.navigate({ to: "/vault" });
+		expect(key()).not.toBe(first);
+	});
+
+	it("ignores a return path that isn't an in-app one", async () => {
+		expect(await destination("/?redirect=%2F%2Fevil.example", open)).toBe("/vault");
+		expect(await destination("/?redirect=https%3A%2F%2Fevil.example", open)).toBe("/vault");
+	});
+});
+
 // The destination picker for an OS-handed 2FA key. It sits under /vault next to the
 // $entryId route, and it is reached while the vault is still locked far more often than
 // any other route (an app launched from another app with "Immediately" auto-lock).

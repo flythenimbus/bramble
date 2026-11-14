@@ -23,6 +23,10 @@ describe("persistableHref", () => {
 		expect(persistableHref(await loaded("/", true))).toBeNull();
 	});
 
+	it("skips the unlock screen holding a return path", async () => {
+		expect(persistableHref(await loaded("/?redirect=%2Fsettings", true))).toBeNull();
+	});
+
 	// #187: the toolbar popup reopened a finished confirm and looped on it.
 	it("never keeps the passkey confirm, a one-shot window", async () => {
 		const router = await loaded("/passkey-verify?id=req-1&rp=github.com");

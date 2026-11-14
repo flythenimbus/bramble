@@ -1,5 +1,10 @@
 import { Trans } from "@lingui/react/macro";
-import { useElementScrollRestoration, useNavigate, useSearch } from "@tanstack/react-router";
+import {
+	useElementScrollRestoration,
+	useLocation,
+	useNavigate,
+	useSearch,
+} from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlatform } from "../../context/PlatformContext";
@@ -20,11 +25,20 @@ import {
 	type VaultListItem,
 } from "../screens/VaultHome/VaultHome";
 import { DEFAULT_SEARCH, type VaultSearch } from "../screens/VaultHome/vault-search";
+import { scrollKey } from "../scroll-key";
+
+/**
+ * Where the list last unmounted. The router records a list's offset when a navigation leaves
+ * it, but a lock unmounts the list before navigating to the unlock screen, so the unlock
+ * reopens it from here (its redirect carries the list's scroll key).
+ */
+let leftAt: { key: string; offset: number } | undefined;
 
 /** Vault list route: projects entries into rows via their entry-mode descriptors. */
 export function VaultHomeRoute() {
 	const navigate = useNavigate();
-	const scrollEntry = useElementScrollRestoration({ id: VAULT_LIST_SCROLL_ID });
+	const key = scrollKey(useLocation());
+	const scrollEntry = useElementScrollRestoration({ id: VAULT_LIST_SCROLL_ID, getKey: scrollKey });
 	// Per-field `??` (not spread): a `.catch`ed param can be present-but-undefined.
 	const raw = useSearch({ from: "/_app/vault" });
 	const search = useMemo<VaultSearch>(
@@ -38,7 +52,7 @@ export function VaultHomeRoute() {
 		}),
 		[raw.q, raw.type, raw.sort, raw.archived, raw.attachments, raw.health],
 	);
-	const { entries, files, conflicts, ready, deleteEntry, touchEntry } = useVault();
+	const { entries, files, conflicts, ready, isLocked, deleteEntry, touchEntry } = useVault();
 	const { shell } = usePlatform();
 	const { prefs, loaded: prefsLoaded, update } = usePrefs();
 	// Hide stored breach flags when breach checking is off.
@@ -129,6 +143,9 @@ export function VaultHomeRoute() {
 		);
 	}
 
+	// Locking: unmount rather than render the list empty, which would scroll it to the top.
+	if (isLocked) return null;
+
 	return (
 		<VaultHome
 			items={items}
@@ -144,7 +161,10 @@ export function VaultHomeRoute() {
 			tags={tags}
 			statsCollapsed={prefs.statsCollapsed}
 			onToggleStats={() => void update("statsCollapsed", !prefs.statsCollapsed)}
-			initialScrollOffset={scrollEntry?.scrollY}
+			initialScrollOffset={leftAt?.key === key ? leftAt.offset : scrollEntry?.scrollY}
+			onLeave={(offset) => {
+				leftAt = { key, offset };
+			}}
 			// The update first: it may carry a security fix.
 			nudge={
 				appUpdate ? (

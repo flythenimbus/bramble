@@ -6,15 +6,18 @@ import {
 	lazyRouteComponent,
 	Outlet,
 	redirect,
+	type StaticDataRouteOption,
 } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import type { UseVault } from "../hooks/useVault";
 import { AppLayout } from "./layouts/AppLayout";
 import { AuthRoute } from "./routes/AuthRoute";
+import { authSearchSchema } from "./routes/auth-search";
 import { passkeyVerifySearchSchema } from "./routes/passkey-verify-search";
 import { VaultHomeRoute } from "./routes/VaultHomeRoute";
 import { settingsSearchSchema } from "./screens/Settings/settings-search";
 import { vaultSearchSchema } from "./screens/VaultHome/vault-search";
+import { carryScroll, scrollKey } from "./scroll-key";
 
 // Code-split the routes that aren't on the first-paint path (Settings pulls in
 // backup/sync/import/restore; the entry forms pull in every field editor). The
@@ -77,9 +80,10 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const authRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/",
+	validateSearch: authSearchSchema,
 	// WARNING: intentionally NOT gated on `ready`. Adding a ready gate here
 	// "for symmetry" with _app reintroduces a redirect loop.
-	beforeLoad: ({ context }) => {
+	beforeLoad: ({ context, search, location }) => {
 		if (context.vault && !context.vault.isLocked) {
 			// A recovery-code unlock usually means a forgotten password: land on changing it.
 			if (context.vault.unlockedWithRecoveryCode) {
@@ -87,6 +91,9 @@ const authRoute = createRoute({
 					to: "/settings",
 					search: { tab: "security", highlight: "master-password" },
 				});
+			}
+			if (search.redirect) {
+				throw redirect({ href: search.redirect, state: carryScroll(location) });
 			}
 			throw redirect({ to: "/vault" });
 		}
@@ -115,10 +122,18 @@ const selectVaultRoute = createRoute({
 const appLayoutRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	id: "_app",
-	// Guard for all authed routes: bounce to the unlock screen when locked.
-	// Gated on `ready` to avoid redirecting a popped-out window pre-hydration.
-	beforeLoad: ({ context }) => {
-		if (context.vault?.ready && context.vault.isLocked) throw redirect({ to: "/" });
+	// Guard for all authed routes: bounce to the unlock screen when locked, remembering the
+	// screen and its scroll so the unlock returns to both. Gated on `ready` to avoid redirecting
+	// a popped-out window pre-hydration.
+	beforeLoad: ({ context, location, matches }) => {
+		if (context.vault?.ready && context.vault.isLocked) {
+			if (isOneShot(matches)) throw redirect({ to: "/" });
+			throw redirect({
+				to: "/",
+				search: { redirect: location.href },
+				state: carryScroll(location),
+			});
+		}
 	},
 	component: AppLayout,
 });
@@ -238,6 +253,7 @@ export function createAppRouter(initialPath = "/") {
 		// The list only. Unrestricted, the router carries offsets between screens whose
 		// scrollers share a DOM path (record, Settings, Generator).
 		scrollRestoration: ({ location }) => location.pathname === "/vault",
+		getScrollRestorationKey: scrollKey,
 	});
 }
 
@@ -246,10 +262,15 @@ export type AppRouter = ReturnType<typeof createAppRouter>;
 /** The href a later view should reopen on: null for the unlock screen and one-shot routes. */
 export function persistableHref(router: AppRouter): string | null {
 	const { location } = router.state;
-	if (!location.href || location.href === "/") return null;
+	if (!location.href || location.pathname === "/") return null;
 	// Not state.matches: App persists at mount, before the first load fills it (#187).
-	if (router.matchRoutes(location).some((m) => m.staticData?.persistRoute === false)) return null;
+	if (isOneShot(router.matchRoutes(location))) return null;
 	return location.href;
+}
+
+/** A one-shot window's route (the passkey confirm), which nothing may reopen. */
+function isOneShot(matches: readonly { staticData?: StaticDataRouteOption }[]): boolean {
+	return matches.some((m) => m.staticData?.persistRoute === false);
 }
 
 declare module "@tanstack/react-router" {

@@ -86,6 +86,8 @@ interface VaultHomeProps {
 	nudge?: ReactNode;
 	/** Where to open the list: the offset it had when this history entry was left (#200). */
 	initialScrollOffset?: number;
+	/** The list's offset as it unmounts. */
+	onLeave?: (offset: number) => void;
 }
 
 /** Vault list screen with search, password-health stats, and the entry rows. */
@@ -105,6 +107,7 @@ export function VaultHome({
 	onToggleStats,
 	nudge,
 	initialScrollOffset,
+	onLeave,
 }: VaultHomeProps) {
 	const { t } = useLingui();
 	// A collapsed Overview hides the cards, so it lifts their filter too: the list is never
@@ -181,6 +184,11 @@ export function VaultHome({
 		initialOffset: initialScrollOffset,
 		getItemKey: (index) => filtered[index]?.id ?? index,
 	});
+	const leave = useRef(onLeave);
+	useEffect(() => {
+		leave.current = onLeave;
+	});
+	useEffect(() => () => leave.current?.(rowVirtualizer.scrollOffset ?? 0), [rowVirtualizer]);
 
 	return (
 		<main className="flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto px-4 py-5">

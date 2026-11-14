@@ -1,6 +1,14 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createVault, expectUnlocked, openPopup, optionsUrl, STRONG_PW } from "./helpers";
+import {
+	createVault,
+	expectUnlocked,
+	lock,
+	openPopup,
+	optionsUrl,
+	STRONG_PW,
+	unlock,
+} from "./helpers";
 
 // #200. Rows are asserted by name, not pixels: a restored offset that is right in pixels still
 // shows the wrong rows when the virtualizer's row estimate is off.
@@ -193,4 +201,52 @@ test("Settings opened from a scrolled record starts at the top", async ({
 	// Long enough for the router's restore to have run, were it going to.
 	await popup.waitForTimeout(300);
 	expect(await settings.evaluate((el) => el.scrollTop)).toBe(0);
+});
+
+// A lock bounces to the unlock screen; unlocking returns to the screen it interrupted, as it was
+// (mobile's default "Immediately" auto-lock does this on every trip to another app).
+test("unlocking returns to the row the list was on", async ({ context, extensionId }) => {
+	test.setTimeout(120_000);
+	const popup = await popupWithLongList(context, extensionId);
+	const rows = await scrollDeep(popup);
+
+	await lock(popup);
+	await unlock(popup);
+
+	await expect.poll(() => topRow(popup)).toBe(rows[0]);
+});
+
+test("unlocking keeps the search and its scroll", async ({ context, extensionId }) => {
+	test.setTimeout(120_000);
+	const popup = await popupWithLongList(context, extensionId);
+	const search = popup.getByLabel(/Search vault/i);
+	await search.fill("Entry 1");
+	await expect(popup.getByRole("button", { name: "Open Entry 000", exact: true })).toHaveCount(0);
+	await list(popup).hover();
+	while ((await list(popup).evaluate((el) => el.scrollTop)) < 1200) {
+		await popup.mouse.wheel(0, 300);
+		await popup.waitForTimeout(30);
+	}
+	await popup.waitForTimeout(300);
+	const rows = await visibleRows(popup);
+
+	await lock(popup);
+	await unlock(popup);
+
+	await expect(search).toHaveValue("Entry 1");
+	await expect.poll(() => topRow(popup)).toBe(rows[0]);
+});
+
+test("unlocking returns to the Settings tab", async ({ context, extensionId }) => {
+	test.setTimeout(120_000);
+	const popup = await popupWithLongList(context, extensionId);
+	await popup.getByRole("button", { name: "Settings", exact: true }).click();
+	const tabs = popup.getByRole("navigation", { name: "Settings sections" });
+	await tabs.getByRole("button", { name: "Sync" }).click();
+
+	await lock(popup);
+	await unlock(popup);
+
+	await expect(tabs).toBeVisible();
+	await expect(tabs.getByRole("button", { name: "Sync" })).toHaveAttribute("aria-current", "true");
 });
