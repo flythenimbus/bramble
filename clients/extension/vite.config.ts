@@ -89,6 +89,7 @@ export default defineConfig({
 				options: resolve(root, "options.html"),
 				offscreen: resolve(root, "offscreen.html"),
 				"autofill-ui": resolve(root, "autofill-ui.html"),
+				"corner-field": resolve(root, "corner-field.html"),
 				background: resolve(root, "background/background.ts"),
 				"content-script": resolve(root, "content/content.ts"),
 				// Firefox-only passkey-provider transport (Chrome uses webAuthenticationProxy):

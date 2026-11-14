@@ -15,6 +15,7 @@ import { withPasswordChangelog } from "@core/vault/password-changelog";
 import { type EncryptedEntry, encodeVaultBlob, type VaultBlob } from "@core/vault-format";
 import { type DedupeOutcome, effectivePort, hostnameMatches, registrableDomain } from "../dedupe";
 import { api } from "../platform-api";
+import { isExtensionSender } from "../sender";
 import { CORNER_HANDOFF_KEY } from "../session-keys";
 import {
 	addLoginEntry,
@@ -540,7 +541,32 @@ async function cornerFlushHandoff(): Promise<MessageEnvelope> {
 	}
 }
 
+/** True for the save card's Username frame: our corner-field.html, framed in a tab. */
+function isCornerFieldFrame(sender: chrome.runtime.MessageSender): boolean {
+	if (!isExtensionSender(sender) || sender.tab?.id === undefined || !sender.frameId) return false;
+	try {
+		return new URL(sender.url ?? "").pathname === "/corner-field.html";
+	} catch {
+		return false;
+	}
+}
+
+// The Username frame can't reach its card directly: Firefox gives an embedded extension frame
+// no tabs API. Only the payload goes on, and only to the tab's top frame, where the card is.
+async function cornerFieldRelay(
+	message: any,
+	sender: chrome.runtime.MessageSender,
+): Promise<MessageEnvelope> {
+	const tabId = sender.tab?.id;
+	if (tabId === undefined || !isCornerFieldFrame(sender)) return { ok: false, error: "forbidden" };
+	const reply = await api.tabs
+		.sendMessage(tabId, { type: "CORNER_FIELD", payload: message.payload }, { frameId: 0 })
+		.catch(() => undefined);
+	return (reply as MessageEnvelope | undefined) ?? { ok: false, error: "no card" };
+}
+
 on("CORNER_PROMPT_CAPTURE", cornerPromptCapture);
 on("CORNER_PROMPT_QUERY", cornerPromptQuery);
 on("CORNER_PROMPT_RESPONSE", cornerPromptResponse);
 on("CORNER_FLUSH_HANDOFF", cornerFlushHandoff);
+on("CORNER_FIELD", cornerFieldRelay);

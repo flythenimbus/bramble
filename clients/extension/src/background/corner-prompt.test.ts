@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	type BackgroundHarness,
+	extensionSender,
 	loadBackground,
 	pageSender,
 	setAutofillIndex,
@@ -255,4 +256,77 @@ describe("capture public-suffix isolation", () => {
 			expect(other.resp).toEqual({ ok: true, data: null });
 		},
 	);
+});
+
+// The save card's Username box is an extension-origin frame, and Firefox gives an embedded
+// frame no tabs API, so it reaches the card through here.
+describe("CORNER_FIELD relay", () => {
+	const fieldSender = (
+		tabId: number | undefined,
+		page = "corner-field.html?id=abc",
+		frameId = 7,
+	) => ({
+		origin: extensionSender.origin,
+		url: `${extensionSender.origin}/${page}`,
+		...(tabId === undefined ? {} : { tab: { id: tabId }, frameId }),
+	});
+	const OPEN = { type: "CORNER_FIELD", payload: { id: "abc", op: "open" } };
+
+	it("hands the frame's message to the tab's top frame and returns its answer", async () => {
+		const bg = await loadBackground({
+			tabReply: () => ({ ok: true, data: { value: "alice" } }),
+		});
+		const { resp } = await bg.send(OPEN, fieldSender(5));
+		expect(resp).toEqual({ ok: true, data: { value: "alice" } });
+		expect(bg.state.tabMessages).toEqual([{ tabId: 5, message: OPEN, options: { frameId: 0 } }]);
+	});
+
+	it("relays nothing but the payload", async () => {
+		const bg = await loadBackground({ tabReply: () => ({ ok: true }) });
+		await bg.send({ ...OPEN, target: "somewhere", extra: 1 }, fieldSender(5));
+		expect(bg.state.tabMessages[0]?.message).toEqual(OPEN);
+	});
+
+	it("refuses a content script, whatever frame it runs in", async () => {
+		const bg = await loadBackground({ tabReply: () => ({ ok: true }) });
+		// A page can be served from the frame's own path; it is still a page.
+		const lookalike = {
+			...pageSender("evil.com", 5, 3),
+			url: "https://evil.com/corner-field.html?id=abc",
+		};
+		for (const sender of [pageSender("evil.com", 5, 3), pageSender("evil.com", 5), lookalike]) {
+			const { resp } = await bg.send(OPEN, sender);
+			expect(resp).toEqual({ ok: false, error: "forbidden" });
+		}
+		expect(bg.state.tabMessages).toEqual([]);
+	});
+
+	it("refuses every extension page but the Username frame", async () => {
+		const bg = await loadBackground({ tabReply: () => ({ ok: true }) });
+		const others = [
+			extensionSender, // popup, no tab
+			fieldSender(undefined), // the page itself, outside any tab
+			fieldSender(5, "corner-field.html?id=abc", 0), // opened as a tab of its own
+			fieldSender(5, "autofill-ui.html?parentOrigin=x"),
+			fieldSender(5, "popup.html?detached=1"),
+			fieldSender(5, "x/corner-field.html"),
+		];
+		for (const sender of others) {
+			const { resp } = await bg.send(OPEN, sender);
+			expect(resp).toEqual({ ok: false, error: "forbidden" });
+		}
+		expect(bg.state.tabMessages).toEqual([]);
+	});
+
+	it("says so when the tab has no card to answer", async () => {
+		const gone = await loadBackground({
+			tabReply: () => {
+				throw new Error("Could not establish connection. Receiving end does not exist.");
+			},
+		});
+		expect((await gone.send(OPEN, fieldSender(5))).resp).toEqual({ ok: false, error: "no card" });
+
+		const silent = await loadBackground({ tabReply: () => undefined });
+		expect((await silent.send(OPEN, fieldSender(5))).resp).toEqual({ ok: false, error: "no card" });
+	});
 });

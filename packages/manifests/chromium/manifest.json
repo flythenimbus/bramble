@@ -59,7 +59,7 @@
 	},
 	"web_accessible_resources": [
 		{
-			"resources": ["autofill-ui.html", "autofill-ui.js"],
+			"resources": ["autofill-ui.html", "autofill-ui.js", "corner-field.html", "corner-field.js"],
 			"matches": ["<all_urls>"],
 			"use_dynamic_url": true
 		}

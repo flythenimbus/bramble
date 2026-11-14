@@ -536,6 +536,61 @@ away before the prompt is shown, the next page picks the stash back up. The
 commit itself goes through the background, which writes directly to
 `chrome.storage.local` (headless, no gesture; see [storage.md](storage.md)).
 
+### Typing on the card
+
+The card sits in a closed shadow root in the page. That hides its DOM from the
+page and nothing else. The events a browser dispatches for a keystroke are
+composed: they pass through the page's `window` and `document` on the way in and
+on the way out, retargeted to the card's host. With the Username box in that
+shadow root, a page heard every key typed into it (`keydown` through `input`,
+each carrying the character) from a listener at `window` capture, which runs
+before anything inside the card can call `stopPropagation`. It could also read
+the box whole (`document.execCommand("selectAll")`, then `getSelection()`) and
+write into it (`execCommand("insertText")`), because the box belonged to the
+page's document. A Discourse forum answering "c" with its composer is how it was
+noticed.
+
+So the box the user types in is an **extension-origin frame**
+(`corner-field.html`, `corner-field.ts`), the same boundary the picker has: a
+keystroke inside a cross-origin frame never reaches the parent document, and the
+page can neither select in the frame nor edit it. The card keeps a read-only
+copy of the box in its own shadow root and shows that until the frame reports
+in. Where the frame cannot load, the read-only box is what stays: the captured
+username still saves, and can be corrected in the vault afterwards. Chromium
+blocks the frame under `Cross-Origin-Embedder-Policy`; Firefox 160 loads it
+there, and under a `frame-src 'none'` CSP too.
+
+The frame and the card do not talk over the page's window, which the page
+shares. Everything the frame says rides extension messaging, which a page can
+neither read nor forge:
+
+- The card mounts the frame with a random `id` in its url, known to nothing else
+  in the tab.
+- The frame sends `CORNER_FIELD` to the background, which passes the payload to
+  the tab's top frame, where the card is (`cornerFieldRelay`). It is a relay
+  because Firefox gives an embedded extension frame no `tabs` API. The background
+  takes the message only from `corner-field.html` framed in a tab, and forwards
+  nothing but the payload.
+- `open` is answered with the captured username. The frame shows it and reports
+  `value`, and the card swaps the frame in on that first report. Every edit is
+  another `value`.
+- **Save** wants the text as it stands at the click, and a report still in
+  flight would cost the last keystroke. The card posts a counter to the frame
+  (`CORNER_FIELD_FLUSH`, the one thing sent over a window, and it carries
+  nothing), waits for the `value` that echoes it, and only then replies to the
+  background. If none comes within a second it saves the last text reported.
+
+A page can embed `corner-field.html` itself, since it is web-accessible. Such a
+copy has no `id` a card answers to, and the page cannot read what is typed into
+it either.
+
+Moving the card's host element reloads the frame inside it, which any page
+script may do. `open` then returns the text last reported, not the captured
+username, so the typing survives.
+
+`e2e/extension/corner-prompt-typing.spec.ts` holds this with a page that listens
+from its first script, at `window` capture.
+
 ### Suppressing the browser's own dropdown, without blinding ourselves
 
 While the picker is anchored to a field it writes `autocomplete="off"` on it, so
@@ -590,6 +645,9 @@ The iframe holds **no secrets**. It receives only summaries (name + masked
 secondary) over `postMessage` and reports the user's pick back; the fill still
 happens in the content script against the real page inputs, and the background
 returns secrets only to the initiating content script's original request.
+
+The save card's Username box is the other thing kept behind this boundary, for
+what is typed rather than what is shown: see "Typing on the card".
 
 The iframe sits in the page's DOM, so `window.parent` is the **page's** window,
 which the content script shares. A check on the parent's source and origin cannot

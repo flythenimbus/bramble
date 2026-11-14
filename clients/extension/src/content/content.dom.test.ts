@@ -132,7 +132,11 @@ vi.mock("./lifecycle", () => ({
 }));
 let frameIsLegible = true;
 vi.mock("./legibility", () => ({ isLegible: () => frameIsLegible, EARLY_CLICK_MS: 500 }));
-vi.mock("./corner-prompt", () => ({ handleCornerPromptShow: vi.fn(), queryCornerPrompt: vi.fn() }));
+vi.mock("./corner-prompt", () => ({
+	handleCornerField: vi.fn(),
+	handleCornerPromptShow: vi.fn(),
+	queryCornerPrompt: vi.fn(),
+}));
 vi.mock("./capture", () => ({ maybeCommitCapture: vi.fn(), onPasswordEnter: vi.fn() }));
 const fillTextField = vi.fn(() => true);
 // What fill.ts would report as the password most recently put into the page. Drives the
@@ -2102,5 +2106,18 @@ describe("content: launch and fill", () => {
 			withFrame(640, 480);
 			expect(ask()).toMatchObject({ frameVisible: false });
 		});
+	});
+});
+
+describe("content: the save card's Username frame", () => {
+	it("hands the frame's relayed message to the card and returns its answer", async () => {
+		const { handleCornerField } = await import("./corner-prompt");
+		vi.mocked(handleCornerField).mockReturnValue({ ok: true, data: { value: "alice" } });
+		let reply: unknown;
+		onMessage?.({ type: "CORNER_FIELD", payload: { id: "abc", op: "open" } }, {}, (v) => {
+			reply = v;
+		});
+		expect(handleCornerField).toHaveBeenCalledWith({ id: "abc", op: "open" });
+		expect(reply).toEqual({ ok: true, data: { value: "alice" } });
 	});
 });

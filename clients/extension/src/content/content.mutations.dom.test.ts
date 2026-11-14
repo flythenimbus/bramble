@@ -40,6 +40,7 @@ vi.mock("./picker", () => ({
 	},
 }));
 vi.mock("./corner-prompt", () => ({
+	handleCornerField: vi.fn(),
 	handleCornerPromptShow: vi.fn(),
 	queryCornerPrompt: vi.fn(),
 }));

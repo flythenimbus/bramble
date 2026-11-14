@@ -7,7 +7,7 @@
 
 import { maybeCommitCapture, onPasswordEnter } from "./capture";
 import { api } from "./content-api";
-import { handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
+import { handleCornerField, handleCornerPromptShow, queryCornerPrompt } from "./corner-prompt";
 import {
 	anchorIsLive,
 	cardFieldsPresent,
@@ -1260,6 +1260,11 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message?.type === "CORNER_PROMPT_SHOW") {
 		handleCornerPromptShow(message.payload as CornerPromptPayload);
 		sendResponse({ ok: true });
+		return false;
+	}
+
+	if (message?.type === "CORNER_FIELD") {
+		sendResponse(handleCornerField(message.payload));
 		return false;
 	}
 

@@ -195,6 +195,18 @@ export const cornerStyles = html`
 			input.tp-input:focus {
 				border-color: rgba(255, 255, 255, 0.7);
 			}
+			iframe.tp-field {
+				display: block;
+				width: 100%;
+				border: 0;
+				margin: 0;
+				padding: 0;
+				background: transparent;
+				color-scheme: light dark;
+			}
+			iframe.tp-field[hidden] {
+				display: none;
+			}
 			.tp-password-wrap {
 				position: relative;
 			}

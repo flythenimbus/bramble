@@ -441,6 +441,11 @@ Verified Firefox facts behind these choices:
   URL rotation is lost. Confirm with `web-ext lint`. Note the Chromium subtlety it caused: with the
   flag on, `runtime.getURL()` returns a GUID origin the loaded document does not share, so the
   picker's bridge pins the origin from the iframe's READY handshake instead (see docs/autofill.md).
+- **An extension frame embedded in a web page gets a reduced API** (checked on Firefox 160):
+  `runtime`, `i18n` and `storage.local` are there, `tabs` and `storage.session` are not. Chromium
+  gives the same frame `tabs` as well. So the save card's Username frame reaches its card through a
+  background relay rather than `tabs.sendMessage` (see docs/autofill.md, "Typing on the card").
+  Page CSP and COEP do not keep such a frame out on Firefox; COEP does on Chromium.
 
 ## Build tooling
 

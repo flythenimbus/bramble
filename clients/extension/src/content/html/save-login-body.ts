@@ -24,7 +24,7 @@ export function saveLoginBody({
 		</div>
 		<div class="tp-row">
 			<div class="tp-label">${t("fieldUsername")}</div>
-			<input class="tp-input" id="tp-username" type="text" value="${username}" autocomplete="off" />
+			<input class="tp-input" id="tp-username" type="text" value="${username}" autocomplete="off" readonly />
 		</div>
 		<div class="tp-row">
 			<div class="tp-label">${t("fieldPassword")}</div>

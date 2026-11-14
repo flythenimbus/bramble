@@ -24,6 +24,26 @@ let cornerShadow: ShadowRoot | null = null;
 let currentPrompt: CornerPromptPayload | null = null;
 let cornerShownAt = 0;
 
+// The save card's Username is typed in an extension-origin frame: a box in the page's own
+// document, closed shadow root or not, hands the page every keystroke. See docs/autofill.md.
+const FIELD_URL = api.runtime.getURL("corner-field.html");
+// How long a save waits for the frame's latest text before settling for the last it pushed.
+const FIELD_FLUSH_MS = 1000;
+
+interface UsernameField {
+	id: string;
+	frame: HTMLIFrameElement;
+	/** The read-only box, shown until the frame reports and for good where the page blocks it. */
+	box: HTMLInputElement;
+	/** The frame's text as last reported; null until it has loaded. */
+	value: string | null;
+}
+let usernameField: UsernameField | null = null;
+let flushCount = 0;
+let pendingFlush: { n: number; done: () => void } | null = null;
+// A save waiting on the frame's text; the card takes no other click until it lands.
+let saving = false;
+
 // Passkey consent counts only on a card the user can see, and not in its first moments (a click
 // aimed at whatever sat there before): a page could otherwise fade or cover it under the cursor.
 const PASSKEY_CONSENT = new Set(["passkey-approve", "passkey-pick"]);
@@ -40,6 +60,9 @@ function removeCornerPrompt(): void {
 	}
 	cornerShadow = null;
 	currentPrompt = null;
+	usernameField = null;
+	saving = false;
+	pendingFlush?.done();
 }
 
 /** Picks up a save/update prompt stashed by a prior page's submit (post-navigation capture). */
@@ -119,8 +142,85 @@ function closeOverflowMenu(): void {
 	cornerShadow?.querySelector(".tp-menu")?.remove();
 }
 
+/** Loads the Username frame beside the card's read-only box, which stays if the page blocks it. */
+function mountUsernameField(shadow: ShadowRoot): void {
+	const box = shadow.querySelector<HTMLInputElement>("#tp-username");
+	if (!box) return;
+	// Unguessable, so a copy of the frame a page embeds itself has no card to talk to.
+	const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+		b.toString(16).padStart(2, "0"),
+	).join("");
+	const frame = document.createElement("iframe");
+	frame.className = "tp-field";
+	frame.title = t("fieldUsername");
+	frame.setAttribute("scrolling", "no");
+	frame.hidden = true;
+	frame.src = `${FIELD_URL}?id=${id}`;
+	box.after(frame);
+	usernameField = { id, frame, box, value: null };
+}
+
+/** A message from the Username frame, relayed by the background. */
+export function handleCornerField(payload: unknown): { ok: boolean; data?: { value: string } } {
+	const p = payload as { id?: unknown; op?: unknown; value?: unknown; flush?: unknown } | undefined;
+	const field = usernameField;
+	if (!field || currentPrompt?.kind !== "save-login" || p?.id !== field.id) return { ok: false };
+	if (p.op === "open") {
+		// A frame the page made reload gets back what the user had typed.
+		return { ok: true, data: { value: field.value ?? currentPrompt.username } };
+	}
+	if (p.op !== "value" || typeof p.value !== "string") return { ok: false };
+	if (field.value === null) {
+		// Its first report: the frame is live, so it takes the box's place and size.
+		field.frame.style.height = `${field.box.offsetHeight || 38}px`;
+		field.frame.hidden = false;
+		field.box.hidden = true;
+	}
+	field.value = p.value;
+	if (pendingFlush && p.flush === pendingFlush.n) pendingFlush.done();
+	return { ok: true };
+}
+
+/** Resolves once the frame has reported its text as of now, or after FIELD_FLUSH_MS. */
+function flushUsernameField(): Promise<void> {
+	const win =
+		usernameField && usernameField.value !== null ? usernameField.frame.contentWindow : null;
+	if (!win) return Promise.resolve();
+	return new Promise((resolve) => {
+		const n = ++flushCount;
+		const timer = setTimeout(done, FIELD_FLUSH_MS);
+		function done(): void {
+			clearTimeout(timer);
+			if (pendingFlush?.n === n) pendingFlush = null;
+			resolve();
+		}
+		pendingFlush = { n, done };
+		// Carries only a counter, so "*" is fine.
+		win.postMessage({ type: "CORNER_FIELD_FLUSH", n }, "*");
+	});
+}
+
+/** Reply to a save with the Username box's text as it stands at the click. */
+async function saveWithUsername(
+	action: "save" | "save-unlock-first",
+	extra: Record<string, unknown> = {},
+): Promise<void> {
+	const prompt = currentPrompt;
+	saving = true;
+	await flushUsernameField();
+	// The card went, or another took its place, while the frame answered.
+	if (!prompt || currentPrompt !== prompt) return;
+	const editedUsername = usernameField?.value ?? undefined;
+	sendCornerResponse(action, {
+		...extra,
+		...(editedUsername === undefined ? {} : { editedUsername }),
+	});
+	removeCornerPrompt();
+}
+
 /** Delegated click handler for all action buttons inside the corner-prompt card. */
 function handleCornerCardClick(e: Event): void {
+	if (saving) return;
 	const target = e.target;
 	if (!(target instanceof HTMLElement)) return;
 	const actionEl = target.closest<HTMLElement>("[data-tp-action]");
@@ -155,10 +255,7 @@ function handleCornerCardClick(e: Event): void {
 	}
 
 	if (action === "save") {
-		const usernameInput = cornerShadow.querySelector<HTMLInputElement>("#tp-username");
-		const edited = usernameInput?.value;
-		sendCornerResponse("save", { editedUsername: edited });
-		removeCornerPrompt();
+		void saveWithUsername("save");
 		return;
 	}
 	if (action === "save-new") {
@@ -184,12 +281,7 @@ function handleCornerCardClick(e: Event): void {
 		const radio = cornerShadow.querySelector<HTMLInputElement>(
 			'input[name="tp-update-target"]:checked',
 		);
-		const editedUsername = cornerShadow.querySelector<HTMLInputElement>("#tp-username")?.value;
-		sendCornerResponse("save-unlock-first", {
-			...(radio ? { chosenEntryId: radio.value } : {}),
-			...(editedUsername !== undefined ? { editedUsername } : {}),
-		});
-		removeCornerPrompt();
+		void saveWithUsername("save-unlock-first", radio ? { chosenEntryId: radio.value } : {});
 		return;
 	}
 	if (action === "passkey-pick") {
@@ -263,6 +355,7 @@ export function handleCornerPromptShow(payload: CornerPromptPayload): void {
 	// page's CSS reset can't reach it; the shadow boundary keeps it encapsulated.
 	shadow.innerHTML = `${cornerStyles}<div class="tp-card">${body}</div>`;
 	shadow.addEventListener("click", handleCornerCardClick, true);
+	if (payload.kind === "save-login") mountUsernameField(shadow);
 
 	cornerPromptEl = root;
 	cornerShadow = shadow;
