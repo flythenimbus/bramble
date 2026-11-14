@@ -33,6 +33,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.useRealTimers();
+	vi.unstubAllGlobals();
 });
 
 describe("webauthn-inpage when the bridge never answers", () => {
@@ -53,5 +54,64 @@ describe("webauthn-inpage when the bridge never answers", () => {
 		await vi.advanceTimersByTimeAsync(181_000);
 		await outcome;
 		expect(native.get).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("webauthn-inpage capability answers", () => {
+	const LINUX = {
+		conditionalGet: true,
+		passkeyPlatformAuthenticator: false,
+		userVerifyingPlatformAuthenticator: false,
+	};
+
+	let stopAnswering = () => {};
+	function answer(result: unknown) {
+		const onMsg = (ev: MessageEvent) => {
+			if (ev.data?.__bramble_pk !== "req" || ev.data.method !== "isUvpaa") return;
+			const data = { __bramble_pk: "res", id: ev.data.id, result };
+			window.dispatchEvent(new MessageEvent("message", { source: window, data }));
+		};
+		window.addEventListener("message", onMsg);
+		stopAnswering = () => window.removeEventListener("message", onMsg);
+	}
+
+	beforeEach(() => {
+		// jsdom delivers postMessage on a real timer.
+		vi.useRealTimers();
+		vi.stubGlobal("PublicKeyCredential", {
+			isUserVerifyingPlatformAuthenticatorAvailable: async () => false,
+			getClientCapabilities: async () => ({ ...LINUX }),
+		});
+	});
+	afterEach(() => stopAnswering());
+
+	it("reports a platform authenticator where the provider serves the page", async () => {
+		answer({ isUvpaa: true });
+		await install();
+		expect(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()).toBe(true);
+		const capabilities = await PublicKeyCredential.getClientCapabilities();
+		expect(capabilities).toEqual({
+			...LINUX,
+			passkeyPlatformAuthenticator: true,
+			userVerifyingPlatformAuthenticator: true,
+		});
+	});
+
+	it.each([
+		["the provider will not serve the page", { isUvpaa: false }],
+		["the bridge cannot reach the background", { passthrough: true }],
+	])("gives the browser's own answers when %s", async (_why, result) => {
+		answer(result);
+		await install();
+		expect(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()).toBe(false);
+		expect(await PublicKeyCredential.getClientCapabilities()).toEqual(LINUX);
+	});
+
+	it("gives the browser's own answer when the bridge never answers", async () => {
+		vi.useFakeTimers();
+		await install();
+		const outcome = PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+		await vi.advanceTimersByTimeAsync(5_001);
+		expect(await outcome).toBe(false);
 	});
 });

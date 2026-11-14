@@ -15,10 +15,16 @@
 const api = ((globalThis as { browser?: typeof chrome }).browser ??
 	(globalThis as { chrome?: typeof chrome }).chrome) as typeof chrome;
 
+const TYPES = {
+	create: "WEBAUTHN_CREATE",
+	get: "WEBAUTHN_GET",
+	isUvpaa: "WEBAUTHN_IS_UVPAA",
+} as const;
+
 interface Req {
 	__bramble_pk: "req";
 	id: string;
-	method: "create" | "get";
+	method: keyof typeof TYPES;
 	payload: unknown;
 }
 
@@ -28,7 +34,7 @@ function isReq(d: unknown): d is Req {
 		d !== null &&
 		(d as Req).__bramble_pk === "req" &&
 		typeof (d as Req).id === "string" &&
-		((d as Req).method === "create" || (d as Req).method === "get")
+		Object.hasOwn(TYPES, (d as Req).method)
 	);
 }
 
@@ -37,7 +43,7 @@ window.addEventListener("message", (ev: MessageEvent) => {
 	if (ev.source !== window) return;
 	const d = ev.data;
 	if (!isReq(d)) return;
-	const type = d.method === "create" ? "WEBAUTHN_CREATE" : "WEBAUTHN_GET";
+	const type = TYPES[d.method];
 	const reply = (result: unknown) =>
 		window.postMessage({ __bramble_pk: "res", id: d.id, result }, ev.origin || "*");
 

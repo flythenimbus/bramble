@@ -77,4 +77,8 @@ if (typeof api.webAuthenticationProxy === "undefined") {
 			return { ok: true, data: toTransportResult(details) };
 		});
 	}
+	on("WEBAUTHN_IS_UVPAA", async (_message, sender) => ({
+		ok: true,
+		data: { isUvpaa: isProviderEnabled() && senderCaller(sender) !== null },
+	}));
 }

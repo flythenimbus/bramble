@@ -15,8 +15,9 @@ import {
 	serializeGetOptions,
 } from "./webauthn-inpage-codec";
 
+type Passthrough = { passthrough: true };
 type TransportResult =
-	| { passthrough: true }
+	| Passthrough
 	| { error: { name: string; message: string } }
 	| { responseJson: string };
 
@@ -24,17 +25,23 @@ type TransportResult =
 // backstop for a wedged bridge so create()/get() never hangs forever.
 const ROUNDTRIP_TIMEOUT_MS = 180_000;
 
+const CAPABILITY_TIMEOUT_MS = 5_000;
+
 /** Post the request to the isolated bridge and await its reply (or a transport failure). */
-function roundtrip(method: "create" | "get", payload: unknown): Promise<TransportResult> {
+function roundtrip<R = TransportResult>(
+	method: "create" | "get" | "isUvpaa",
+	payload: unknown,
+	timeoutMs = ROUNDTRIP_TIMEOUT_MS,
+): Promise<R | Passthrough> {
 	return new Promise((resolve, reject) => {
 		const id = crypto.randomUUID();
 		const timer = setTimeout(() => {
 			cleanup();
 			reject(new Error("passkey transport timeout"));
-		}, ROUNDTRIP_TIMEOUT_MS);
+		}, timeoutMs);
 		function onMsg(ev: MessageEvent) {
 			if (ev.source !== window) return;
-			const d = ev.data as { __bramble_pk?: string; id?: string; result?: TransportResult } | null;
+			const d = ev.data as { __bramble_pk?: string; id?: string; result?: R } | null;
 			if (!d) return;
 			if (d.__bramble_pk !== "res" || d.id !== id) return;
 			cleanup();
@@ -59,6 +66,42 @@ function canIntercept(): boolean {
 	} catch {
 		return false;
 	}
+}
+
+async function providerServes(): Promise<boolean> {
+	if (!canIntercept()) return false;
+	try {
+		const result = await roundtrip<{ isUvpaa: boolean }>("isUvpaa", null, CAPABILITY_TIMEOUT_MS);
+		return "isUvpaa" in result && result.isUvpaa;
+	} catch {
+		return false;
+	}
+}
+
+function patchCapabilities(): void {
+	const pkc = globalThis.PublicKeyCredential;
+	if (typeof pkc?.isUserVerifyingPlatformAuthenticatorAvailable !== "function") return;
+	const nativeUvpaa = pkc.isUserVerifyingPlatformAuthenticatorAvailable.bind(pkc);
+	Object.defineProperty(pkc, "isUserVerifyingPlatformAuthenticatorAvailable", {
+		configurable: true,
+		writable: true,
+		value: async () => (await nativeUvpaa()) || (await providerServes()),
+	});
+	if (typeof pkc.getClientCapabilities !== "function") return;
+	const nativeCapabilities = pkc.getClientCapabilities.bind(pkc);
+	Object.defineProperty(pkc, "getClientCapabilities", {
+		configurable: true,
+		writable: true,
+		value: async () => {
+			const capabilities = await nativeCapabilities();
+			if (!(await providerServes())) return capabilities;
+			return {
+				...capabilities,
+				passkeyPlatformAuthenticator: true,
+				userVerifyingPlatformAuthenticator: true,
+			};
+		},
+	});
 }
 
 function install(): void {
@@ -124,6 +167,7 @@ function install(): void {
 			writable: true,
 			value: getOverride,
 		});
+		patchCapabilities();
 	} catch {
 		// A frozen credentials container: leave the native methods in place.
 	}
