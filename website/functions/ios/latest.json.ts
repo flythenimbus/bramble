@@ -22,8 +22,8 @@ async function readListing(): Promise<Listing> {
 	return listing;
 }
 
-export const onRequest = async (_context: PagesContext): Promise<Response> => {
-	const listing = await edgeCached("https://bramble.sh/__cache/app-store", readListing);
+export const onRequest = async (context: PagesContext): Promise<Response> => {
+	const listing = await edgeCached(context.env, "app-store", readListing);
 	if (!listing) return json({ error: "unavailable" }, 503, "no-store");
 
 	return json(

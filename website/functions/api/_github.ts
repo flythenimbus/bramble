@@ -1,9 +1,9 @@
-import { edgeCached } from "./_cache";
+import { type CacheEnv, edgeCached } from "./_cache";
 
 // One cached view of every GitHub release, shared by the badge and redirect endpoints.
 // Underscore-prefixed, so Pages treats this as a module rather than a route.
 
-export type Env = { GITHUB_TOKEN?: string };
+export type Env = CacheEnv & { GITHUB_TOKEN?: string };
 
 export type PagesContext = {
 	request: Request;
@@ -65,10 +65,8 @@ const TAGS: Record<ReleasePlatform, RegExp> = {
 };
 
 // v2: a cached v1 snapshot has no installer, so it is not read back as one.
-const CACHE_KEY = "https://bramble.sh/__cache/releases-v2";
-
 export const snapshot = (env: Env): Promise<Snapshot | null> =>
-	edgeCached(CACHE_KEY, () => readReleases(env));
+	edgeCached(env, "releases-v2", () => readReleases(env));
 
 async function readReleases(env: Env): Promise<Snapshot> {
 	const result: Snapshot = { downloads: { android: 0, macos: 0, linux: 0 }, latest: {} };
