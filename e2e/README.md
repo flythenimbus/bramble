@@ -17,6 +17,17 @@ extension and once without, and prints the difference in main-thread blocking ti
 network, so it is manual. It is what quantified issue #59 and what should be re-run after any
 change to the content script's detection or its mutation handling.
 
+`firefox/corner-prompt-typing.mjs` is not a suite either. It is the Firefox half of
+`extension/corner-prompt-typing.spec.ts`: a plain script that drives a stock Firefox over WebDriver
+BiDi through `firefox/driver.mjs`, because Playwright cannot load a Firefox add-on and web-ext
+cannot type or click. Manual too, and worth a run before a Firefox release that touches the save
+card:
+
+```sh
+pnpm --filter @vault/platform-extension build:firefox
+FIREFOX_BINARY=/path/to/firefox node e2e/firefox/corner-prompt-typing.mjs
+```
+
 The transport-race gate lives under `extension/` but is `testIgnore`d from `playwright.config.ts`:
 it loads its own tiny fixture rather than the built extension, so it needs no build and runs in
 seconds.
