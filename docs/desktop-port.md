@@ -592,9 +592,12 @@ So the vault window runs on the engine the iOS app uses, the way iOS does:
   peers left by an earlier window: on Wayland closing the window destroys it, and the engine
   lives on in this process.
 
-The engine resolves no mDNS candidates (disabled, as on iOS), so two devices on one LAN with
-no STUN or TURN, one of them a browser hiding its addresses behind `.local` names, may not
-connect directly. The hosted relay hands out STUN and TURN, which covers it.
+The engine resolves no mDNS candidates (disabled, as on iOS), but that costs nothing on a LAN:
+it offers raw addresses itself, so a browser that hides its own behind `.local` names still
+reaches it, and the engine learns the browser's real address from those checks. Checked in the
+harness with Chromium's hiding on and no STUN or TURN: connected in about a second, edits
+crossed. Two devices that can't reach each other's addresses need STUN or TURN either way, which
+the hosted relay hands out.
 
 **The release CSP has to allow the relay.** `connect-src` starts at `'self' ipc:
 http://ipc.localhost`, which blocks the relay WebSocket and the ICE-servers fetch. WebKit reports
